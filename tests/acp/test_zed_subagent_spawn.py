@@ -15,16 +15,16 @@ from pydantic_ai.models.test import TestModel
 import pytest
 
 from acp.schema import ToolCallStart
-from agentpool import Agent
-from agentpool.agents.context import (
+from wolfharness import Agent
+from wolfharness.agents.context import (
     MAX_SUBAGENT_DEPTH,
     AgentContext,
     AgentRunContext,
     SubagentDepthError,
 )
-from agentpool.agents.events import SpawnSessionStart
-from agentpool.orchestrator.core import EventBus
-from agentpool_server.acp_server.event_converter import ACPEventConverter
+from wolfharness.agents.events import SpawnSessionStart
+from wolfharness.orchestrator.core import EventBus
+from wolfharness_server.acp_server.event_converter import ACPEventConverter
 
 
 # ---------------------------------------------------------------------------
@@ -291,7 +291,7 @@ def test_team_py_uses_yield_spawn_pattern() -> None:
     """
     import inspect
 
-    from agentpool.delegation import base_team
+    from wolfharness.delegation import base_team
 
     source = inspect.getsource(base_team)
 

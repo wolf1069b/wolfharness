@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agentpool_server.opencode_server.session_pool_integration import (
+from wolfharness_server.opencode_server.session_pool_integration import (
     OpenCodeSessionPoolIntegration,
 )
 

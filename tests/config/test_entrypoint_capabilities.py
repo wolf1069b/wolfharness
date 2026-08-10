@@ -3,7 +3,7 @@
 Tests that ``type: <entrypoint_name>`` in YAML resolves to the correct
 :class:`EntryPointCapabilityConfig` and that the config's ``build()``
 method instantiates the capability class registered via the
-``agentpool.capabilities`` entry-point group.
+``wolfharness.capabilities`` entry-point group.
 """
 
 from __future__ import annotations
@@ -13,8 +13,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agentpool import AgentsManifest, NativeAgentConfig
-from agentpool_config.capabilities import (
+from wolfharness import AgentsManifest, NativeAgentConfig
+from wolfharness_config.capabilities import (
     EntryPointCapabilityConfig,
     GenericCapabilityConfig,
     build_capability,
@@ -49,7 +49,7 @@ _FAKE_REGISTRY: dict[str, type] = {
 }
 
 # Patch paths
-_DISCOVER_PATH = "agentpool.capabilities.registry.discover_entry_point_capabilities"
+_DISCOVER_PATH = "wolfharness.capabilities.registry.discover_entry_point_capabilities"
 _ENTRY_POINTS_PATH = "importlib.metadata.entry_points"
 
 

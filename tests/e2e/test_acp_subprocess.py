@@ -1,4 +1,4 @@
-"""L4 subprocess E2E tests for the ACP server (``agentpool serve-acp``).
+"""L4 subprocess E2E tests for the ACP server (``wolfharness serve-acp``).
 
 L4a smoke tests (``@pytest.mark.e2e``, NOT slow):
     - test_server_startup: spawn serve-acp, verify process alive, initialize JSON-RPC
@@ -51,7 +51,7 @@ if TYPE_CHECKING:
 
 pytestmark = [
     pytest.mark.e2e,
-    pytest.mark.skipif(SKIP_NO_BINARY, reason="agentpool binary not on PATH"),
+    pytest.mark.skipif(SKIP_NO_BINARY, reason="wolfharness binary not on PATH"),
     pytest.mark.skipif(SKIP_WINDOWS, reason="Windows stdio subprocess issues"),
 ]
 
@@ -99,7 +99,7 @@ async def _spawn_acp_server(
     *,
     agent: str = "test_agent",
 ) -> AsyncIterator[ACPServerHandle]:
-    """Spawn ``agentpool serve-acp`` and return a handle with client connection.
+    """Spawn ``wolfharness serve-acp`` and return a handle with client connection.
 
     Args:
         config_path: Path to the YAML config file.
@@ -114,7 +114,7 @@ async def _spawn_acp_server(
     client = DefaultACPClient(allow_file_operations=False)
     async with spawn_agent_process(
         lambda _conn: client,
-        "agentpool",
+        "wolfharness",
         "serve-acp",
         str(config_path),
         "--agent",

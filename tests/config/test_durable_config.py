@@ -12,7 +12,7 @@ from datetime import timedelta
 import pytest
 import yaml
 
-from agentpool_config.durable import CheckpointConfig, DeferredToolConfig
+from wolfharness_config.durable import CheckpointConfig, DeferredToolConfig
 
 
 pytestmark = pytest.mark.unit

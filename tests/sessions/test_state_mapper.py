@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool.lifecycle.types import RunState
-from agentpool.sessions.state_mapper import (
+from wolfharness.lifecycle.types import RunState
+from wolfharness.sessions.state_mapper import (
     SESSION_STATUS_ACTIVE,
     SESSION_STATUS_CHECKPOINTED,
     SESSION_STATUS_CLOSED,

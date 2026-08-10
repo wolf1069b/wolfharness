@@ -8,8 +8,8 @@ from pydantic_ai.capabilities import CapabilityOrdering, NativeTool, ProcessHist
 from pydantic_ai.toolsets import FunctionToolset
 import pytest
 
-from agentpool.agents.context import AgentContext
-from agentpool.capabilities.question import QuestionCapability
+from wolfharness.agents.context import AgentContext
+from wolfharness.capabilities.question import QuestionCapability
 
 
 def test_get_toolset_returns_function_toolset_without_schemas():

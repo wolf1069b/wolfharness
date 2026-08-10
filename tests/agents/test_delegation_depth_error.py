@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool.agents.exceptions import MAX_DELEGATION_DEPTH, DelegationDepthError
+from wolfharness.agents.exceptions import MAX_DELEGATION_DEPTH, DelegationDepthError
 
 
 pytestmark = pytest.mark.unit
@@ -62,7 +62,7 @@ def test_delegation_depth_error_catchable_as_runtime_error() -> None:
 
 def test_import_from_agents_init() -> None:
     """DelegationDepthError and MAX_DELEGATION_DEPTH should be importable from agents package."""
-    import agentpool.agents as agents_mod
+    import wolfharness.agents as agents_mod
 
     assert agents_mod.DelegationDepthError is DelegationDepthError
     assert agents_mod.MAX_DELEGATION_DEPTH is MAX_DELEGATION_DEPTH

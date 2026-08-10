@@ -12,14 +12,14 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from agentpool_server.opencode_server.models import (
+from wolfharness_server.opencode_server.models import (
     MessageRequest,
     TextPartInput,
 )
-from agentpool_server.opencode_server.models.message import UserMessage
-from agentpool_server.opencode_server.routes.message_routes import _process_message
-from agentpool_server.opencode_server.session_pool_integration import ensure_session
-from agentpool_server.opencode_server.state import ServerState
+from wolfharness_server.opencode_server.models.message import UserMessage
+from wolfharness_server.opencode_server.routes.message_routes import _process_message
+from wolfharness_server.opencode_server.session_pool_integration import ensure_session
+from wolfharness_server.opencode_server.state import ServerState
 
 
 if TYPE_CHECKING:
@@ -84,8 +84,8 @@ class SlowAgentMock:
                 await asyncio.sleep(self.delay)
 
                 # Yield a simple text event
-                from agentpool.agents.events import StreamCompleteEvent, TextContentItem
-                from agentpool.messaging import ChatMessage
+                from wolfharness.agents.events import StreamCompleteEvent, TextContentItem
+                from wolfharness.messaging import ChatMessage
 
                 yield TextContentItem(text=f"Response for {session_id}")
                 yield StreamCompleteEvent(message=ChatMessage(role="assistant", content="done"))
@@ -142,7 +142,7 @@ def slow_mock_agent():  # noqa: PLR0915
     pool.session_pool.sessions.get_session = Mock(return_value=None)
 
     # Set up a real EventBus so adapter can subscribe/unsubscribe
-    from agentpool.orchestrator.core import EventBus
+    from wolfharness.orchestrator.core import EventBus
 
     event_bus = EventBus(max_queue_size=100)
     pool.session_pool.event_bus = event_bus
@@ -157,8 +157,8 @@ def slow_mock_agent():  # noqa: PLR0915
         message_id: str | None = None,
         **kwargs: Any,
     ):
-        from agentpool.lifecycle import RunOutcome, RunState
-        from agentpool.orchestrator.run import RunHandle
+        from wolfharness.lifecycle import RunOutcome, RunState
+        from wolfharness.orchestrator.run import RunHandle
 
         handle = Mock(spec=RunHandle)
         handle.run_id = "test-run"
@@ -258,12 +258,12 @@ def concurrent_test_state(tmp_project_dir, slow_mock_agent):
         if message_id is not None and content is not None:
             import time as _time
 
-            from agentpool_server.opencode_server.models.common import TimeCreated
-            from agentpool_server.opencode_server.models.message import (
+            from wolfharness_server.opencode_server.models.common import TimeCreated
+            from wolfharness_server.opencode_server.models.message import (
                 MessageWithParts,
                 UserMessage,
             )
-            from agentpool_server.opencode_server.opencode_message_bridge import (
+            from wolfharness_server.opencode_server.opencode_message_bridge import (
                 append_message_to_session,
             )
 
@@ -344,7 +344,7 @@ class TestConcurrentMessageHandling:
         )
 
         # Debug: capture all error events first
-        from agentpool_server.opencode_server.models.events import SessionErrorEvent
+        from wolfharness_server.opencode_server.models.events import SessionErrorEvent
 
         error_events = [e for e in all_events if isinstance(e, SessionErrorEvent)]
         if error_events:

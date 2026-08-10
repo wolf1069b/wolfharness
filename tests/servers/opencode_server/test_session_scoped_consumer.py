@@ -8,20 +8,20 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from agentpool.agents.events import RunStartedEvent, StreamCompleteEvent
-from agentpool.agents.events.events import UserMessageInsertedEvent
-from agentpool.messaging.messages import ChatMessage
-from agentpool.orchestrator.core import SessionPool
-from agentpool_server.opencode_server.models import (
+from wolfharness.agents.events import RunStartedEvent, StreamCompleteEvent
+from wolfharness.agents.events.events import UserMessageInsertedEvent
+from wolfharness.messaging.messages import ChatMessage
+from wolfharness.orchestrator.core import SessionPool
+from wolfharness_server.opencode_server.models import (
     MessagePath,
     MessageTime,
     MessageWithParts,
 )
-from agentpool_server.opencode_server.session_pool_integration import (
+from wolfharness_server.opencode_server.session_pool_integration import (
     OpenCodeSessionPoolIntegration,
     get_messages_for_session,
 )
-from agentpool_server.opencode_server.state import ServerState
+from wolfharness_server.opencode_server.state import ServerState
 
 
 pytestmark = pytest.mark.integration
@@ -30,7 +30,7 @@ pytestmark = pytest.mark.integration
 @pytest.fixture
 def mock_agent_pool() -> Mock:
     """Create a mock AgentPool for SessionPool construction."""
-    from agentpool.messaging.messages import ChatMessage
+    from wolfharness.messaging.messages import ChatMessage
 
     pool = Mock()
     pool.main_agent = Mock()
@@ -353,7 +353,7 @@ async def test_consumer_handles_spawn_session_start(
     server_state: ServerState,
 ) -> None:
     """Consumer should handle SpawnSessionStart by creating child consumers."""
-    from agentpool.agents.events import SpawnSessionStart
+    from wolfharness.agents.events import SpawnSessionStart
 
     integration = OpenCodeSessionPoolIntegration(
         session_pool=session_pool,

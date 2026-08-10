@@ -14,22 +14,22 @@ from pydantic_graph.graph_builder import EndMarker, ErrorMarker, GraphTask
 from pydantic_graph.id_types import ForkStack, NodeID, TaskID
 import pytest
 
-from agentpool.agents.events import (
+from wolfharness.agents.events import (
     PartStartEvent,
     RunErrorEvent,
     RunStartedEvent,
     StreamCompleteEvent,
     SubAgentEvent,
 )
-from agentpool.messaging import ChatMessage
-from agentpool.messaging.messagenode import MessageNode
-from agentpool.messaging.messages import ChatMessage as Msg
-from agentpool.messaging.signal_adapter import SignalEmittingGraphRun
-from agentpool.messaging.streaming_adapter import (
+from wolfharness.messaging import ChatMessage
+from wolfharness.messaging.messagenode import MessageNode
+from wolfharness.messaging.messages import ChatMessage as Msg
+from wolfharness.messaging.signal_adapter import SignalEmittingGraphRun
+from wolfharness.messaging.streaming_adapter import (
     GraphStreamingAdapter,
     adapt_graph_run,
 )
-from agentpool.talk import Talk
+from wolfharness.talk import Talk
 
 
 pytestmark = pytest.mark.unit

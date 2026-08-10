@@ -18,10 +18,10 @@ from typing import Any
 
 import pytest
 
-from agentpool.agents.events import (
+from wolfharness.agents.events import (
     RunStartedEvent,
 )
-from agentpool.orchestrator.core import (
+from wolfharness.orchestrator.core import (
     EventBus,
 )
 
@@ -219,7 +219,7 @@ async def test_user_messages_display_correctly_after_restart() -> None:
     session_id = "sess-int-4"
 
     # Simulate a user message with text and image parts
-    from agentpool.agents.events.events import CustomEvent
+    from wolfharness.agents.events.events import CustomEvent
 
     user_msg_parts = [
         {"type": "text", "text": "Hello, analyze this image"},

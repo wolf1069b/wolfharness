@@ -13,10 +13,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from pydantic_ai import RunContext
 import pytest
 
-from agentpool import ChatMessage
-from agentpool.agents.base_agent import BaseAgent
-from agentpool.agents.context import AgentContext
-from agentpool.agents.events import (
+from wolfharness import ChatMessage
+from wolfharness.agents.base_agent import BaseAgent
+from wolfharness.agents.context import AgentContext
+from wolfharness.agents.events import (
     RunErrorEvent,
     RunFailedEvent,
     StreamCompleteEvent,
@@ -24,14 +24,14 @@ from agentpool.agents.events import (
     ToolCallCompleteEvent,
     ToolCallStartEvent,
 )
-from agentpool.capabilities.background_task.capability import (
+from wolfharness.capabilities.background_task.capability import (
     MAX_DELEGATION_DEPTH,
     BackgroundTaskCapability,
     _generate_task_id,
 )
-from agentpool.capabilities.background_task.types import BackgroundTask
-from agentpool.delegation import AgentPool, BaseTeam
-from agentpool.tools.exceptions import ToolError
+from wolfharness.capabilities.background_task.types import BackgroundTask
+from wolfharness.delegation import AgentPool, BaseTeam
+from wolfharness.tools.exceptions import ToolError
 
 
 # ---------------------------------------------------------------------------
@@ -285,7 +285,7 @@ async def test_task_delegation_depth_limit():
 @pytest.mark.unit
 async def test_task_sync_emits_spawn_session_start():
     """Test that create_child_session is called with spawn_mechanism='task'
-    so SpawnSessionStart is auto-emitted by the agentpool framework.
+    so SpawnSessionStart is auto-emitted by the wolfharness framework.
     """
     capability = BackgroundTaskCapability(schemas=None)
     pool = _make_mock_pool()
@@ -459,7 +459,8 @@ async def test_task_creates_child_session():
 
 @pytest.mark.unit
 @patch(
-    "agentpool.capabilities.background_task.capability.load_skill_for_node", new_callable=AsyncMock
+    "wolfharness.capabilities.background_task.capability.load_skill_for_node",
+    new_callable=AsyncMock,
 )
 async def test_task_injects_skills(mock_load_skill):
     """Test that task injects skills into the formatted prompt."""
@@ -550,7 +551,7 @@ async def test_task_async_returns_formatted_text():
     )
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_testtask",
     ):
         result = await capability._task(
@@ -588,7 +589,7 @@ async def test_task_async_registers_background_task():
     )
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_regtest1",
     ):
         await capability._task(
@@ -630,7 +631,7 @@ async def test_task_async_creates_task_directory():
     )
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_dirtst01",
     ):
         await capability._task(
@@ -651,7 +652,7 @@ async def test_task_async_creates_task_directory():
 @pytest.mark.unit
 async def test_task_async_emits_spawn_session_start():
     """Test that async path calls create_child_session with spawn_mechanism='task'
-    so SpawnSessionStart is auto-emitted by the agentpool framework.
+    so SpawnSessionStart is auto-emitted by the wolfharness framework.
     """
     capability = BackgroundTaskCapability(schemas=None)
     pool = _make_mock_pool()
@@ -666,7 +667,7 @@ async def test_task_async_emits_spawn_session_start():
     )
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_spawnt01",
     ):
         await capability._task(
@@ -818,7 +819,7 @@ async def test_task_extracts_model_id_from_base_agent():
     """Test that task calls create_child_session correctly for BaseAgent nodes.
 
     Model ID extraction was removed — SpawnSessionStart (including model_id)
-    is now auto-emitted by create_child_session() in the agentpool framework.
+    is now auto-emitted by create_child_session() in the wolfharness framework.
     """
     capability = BackgroundTaskCapability(schemas=None)
     pool = _make_mock_pool()

@@ -21,7 +21,7 @@ import httpx
 
 
 REGISTRY_URL = "https://registry.modelcontextprotocol.io/v0/servers"
-OUTPUT_FILE = Path(__file__).parent.parent / "src" / "agentpool_config" / "mcp_registry.py"
+OUTPUT_FILE = Path(__file__).parent.parent / "src" / "wolfharness_config" / "mcp_registry.py"
 
 
 @dataclass
@@ -405,7 +405,7 @@ def generate_single_file(servers: list[ServerDef]) -> str:
         "",
         "from pydantic import Field, HttpUrl",
         "",
-        "from agentpool_config.mcp_server import (",
+        "from wolfharness_config.mcp_server import (",
         "    BaseMCPServerConfig,",
         "    SSEMCPServerConfig,",
         "    StdioMCPServerConfig,",

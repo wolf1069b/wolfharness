@@ -58,9 +58,9 @@ The schema layer supports both paths:
 skill_commands = self.get_skill_commands()
 return InitializeResponse.create(
     protocol_version=version,
-    name="agentpool",
+    name="wolfharness",
     title="AgentPool",
-    version=_version("agentpool"),
+    version=_version("wolfharness"),
     # ... other capabilities ...
     slash_commands=skill_commands,  # ← ADVERTISED AT INIT TIME
 )
@@ -388,7 +388,7 @@ slash_commands: list[AvailableCommand] = Field(default_factory=list)
 
 #### 3. `AgentPoolACPAgent.initialize()` Update
 
-**File**: `src/agentpool_server/acp_server/acp_agent.py`
+**File**: `src/wolfharness_server/acp_server/acp_agent.py`
 
 **Remove**:
 ```python
@@ -437,7 +437,7 @@ The `get_skill_commands()` method on `AgentPoolACPAgent` is currently used **onl
 |------|---------|
 | `src/acp/schema/capabilities.py` | Remove `slash_commands` field from `AgentCapabilities`; update `create()` |
 | `src/acp/schema/agent_responses.py` | Remove `slash_commands` parameter from `InitializeResponse.create()` |
-| `src/agentpool_server/acp_server/acp_agent.py` | Remove `slash_commands=skill_commands` from `initialize()` |
+| `src/wolfharness_server/acp_server/acp_agent.py` | Remove `slash_commands=skill_commands` from `initialize()` |
 
 **Duration**: 0.5 day
 
@@ -606,8 +606,8 @@ Revert by restoring:
 
 - `src/acp/schema/capabilities.py:273` — `AgentCapabilities.slash_commands`
 - `src/acp/schema/agent_responses.py:284-339` — `InitializeResponse.create()`
-- `src/agentpool_server/acp_server/acp_agent.py:482-505` — `AgentPoolACPAgent.initialize()`
-- `src/agentpool_server/acp_server/session.py:562-572` — `ACPSession.send_available_commands_update()`
+- `src/wolfharness_server/acp_server/acp_agent.py:482-505` — `AgentPoolACPAgent.initialize()`
+- `src/wolfharness_server/acp_server/session.py:562-572` — `ACPSession.send_available_commands_update()`
 - `src/acp/agent/notifications.py:336-339` — `ACPNotifications.update_commands()`
 - `src/acp/schema/session_updates.py:354-363` — `AvailableCommandsUpdate`
 

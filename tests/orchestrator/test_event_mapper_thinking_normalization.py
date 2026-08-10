@@ -22,8 +22,8 @@ from pydantic_ai.messages import (
 from pydantic_ai.models.openai import _make_raw_content_updater
 import pytest
 
-from agentpool.agents.events.events import PartDeltaEvent, PartStartEvent
-from agentpool.orchestrator.event_mapper import (
+from wolfharness.agents.events.events import PartDeltaEvent, PartStartEvent
+from wolfharness.orchestrator.event_mapper import (
     EventMapper,
     _normalize_thinking_event,
     normalize_thinking_parts_in_messages,

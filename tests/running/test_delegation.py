@@ -6,16 +6,16 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from agentpool.agents import Agent
-from agentpool.agents.base_agent import BaseAgent  # noqa: TC001
-from agentpool.running import NodeInjectionError, with_nodes
+from wolfharness.agents import Agent
+from wolfharness.agents.base_agent import BaseAgent  # noqa: TC001
+from wolfharness.running import NodeInjectionError, with_nodes
 
 
 pytestmark = pytest.mark.unit
 
 
 if TYPE_CHECKING:
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
 
 async def test_basic_injection(pool: AgentPool):

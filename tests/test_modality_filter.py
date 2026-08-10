@@ -19,8 +19,8 @@ from pydantic_ai.models import ModelRequestContext, ModelRequestParameters
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool.capabilities.modality_filter import ModalityFilterCapability
-from agentpool_config.model_capabilities import ModelCapabilities
+from wolfharness.capabilities.modality_filter import ModalityFilterCapability
+from wolfharness_config.model_capabilities import ModelCapabilities
 
 
 pytestmark = pytest.mark.unit
@@ -540,8 +540,8 @@ def test_get_ordering_wrapped_by_budget_and_dcp() -> None:
     assert ordering is not None
     assert isinstance(ordering, CapabilityOrdering)
     # wrapped_by means those capabilities are OUTER, self is INNER.
-    from agentpool.capabilities.dcp.capability import DynamicContextPruningCapability
-    from agentpool.capabilities.tool_output_budget import ToolOutputBudgetCapability
+    from wolfharness.capabilities.dcp.capability import DynamicContextPruningCapability
+    from wolfharness.capabilities.tool_output_budget import ToolOutputBudgetCapability
 
     assert ToolOutputBudgetCapability in ordering.wrapped_by
     assert DynamicContextPruningCapability in ordering.wrapped_by

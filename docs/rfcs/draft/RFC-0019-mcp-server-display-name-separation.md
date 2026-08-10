@@ -17,17 +17,17 @@ Currently, MCP servers in AgentPool are displayed with auto-generated identifier
 
 The MCP server naming follows this chain:
 
-1. **MCPManager initialization** (`src/agentpool/delegation/pool.py:149`):
+1. **MCPManager initialization** (`src/wolfharness/delegation/pool.py:149`):
    ```python
    self.mcp = MCPManager(name="pool_mcp", servers=servers, owner="pool")
    ```
 
-2. **Provider name construction** (`src/agentpool/mcp_server/manager.py:137`):
+2. **Provider name construction** (`src/wolfharness/mcp_server/manager.py:137`):
    ```python
    name=f"{self.name}_{config.client_id}"
    ```
 
-3. **Client ID generation** (`src/agentpool_config/mcp_server.py`):
+3. **Client ID generation** (`src/wolfharness_config/mcp_server.py`):
    - StreamableHTTP: `f"streamable_http_{self.url}"`
    - SSE: `f"sse_{self.url}"`
    - Stdio: `f"{self.command}_{args}"`
@@ -162,7 +162,7 @@ The MCP server naming follows this chain:
 
 ### Changes Required
 
-#### 1. Config Layer (`src/agentpool_config/mcp_server.py`)
+#### 1. Config Layer (`src/wolfharness_config/mcp_server.py`)
 
 Add `display_name` property to base or each config class:
 
@@ -182,7 +182,7 @@ Apply to:
 - `SSEMCPServerConfig`
 - `StreamableHTTPMCPServerConfig`
 
-#### 2. Manager Layer (`src/agentpool/mcp_server/manager.py`)
+#### 2. Manager Layer (`src/wolfharness/mcp_server/manager.py`)
 
 Update provider name construction (line 137):
 
@@ -194,7 +194,7 @@ name=f"{self.name}_{config.client_id}"
 name=f"{self.name}_{config.display_name}"
 ```
 
-#### 3. API Layer (`src/agentpool_server/opencode_server/routes/agent_routes.py`)
+#### 3. API Layer (`src/wolfharness_server/opencode_server/routes/agent_routes.py`)
 
 Update MCP status response (line 178):
 

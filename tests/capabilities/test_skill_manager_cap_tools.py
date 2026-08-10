@@ -3,7 +3,7 @@
 Covers ``SkillManagerCap._load_skill_impl`` / ``_list_skills_impl`` and the
 bare-name helpers (``_load_visible_bare_skill`` / ``_available_skill_names``),
 which are the real path pydantic-ai agents use (vs. the backward-compat
-wrappers in ``agentpool_toolsets/builtin/skills.py``).
+wrappers in ``wolfharness_toolsets/builtin/skills.py``).
 
 Specifically verifies:
 - bare-name load of a local skill
@@ -22,9 +22,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from agentpool.capabilities.resource_protocols import SkillEntry, SkillResource
-from agentpool.capabilities.skill_manager_cap import SkillManagerCap
-from agentpool.skills.skill import Skill
+from wolfharness.capabilities.resource_protocols import SkillEntry, SkillResource
+from wolfharness.capabilities.skill_manager_cap import SkillManagerCap
+from wolfharness.skills.skill import Skill
 
 
 pytestmark = pytest.mark.unit
@@ -73,7 +73,7 @@ def _local_skill(name: str, desc: str = "local") -> Skill:
 
 def _make_ctx(pool: Any, node_name: str | None = None) -> Any:
     """Build a RunContext-like object with a RuntimeAgentContext deps."""
-    from agentpool.agents.context import AgentContext as RuntimeAgentContext
+    from wolfharness.agents.context import AgentContext as RuntimeAgentContext
 
     node = MagicMock()
     node.name = node_name if node_name is not None else "default-node"

@@ -11,11 +11,11 @@ from typing import TYPE_CHECKING
 import pytest
 from upathtools import UPath
 
-from agentpool import AgentPool, AgentsManifest, NativeAgentConfig
-from agentpool.capabilities.resource_protocols import SkillResource
-from agentpool.capabilities.skill_manager_cap import SkillManagerCap
-from agentpool.skills.uri_resolver import SkillURIResolver
-from agentpool_config.skills import SkillsConfig
+from wolfharness import AgentPool, AgentsManifest, NativeAgentConfig
+from wolfharness.capabilities.resource_protocols import SkillResource
+from wolfharness.capabilities.skill_manager_cap import SkillManagerCap
+from wolfharness.skills.uri_resolver import SkillURIResolver
+from wolfharness_config.skills import SkillsConfig
 
 
 pytestmark = pytest.mark.integration

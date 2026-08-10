@@ -2,7 +2,7 @@
 sync:
   agent: doc_sync_agent
   dependencies:
-    - src/agentpool_config/knowledge.py
+    - src/wolfharness_config/knowledge.py
 title: Knowledge Sources
 description: Knowledge source configuration and management
 icon: material/book-open-variant

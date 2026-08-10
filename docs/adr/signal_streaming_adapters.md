@@ -25,7 +25,7 @@ The migration to `pydantic-graph` replaces the ad-hoc node/graph execution with 
 
 ### 2.1 Current Signal Definitions
 
-In `src/agentpool/messaging/messagenode.py`:
+In `src/wolfharness/messaging/messagenode.py`:
 
 ```python
 class MessageNode[TDeps, TResult](ABC):
@@ -36,7 +36,7 @@ class MessageNode[TDeps, TResult](ABC):
     """Signal emitted when node creates a message."""
 ```
 
-In `src/agentpool/talk/talk.py`:
+In `src/wolfharness/talk/talk.py`:
 
 ```python
 class Talk[TTransmittedData = Any]:
@@ -60,7 +60,7 @@ Inside `_GraphIterator.iter_graph()`, the lifecycle is:
 
 ### 2.3 Existing Event Types
 
-From `src/agentpool/agents/events/events.py`:
+From `src/wolfharness/agents/events/events.py`:
 
 ```python
 type RichAgentStreamEvent[OutputDataT] = (
@@ -522,7 +522,7 @@ PartDeltaEvent (LLM resumes streaming)
 ### 8.1 Adapter Layer Location
 
 The adapter should live in a new module, e.g.:
-- `src/agentpool/delegation/graph_adapter.py`
+- `src/wolfharness/delegation/graph_adapter.py`
 
 It wraps `GraphRun` without subclassing it, to avoid coupling to pydantic-graph internals.
 

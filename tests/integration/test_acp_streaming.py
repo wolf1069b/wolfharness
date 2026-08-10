@@ -36,10 +36,10 @@ from acp.schema import (
     ToolCallProgress,
     ToolCallStart,
 )
-from agentpool.agents.acp_agent import ACPAgent
-from agentpool.agents.acp_agent.session_state import ACPSessionState
-from agentpool.agents.context import AgentRunContext
-from agentpool.agents.events import (
+from wolfharness.agents.acp_agent import ACPAgent
+from wolfharness.agents.acp_agent.session_state import ACPSessionState
+from wolfharness.agents.context import AgentRunContext
+from wolfharness.agents.events import (
     PartDeltaEvent,
     RunStartedEvent,
     StreamCompleteEvent,
@@ -47,7 +47,7 @@ from agentpool.agents.events import (
     ToolCallStartEvent,
     ToolResultMetadataEvent,
 )
-from agentpool.messaging import ChatMessage
+from wolfharness.messaging import ChatMessage
 
 
 pytestmark = pytest.mark.unit
@@ -401,7 +401,7 @@ async def test_acp_streaming_event_sequence_with_tool_metadata(
     )
 
     # Patch acp_to_native_event to allow ToolResultMetadataEvent passthrough
-    from agentpool.agents.acp_agent import acp_converters as converters_mod
+    from wolfharness.agents.acp_agent import acp_converters as converters_mod
 
     global _original_acp_to_native_event  # noqa: PLW0603
     _original_acp_to_native_event = converters_mod.acp_to_native_event

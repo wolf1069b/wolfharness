@@ -12,10 +12,10 @@ from typing import TYPE_CHECKING
 import pytest
 from upathtools import UPath
 
-from agentpool import AgentPool
-from agentpool.skills.exceptions import SecurityError
-from agentpool.skills.uri_resolver import ResolvedSkillURI
-from agentpool.tools.exceptions import ToolError
+from wolfharness import AgentPool
+from wolfharness.skills.exceptions import SecurityError
+from wolfharness.skills.uri_resolver import ResolvedSkillURI
+from wolfharness.tools.exceptions import ToolError
 
 
 pytestmark = pytest.mark.integration
@@ -272,7 +272,7 @@ class TestArgumentSubstitution:
         test_skill_with_reference: UPath,
     ) -> None:
         """Test $1, $2 argument substitution."""
-        from agentpool_toolsets.builtin.skills import _substitute_arguments
+        from wolfharness_toolsets.builtin.skills import _substitute_arguments
 
         instructions = "First: $1, Second: $2"
         result = _substitute_arguments(instructions, "hello world")
@@ -285,7 +285,7 @@ class TestArgumentSubstitution:
         test_skill_with_reference: UPath,
     ) -> None:
         """Test $@ and $ARGUMENTS substitution."""
-        from agentpool_toolsets.builtin.skills import _substitute_arguments
+        from wolfharness_toolsets.builtin.skills import _substitute_arguments
 
         instructions = "All: $@, Also: $ARGUMENTS"
         result = _substitute_arguments(instructions, "arg1 arg2 arg3")
@@ -298,7 +298,7 @@ class TestArgumentSubstitution:
         test_skill_with_reference: UPath,
     ) -> None:
         """Test mixed positional and all-arguments substitution."""
-        from agentpool_toolsets.builtin.skills import _substitute_arguments
+        from wolfharness_toolsets.builtin.skills import _substitute_arguments
 
         instructions = "First: $1, Rest: $@"
         result = _substitute_arguments(instructions, "alpha beta gamma")
@@ -311,7 +311,7 @@ class TestArgumentSubstitution:
         test_skill_with_reference: UPath,
     ) -> None:
         """Test behavior when no arguments provided."""
-        from agentpool_toolsets.builtin.skills import _substitute_arguments
+        from wolfharness_toolsets.builtin.skills import _substitute_arguments
 
         instructions = "Args: $1, All: $@"
         result = _substitute_arguments(instructions, None)

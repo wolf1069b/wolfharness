@@ -6,11 +6,11 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from agentpool.orchestrator import SessionController
-from agentpool.sessions import SessionData
-from agentpool_config.storage import MemoryStorageConfig, SQLStorageConfig
-from agentpool_storage.memory_provider.provider import MemoryStorageProvider
-from agentpool_storage.sql_provider import SQLModelProvider
+from wolfharness.orchestrator import SessionController
+from wolfharness.sessions import SessionData
+from wolfharness_config.storage import MemoryStorageConfig, SQLStorageConfig
+from wolfharness_storage.memory_provider.provider import MemoryStorageProvider
+from wolfharness_storage.sql_provider import SQLModelProvider
 
 
 pytestmark = pytest.mark.integration
@@ -19,7 +19,7 @@ pytestmark = pytest.mark.integration
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
 
 class TestSessionData:
@@ -419,7 +419,7 @@ class TestSessionControllerPersistence:
         # previously used datetime.fromtimestamp(time.monotonic()),
         # producing a 1970 datetime.  Verify the full pipeline produces
         # a sane time.created in the OpenCode session model.
-        from agentpool_server.opencode_server.converters import session_data_to_opencode
+        from wolfharness_server.opencode_server.converters import session_data_to_opencode
 
         opencode_session = session_data_to_opencode(child)
         assert opencode_session.time.created > 1_000_000_000_000

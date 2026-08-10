@@ -19,12 +19,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from agentpool.sessions import SessionData
-from agentpool_storage.memory_provider.provider import MemoryStorageProvider
+from wolfharness.sessions import SessionData
+from wolfharness_storage.memory_provider.provider import MemoryStorageProvider
 
 
 if TYPE_CHECKING:
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
 
 pytestmark = pytest.mark.unit
@@ -128,8 +128,8 @@ class TestSessionPoolOpaqueChildId:
 
     async def test_child_session_id_is_opaque_string(self, minimal_pool: AgentPool) -> None:
         """Child session IDs must be non-empty opaque strings."""
-        from agentpool.orchestrator import SessionPool
-        from agentpool.utils.identifiers import generate_session_id
+        from wolfharness.orchestrator import SessionPool
+        from wolfharness.utils.identifiers import generate_session_id
 
         session_pool = SessionPool(pool=minimal_pool, store=None)
         state = await session_pool.create_session(
@@ -156,8 +156,8 @@ class TestSessionPoolOpaqueChildId:
         self, minimal_pool: AgentPool, parent_id: str
     ) -> None:
         """create_session must accept any string as parent_session_id."""
-        from agentpool.orchestrator import SessionPool
-        from agentpool.utils.identifiers import generate_session_id
+        from wolfharness.orchestrator import SessionPool
+        from wolfharness.utils.identifiers import generate_session_id
 
         store = MemoryStorageProvider()
         parent = SessionData(session_id=parent_id, agent_name="parent_agent")
@@ -187,8 +187,8 @@ class TestSessionPoolOpaqueChildId:
         self, minimal_pool: AgentPool, parent_id: str
     ) -> None:
         """get_children must find children by opaque parent ID."""
-        from agentpool.orchestrator import SessionPool
-        from agentpool.utils.identifiers import generate_session_id
+        from wolfharness.orchestrator import SessionPool
+        from wolfharness.utils.identifiers import generate_session_id
 
         store = MemoryStorageProvider()
         parent = SessionData(session_id=parent_id, agent_name="parent_agent")
@@ -225,7 +225,7 @@ class TestNoSessionIdParsing:
         This test documents that the identifiers module doesn't encourage
         counter-based parsing.
         """
-        from agentpool.utils.identifiers import generate_session_id
+        from wolfharness.utils.identifiers import generate_session_id
 
         id1 = generate_session_id()
         id2 = generate_session_id()
@@ -237,7 +237,7 @@ class TestNoSessionIdParsing:
 
     def test_ascending_format_produces_sortable_ids(self) -> None:
         """ascending() IDs are lexicographically sortable — a property, not a format dependency."""
-        from agentpool.utils.identifiers import ascending
+        from wolfharness.utils.identifiers import ascending
 
         ids = [ascending("session") for _ in range(10)]
         # Later IDs must sort after earlier ones
@@ -246,7 +246,7 @@ class TestNoSessionIdParsing:
 
     def test_ascending_with_given_accepts_any_valid_prefix(self) -> None:
         """ascending(prefix, given=...) validates prefix only — no format parsing."""
-        from agentpool.utils.identifiers import ascending
+        from wolfharness.utils.identifiers import ascending
 
         # Providing an ID that starts with "ses" must be accepted
         result = ascending("session", given="ses_custom_suffix")
@@ -254,7 +254,7 @@ class TestNoSessionIdParsing:
 
     def test_ascending_with_wrong_prefix_raises(self) -> None:
         """ascending(prefix, given=...) raises if prefix doesn't match."""
-        from agentpool.utils.identifiers import ascending
+        from wolfharness.utils.identifiers import ascending
 
         with pytest.raises(ValueError, match="does not start with"):
             ascending("session", given="msg_something")
@@ -270,10 +270,10 @@ class TestServerSessionLookupOpaque:
 
     def test_opencode_state_sessions_dict_opaque(self) -> None:
         """ServerState.sessions dict accepts any string key."""
-        from agentpool.utils.time_utils import now_ms
-        from agentpool_server.opencode_server.models import Session
-        from agentpool_server.opencode_server.models.common import TimeCreatedUpdated
-        from agentpool_server.opencode_server.state import ServerState
+        from wolfharness.utils.time_utils import now_ms
+        from wolfharness_server.opencode_server.models import Session
+        from wolfharness_server.opencode_server.models.common import TimeCreatedUpdated
+        from wolfharness_server.opencode_server.state import ServerState
 
         agent = MagicMock()
         state = ServerState(working_dir="/tmp", agent=agent)
@@ -302,7 +302,7 @@ class TestServerSessionLookupOpaque:
         # We test the dict-based lookup pattern (get_session) conceptually.
         # The _acp_sessions dict maps session_id -> ACPSession using plain dict.get().
         # This test documents that the lookup is opaque.
-        from agentpool_server.acp_server.session_manager import ACPSessionManager
+        from wolfharness_server.acp_server.session_manager import ACPSessionManager
 
         # ACPSessionManager._acp_sessions is a plain dict[str, ACPSession]
         # get_session does: return self._acp_sessions.get(session_id)

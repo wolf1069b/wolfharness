@@ -18,12 +18,12 @@ from pydantic_ai import (
 )
 import pytest
 
-from agentpool.messaging.messages import ChatMessage
-from agentpool_server.opencode_server.converters import (
+from wolfharness.messaging.messages import ChatMessage
+from wolfharness_server.opencode_server.converters import (
     chat_message_to_opencode,
     opencode_to_chat_message,
 )
-from agentpool_server.opencode_server.models import ReasoningPart
+from wolfharness_server.opencode_server.models import ReasoningPart
 
 
 pytestmark = pytest.mark.integration
@@ -114,7 +114,7 @@ def test_chat_message_to_opencode_preserves_text_and_thinking():
     msg = _make_assistant_chat_message_with_thinking()
     result = chat_message_to_opencode(msg, session_id="s1")
 
-    from agentpool_server.opencode_server.models import TextPart
+    from wolfharness_server.opencode_server.models import TextPart
 
     reasoning_parts = [p for p in result.parts if isinstance(p, ReasoningPart)]
     text_parts = [p for p in result.parts if isinstance(p, TextPart)]

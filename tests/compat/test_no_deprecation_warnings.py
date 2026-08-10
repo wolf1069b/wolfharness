@@ -11,12 +11,12 @@ import warnings
 
 import pytest
 
-from agentpool.hooks.agent_hooks import AgentHooks
-from agentpool.mcp_server.manager import MCPManager
-from agentpool.messaging import ChatMessage
-from agentpool.messaging.connection_manager import ConnectionManager
-from agentpool.messaging.messagenode import MessageNode
-from agentpool.utils.context_wrapping import wrap_instruction
+from wolfharness.hooks.agent_hooks import AgentHooks
+from wolfharness.mcp_server.manager import MCPManager
+from wolfharness.messaging import ChatMessage
+from wolfharness.messaging.connection_manager import ConnectionManager
+from wolfharness.messaging.messagenode import MessageNode
+from wolfharness.utils.context_wrapping import wrap_instruction
 
 
 pytestmark = pytest.mark.unit

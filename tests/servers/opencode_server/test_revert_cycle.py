@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from agentpool_server.opencode_server.models import (
+from wolfharness_server.opencode_server.models import (
     AssistantMessage,
     MessagePath,
     MessageRequest,
@@ -29,7 +29,7 @@ from agentpool_server.opencode_server.models import (
     TimeCreated,
     UserMessage,
 )
-from agentpool_server.opencode_server.session_pool_integration import (
+from wolfharness_server.opencode_server.session_pool_integration import (
     append_message_to_session,
 )
 
@@ -37,7 +37,7 @@ from agentpool_server.opencode_server.session_pool_integration import (
 if TYPE_CHECKING:
     from httpx import AsyncClient
 
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness_server.opencode_server.state import ServerState
 
 
 pytestmark = pytest.mark.integration
@@ -735,7 +735,7 @@ class TestAutoCancelTimeoutIntegration:
         await _add_messages_to_state(server_state, session_id, count=4)
 
         # Simulate a busy session: set current_run_id on the session state
-        from agentpool.orchestrator.session_pool import SessionState as PoolSessionState
+        from wolfharness.orchestrator.session_pool import SessionState as PoolSessionState
 
         busy_session = PoolSessionState(
             session_id=session_id,
@@ -810,7 +810,7 @@ class TestStaleRunHandle:
         await _add_messages_to_state(server_state, session_id, count=4)
 
         # Simulate stale run handle
-        from agentpool.orchestrator.session_pool import SessionState as PoolSessionState
+        from wolfharness.orchestrator.session_pool import SessionState as PoolSessionState
 
         stale_session = PoolSessionState(
             session_id=session_id,

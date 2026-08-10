@@ -1,1 +1,1 @@
-"""Database migrations for agentpool."""
+"""Database migrations for wolfharness."""

@@ -20,12 +20,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agentpool.agents.base_agent import BaseAgent
-from agentpool.capabilities.mcp_server_cap import McpServerCap
-from agentpool.common_types import MCPServerStatus
-from agentpool.mcp_server.client import MCPClient
-from agentpool.mcp_server.manager import MCPManager
-from agentpool_config.mcp_server import StdioMCPServerConfig
+from wolfharness.agents.base_agent import BaseAgent
+from wolfharness.capabilities.mcp_server_cap import McpServerCap
+from wolfharness.common_types import MCPServerStatus
+from wolfharness.mcp_server.client import MCPClient
+from wolfharness.mcp_server.manager import MCPManager
+from wolfharness_config.mcp_server import StdioMCPServerConfig
 
 
 pytestmark = pytest.mark.unit
@@ -246,7 +246,7 @@ async def test_setup_server_records_failure() -> None:
     manager = MCPManager()
     # Force MCPClient construction to raise by patching the import target.
     # setup_server() imports MCPClient lazily inside the function body.
-    import agentpool.mcp_server.client as client_mod
+    import wolfharness.mcp_server.client as client_mod
 
     original = client_mod.MCPClient
 
@@ -278,12 +278,12 @@ async def test_setup_server_clears_error_on_retry() -> None:
     async def _fake_cap_aenter(self: McpServerCap[Any]) -> McpServerCap[Any]:
         return self
 
-    import agentpool.mcp_server.client as client_mod
+    import wolfharness.mcp_server.client as client_mod
 
     original_client = client_mod.MCPClient
     client_mod.MCPClient = lambda **_kw: mock_client  # type: ignore[assignment]
     try:
-        import agentpool.capabilities.mcp_server_cap as cap_mod
+        import wolfharness.capabilities.mcp_server_cap as cap_mod
 
         original_cap_aenter = cap_mod.McpServerCap.__aenter__
         cap_mod.McpServerCap.__aenter__ = _fake_cap_aenter  # type: ignore[assignment]
@@ -461,7 +461,7 @@ async def test_aenter_tolerates_individual_failure() -> None:
         self.providers.append(cap)
         return cap
 
-    import agentpool.mcp_server.manager as mgr_mod
+    import wolfharness.mcp_server.manager as mgr_mod
 
     original = mgr_mod.MCPManager.setup_server
     mgr_mod.MCPManager.setup_server = _fake_setup  # type: ignore[assignment]
@@ -509,7 +509,7 @@ async def test_aenter_all_fail() -> None:
         self._setup_errors[config.client_id] = "boom"
         raise RuntimeError("boom")
 
-    import agentpool.mcp_server.manager as mgr_mod
+    import wolfharness.mcp_server.manager as mgr_mod
 
     original = mgr_mod.MCPManager.setup_server
     mgr_mod.MCPManager.setup_server = _always_fail  # type: ignore[assignment]

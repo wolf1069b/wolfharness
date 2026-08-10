@@ -33,13 +33,13 @@ if TYPE_CHECKING:
 
 from pydantic_ai.usage import RequestUsage
 
-from agentpool.agents.events import StreamCompleteEvent
-from agentpool.messaging.messages import ChatMessage
-from agentpool_server.acp_server.event_converter import ACPEventConverter
 from tests.fixtures.subagent_events import (
     TEST_EVENT_SEQUENCES,
     zed_full_lifecycle_events,
 )
+from wolfharness.agents.events import StreamCompleteEvent
+from wolfharness.messaging.messages import ChatMessage
+from wolfharness_server.acp_server.event_converter import ACPEventConverter
 
 
 pytestmark = pytest.mark.integration
@@ -398,7 +398,7 @@ class TestZedModeSnapshots:
         # tool_call_id for snapshot comparison
         fixed_uuid = UUID("00000000-0000-0000-0000-000000000001")
         with patch(
-            "agentpool_server.acp_server.event_converter.uuid.uuid4",
+            "wolfharness_server.acp_server.event_converter.uuid.uuid4",
             return_value=fixed_uuid,
         ):
             events = zed_full_lifecycle_events()
@@ -486,7 +486,7 @@ class TestZedModeKindAndMeta:
         Then: The yielded ToolCallStart has kind="other" (subagent context
               is conveyed via field_meta, not the kind field).
         """
-        from agentpool.agents.events import SpawnSessionStart
+        from wolfharness.agents.events import SpawnSessionStart
 
         converter = ACPEventConverter(subagent_display_mode="zed")
         converter._current_message_id = "test-msg-id"
@@ -519,7 +519,7 @@ class TestZedModeKindAndMeta:
         Then: The yielded ToolCallProgress has field_meta with
         subagent_session_info and tool_name keys.
         """
-        from agentpool.agents.events import SpawnSessionStart
+        from wolfharness.agents.events import SpawnSessionStart
 
         converter = ACPEventConverter(subagent_display_mode="zed")
         converter._current_message_id = "test-msg-id"

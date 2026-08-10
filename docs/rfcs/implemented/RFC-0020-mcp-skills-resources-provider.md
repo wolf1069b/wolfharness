@@ -53,20 +53,20 @@ This RFC specifies the **MCP Skills Resources Provider Protocol** implementation
 
 ### Current State
 
-**ResourceProvider Infrastructure** (`src/agentpool/resource_providers/`):
+**ResourceProvider Infrastructure** (`src/wolfharness/resource_providers/`):
 - `ResourceProvider` base class with `get_skills()`, `get_skill_instructions()` methods
 - `skills_changed` signal for change notifications
 - `AggregatingResourceProvider` for combining multiple providers
 - `MCPResourceProvider` for MCP server integration (needs skill support)
 - **Gap**: No local filesystem skill provider; skills not integrated with ResourceProvider
 
-**Skills System** (`src/agentpool/skills/`):
+**Skills System** (`src/wolfharness/skills/`):
 - Skills are defined in `SKILL.md` files with YAML frontmatter
 - `SkillsRegistry` auto-discovers skills from directories
 - `SkillsInstructionProvider` injects skills into prompts (not a ResourceProvider)
 - **Gap**: Skills not exposed through ResourceProvider interface
 
-**MCP Integration** (`src/agentpool/mcp_server/`):
+**MCP Integration** (`src/wolfharness/mcp_server/`):
 - `MCPResourceProvider` exposes MCP tools, prompts, resources
 - MCP servers can expose skills in two ways:
   1. **Via Prompts**: Traditional MCP prompts (e.g., `github-copilot/code-review`)
@@ -276,7 +276,7 @@ This RFC specifies the **MCP Skills Resources Provider Protocol** implementation
 #### 1. Exception Hierarchy
 
 ```python
-# src/agentpool/skills/exceptions.py
+# src/wolfharness/skills/exceptions.py
 
 class SkillError(Exception):
     """Base exception for skill-related errors."""
@@ -317,7 +317,7 @@ class ProviderError(SkillError):
 #### 2. LocalResourceProvider (New)
 
 ```python
-# src/agentpool/resource_providers/local.py
+# src/wolfharness/resource_providers/local.py
 
 from __future__ import annotations
 
@@ -327,12 +327,12 @@ from typing import TYPE_CHECKING, Self
 
 from upathtools import UPath
 
-from agentpool.log import get_logger
-from agentpool.resource_providers import ResourceChangeEvent, ResourceProvider
-from agentpool.resource_providers.resource_info import ResourceInfo
-from agentpool.skills.exceptions import ReferenceNotFoundError, SecurityError, SkillNotFoundError
-from agentpool.skills.registry import SkillsRegistry
-from agentpool.skills.skill import Skill
+from wolfharness.log import get_logger
+from wolfharness.resource_providers import ResourceChangeEvent, ResourceProvider
+from wolfharness.resource_providers.resource_info import ResourceInfo
+from wolfharness.skills.exceptions import ReferenceNotFoundError, SecurityError, SkillNotFoundError
+from wolfharness.skills.registry import SkillsRegistry
+from wolfharness.skills.skill import Skill
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -582,7 +582,7 @@ MCP servers can expose skills in two ways:
 2. **Via Resources (Skill Protocol)**: Using `skill://` URI scheme with SKILL.md files
 
 ```python
-# src/agentpool/resource_providers/mcp_provider.py (extension)
+# src/wolfharness/resource_providers/mcp_provider.py (extension)
 
 # Add to existing MCPResourceProvider class:
 
@@ -610,7 +610,7 @@ async def get_skills(self) -> list[Skill]:
 
 async def _get_prompt_skills(self) -> list[Skill]:
     """Get MCP prompts mapped to skills."""
-    from agentpool.skills.skill import Skill
+    from wolfharness.skills.skill import Skill
     
     prompts = await self.get_prompts()
     skills: list[Skill] = []
@@ -660,7 +660,7 @@ async def _get_resource_skills(self) -> list[Skill]:
     
     See: https://gofastmcp.com/servers/providers/skills
     """
-    from agentpool.skills.skill import Skill
+    from wolfharness.skills.skill import Skill
     
     resources = await self.get_resources()
     skills: list[Skill] = []
@@ -947,7 +947,7 @@ async def read_reference(self, skill_name: str, ref_path: str) -> str:
 #### 4. Skill URI Resolver
 
 ```python
-# src/agentpool/skills/uri_resolver.py
+# src/wolfharness/skills/uri_resolver.py
 
 from __future__ import annotations
 
@@ -955,10 +955,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from urllib.parse import unquote
 
-from agentpool.skills.exceptions import SkillNotFoundError, SecurityError
+from wolfharness.skills.exceptions import SkillNotFoundError, SecurityError
 
 if TYPE_CHECKING:
-    from agentpool.resource_providers import AggregatingResourceProvider
+    from wolfharness.resource_providers import AggregatingResourceProvider
 
 
 @dataclass(frozen=True)
@@ -1302,15 +1302,15 @@ class ResolvedSkill:
 #### 5. Updated load_skill Tool
 
 ```python
-# src/agentpool_toolsets/builtin/skills.py
+# src/wolfharness_toolsets/builtin/skills.py
 
 from __future__ import annotations
 
 from typing import Literal
 
-from agentpool.agents.context import AgentContext
-from agentpool.resource_providers import StaticResourceProvider
-from agentpool.skills.exceptions import SkillNotFoundError, SecurityError, ReferenceNotFoundError
+from wolfharness.agents.context import AgentContext
+from wolfharness.resource_providers import StaticResourceProvider
+from wolfharness.skills.exceptions import SkillNotFoundError, SecurityError, ReferenceNotFoundError
 
 
 SKILL_USAGE_GUIDANCE = """
@@ -1390,7 +1390,7 @@ async def load_skill(
     Returns:
         The skill instructions or reference content
     """
-    from agentpool.log import get_logger
+    from wolfharness.log import get_logger
     
     logger = get_logger(__name__)
     
@@ -1521,7 +1521,7 @@ class SkillsTools(StaticResourceProvider):
 ### Integration with AgentPool
 
 ```python
-# src/agentpool/delegation/pool.py
+# src/wolfharness/delegation/pool.py
 
 class AgentPool:
     """Updated AgentPool with unified skill access via ResourceProvider."""
@@ -1533,9 +1533,9 @@ class AgentPool:
         Creates LocalResourceProvider within SkillsManager, then combines with
         MCP providers via AggregatingResourceProvider.
         """
-        from agentpool.resource_providers.local import LocalResourceProvider
-        from agentpool.resource_providers import AggregatingResourceProvider
-        from agentpool.skills.uri_resolver import SkillURIResolver
+        from wolfharness.resource_providers.local import LocalResourceProvider
+        from wolfharness.resource_providers import AggregatingResourceProvider
+        from wolfharness.skills.uri_resolver import SkillURIResolver
         
         # 1. Extend existing SkillsManager with ResourceProvider
         if hasattr(self, 'skills') and self.skills:
@@ -1603,7 +1603,7 @@ class AgentPool:
 ### SkillsManager Extension
 
 ```python
-# src/agentpool/skills/manager.py (extension)
+# src/wolfharness/skills/manager.py (extension)
 
 class SkillsManager:
     """Extended to expose ResourceProvider interface."""
@@ -1613,7 +1613,7 @@ class SkillsManager:
         await self.registry.__aenter__()
         
         # Create and enter LocalResourceProvider
-        from agentpool.resource_providers.local import LocalResourceProvider
+        from wolfharness.resource_providers.local import LocalResourceProvider
         
         self._resource_provider = LocalResourceProvider(
             name="local",
@@ -1722,9 +1722,9 @@ When an MCP server uses the [FastMCP Skills Provider protocol](https://gofastmcp
 
 ### Phase 1: Core Infrastructure (Week 1)
 
-1. **Exception classes** (`src/agentpool/skills/exceptions.py`)
-2. **URI resolver** (`src/agentpool/skills/uri_resolver.py`)
-3. **LocalResourceProvider** (`src/agentpool/resource_providers/local.py`)
+1. **Exception classes** (`src/wolfharness/skills/exceptions.py`)
+2. **URI resolver** (`src/wolfharness/skills/uri_resolver.py`)
+3. **LocalResourceProvider** (`src/wolfharness/resource_providers/local.py`)
 4. **Tests** for URI parsing and resolution
 
 ### Phase 2: MCP Integration (Week 2)
@@ -1833,9 +1833,9 @@ Based on comprehensive review by Metis, Momus, and Oracle during initial develop
 - [x] Architecture review passed (Oracle)
 - [x] RFC quality review passed (Momus)
 - [x] Implementation readiness review passed (Metis)
-- [x] Exception hierarchy (`src/agentpool/skills/exceptions.py`)
-- [x] URI resolver (`src/agentpool/skills/uri_resolver.py`)
-- [x] LocalResourceProvider (`src/agentpool/resource_providers/local.py`)
+- [x] Exception hierarchy (`src/wolfharness/skills/exceptions.py`)
+- [x] URI resolver (`src/wolfharness/skills/uri_resolver.py`)
+- [x] LocalResourceProvider (`src/wolfharness/resource_providers/local.py`)
 - [x] MCPResourceProvider skill methods
 - [x] AggregatingResourceProvider skill aggregation
 - [x] Updated load_skill tool with URI support

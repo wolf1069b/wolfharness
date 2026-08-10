@@ -16,17 +16,21 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import anyio
 import pytest
 
-from agentpool.sessions.models import SessionData
-from agentpool.storage.manager import SessionMetadata, SessionMetadataGeneratedEvent, StorageManager
-from agentpool_config.storage import MemoryStorageConfig, SQLStorageConfig, StorageConfig
-from agentpool_server.opencode_server.converters import (
+from wolfharness.sessions.models import SessionData
+from wolfharness.storage.manager import (
+    SessionMetadata,
+    SessionMetadataGeneratedEvent,
+    StorageManager,
+)
+from wolfharness_config.storage import MemoryStorageConfig, SQLStorageConfig, StorageConfig
+from wolfharness_server.opencode_server.converters import (
     opencode_to_session_data,
     session_data_to_opencode,
 )
-from agentpool_server.opencode_server.models import Session
-from agentpool_server.opencode_server.models.common import TimeCreatedUpdated
-from agentpool_storage.memory_provider.provider import MemoryStorageProvider
-from agentpool_storage.sql_provider.sql_provider import SQLModelProvider
+from wolfharness_server.opencode_server.models import Session
+from wolfharness_server.opencode_server.models.common import TimeCreatedUpdated
+from wolfharness_storage.memory_provider.provider import MemoryStorageProvider
+from wolfharness_storage.sql_provider.sql_provider import SQLModelProvider
 
 
 pytestmark = pytest.mark.integration
@@ -414,8 +418,8 @@ class TestOpenCodeProviderTitleFix:
 
     async def test_save_session_creates_new_session_file(self, tmp_path: Path) -> None:
         """Verify save_session creates new session file when it doesn't exist."""
-        from agentpool_config.storage import OpenCodeStorageConfig
-        from agentpool_storage.opencode_provider.provider import OpenCodeStorageProvider
+        from wolfharness_config.storage import OpenCodeStorageConfig
+        from wolfharness_storage.opencode_provider.provider import OpenCodeStorageProvider
 
         config = OpenCodeStorageConfig(path=str(tmp_path / "opencode_storage"))
         provider = OpenCodeStorageProvider(config)
@@ -437,7 +441,7 @@ class TestOpenCodeProviderTitleFix:
         assert session_file.exists(), f"Session file should be created at {session_file}"
 
         # Verify title was saved
-        from agentpool_storage.opencode_provider import helpers
+        from wolfharness_storage.opencode_provider import helpers
 
         oc_session = helpers.read_session(session_file)
         assert oc_session is not None
@@ -448,8 +452,8 @@ class TestOpenCodeProviderTitleFix:
 
     async def test_save_session_updates_existing_session(self, tmp_path: Path) -> None:
         """Verify save_session updates existing session file."""
-        from agentpool_config.storage import OpenCodeStorageConfig
-        from agentpool_storage.opencode_provider.provider import OpenCodeStorageProvider
+        from wolfharness_config.storage import OpenCodeStorageConfig
+        from wolfharness_storage.opencode_provider.provider import OpenCodeStorageProvider
 
         config = OpenCodeStorageConfig(path=str(tmp_path / "opencode_storage"))
         provider = OpenCodeStorageProvider(config)
@@ -474,7 +478,7 @@ class TestOpenCodeProviderTitleFix:
 
         # Verify title was updated
         session_file = provider.sessions_path / "test_project" / "update_session_001.json"
-        from agentpool_storage.opencode_provider import helpers
+        from wolfharness_storage.opencode_provider import helpers
 
         oc_session = helpers.read_session(session_file)
         assert oc_session is not None
@@ -483,8 +487,8 @@ class TestOpenCodeProviderTitleFix:
 
     async def test_load_session_reads_title(self, tmp_path: Path) -> None:
         """Verify load_session reads title from session file."""
-        from agentpool_config.storage import OpenCodeStorageConfig
-        from agentpool_storage.opencode_provider.provider import OpenCodeStorageProvider
+        from wolfharness_config.storage import OpenCodeStorageConfig
+        from wolfharness_storage.opencode_provider.provider import OpenCodeStorageProvider
 
         config = OpenCodeStorageConfig(path=str(tmp_path / "opencode_storage"))
         provider = OpenCodeStorageProvider(config)
@@ -554,7 +558,7 @@ class TestModelVariantResolution:
             manager._model_variants = {"my-variant": mock_variant}
 
             # Patch the Agent import inside the method body
-            with patch("agentpool.Agent") as mock_agent_cls:
+            with patch("wolfharness.Agent") as mock_agent_cls:
                 mock_agent = MagicMock()
                 mock_result = MagicMock()
                 mock_result.data = SessionMetadata(

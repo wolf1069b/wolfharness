@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from agentpool import Agent, AgentPool, AgentsManifest
+from wolfharness import Agent, AgentPool, AgentsManifest
 
 
 pytestmark = pytest.mark.integration

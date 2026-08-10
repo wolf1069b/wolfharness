@@ -14,7 +14,7 @@ from pydantic_ai import (
 )
 import pytest
 
-from agentpool.messaging.compaction import (
+from wolfharness.messaging.compaction import (
     CompactionPipeline,
     FilterEmptyMessages,
     FilterRetryPrompts,
@@ -29,7 +29,7 @@ from agentpool.messaging.compaction import (
     balanced_context,
     minimal_context,
 )
-from agentpool_config.compaction import (
+from wolfharness_config.compaction import (
     CompactionConfig,
     FilterThinkingConfig,
     KeepLastMessagesConfig,

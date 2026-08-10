@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool import AgentPool
-from agentpool.models.agents import NativeAgentConfig
-from agentpool.models.manifest import AgentsManifest
-from agentpool_server.agui_server import AGUIServer
+from wolfharness import AgentPool
+from wolfharness.models.agents import NativeAgentConfig
+from wolfharness.models.manifest import AgentsManifest
+from wolfharness_server.agui_server import AGUIServer
 
 
 pytestmark = pytest.mark.integration
@@ -102,7 +102,7 @@ async def test_agui_server_from_config(tmp_path):
     environments:
       test:
         type: inline
-        module_path: agentpool
+        module_path: wolfharness
         class_name: Agent
 
     agents:

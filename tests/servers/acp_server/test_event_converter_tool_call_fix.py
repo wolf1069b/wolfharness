@@ -14,11 +14,11 @@ from pydantic_ai import PartDeltaEvent, ToolCallPartDelta
 import pytest
 
 from acp.schema import ToolCallProgress, ToolCallStart
-from agentpool.agents.events.events import (
+from wolfharness.agents.events.events import (
     ToolCallProgressEvent,
     ToolCallStartEvent,
 )
-from agentpool_server.acp_server.event_converter import ACPEventConverter
+from wolfharness_server.acp_server.event_converter import ACPEventConverter
 
 
 pytestmark = [pytest.mark.unit, pytest.mark.anyio]

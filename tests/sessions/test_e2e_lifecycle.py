@@ -16,17 +16,17 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from agentpool.orchestrator.core import SessionController
-from agentpool.sessions.models import PendingDeferredCall, SessionData
-from agentpool.storage.manager import StorageManager
-from agentpool_config.storage import SQLStorageConfig, StorageConfig
-from agentpool_storage.sql_provider import SQLModelProvider
+from wolfharness.orchestrator.core import SessionController
+from wolfharness.sessions.models import PendingDeferredCall, SessionData
+from wolfharness.storage.manager import StorageManager
+from wolfharness_config.storage import SQLStorageConfig, StorageConfig
+from wolfharness_storage.sql_provider import SQLModelProvider
 
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
@@ -92,7 +92,7 @@ async def test_e2e_session_lifecycle_with_sql_model_provider(
     assert loaded.pending_deferred_calls[0].tool_call_id == "tc-e2e-001"
 
     # --- Step 2: Save checkpoint via StorageManager ---
-    from agentpool.agents.native_agent.checkpoint import CheckpointManager
+    from wolfharness.agents.native_agent.checkpoint import CheckpointManager
 
     checkpoint_mgr = CheckpointManager(storage_manager)
     await checkpoint_mgr.checkpoint(

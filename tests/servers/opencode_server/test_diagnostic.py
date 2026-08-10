@@ -7,11 +7,11 @@ from unittest.mock import Mock
 
 import pytest
 
-from agentpool_server.opencode_server.routes.global_routes import (
+from wolfharness_server.opencode_server.routes.global_routes import (
     VERSION,
     GlobalEventFactory,
 )
-from agentpool_server.opencode_server.state import ServerState
+from wolfharness_server.opencode_server.state import ServerState
 
 
 pytestmark = pytest.mark.integration
@@ -38,7 +38,7 @@ class _MockState:
 
     def get_event_factory(self) -> GlobalEventFactory:
         if self._event_factory is None:
-            from agentpool_storage.opencode_provider import helpers
+            from wolfharness_storage.opencode_provider import helpers
 
             self._event_factory = GlobalEventFactory(
                 directory=self.working_dir or "",
@@ -132,8 +132,8 @@ async def test_diagnostic_working_dir_none_returns_directory_null() -> None:
     from fastapi import FastAPI
     from httpx import ASGITransport, AsyncClient
 
-    from agentpool_server.opencode_server.dependencies import get_state
-    from agentpool_server.opencode_server.routes.global_routes import router as global_router
+    from wolfharness_server.opencode_server.dependencies import get_state
+    from wolfharness_server.opencode_server.routes.global_routes import router as global_router
 
     state = _make_state_with_none_working_dir()
     app = FastAPI()

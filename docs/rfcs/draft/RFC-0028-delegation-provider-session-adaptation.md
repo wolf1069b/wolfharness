@@ -41,7 +41,7 @@ This RFC proposes adapting all delegation providers (SubagentTools, WorkersTools
 
 ### Current State
 
-AgentPool has a `SessionManager` class (`src/agentpool/sessions/manager.py`) with a `create_child_session()` method that:
+AgentPool has a `SessionManager` class (`src/wolfharness/sessions/manager.py`) with a `create_child_session()` method that:
 
 1. Generates a unique session ID
 2. Loads the parent session and inherits `project_id` / `cwd`
@@ -69,7 +69,7 @@ The server-side `EventProcessor` or `ServerState.ensure_session()` reactively ma
 | Term | Definition |
 |------|------------|
 | **Delegation Provider** | Any mechanism that spawns child agent execution: SubagentTools (`task`), WorkersTools, Team (parallel), TeamRun (sequential) |
-| **SessionManager** | Central class for session CRUD and child session creation (`src/agentpool/sessions/manager.py`) |
+| **SessionManager** | Central class for session CRUD and child session creation (`src/wolfharness/sessions/manager.py`) |
 | **SessionStore** | Protocol for session persistence (`SessionData` objects) — memory or SQL-backed |
 | **SessionData** | Pydantic model with `session_id`, `parent_id`, `project_id`, `cwd`, `agent_name`, `agent_type` |
 | **SpawnSessionStart** | Event emitted before child content starts; carries `child_session_id`, `parent_session_id`, `depth`, metadata |
@@ -408,7 +408,7 @@ AFTER:
 Add a convenience method to `AgentContext` that wraps `pool.sessions.create_child_session()`:
 
 ```python
-# src/agentpool/agents/context.py
+# src/wolfharness/agents/context.py
 
 class AgentContext:
     # ... existing code ...
@@ -448,7 +448,7 @@ class AgentContext:
 #### 2. SubagentTools Adaptation
 
 ```python
-# src/agentpool_toolsets/builtin/subagent_tools.py
+# src/wolfharness_toolsets/builtin/subagent_tools.py
 
 # BEFORE:
 child_session_id = identifier.ascending("session")
@@ -532,7 +532,7 @@ child_depth = (ctx.run_ctx.depth if ctx.run_ctx is not None else 0) + 1
 **Solution**: Add `depth: int = 0` as an explicit parameter to `BaseAgent.run_stream()`:
 
 ```python
-# src/agentpool/agents/base_agent.py
+# src/wolfharness/agents/base_agent.py
 
 # BEFORE (actual 12-param signature — simplified for illustration):
 async def run_stream(
@@ -581,7 +581,7 @@ This is the **only correct approach** — alternatives like stripping `depth` fr
 Add session propagation to parallel team execution:
 
 ```python
-# src/agentpool/delegation/team.py
+# src/wolfharness/delegation/team.py
 
 async def run_stream(self, *prompts, depth: int = 0, **kwargs):
     all_nodes = list(self.nodes)
@@ -668,7 +668,7 @@ async def run_stream(self, *prompts, depth: int = 0, **kwargs):
 Sequential team — each step's child session is created independently:
 
 ```python
-# src/agentpool/delegation/teamrun.py
+# src/wolfharness/delegation/teamrun.py
 
 async def run_stream(self, *prompts, depth: int = 0, require_all: bool = True, **kwargs):
     # Read session_id from kwargs first (set by SubagentTools caller),
@@ -752,7 +752,7 @@ async def run_stream(self, *prompts, depth: int = 0, require_all: bool = True, *
 **Solution**: Remove the dead field or connect it to `BaseAgent.session_id`:
 
 ```python
-# src/agentpool/agents/base_agent.py
+# src/wolfharness/agents/base_agent.py
 
 # BEFORE:
 run_ctx = AgentRunContext(deps=deps)
@@ -768,7 +768,7 @@ run_ctx = AgentRunContext(deps=deps, session_id=self.session_id)
 **Recommendation**: Option C (deprecate) — mark the field as deprecated using a descriptor that emits `DeprecationWarning` on access. Removing it is a public API break for external consumers. In a future major version, it can be removed entirely.
 
 ```python
-# src/agentpool/agents/context.py
+# src/wolfharness/agents/context.py
 
 import warnings
 from dataclasses import dataclass, field
@@ -835,7 +835,7 @@ AgentRunContext.session_id = _DeprecatedSessionId()  # type: ignore[assignment]
 **Solution**: Add `parent_session_id` parameter to `create_session()`. When provided, call `create_child_session()` (with inheritance). When not provided, create a top-level session with the existing project_id computation from cwd.
 
 ```python
-# src/agentpool_server/acp_server/session_manager.py
+# src/wolfharness_server/acp_server/session_manager.py
 
 # BEFORE:
 async def create_session(
@@ -892,7 +892,7 @@ async def create_session(
             )
         else:
             # Top-level ACP session — compute project_id from cwd
-            from agentpool_storage.opencode_provider.helpers import compute_project_id
+            from wolfharness_storage.opencode_provider.helpers import compute_project_id
             project_id = compute_project_id(cwd)
             data = SessionData(
                 session_id=session_id,
@@ -941,7 +941,7 @@ The second `store.save()` would **overwrite** the correct data from step 1.
 **Solution**: `ensure_session()` must skip `store.save()` when the session was already persisted:
 
 ```python
-# src/agentpool_server/opencode_server/state.py
+# src/wolfharness_server/opencode_server/state.py
 
 async def ensure_session(self, session_id: str, parent_id: str | None = None) -> Session:
     # Check if session already exists in memory
@@ -1011,7 +1011,7 @@ A native agent's implementation type is `"native"`, but its delegation source ty
 **Solution**: Provide two separate, type-safe functions with distinct return types:
 
 ```python
-# src/agentpool/messaging/messagenode.py
+# src/wolfharness/messaging/messagenode.py
 
 class MessageNode:
     # ... existing code ...
@@ -1024,9 +1024,9 @@ class MessageNode:
         Returns values from AgentTypeLiteral domain.
         """
         # Import locally to avoid circular imports
-        from agentpool.agents.base_agent import BaseAgent
-        from agentpool.delegation.team import Team
-        from agentpool.delegation.teamrun import TeamRun
+        from wolfharness.agents.base_agent import BaseAgent
+        from wolfharness.delegation.team import Team
+        from wolfharness.delegation.teamrun import TeamRun
 
         if isinstance(self, Team | TeamRun):
             return "team"
@@ -1036,10 +1036,10 @@ class MessageNode:
 ```
 
 ```python
-# src/agentpool/agents/helpers.py
+# src/wolfharness/agents/helpers.py
 
 from typing import Literal
-from agentpool.messaging.messagenode import MessageNode
+from wolfharness.messaging.messagenode import MessageNode
 
 # The return type matches SpawnSessionStart.source_type and SubAgentEvent.source_type
 SourceType = Literal["agent", "team_parallel", "team_sequential"]
@@ -1054,9 +1054,9 @@ def get_source_type(node: MessageNode) -> SourceType:
     - agent_type = implementation type (native, acp, claude, codex, team)
     - source_type = delegation type (agent, team_parallel, team_sequential)
     """
-    from agentpool.delegation.team import Team
-    from agentpool.delegation.teamrun import TeamRun
-    from agentpool.agents.base_agent import BaseAgent
+    from wolfharness.delegation.team import Team
+    from wolfharness.delegation.teamrun import TeamRun
+    from wolfharness.agents.base_agent import BaseAgent
 
     match node:
         case Team():
@@ -1073,7 +1073,7 @@ def get_source_type(node: MessageNode) -> SourceType:
 - `get_source_type(node)` → used for `SpawnSessionStart.source_type`, `SubAgentEvent.source_type` (returns `"agent"` / `"team_parallel"` / `"team_sequential"`)
 - `node.agent_type` → used for `SessionData.agent_type`, `create_child_session(agent_type=...)` (returns `"native"` / `"acp"` / `"team"` etc.)
 
-**Pre-existing codebase bug**: `team.py:32` and `teamrun.py:28` import `SubAgentType` from `agentpool.agents.events.events` inside `TYPE_CHECKING` blocks, but `SubAgentType` does **not exist** in that module. This is a type-checking error that's silently ignored at runtime. The new `SourceType` type alias and `get_source_type()` function in `helpers.py` replace this broken import. **Implementation action**: Update the `TYPE_CHECKING` imports in `team.py` and `teamrun.py` to use `from agentpool.agents.helpers import SourceType` instead of the broken `SubAgentType` import.
+**Pre-existing codebase bug**: `team.py:32` and `teamrun.py:28` import `SubAgentType` from `wolfharness.agents.events.events` inside `TYPE_CHECKING` blocks, but `SubAgentType` does **not exist** in that module. This is a type-checking error that's silently ignored at runtime. The new `SourceType` type alias and `get_source_type()` function in `helpers.py` replace this broken import. **Implementation action**: Update the `TYPE_CHECKING` imports in `team.py` and `teamrun.py` to use `from wolfharness.agents.helpers import SourceType` instead of the broken `SubAgentType` import.
 
 **`AgentTypeLiteral` domain note**: `AgentTypeLiteral = Literal["native", "acp", "agui", "claude", "codex"]` does NOT include `"team"`. The `MessageNode.agent_type` property returns `"team"` for Team/TeamRun instances, which is outside the `AgentTypeLiteral` domain. This is acceptable because `SessionData.agent_type` is typed as `str | None` (not `AgentTypeLiteral`), so storing `"team"` is valid at runtime and in the persistence layer. The `"team"` value provides useful semantic information about which kind of node created the session. If stricter typing is desired in the future, `AgentTypeLiteral` could be extended to include `"team"`.
 
@@ -1123,7 +1123,7 @@ Calling Session (parent)
 Providers must enforce a maximum delegation depth to prevent unbounded recursion:
 
 ```python
-# src/agentpool/agents/base_agent.py or constants
+# src/wolfharness/agents/base_agent.py or constants
 
 MAX_DELEGATION_DEPTH = 10  # Hard cap on delegation nesting
 
@@ -1137,10 +1137,10 @@ if current_depth >= MAX_DELEGATION_DEPTH:
 child_depth = current_depth + 1
 ```
 
-`DelegationDepthError` is defined in `src/agentpool/agents/exceptions.py` alongside other agent-specific exceptions. `MAX_DELEGATION_DEPTH` is a module-level constant in the same file.
+`DelegationDepthError` is defined in `src/wolfharness/agents/exceptions.py` alongside other agent-specific exceptions. `MAX_DELEGATION_DEPTH` is a module-level constant in the same file.
 
 ```python
-# src/agentpool/agents/exceptions.py
+# src/wolfharness/agents/exceptions.py
 
 class DelegationDepthError(Exception):
     """Raised when delegation depth exceeds MAX_DELEGATION_DEPTH."""
@@ -1834,9 +1834,9 @@ Verify both `agent_type` and `get_source_type()` return domain-appropriate value
 async def test_messagenode_agent_type_and_source_type():
     """MessageNode.agent_type and get_source_type() must return
     values from their respective domains."""
-    from agentpool.agents.base_agent import BaseAgent
-    from agentpool.delegation.team import Team
-    from agentpool.delegation.teamrun import TeamRun
+    from wolfharness.agents.base_agent import BaseAgent
+    from wolfharness.delegation.team import Team
+    from wolfharness.delegation.teamrun import TeamRun
 
     native = Agent(name="native", model="test")
     team = Team([native], name="team")
@@ -1848,7 +1848,7 @@ async def test_messagenode_agent_type_and_source_type():
     assert teamrun.agent_type == "team"  # Implementation type
 
     # get_source_type returns delegation source type (source_type domain)
-    from agentpool.agents.helpers import get_source_type
+    from wolfharness.agents.helpers import get_source_type
     assert get_source_type(native) == "agent"       # NOT "native"!
     assert get_source_type(team) == "team_parallel"  # NOT "team"!
     assert get_source_type(teamrun) == "team_sequential"  # NOT "team"!
@@ -1862,7 +1862,7 @@ Verify that `get_source_type()` return values are valid for `source_type` fields
 async def test_get_source_type_compatible_with_source_type_literal():
     """get_source_type() must return values accepted by
     SpawnSessionStart.source_type and SubAgentEvent.source_type."""
-    from agentpool.agents.helpers import get_source_type, SourceType
+    from wolfharness.agents.helpers import get_source_type, SourceType
 
     for node in [native_agent, acp_agent, team, teamrun]:
         result = get_source_type(node)
@@ -1901,8 +1901,8 @@ Verify the `case _` branch in `get_source_type()` returns `"agent"` with a warni
 async def test_get_source_type_wildcard_defaults_to_agent():
     """Unknown MessageNode subclasses should default to 'agent'
     with a warning log."""
-    from agentpool.agents.helpers import get_source_type
-    from agentpool.messaging.messagenode import MessageNode
+    from wolfharness.agents.helpers import get_source_type
+    from wolfharness.messaging.messagenode import MessageNode
 
     class CustomNode(MessageNode):
         name: str = "custom"
@@ -1921,7 +1921,7 @@ Verify the descriptor works correctly with `dataclasses.asdict()`:
 async def test_deprecated_session_id_asdict():
     """dataclasses.asdict() should work with the _DeprecatedSessionId
     descriptor, triggering deprecation warning on access."""
-    from agentpool.agents.context import AgentRunContext
+    from wolfharness.agents.context import AgentRunContext
 
     ctx = AgentRunContext(deps=None, depth=0)
     with pytest.warns(DeprecationWarning, match="session_id"):
@@ -1938,10 +1938,10 @@ def test_messagenode_agent_type_no_circular_import():
     """MessageNode.agent_type property with local imports should not
     cause circular import errors at module load time."""
     import importlib
-    import agentpool.messaging.messagenode
+    import wolfharness.messaging.messagenode
 
     # Force re-import to detect circular dependency
-    importlib.reload(agentpool.messaging.messagenode)
+    importlib.reload(wolfharness.messaging.messagenode)
     # Should not raise ImportError
 ```
 
@@ -2046,7 +2046,7 @@ async def test_ensure_session_store_first_skips_bind():
 | 2 | Component #9 factual error — `BaseAgent.run_stream()` does NOT propagate `parent_session_id` → `parent_id`; they are independent parameters (session-level vs message-level) | Metis HR-5 | ✅ Rewrote Component #10 (renumbered) with correct distinction and explanation of how `Session.parent_id` is populated |
 | 3 | `_stream_task()` pseudocode missing — `skip_spawn_event` described in text but no pseudocode; simpler approach: remove SpawnSessionStart from `_stream_task()` entirely | Oracle SHOULD, Metis HR-7 | ✅ Replaced `skip_spawn_event` with structural single-emission: `_stream_task()` never emits `SpawnSessionStart` |
 | 4 | Duplicate "#### 8." numbering still broken — added Component #8 without renumbering | Oracle SHOULD | ✅ Renumbered 8→8, 8→9, 9→10, 10→11, 11→12 |
-| 5 | `DelegationDepthError` referenced but undefined — no module location specified | Oracle SHOULD | ✅ Added definition in `src/agentpool/agents/exceptions.py` with `MAX_DELEGATION_DEPTH` constant |
+| 5 | `DelegationDepthError` referenced but undefined — no module location specified | Oracle SHOULD | ✅ Added definition in `src/wolfharness/agents/exceptions.py` with `MAX_DELEGATION_DEPTH` constant |
 | 6 | `TeamRun.run_stream()` pseudocode drops `require_all: bool = True` parameter | Metis AMB-3 | ✅ Added `require_all` to TeamRun signature |
 | 7 | `ensure_session()` in-memory path returns without broadcasting `SessionUpdatedEvent` — TUI regression vs current code | Metis AMB-4 | ✅ Added `SessionUpdatedEvent` broadcast to in-memory return path |
 | 8 | WorkersTools hardcodes `depth=1` in four locations — breaks nested delegation | Metis AMB-6 | ✅ Added depth propagation specification: `(ctx.run_ctx.depth if ctx.run_ctx is not None else 0) + 1` |
@@ -2123,15 +2123,15 @@ async def test_ensure_session_store_first_skips_bind():
 
 ### Key Source Files
 
-- `src/agentpool/sessions/manager.py` — `SessionManager.create_child_session()`
-- `src/agentpool/sessions/store.py` — `SessionStore` protocol
-- `src/agentpool/sessions/models.py` — `SessionData` model
-- `src/agentpool_toolsets/builtin/subagent_tools.py` — SubagentTools
-- `src/agentpool_toolsets/builtin/workers.py` — WorkersTools
-- `src/agentpool/delegation/team.py` — Team (parallel)
-- `src/agentpool/delegation/teamrun.py` — TeamRun (sequential)
-- `src/agentpool/agents/context.py` — `AgentContext`
-- `src/agentpool/agents/events/events.py` — `SpawnSessionStart`, `SubAgentEvent`
-- `src/agentpool_server/opencode_server/state.py` — `ServerState.ensure_session()`
-- `src/agentpool_server/opencode_server/event_processor.py` — `EventProcessor`
-- `src/agentpool_server/acp_server/session_manager.py` — `ACPSessionManager`
+- `src/wolfharness/sessions/manager.py` — `SessionManager.create_child_session()`
+- `src/wolfharness/sessions/store.py` — `SessionStore` protocol
+- `src/wolfharness/sessions/models.py` — `SessionData` model
+- `src/wolfharness_toolsets/builtin/subagent_tools.py` — SubagentTools
+- `src/wolfharness_toolsets/builtin/workers.py` — WorkersTools
+- `src/wolfharness/delegation/team.py` — Team (parallel)
+- `src/wolfharness/delegation/teamrun.py` — TeamRun (sequential)
+- `src/wolfharness/agents/context.py` — `AgentContext`
+- `src/wolfharness/agents/events/events.py` — `SpawnSessionStart`, `SubAgentEvent`
+- `src/wolfharness_server/opencode_server/state.py` — `ServerState.ensure_session()`
+- `src/wolfharness_server/opencode_server/event_processor.py` — `EventProcessor`
+- `src/wolfharness_server/acp_server/session_manager.py` — `ACPSessionManager`

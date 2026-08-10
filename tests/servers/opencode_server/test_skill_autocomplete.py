@@ -14,14 +14,14 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 import pytest
 from upathtools import UPath
 
-from agentpool.skills.command import SkillCommand
-from agentpool.skills.skill import Skill
+from wolfharness.skills.command import SkillCommand
+from wolfharness.skills.skill import Skill
 
 
 if TYPE_CHECKING:
     from httpx import AsyncClient
 
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness_server.opencode_server.state import ServerState
 
 
 pytestmark = pytest.mark.asyncio
@@ -109,7 +109,7 @@ async def test_command_endpoint_skill_provider_fallback(
     server_state.skill_bridge = None
 
     # Create skill_resolver mock
-    from agentpool.capabilities.resource_protocols import SkillEntry
+    from wolfharness.capabilities.resource_protocols import SkillEntry
 
     mock_entry = SkillEntry(
         name="provider-skill",

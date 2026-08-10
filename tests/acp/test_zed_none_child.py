@@ -4,7 +4,7 @@ Verifies that ``SubAgentEvent`` with ``child_session_id=None`` (or other
 unknown/missing values) in zed mode does not raise ``KeyError`` or crash,
 matching the plan requirement in ``tasks.md 6.8``.
 
-Ref: ``src/agentpool_server/acp_server/event_converter.py:690-693``
+Ref: ``src/wolfharness_server/acp_server/event_converter.py:690-693``
 """
 
 from __future__ import annotations
@@ -13,15 +13,15 @@ from pydantic_ai import PartStartEvent, TextPart, TextPartDelta, ThinkingPart
 from pydantic_ai.usage import RequestUsage
 import pytest
 
-from agentpool.agents.events import (
+from wolfharness.agents.events import (
     PartDeltaEvent,
     RunErrorEvent,
     SpawnSessionStart,
     StreamCompleteEvent,
     SubAgentEvent,
 )
-from agentpool.messaging.messages import ChatMessage
-from agentpool_server.acp_server.event_converter import ACPEventConverter
+from wolfharness.messaging.messages import ChatMessage
+from wolfharness_server.acp_server.event_converter import ACPEventConverter
 
 
 # ---------------------------------------------------------------------------

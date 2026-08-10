@@ -10,7 +10,7 @@ import logging
 
 import pytest
 
-from agentpool_server.acp_server.server import _coerce_subagent_display_mode
+from wolfharness_server.acp_server.server import _coerce_subagent_display_mode
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +99,7 @@ def test_coerce_qwen(caplog: pytest.LogCaptureFixture):
 @pytest.mark.unit
 def test_pool_server_config_accepts_qwen():
     """ACPPoolServerConfig accepts 'qwen' without ValidationError."""
-    from agentpool_config.pool_server import ACPPoolServerConfig
+    from wolfharness_config.pool_server import ACPPoolServerConfig
 
     config = ACPPoolServerConfig(subagent_display_mode="qwen")
     assert config.subagent_display_mode == "qwen"

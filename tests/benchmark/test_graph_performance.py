@@ -21,16 +21,16 @@ from typing import TYPE_CHECKING, Any
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool import Agent, BaseTeam
-from agentpool.agents.events import RunStartedEvent
-from agentpool.delegation.graph_team import build_team_graph
+from wolfharness import Agent, BaseTeam
+from wolfharness.agents.events import RunStartedEvent
+from wolfharness.delegation.graph_team import build_team_graph
 
 
 pytestmark = pytest.mark.unit
 
 
 if TYPE_CHECKING:
-    from agentpool.messaging import ChatMessage
+    from wolfharness.messaging import ChatMessage
 
 
 # Threshold: graph-based must be within 40% of direct execution.

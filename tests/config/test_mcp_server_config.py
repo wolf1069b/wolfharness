@@ -9,7 +9,7 @@ from __future__ import annotations
 from pydantic import HttpUrl
 import pytest
 
-from agentpool_config.mcp_server import (
+from wolfharness_config.mcp_server import (
     AcpMCPServerConfig,
     SSEMCPServerConfig,
     StdioMCPServerConfig,

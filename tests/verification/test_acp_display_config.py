@@ -44,7 +44,7 @@ def test_config_model() -> bool:
     print_section("Test 1: Config Model Field")
 
     try:
-        from agentpool_config.pool_server import ACPPoolServerConfig
+        from wolfharness_config.pool_server import ACPPoolServerConfig
 
         # Test 1.1: Field accepts "zed" (new mode)
         config_zed = ACPPoolServerConfig(subagent_display_mode="zed")
@@ -98,7 +98,7 @@ def test_default_value() -> bool:
     print_section("Test 2: Default Value")
 
     try:
-        from agentpool_config.pool_server import ACPPoolServerConfig
+        from wolfharness_config.pool_server import ACPPoolServerConfig
 
         # Test default value
         config_default = ACPPoolServerConfig()
@@ -119,7 +119,7 @@ def test_cli_option() -> bool:
     try:
         # Test that help shows the option
         result = subprocess.run(
-            ["uv", "run", "agentpool", "serve-acp", "--help"],
+            ["uv", "run", "wolfharness", "serve-acp", "--help"],
             capture_output=True,
             text=True,
             timeout=30,
@@ -147,10 +147,10 @@ def test_server_initialization() -> bool:
     print_section("Test 4: Server Initialization")
 
     try:
-        from agentpool import AgentPool
-        from agentpool.models.manifest import AgentsManifest
-        from agentpool_config.pool_server import ACPPoolServerConfig
-        from agentpool_server.acp_server.server import ACPServer
+        from wolfharness import AgentPool
+        from wolfharness.models.manifest import AgentsManifest
+        from wolfharness_config.pool_server import ACPPoolServerConfig
+        from wolfharness_server.acp_server.server import ACPServer
 
         # Create a minimal manifest
         manifest_dict = {
@@ -220,7 +220,7 @@ def test_agent_display_mode() -> bool:
         from dataclasses import fields
         import inspect
 
-        from agentpool_server.acp_server.acp_agent import AgentPoolACPAgent
+        from wolfharness_server.acp_server.acp_agent import AgentPoolACPAgent
 
         # Test 5.1: AgentPoolACPAgent has subagent_display_mode field
         field_names = [f.name for f in fields(AgentPoolACPAgent)]
@@ -262,7 +262,7 @@ def test_session_display_mode() -> bool:
     try:
         from dataclasses import fields
 
-        from agentpool_server.acp_server.session import ACPSession
+        from wolfharness_server.acp_server.session import ACPSession
 
         # Test 6.1: ACPSession has subagent_display_mode field
         field_names = [f.name for f in fields(ACPSession)]
@@ -295,8 +295,8 @@ def test_end_to_end_flow() -> bool:
     try:
         from dataclasses import fields
 
-        from agentpool.models.manifest import AgentsManifest
-        from agentpool_server.acp_server.server import ACPServer
+        from wolfharness.models.manifest import AgentsManifest
+        from wolfharness_server.acp_server.server import ACPServer
 
         # Create minimal manifest
         manifest_dict = {
@@ -317,7 +317,7 @@ def test_end_to_end_flow() -> bool:
 
         # Test 7.2: Verify agent has access to mode via server reference
         # (AgentPoolACPAgent gets subagent_display_mode from server at instantiation)
-        from agentpool_server.acp_server.acp_agent import AgentPoolACPAgent
+        from wolfharness_server.acp_server.acp_agent import AgentPoolACPAgent
 
         # Check that AgentPoolACPAgent stores the mode
         sig_fields = {f.name: f for f in fields(AgentPoolACPAgent)}
@@ -328,7 +328,7 @@ def test_end_to_end_flow() -> bool:
         # SessionManager.create_session accepts subagent_display_mode parameter
         import inspect
 
-        from agentpool_server.acp_server.session_manager import ACPSessionManager
+        from wolfharness_server.acp_server.session_manager import ACPSessionManager
 
         sig = inspect.signature(ACPSessionManager.create_session)
         params = sig.parameters
@@ -349,7 +349,7 @@ def test_end_to_end_flow() -> bool:
             return False
 
         # Test 7.4: Verify ACPSession stores the mode
-        from agentpool_server.acp_server.session import ACPSession
+        from wolfharness_server.acp_server.session import ACPSession
 
         sig_fields = {f.name: f for f in fields(ACPSession)}
         assert "subagent_display_mode" in sig_fields

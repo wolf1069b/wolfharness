@@ -23,18 +23,18 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from agentpool_server.opencode_server.models import (
+from wolfharness_server.opencode_server.models import (
     MessageWithParts,
     Session,
     TextPart,
     TimeCreatedUpdated,
     UserMessage,
 )
-from agentpool_server.opencode_server.routes.session_routes import get_or_load_session
+from wolfharness_server.opencode_server.routes.session_routes import get_or_load_session
 
 
 if TYPE_CHECKING:
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness_server.opencode_server.state import ServerState
 
 
 def _make_session(session_id: str, parent_id: str | None = None) -> Session:
@@ -52,7 +52,7 @@ def _make_session(session_id: str, parent_id: str | None = None) -> Session:
 
 def _make_dummy_message(session_id: str) -> MessageWithParts:
     """Create a minimal message for populating session history."""
-    from agentpool_server.opencode_server.models import TimeCreated
+    from wolfharness_server.opencode_server.models import TimeCreated
 
     return MessageWithParts(
         info=UserMessage(

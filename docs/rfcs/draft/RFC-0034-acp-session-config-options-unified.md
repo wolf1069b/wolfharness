@@ -48,7 +48,7 @@ AgentPool 当前实现：
 - `NewSessionResponse.config_options` → 透出所有 `agent.get_modes()` 返回的 categories（`get_session_config_options()`）
 - `NewSessionResponse.models` → 透出 tokonomics 发现的模型 + manifest model_variants（`get_session_model_state()`）
 
-#### agentpool 内部的 `get_modes()` 体系
+#### wolfharness 内部的 `get_modes()` 体系
 
 各 agent 类型的 `get_modes()` 返回如下 categories：
 
@@ -465,7 +465,7 @@ ACP 协议 PR #648（已 MERGED）定义了 `providers/list`、`providers/set`�
 │                                                                  │
 │  ┌─ 运行时路由 ───────────────────────────────────────────────┐  │
 │  │                                                              │  │
-│  │  Provider 路由表（agentpool 内存维护）                       │  │
+│  │  Provider 路由表（wolfharness 内存维护）                       │  │
 │  │    默认：manifest model_variants → provider → default URL   │  │
 │  │    覆盖：providers/set → provider → client URL + headers    │  │
 │  │    禁用：providers/disable → provider → null（不可路由）     │  │
@@ -483,7 +483,7 @@ ACP 协议 PR #648（已 MERGED）定义了 `providers/list`、`providers/set`�
 
 #### 数据模型
 
-从 ACP PR #648 协议定义映射到 agentpool 的类型：
+从 ACP PR #648 协议定义映射到 wolfharness 的类型：
 
 ```python
 # acp/schema/providers.py（新增文件）
@@ -540,7 +540,7 @@ class ProvidersDisableResponse(BaseModel):
 
 #### Provider 路由表
 
-agentpool 内存维护一个 provider 路由表，存储 `providers/set` 的覆盖配置：
+wolfharness 内存维护一个 provider 路由表，存储 `providers/set` 的覆盖配置：
 
 ```python
 # acp_server/provider_router.py（新增文件）
@@ -806,7 +806,7 @@ async def get_session_model_state(
     agent: BaseAgent,
     provider_router: ProviderRouter | None = None,
 ) -> SessionModelState | None:
-    from agentpool_server.shared.model_utils import build_model_state_for_acp
+    from wolfharness_server.shared.model_utils import build_model_state_for_acp
     manifest = getattr(getattr(agent, "agent_pool", None), "manifest", None)
     return await build_model_state_for_acp(agent, manifest, provider_router)
 ```
@@ -1233,19 +1233,19 @@ Phase 0 必须最先实施（Phase 1 依赖 `ProviderRouter`）。Phase 1 和 Ph
 
 ### AgentPool 源码
 
-- `packages/agentpool/src/agentpool_server/acp_server/acp_agent.py` — ACP server 核心，`get_session_model_state`、`get_session_config_options`
-- `packages/agentpool/src/agentpool_server/acp_server/converters.py` — `to_session_config_option()`、`agent_to_mode()`（已有但未使用）
-- `packages/agentpool/src/agentpool_server/opencode_server/routes/config_routes.py` — OpenCode model list 逻辑、`/mode` 路由
-- `packages/agentpool/src/agentpool_server/shared/model_utils.py` — 现有共享 model 工具函数
-- `packages/agentpool/src/agentpool/agents/native_agent/helpers.py` — `get_permission_category()`、`get_model_category()`
-- `packages/agentpool/src/agentpool/agents/modes.py` — `ModeCategory`、`ModeInfo`、`ModeCategoryId`
-- `packages/agentpool/src/acp/schema/capabilities.py` — `AgentCapabilities`（需新增 `providers` 字段）
-- `packages/agentpool/src/agentpool/models/manifest.py` — `AgentsManifest.model_variants`（`providers/list` 的数据来源）
+- `packages/wolfharness/src/wolfharness_server/acp_server/acp_agent.py` — ACP server 核心，`get_session_model_state`、`get_session_config_options`
+- `packages/wolfharness/src/wolfharness_server/acp_server/converters.py` — `to_session_config_option()`、`agent_to_mode()`（已有但未使用）
+- `packages/wolfharness/src/wolfharness_server/opencode_server/routes/config_routes.py` — OpenCode model list 逻辑、`/mode` 路由
+- `packages/wolfharness/src/wolfharness_server/shared/model_utils.py` — 现有共享 model 工具函数
+- `packages/wolfharness/src/wolfharness/agents/native_agent/helpers.py` — `get_permission_category()`、`get_model_category()`
+- `packages/wolfharness/src/wolfharness/agents/modes.py` — `ModeCategory`、`ModeInfo`、`ModeCategoryId`
+- `packages/wolfharness/src/acp/schema/capabilities.py` — `AgentCapabilities`（需新增 `providers` 字段）
+- `packages/wolfharness/src/wolfharness/models/manifest.py` — `AgentsManifest.model_variants`（`providers/list` 的数据来源）
 
 ### ACP 协议
 
-- `packages/agentpool/src/acp/schema/session_state.py` — `SessionConfigOption`、`SessionConfigOptionCategory`、`SessionModeState`
-- `packages/agentpool/src/acp/schema/agent_responses.py` — `NewSessionResponse`（`models`、`modes`、`config_options` 字段）
+- `packages/wolfharness/src/acp/schema/session_state.py` — `SessionConfigOption`、`SessionConfigOptionCategory`、`SessionModeState`
+- `packages/wolfharness/src/acp/schema/agent_responses.py` — `NewSessionResponse`（`models`、`modes`、`config_options` 字段）
 - [ACP 协议官网](https://agentclientprotocol.com/protocol/session-modes)
 - [ACP PR #648: Configurable LLM Providers](https://github.com/agentclientprotocol/agent-client-protocol/pull/648) — `providers/*` 方法族定义（已 MERGED）
 - `packages/agent-client-protocol/docs/rfds/custom-llm-endpoint.mdx` — ACP RFD 原文

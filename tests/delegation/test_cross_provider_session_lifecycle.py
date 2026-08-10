@@ -25,16 +25,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentpool import Agent, AgentPool, AgentsManifest, BaseTeam
-from agentpool.agents.context import AgentContext, AgentRunContext
-from agentpool.agents.events import (
+from wolfharness import Agent, AgentPool, AgentsManifest, BaseTeam
+from wolfharness.agents.context import AgentContext, AgentRunContext
+from wolfharness.agents.events import (
     RunStartedEvent,
     SpawnSessionStart,
     SubAgentEvent,
 )
-from agentpool.agents.exceptions import MAX_DELEGATION_DEPTH, DelegationDepthError
-from agentpool.sessions import SessionData
-from agentpool_storage.memory_provider.provider import MemoryStorageProvider
+from wolfharness.agents.exceptions import MAX_DELEGATION_DEPTH, DelegationDepthError
+from wolfharness.sessions import SessionData
+from wolfharness_storage.memory_provider.provider import MemoryStorageProvider
 
 
 pytestmark = pytest.mark.integration
@@ -53,7 +53,7 @@ def _make_echo_agent(name: str, response: str = "hello") -> Agent[Any, str]:
     """Create an Agent that echoes a fixed response via function_to_model."""
     from functools import partial
 
-    from agentpool.utils.model_helpers import function_to_model
+    from wolfharness.utils.model_helpers import function_to_model
 
     async def _echo(_msg: str, *, _response: str = response) -> str:
         return _response
@@ -343,10 +343,10 @@ agents:
 
 async def test_acp_child_session_inherits_parent_project_and_cwd() -> None:
     """TG-10: ACP child session created via ACPSessionManager with parent_session_id...."""
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.manifest import AgentsManifest
-    from agentpool.orchestrator.core import SessionPool
-    from agentpool_server.acp_server.session_manager import ACPSessionManager
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.manifest import AgentsManifest
+    from wolfharness.orchestrator.core import SessionPool
+    from wolfharness_server.acp_server.session_manager import ACPSessionManager
 
     manifest = AgentsManifest(agents={"acp_agent": NativeAgentConfig(model="test")})
     pool = AgentPool(manifest)
@@ -363,7 +363,7 @@ async def test_acp_child_session_inherits_parent_project_and_cwd() -> None:
 
     # Create parent session with known project_id and cwd
     parent_cwd = tempfile.gettempdir()
-    from agentpool_storage.opencode_provider.helpers import compute_project_id
+    from wolfharness_storage.opencode_provider.helpers import compute_project_id
 
     parent_project_id = compute_project_id(parent_cwd)
     parent_data = SessionData(
@@ -379,8 +379,8 @@ async def test_acp_child_session_inherits_parent_project_and_cwd() -> None:
     mock_acp_agent = MagicMock()
 
     with (
-        patch("agentpool_server.acp_server.session_manager.ACPSession") as mock_session_cls,
-        patch("agentpool_server.acp_server.session_manager.ClientCapabilities"),
+        patch("wolfharness_server.acp_server.session_manager.ACPSession") as mock_session_cls,
+        patch("wolfharness_server.acp_server.session_manager.ClientCapabilities"),
     ):
         mock_session_instance = MagicMock()
         mock_session_instance.register_update_callback = MagicMock()
@@ -412,7 +412,7 @@ async def test_acp_child_session_inherits_parent_project_and_cwd() -> None:
 
 async def test_subagent_depth_guard_before_session_creation() -> None:
     """TG-14: When depth >= MAX_DELEGATION_DEPTH, DelegationDepthError is raised BEFORE...."""
-    from agentpool_toolsets.builtin.subagent_tools import SubagentTools
+    from wolfharness_toolsets.builtin.subagent_tools import SubagentTools
 
     manifest = AgentsManifest.from_yaml("""
 agents:
@@ -828,7 +828,7 @@ agents:
 
     async with AgentPool(manifest) as pool:
         # Add team to manifest so subagent tool can find it
-        from agentpool_config.teams import TeamConfig
+        from wolfharness_config.teams import TeamConfig
 
         pool.manifest.teams["work_team"] = TeamConfig(mode="parallel", members=["alpha", "beta"])
         inner_team.agent_pool = pool

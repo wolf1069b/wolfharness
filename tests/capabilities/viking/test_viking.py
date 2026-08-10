@@ -18,27 +18,27 @@ from pydantic_ai.models import ModelRequestContext, ModelRequestParameters
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool.capabilities.viking import VikingCapability, _normalize_search_results
-from agentpool.capabilities.viking.identity import VikingIdentity, _try_decode_api_key
-from agentpool.capabilities.viking.profile import (
+from wolfharness.capabilities.viking import VikingCapability, _normalize_search_results
+from wolfharness.capabilities.viking.identity import VikingIdentity, _try_decode_api_key
+from wolfharness.capabilities.viking.profile import (
     _derive_context_hint,
     _format_profile_block,
 )
-from agentpool.capabilities.viking.recall import (
+from wolfharness.capabilities.viking.recall import (
     _extract_latest_user_prompt,
     _format_recall_block,
     _inject_system_message,
     _rank_and_dedup,
 )
-from agentpool.capabilities.viking.tools import build_tools
-from agentpool.capabilities.viking.utils import (
+from wolfharness.capabilities.viking.tools import build_tools
+from wolfharness.capabilities.viking.utils import (
     add_line_numbers,
     format_ls_entries,
     format_search_results,
     is_viking_uri,
     truncate_text,
 )
-from agentpool_config.capabilities import VikingCapabilityConfig, build_capability
+from wolfharness_config.capabilities import VikingCapabilityConfig, build_capability
 
 
 pytestmark = pytest.mark.unit
@@ -47,45 +47,6 @@ pytestmark = pytest.mark.unit
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def mock_client() -> AsyncMock:
-    """Create a mock AsyncHTTPClient with all SDK methods."""
-    client = AsyncMock()
-    client.initialize = AsyncMock()
-    client.close = AsyncMock()
-    client.search = AsyncMock(return_value={"results": []})
-    client.find = AsyncMock(return_value={"results": []})
-    client.grep = AsyncMock(return_value={"matches": []})
-    client.glob = AsyncMock(return_value={"matches": []})
-    client.ls = AsyncMock(return_value=[])
-    client.read = AsyncMock(return_value="file content")
-    client.abstract = AsyncMock(return_value="abstract summary")
-    client.overview = AsyncMock(return_value="overview content")
-    client.write = AsyncMock(return_value={"status": "ok"})
-    client.mkdir = AsyncMock(return_value=None)
-    client.rm = AsyncMock(return_value=None)
-    client.link = AsyncMock(return_value=None)
-    client.set_tags = AsyncMock(return_value={"status": "ok"})
-    client.add_resource = AsyncMock(return_value={"status": "ok"})
-    client.create_session = AsyncMock(return_value={"session_id": "test-session"})
-    client.add_message = AsyncMock(return_value={"status": "ok"})
-    client.commit_session = AsyncMock(return_value={"status": "ok"})
-    client.get_session_context = AsyncMock(return_value={})
-    client._request = AsyncMock(return_value={})
-    return client
-
-
-@pytest.fixture
-def viking_cap(mock_client: AsyncMock) -> VikingCapability:
-    """Create a VikingCapability with a mock client pre-injected.
-
-    Enables link and memory features so all tools are available for testing.
-    """
-    cap = VikingCapability(mode="all", enable_link=True, enable_memory=True, enable_forget=True)
-    cap._client = mock_client
-    return cap
 
 
 def _make_ctx(session_id: str | None = "test-session") -> MagicMock:
@@ -220,7 +181,7 @@ class TestVikingCapabilityConfig:
         """The 'type' field discriminator correctly identifies VikingCapabilityConfig."""
         import typing
 
-        from agentpool_config.capabilities import BuiltinCapabilityConfig
+        from wolfharness_config.capabilities import BuiltinCapabilityConfig
 
         cfg = VikingCapabilityConfig()
         assert cfg.type == "viking"
@@ -243,7 +204,7 @@ class TestShouldReturnImageBytes:
     def _cap(
         support_vision: bool | None = None, image_input: bool | None = None
     ) -> VikingCapability:
-        from agentpool_config.model_capabilities import ModelCapabilities
+        from wolfharness_config.model_capabilities import ModelCapabilities
 
         cap = VikingCapability(mode="all", support_vision=support_vision)
         cap.model_capabilities = ModelCapabilities(image_input=image_input)
@@ -793,7 +754,7 @@ class TestRetrieveTools:
         self, viking_cap: VikingCapability, mock_client: AsyncMock
     ) -> None:
         """support_vision=None + image_input=True returns image bytes."""
-        from agentpool_config.model_capabilities import ModelCapabilities
+        from wolfharness_config.model_capabilities import ModelCapabilities
 
         viking_cap.support_vision = None
         viking_cap.model_capabilities = ModelCapabilities(image_input=True)
@@ -814,7 +775,7 @@ class TestRetrieveTools:
         self, viking_cap: VikingCapability, mock_client: AsyncMock
     ) -> None:
         """support_vision=None + image_input=False returns text URI hint."""
-        from agentpool_config.model_capabilities import ModelCapabilities
+        from wolfharness_config.model_capabilities import ModelCapabilities
 
         viking_cap.support_vision = None
         viking_cap.model_capabilities = ModelCapabilities(image_input=False)
@@ -967,35 +928,35 @@ class TestWriteTools:
     """Tests for the 6 write tools."""
 
     @pytest.mark.asyncio
-    async def test_viking_remember(
+    async def test_viking_remember_schedules_deferred_capture(
         self, viking_cap: VikingCapability, mock_client: AsyncMock
     ) -> None:
-        """viking_remember calls create_session -> add_message per msg -> commit_session."""
+        """viking_remember schedules a capture without touching the client."""
         tools = build_tools(viking_cap)
         remember_tool = _get_tool(tools, "viking_remember")
 
-        ctx = _make_ctx()
-        messages = [
-            {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": "Hi there"},
-        ]
-        result = await remember_tool(ctx, messages=messages)
+        result = await remember_tool(_make_ctx())
 
-        mock_client.create_session.assert_called_once()
-        assert mock_client.add_message.call_count == 2
-        mock_client.commit_session.assert_called_once()
+        # No session work happens at call time — the capture is deferred.
+        mock_client.create_session.assert_not_called()
+        mock_client.add_message.assert_not_called()
+        mock_client.commit_session.assert_not_called()
+        assert viking_cap._remember_pending == [""]
+        assert "Capture scheduled" in result.return_value
 
-        create_sid = mock_client.create_session.call_args.kwargs["session_id"]
-        assert mock_client.add_message.call_args_list[0].args[0] == create_sid
-        assert mock_client.add_message.call_args_list[0].args[1] == "user"
-        assert mock_client.add_message.call_args_list[0].args[2] == "Hello"
-        assert mock_client.add_message.call_args_list[1].args[0] == create_sid
-        assert mock_client.add_message.call_args_list[1].args[1] == "assistant"
-        assert mock_client.add_message.call_args_list[1].args[2] == "Hi there"
-        assert mock_client.commit_session.call_args.args[0] == create_sid
+    @pytest.mark.asyncio
+    async def test_viking_remember_records_reason(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """viking_remember appends the optional reason to the pending queue."""
+        tools = build_tools(viking_cap)
+        remember_tool = _get_tool(tools, "viking_remember")
 
-        assert "Remembered 2 messages" in result.return_value
-        assert create_sid in result.return_value
+        result = await remember_tool(_make_ctx(), reason="SY215 oil pressure is 34.3 MPa")
+
+        assert viking_cap._remember_pending == ["SY215 oil pressure is 34.3 MPa"]
+        assert "Capture scheduled" in result.return_value
+        mock_client.create_session.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_viking_write_default_mode(
@@ -1465,65 +1426,391 @@ class TestVikingRecallDetailed:
 # ---------------------------------------------------------------------------
 
 
-class TestVikingRememberDetailed:
-    """Detailed tests for viking_remember session sequence."""
+class TestVikingRememberDeferred:
+    """Deferred ``viking_remember`` capture semantics.
+
+    The tool only queues reasons; the drain runs at the next
+    ``before_model_request`` (or ``after_run``) and ingests the real
+    conversation into a ``remember-`` session.
+    """
 
     @pytest.mark.asyncio
-    async def test_session_creation_sequence(
+    async def test_drain_ingests_real_conversation_with_marker(
         self, viking_cap: VikingCapability, mock_client: AsyncMock
     ) -> None:
-        """create_session -> add_message (per msg) -> commit_session in order."""
-        tools = build_tools(viking_cap)
-        remember_tool = _get_tool(tools, "viking_remember")
+        """Drain ingests real pairs to a remember session, appends the marker."""
+        from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
-        ctx = _make_ctx()
+        tools = build_tools(viking_cap)
+        await _get_tool(tools, "viking_remember")(_make_ctx(), reason="remember this")
+
         messages = [
-            {"role": "user", "content": "What is Python?"},
-            {"role": "assistant", "content": "A programming language."},
-            {"role": "user", "content": "Thanks!"},
+            ModelRequest(parts=[UserPromptPart(content="What is X?")]),
+            ModelResponse(parts=[TextPart(content="X is a thing.")]),
         ]
-        result = await remember_tool(ctx, messages=messages)
+        rc = _make_request_context(messages)
+        result = await viking_cap._handle_remember_drain(_make_ctx(), rc)
 
-        mock_client.create_session.assert_called_once()
-        assert mock_client.add_message.call_count == 3
+        assert result is rc
+        assert mock_client.create_session.call_args.kwargs["session_id"].startswith("remember-")
+        add_calls = mock_client.add_message.call_args_list
+        assert (add_calls[0].args[1], add_calls[0].args[2]) == ("user", "What is X?")
+        assert (add_calls[1].args[1], add_calls[1].args[2]) == ("assistant", "X is a thing.")
+        # Intent marker appended as a trailing message
+        assert "<memory-intent>remember this</memory-intent>" in add_calls[2].args[2]
         mock_client.commit_session.assert_called_once()
-
-        session_id = mock_client.create_session.call_args.kwargs["session_id"]
-        for call in mock_client.add_message.call_args_list:
-            assert call.args[0] == session_id
-        assert mock_client.commit_session.call_args.args[0] == session_id
-
-        assert "Remembered 3 messages" in result.return_value
+        # Success semantics: cursor advanced, reasons cleared
+        assert viking_cap._last_ingested_idx == 2
+        assert viking_cap._remember_pending == []
 
     @pytest.mark.asyncio
-    async def test_remember_single_message(
+    async def test_drain_sanitizes_unconditionally(
         self, viking_cap: VikingCapability, mock_client: AsyncMock
     ) -> None:
-        """viking_remember works with a single message."""
+        """Drain strips injected XML blocks regardless of auto_ingest_sanitize."""
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
+
+        viking_cap.auto_ingest_sanitize = False  # remember must sanitize anyway
         tools = build_tools(viking_cap)
-        remember_tool = _get_tool(tools, "viking_remember")
+        await _get_tool(tools, "viking_remember")(_make_ctx())
 
-        ctx = _make_ctx()
-        result = await remember_tool(ctx, messages=[{"role": "user", "content": "Hi"}])
+        messages = [
+            ModelRequest(
+                parts=[UserPromptPart(content="Q <openviking-recall>secret</openviking-recall>")]
+            )
+        ]
+        rc = _make_request_context(messages)
+        await viking_cap._handle_remember_drain(_make_ctx(), rc)
 
-        assert mock_client.add_message.call_count == 1
-        assert "Remembered 1 messages" in result.return_value
+        add_calls = mock_client.add_message.call_args_list
+        assert "[recalled context omitted]" in add_calls[0].args[2]
+        assert "secret" not in add_calls[0].args[2]
 
     @pytest.mark.asyncio
-    async def test_remember_empty_messages(
+    async def test_drain_multiple_reasons_merge_into_one_commit(
         self, viking_cap: VikingCapability, mock_client: AsyncMock
     ) -> None:
-        """viking_remember works with empty messages list."""
+        """Two remember calls within a boundary merge into one capture."""
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
+
         tools = build_tools(viking_cap)
         remember_tool = _get_tool(tools, "viking_remember")
+        await remember_tool(_make_ctx(), reason="reason-a")
+        await remember_tool(_make_ctx(), reason="reason-b")
 
-        ctx = _make_ctx()
-        result = await remember_tool(ctx, messages=[])
+        messages = [ModelRequest(parts=[UserPromptPart(content="prompt")])]
+        rc = _make_request_context(messages)
+        await viking_cap._handle_remember_drain(_make_ctx(), rc)
+
+        # One session, one commit; marker per reason.
+        mock_client.create_session.assert_called_once()
+        mock_client.commit_session.assert_called_once()
+        marker_texts = " ".join(c.args[2] for c in mock_client.add_message.call_args_list)
+        assert "<memory-intent>reason-a</memory-intent>" in marker_texts
+        assert "<memory-intent>reason-b</memory-intent>" in marker_texts
+
+    @pytest.mark.asyncio
+    async def test_drain_no_op_without_pending(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """Without pending reasons the drain leaves the context untouched."""
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
+
+        messages = [ModelRequest(parts=[UserPromptPart(content="prompt")])]
+        rc = _make_request_context(messages)
+        result = await viking_cap._handle_remember_drain(_make_ctx(), rc)
+
+        assert result is rc
+        mock_client.create_session.assert_not_called()
+        assert viking_cap._last_ingested_idx == 0
+
+    @pytest.mark.asyncio
+    async def test_drain_failed_commit_keeps_cursor_and_reasons(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """A failed drain retries: cursor unchanged and reasons retained."""
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
+
+        mock_client.commit_session = AsyncMock(side_effect=RuntimeError("server down"))
+        tools = build_tools(viking_cap)
+        remember_tool = _get_tool(tools, "viking_remember")
+        await remember_tool(_make_ctx(), reason="keep me")
+
+        messages = [ModelRequest(parts=[UserPromptPart(content="prompt")])]
+        rc = _make_request_context(messages)
+        await viking_cap._handle_remember_drain(_make_ctx(), rc)
+
+        assert viking_cap._last_ingested_idx == 0
+        assert viking_cap._remember_pending == ["keep me"]
+
+    @pytest.mark.asyncio
+    async def test_drain_drops_reasons_after_retry_cap(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """Consecutive failures drop pending reasons after the retry cap."""
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
+
+        mock_client.commit_session = AsyncMock(side_effect=RuntimeError("server down"))
+        tools = build_tools(viking_cap)
+        remember_tool = _get_tool(tools, "viking_remember")
+        rc = _make_request_context([ModelRequest(parts=[UserPromptPart(content="prompt")])])
+
+        for _ in range(3):
+            await remember_tool(_make_ctx(), reason="r")
+            await viking_cap._handle_remember_drain(_make_ctx(), rc)
+
+        assert viking_cap._remember_drain_failures == 3
+        assert viking_cap._remember_pending == []
+
+    @pytest.mark.asyncio
+    async def test_drain_success_advances_cursor(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """A successful drain with a full commit result advances cursor/clears reasons."""
+        from pydantic_ai.messages import (
+            ModelRequest,
+            ModelResponse,
+            TextPart,
+            UserPromptPart,
+        )
+
+        mock_client.commit_session = AsyncMock(
+            return_value={"archive_uri": "viking://user/u/sessions/s1", "task_id": "task-1"}
+        )
+        tools = build_tools(viking_cap)
+        await _get_tool(tools, "viking_remember")(_make_ctx(), reason="n")
+
+        messages = [
+            ModelRequest(parts=[UserPromptPart(content="P")]),
+            ModelResponse(parts=[TextPart(content="A")]),
+        ]
+        rc = _make_request_context(messages)
+        await viking_cap._handle_remember_drain(_make_ctx(), rc)
+
+        assert viking_cap._last_ingested_idx == 2
+        assert viking_cap._remember_pending == []
+        assert viking_cap._remember_drain_failures == 0
+
+    @pytest.mark.asyncio
+    async def test_notify_task_steers_formatted_summary(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """The notification task steers the formatted memory diff into the session."""
+        commit_result = {
+            "archive_uri": "viking://user/u/sessions/s1",
+            "task_id": "task-1",
+        }
+        mock_client._request = AsyncMock(return_value={"status": "completed"})
+        mock_client.read = AsyncMock(
+            return_value={"added": ["viking://user/u/memories/x.md"], "updated": [], "deleted": []}
+        )
+        session_pool = AsyncMock()
+        session_pool.steer_from_background_task = AsyncMock(return_value="steer-1")
+
+        await viking_cap._notify_memory_diff(mock_client, commit_result, session_pool, "run-1")
+
+        session_pool.steer_from_background_task.assert_awaited_once()
+        steer_msg = session_pool.steer_from_background_task.await_args.args[1]
+        assert "added: viking://user/u/memories/x.md" in steer_msg
+
+    @pytest.mark.asyncio
+    async def test_notify_task_failure_is_swallowed(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """A broken poll or steer never raises into the run."""
+        commit_result = {"archive_uri": "viking://a", "task_id": "t1"}
+
+        # Poll raises -> extraction wait fails -> no steer, no exception.
+        mock_client._request = AsyncMock(side_effect=RuntimeError("poll exploded"))
+        session_pool = AsyncMock()
+        await viking_cap._notify_memory_diff(mock_client, commit_result, session_pool, "run-1")
+        session_pool.steer_from_background_task.assert_not_awaited()
+
+        # Steer raises after a successful poll -> swallowed.
+        mock_client._request = AsyncMock(return_value={"status": "completed"})
+        mock_client.read = AsyncMock(return_value={"added": ["viking://m"]})
+        session_pool.steer_from_background_task = AsyncMock(
+            side_effect=RuntimeError("steer dropped")
+        )
+        await viking_cap._notify_memory_diff(mock_client, commit_result, session_pool, "run-1")
+
+    @pytest.mark.asyncio
+    async def test_wait_for_extraction_returns_false_on_failed_status(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """A task that ended in a failed state stops the poll with False."""
+        mock_client._request = AsyncMock(return_value={"status": "failed"})
+        assert await viking_cap._wait_for_extraction(mock_client, "task-1", timeout=2.0) is False
+
+    @pytest.mark.asyncio
+    async def test_notify_task_never_spawned_when_disabled(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """remember_notify=False skips the steer notification."""
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
+
+        viking_cap.remember_notify = False
+        mock_client.commit_session = AsyncMock(
+            return_value={"archive_uri": "viking://a", "task_id": "t1"}
+        )
+        tools = build_tools(viking_cap)
+        await _get_tool(tools, "viking_remember")(_make_ctx())
+
+        rc = _make_request_context([ModelRequest(parts=[UserPromptPart(content="P")])])
+        await viking_cap._handle_remember_drain(_make_ctx(), rc)
+
+        # No stray notification task was spawned — the drain returns cleanly.
+        assert viking_cap._last_ingested_idx == 1
+        assert viking_cap._remember_pending == []
+
+
+# ---------------------------------------------------------------------------
+# 8.10b — Test remember boundary wiring (before_model_request / after_run)
+# ---------------------------------------------------------------------------
+
+
+class TestRememberBoundaryIntegration:
+    """Remember capture wired into the model-request boundary and run end."""
+
+    @pytest.mark.asyncio
+    async def test_remember_captures_at_boundary_with_auto_ingest_disabled(
+        self, mock_client: AsyncMock
+    ) -> None:
+        """The drain runs at before_model_request even with auto_ingest off."""
+        from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
+
+        cap = VikingCapability(mode="all", enable_memory=True, auto_ingest_enabled=False)
+        cap._client = mock_client
+        tools = build_tools(cap)
+        await _get_tool(tools, "viking_remember")(_make_ctx(), reason="P")
+
+        messages = [
+            ModelRequest(parts=[UserPromptPart(content="Q")]),
+            ModelResponse(parts=[TextPart(content="A")]),
+        ]
+        rc = _make_request_context(messages)
+        await cap.before_model_request(_make_ctx(), rc)
 
         mock_client.create_session.assert_called_once()
-        mock_client.add_message.assert_not_called()
+        assert mock_client.create_session.call_args.kwargs["session_id"].startswith("remember-")
         mock_client.commit_session.assert_called_once()
-        assert "Remembered 0 messages" in result.return_value
+        assert cap._last_ingested_idx == 2
+
+    @pytest.mark.asyncio
+    async def test_remember_and_auto_ingest_drain_disjoint_ranges(
+        self, mock_client: AsyncMock
+    ) -> None:
+        """With auto_ingest on, remember drains first — auto_ingest skips its range."""
+        from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
+
+        cap = VikingCapability(
+            mode="all",
+            enable_memory=True,
+            auto_ingest_enabled=True,
+            auto_ingest_mode="sync",
+        )
+        cap._client = mock_client
+        tools = build_tools(cap)
+        await _get_tool(tools, "viking_remember")(_make_ctx())
+
+        messages = [
+            ModelRequest(parts=[UserPromptPart(content="Q")]),
+            ModelResponse(parts=[TextPart(content="A")]),
+        ]
+        rc = _make_request_context(messages)
+        await cap.before_model_request(_make_ctx(), rc)
+
+        # Exactly one session (the remember one) — no double commit.
+        mock_client.create_session.assert_called_once()
+        assert mock_client.create_session.call_args.kwargs["session_id"].startswith("remember-")
+        mock_client.commit_session.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_after_run_flushes_final_assistant_message(self, mock_client: AsyncMock) -> None:
+        """after_run captures trailing messages the cursor never saw (auto_ingest path)."""
+        from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
+
+        cap = VikingCapability(mode="all", auto_ingest_enabled=True, auto_ingest_mode="sync")
+        cap._client = mock_client
+        cap._last_ingested_idx = 1  # user turn already ingested at its boundary
+
+        messages = [
+            ModelRequest(parts=[UserPromptPart(content="Q")]),
+            ModelResponse(parts=[TextPart(content="final answer")]),
+        ]
+        ctx = _make_ctx()
+        ctx.messages = messages
+        result = await cap.after_run(ctx, result="done")
+
+        assert result == "done"
+        mock_client.create_session.assert_called_once()
+        add_calls = mock_client.add_message.call_args_list
+        assert (add_calls[0].args[1], add_calls[0].args[2]) == ("assistant", "final answer")
+        assert cap._last_ingested_idx == 2
+
+    @pytest.mark.asyncio
+    async def test_after_run_flushes_last_moment_remember(self, mock_client: AsyncMock) -> None:
+        """after_run flushes a remember intent from the run's final turn."""
+        from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
+
+        cap = VikingCapability(mode="all", enable_memory=True)
+        cap._client = mock_client
+        tools = build_tools(cap)
+        await _get_tool(tools, "viking_remember")(_make_ctx(), reason="final")
+
+        messages = [
+            ModelRequest(parts=[UserPromptPart(content="Q")]),
+            ModelResponse(parts=[TextPart(content="A")]),
+        ]
+        ctx = _make_ctx()
+        ctx.messages = messages
+        await cap.after_run(ctx, result="done")
+
+        mock_client.create_session.assert_called_once()
+        assert mock_client.create_session.call_args.kwargs["session_id"].startswith("remember-")
+        marker_texts = " ".join(c.args[2] for c in mock_client.add_message.call_args_list)
+        assert "<memory-intent>final</memory-intent>" in marker_texts
+        assert cap._remember_pending == []
+
+    @pytest.mark.asyncio
+    async def test_after_run_no_ingest_when_all_capture_disabled(
+        self, mock_client: AsyncMock
+    ) -> None:
+        """after_run does NOT capture when both auto_ingest and remember are off."""
+        from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
+
+        cap = VikingCapability(mode="all")  # auto_ingest_enabled=False, no remember
+        cap._client = mock_client
+
+        messages = [
+            ModelRequest(parts=[UserPromptPart(content="Q")]),
+            ModelResponse(parts=[TextPart(content="A")]),
+        ]
+        ctx = _make_ctx()
+        ctx.messages = messages
+        result = await cap.after_run(ctx, result="done")
+
+        assert result == "done"
+        mock_client.create_session.assert_not_called()
+        mock_client.commit_session.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_drain_add_message_failure_keeps_cursor_and_reasons(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """add_message failing mid-pipeline behaves like a commit failure."""
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
+
+        mock_client.add_message = AsyncMock(side_effect=RuntimeError("write rejected"))
+        tools = build_tools(viking_cap)
+        remember_tool = _get_tool(tools, "viking_remember")
+        await remember_tool(_make_ctx(), reason="keep")
+
+        rc = _make_request_context([ModelRequest(parts=[UserPromptPart(content="P")])])
+        await viking_cap._handle_remember_drain(_make_ctx(), rc)
+
+        assert viking_cap._last_ingested_idx == 0
+        assert viking_cap._remember_pending == ["keep"]
 
 
 # ---------------------------------------------------------------------------
@@ -1591,18 +1878,6 @@ class TestErrorHandling:
         ctx = _make_ctx()
         result = await _get_tool(tools, "viking_read")(ctx, uris="viking://secret.md")
         assert "viking_read error: permission denied" in result.return_value
-
-    @pytest.mark.asyncio
-    async def test_remember_error(
-        self, viking_cap: VikingCapability, mock_client: AsyncMock
-    ) -> None:
-        mock_client.create_session = AsyncMock(side_effect=RuntimeError("quota exceeded"))
-        tools = build_tools(viking_cap)
-        ctx = _make_ctx()
-        result = await _get_tool(tools, "viking_remember")(
-            ctx, messages=[{"role": "user", "content": "hi"}]
-        )
-        assert "viking_remember error: quota exceeded" in result.return_value
 
     @pytest.mark.asyncio
     async def test_write_error(self, viking_cap: VikingCapability, mock_client: AsyncMock) -> None:
@@ -2189,7 +2464,7 @@ class TestResourceAccessProtocol:
 
     def test_isinstance_resource_access(self, viking_cap: VikingCapability) -> None:
         """VikingCapability should be recognized as ResourceAccess."""
-        from agentpool.capabilities.resource_protocols import ResourceAccess
+        from wolfharness.capabilities.resource_protocols import ResourceAccess
 
         assert isinstance(viking_cap, ResourceAccess)
 
@@ -2345,44 +2620,44 @@ class TestMultimodalBridge:
         assert cap._supports_modality("audio/mpeg") is False
 
     def test_supports_modality_image(self) -> None:
-        from agentpool_config.model_capabilities import ModelCapabilities
+        from wolfharness_config.model_capabilities import ModelCapabilities
 
         cap = VikingCapability(model_capabilities=ModelCapabilities(image_input=True))
         assert cap._supports_modality("image/png") is True
         assert cap._supports_modality("image/jpeg") is True
 
     def test_supports_modality_image_false(self) -> None:
-        from agentpool_config.model_capabilities import ModelCapabilities
+        from wolfharness_config.model_capabilities import ModelCapabilities
 
         cap = VikingCapability(model_capabilities=ModelCapabilities(image_input=False))
         assert cap._supports_modality("image/png") is False
 
     def test_supports_modality_audio(self) -> None:
-        from agentpool_config.model_capabilities import ModelCapabilities
+        from wolfharness_config.model_capabilities import ModelCapabilities
 
         cap = VikingCapability(model_capabilities=ModelCapabilities(audio_input=True))
         assert cap._supports_modality("audio/mpeg") is True
 
     def test_supports_modality_video(self) -> None:
-        from agentpool_config.model_capabilities import ModelCapabilities
+        from wolfharness_config.model_capabilities import ModelCapabilities
 
         cap = VikingCapability(model_capabilities=ModelCapabilities(video_input=True))
         assert cap._supports_modality("video/mp4") is True
 
     def test_supports_modality_document(self) -> None:
-        from agentpool_config.model_capabilities import ModelCapabilities
+        from wolfharness_config.model_capabilities import ModelCapabilities
 
         cap = VikingCapability(model_capabilities=ModelCapabilities(document_input=True))
         assert cap._supports_modality("application/pdf") is True
 
     def test_supports_modality_unknown(self) -> None:
-        from agentpool_config.model_capabilities import ModelCapabilities
+        from wolfharness_config.model_capabilities import ModelCapabilities
 
         cap = VikingCapability(model_capabilities=ModelCapabilities(image_input=True))
         assert cap._supports_modality("application/zip") is False
 
     def test_guess_extension_known(self) -> None:
-        from agentpool.capabilities.viking import _guess_extension
+        from wolfharness.capabilities.viking import _guess_extension
 
         assert _guess_extension("image/png") == "png"
         assert _guess_extension("image/jpeg") == "jpg"
@@ -2391,7 +2666,7 @@ class TestMultimodalBridge:
         assert _guess_extension("application/pdf") == "pdf"
 
     def test_guess_extension_unknown(self) -> None:
-        from agentpool.capabilities.viking import _guess_extension
+        from wolfharness.capabilities.viking import _guess_extension
 
         assert _guess_extension("application/zip") == "bin"
 
@@ -2434,7 +2709,7 @@ class TestMultimodalBridge:
             UserPromptPart,
         )
 
-        from agentpool_config.model_capabilities import ModelCapabilities
+        from wolfharness_config.model_capabilities import ModelCapabilities
 
         cap = VikingCapability(
             multimodal_bridge=True,
@@ -2469,7 +2744,7 @@ class TestMultimodalBridge:
             UserPromptPart,
         )
 
-        from agentpool_config.model_capabilities import ModelCapabilities
+        from wolfharness_config.model_capabilities import ModelCapabilities
 
         cap = VikingCapability(
             multimodal_bridge=True,
@@ -2501,7 +2776,7 @@ class TestMultimodalBridge:
             UserPromptPart,
         )
 
-        from agentpool_config.model_capabilities import ModelCapabilities
+        from wolfharness_config.model_capabilities import ModelCapabilities
 
         cap = VikingCapability(
             multimodal_bridge=True,
@@ -2526,7 +2801,7 @@ class TestMultimodalBridge:
             UserPromptPart,
         )
 
-        from agentpool_config.model_capabilities import ModelCapabilities
+        from wolfharness_config.model_capabilities import ModelCapabilities
 
         cap = VikingCapability(
             multimodal_bridge=True,
@@ -2589,7 +2864,7 @@ class TestMultimodalBridge:
         assert uri is None
 
     async def test_for_run_preserves_model_capabilities(self) -> None:
-        from agentpool_config.model_capabilities import ModelCapabilities
+        from wolfharness_config.model_capabilities import ModelCapabilities
 
         caps = ModelCapabilities(image_input=True)
         cap = VikingCapability(model_capabilities=caps, multimodal_bridge=True)
@@ -4207,7 +4482,7 @@ class TestCompaction:
 
     def test_estimate_tokens_ascii(self) -> None:
         """ASCII text: chars / 4."""
-        from agentpool.capabilities.viking.compaction import _estimate_tokens
+        from wolfharness.capabilities.viking.compaction import _estimate_tokens
 
         assert _estimate_tokens("") == 0
         assert _estimate_tokens("hello") == 1  # 5 // 4 = 1
@@ -4216,7 +4491,7 @@ class TestCompaction:
 
     def test_estimate_tokens_cjk(self) -> None:
         """CJK characters count as 1 token each."""
-        from agentpool.capabilities.viking.compaction import _estimate_tokens
+        from wolfharness.capabilities.viking.compaction import _estimate_tokens
 
         # Each CJK char is 1 token
         assert _estimate_tokens("你好") == 2
@@ -4226,14 +4501,14 @@ class TestCompaction:
 
     def test_estimate_tokens_mixed(self) -> None:
         """Mixed ASCII + CJK: ASCII at 4:1, CJK at 1:1."""
-        from agentpool.capabilities.viking.compaction import _estimate_tokens
+        from wolfharness.capabilities.viking.compaction import _estimate_tokens
 
         # 2 CJK chars (2 tokens) + 8 ASCII chars (2 tokens) = 4
         assert _estimate_tokens("你好abcdefgh") == 4
 
     def test_estimate_tokens_empty(self) -> None:
         """Empty string returns 0."""
-        from agentpool.capabilities.viking.compaction import _estimate_tokens
+        from wolfharness.capabilities.viking.compaction import _estimate_tokens
 
         assert _estimate_tokens("") == 0
 
@@ -4243,7 +4518,7 @@ class TestCompaction:
         """Split messages keeping last N turns."""
         from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
-        from agentpool.capabilities.viking.compaction import _split_archivable
+        from wolfharness.capabilities.viking.compaction import _split_archivable
 
         # 4 user turns, keep last 2
         messages: list[Any] = []
@@ -4265,7 +4540,7 @@ class TestCompaction:
         """Keep all messages when fewer turns than keep_recent_turns."""
         from pydantic_ai.messages import ModelRequest, UserPromptPart
 
-        from agentpool.capabilities.viking.compaction import _split_archivable
+        from wolfharness.capabilities.viking.compaction import _split_archivable
 
         messages = [
             ModelRequest(parts=[UserPromptPart(content="Turn 1")]),
@@ -4279,7 +4554,7 @@ class TestCompaction:
         """keep_recent_turns=0 means all messages are archivable."""
         from pydantic_ai.messages import ModelRequest, UserPromptPart
 
-        from agentpool.capabilities.viking.compaction import _split_archivable
+        from wolfharness.capabilities.viking.compaction import _split_archivable
 
         messages = [
             ModelRequest(parts=[UserPromptPart(content="Turn 1")]),
@@ -4291,7 +4566,7 @@ class TestCompaction:
 
     def test_split_archivable_empty(self) -> None:
         """Empty messages list returns empty tuple."""
-        from agentpool.capabilities.viking.compaction import _split_archivable
+        from wolfharness.capabilities.viking.compaction import _split_archivable
 
         archivable, keep = _split_archivable([], keep_recent_turns=3)
         assert archivable == []
@@ -4303,7 +4578,7 @@ class TestCompaction:
         """Serialize messages as markdown with role headers."""
         from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
-        from agentpool.capabilities.viking.compaction import _serialize_messages
+        from wolfharness.capabilities.viking.compaction import _serialize_messages
 
         messages = [
             ModelRequest(parts=[UserPromptPart(content="Hello there")]),
@@ -4317,7 +4592,7 @@ class TestCompaction:
 
     def test_serialize_messages_empty(self) -> None:
         """Empty messages produce empty string."""
-        from agentpool.capabilities.viking.compaction import _serialize_messages
+        from wolfharness.capabilities.viking.compaction import _serialize_messages
 
         assert _serialize_messages([]) == ""
 
@@ -4327,7 +4602,7 @@ class TestCompaction:
         """Summary contains first 200 chars of each message."""
         from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
-        from agentpool.capabilities.viking.compaction import _summarize_messages
+        from wolfharness.capabilities.viking.compaction import _summarize_messages
 
         messages = [
             ModelRequest(parts=[UserPromptPart(content="What is Python?")]),
@@ -4341,7 +4616,7 @@ class TestCompaction:
         """Summary truncates long content to 200 chars."""
         from pydantic_ai.messages import ModelRequest, UserPromptPart
 
-        from agentpool.capabilities.viking.compaction import _summarize_messages
+        from wolfharness.capabilities.viking.compaction import _summarize_messages
 
         long_text = "x" * 300
         messages = [
@@ -4354,7 +4629,7 @@ class TestCompaction:
 
     def test_summarize_messages_empty(self) -> None:
         """Empty messages produce empty string."""
-        from agentpool.capabilities.viking.compaction import _summarize_messages
+        from wolfharness.capabilities.viking.compaction import _summarize_messages
 
         assert _summarize_messages([]) == ""
 
@@ -4682,7 +4957,7 @@ class TestAutoIngest:
 
     def test_sanitize_strips_recall_block(self) -> None:
         """_sanitize_message replaces <openviking-recall> with placeholder."""
-        from agentpool.capabilities.viking.ingest import _sanitize_message
+        from wolfharness.capabilities.viking.ingest import _sanitize_message
 
         content = "Hello <openviking-recall>secret data</openviking-recall> world"
         result = _sanitize_message(content)
@@ -4694,7 +4969,7 @@ class TestAutoIngest:
 
     def test_sanitize_strips_profile_block(self) -> None:
         """_sanitize_message replaces <openviking-profile> with placeholder."""
-        from agentpool.capabilities.viking.ingest import _sanitize_message
+        from wolfharness.capabilities.viking.ingest import _sanitize_message
 
         content = "Context: <openviking-profile>user profile data</openviking-profile> end"
         result = _sanitize_message(content)
@@ -4704,7 +4979,7 @@ class TestAutoIngest:
 
     def test_sanitize_strips_both_blocks(self) -> None:
         """_sanitize_message strips both recall and profile blocks."""
-        from agentpool.capabilities.viking.ingest import _sanitize_message
+        from wolfharness.capabilities.viking.ingest import _sanitize_message
 
         content = (
             "<openviking-recall>recall data</openviking-recall>"
@@ -4718,7 +4993,7 @@ class TestAutoIngest:
 
     def test_sanitize_multiline_blocks(self) -> None:
         """_sanitize_message handles multi-line XML blocks."""
-        from agentpool.capabilities.viking.ingest import _sanitize_message
+        from wolfharness.capabilities.viking.ingest import _sanitize_message
 
         content = (
             "<openviking-recall>\n  <hit uri='viking://doc.md'/>\n  data\n</openviking-recall> rest"
@@ -4730,7 +5005,7 @@ class TestAutoIngest:
 
     def test_sanitize_disabled_returns_original(self) -> None:
         """When enabled=False, content is returned unchanged."""
-        from agentpool.capabilities.viking.ingest import _sanitize_message
+        from wolfharness.capabilities.viking.ingest import _sanitize_message
 
         content = "<openviking-recall>keep this</openviking-recall>"
         result = _sanitize_message(content, enabled=False)
@@ -4738,7 +5013,7 @@ class TestAutoIngest:
 
     def test_sanitize_no_xml_blocks(self) -> None:
         """Content without XML blocks is returned unchanged."""
-        from agentpool.capabilities.viking.ingest import _sanitize_message
+        from wolfharness.capabilities.viking.ingest import _sanitize_message
 
         content = "just plain text without any xml blocks"
         result = _sanitize_message(content)
@@ -4746,7 +5021,7 @@ class TestAutoIngest:
 
     def test_sanitize_empty_string(self) -> None:
         """Empty string returns empty string."""
-        from agentpool.capabilities.viking.ingest import _sanitize_message
+        from wolfharness.capabilities.viking.ingest import _sanitize_message
 
         assert _sanitize_message("") == ""
 
@@ -4756,7 +5031,7 @@ class TestAutoIngest:
         """Extracts user+assistant pairs from messages."""
         from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
-        from agentpool.capabilities.viking.ingest import _extract_conversation_pairs
+        from wolfharness.capabilities.viking.ingest import _extract_conversation_pairs
 
         messages = [
             ModelRequest(parts=[UserPromptPart(content="What is X?")]),
@@ -4771,7 +5046,7 @@ class TestAutoIngest:
         """Only extracts messages after start_idx."""
         from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
-        from agentpool.capabilities.viking.ingest import _extract_conversation_pairs
+        from wolfharness.capabilities.viking.ingest import _extract_conversation_pairs
 
         messages = [
             ModelRequest(parts=[UserPromptPart(content="old question")]),
@@ -4788,7 +5063,7 @@ class TestAutoIngest:
         """Returns empty list when start_idx >= len(messages)."""
         from pydantic_ai.messages import ModelRequest, UserPromptPart
 
-        from agentpool.capabilities.viking.ingest import _extract_conversation_pairs
+        from wolfharness.capabilities.viking.ingest import _extract_conversation_pairs
 
         messages = [ModelRequest(parts=[UserPromptPart(content="hello")])]
         result = _extract_conversation_pairs(messages, start_idx=1)
@@ -4798,7 +5073,7 @@ class TestAutoIngest:
         """Extracts multiple user+assistant turns."""
         from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
-        from agentpool.capabilities.viking.ingest import _extract_conversation_pairs
+        from wolfharness.capabilities.viking.ingest import _extract_conversation_pairs
 
         messages = [
             ModelRequest(parts=[UserPromptPart(content="Q1")]),
@@ -4819,7 +5094,7 @@ class TestAutoIngest:
         """Skips UserPromptPart with list (multimodal) content."""
         from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
-        from agentpool.capabilities.viking.ingest import _extract_conversation_pairs
+        from wolfharness.capabilities.viking.ingest import _extract_conversation_pairs
 
         messages = [
             ModelRequest(parts=[UserPromptPart(content=["image_data", "text"])]),
@@ -4834,7 +5109,7 @@ class TestAutoIngest:
 
     def test_extract_conversation_pairs_empty_messages(self) -> None:
         """Empty messages list returns empty list."""
-        from agentpool.capabilities.viking.ingest import _extract_conversation_pairs
+        from wolfharness.capabilities.viking.ingest import _extract_conversation_pairs
 
         assert _extract_conversation_pairs([], start_idx=0) == []
 
@@ -4980,7 +5255,7 @@ class TestAutoIngest:
 
     @pytest.mark.asyncio
     async def test_handle_auto_ingest_commit_with_retention(self, mock_client: AsyncMock) -> None:
-        """Commit passes keep_recent_turn_count when configured."""
+        """Commit passes keep_recent_count when configured."""
         from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
         cap = VikingCapability(
@@ -5001,13 +5276,13 @@ class TestAutoIngest:
         await cap._handle_auto_ingest(ctx, rc)
 
         commit_kwargs = mock_client.commit_session.call_args.kwargs
-        assert commit_kwargs["keep_recent_turn_count"] == 3
+        assert commit_kwargs["keep_recent_count"] == 3
 
     @pytest.mark.asyncio
     async def test_handle_auto_ingest_commit_without_retention(
         self, mock_client: AsyncMock
     ) -> None:
-        """Commit does not pass keep_recent_turn_count when it's 0."""
+        """Commit does not pass keep_recent_count when it's 0."""
         from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
         cap = VikingCapability(
@@ -5028,7 +5303,7 @@ class TestAutoIngest:
         await cap._handle_auto_ingest(ctx, rc)
 
         commit_kwargs = mock_client.commit_session.call_args.kwargs
-        assert "keep_recent_turn_count" not in commit_kwargs
+        assert "keep_recent_count" not in commit_kwargs
 
     @pytest.mark.asyncio
     async def test_handle_auto_ingest_async_mode_creates_task(self, mock_client: AsyncMock) -> None:
@@ -5053,14 +5328,10 @@ class TestAutoIngest:
 
         # Cursor should be updated immediately
         assert cap._last_ingested_idx == 2
-        # A task should be pending
-        assert len(cap._pending_tasks) >= 0  # Task may have already completed
-        # Pending conversation should be stored
-        assert cap._pending_conversation is not None
+        # A task must have been spawned and tracked
+        assert len(cap._pending_tasks) == 1
 
-        # Wait for the task to complete
-        if cap._pending_tasks:
-            await asyncio.gather(*cap._pending_tasks, return_exceptions=True)
+        await asyncio.gather(*cap._pending_tasks, return_exceptions=True)
 
         # After task completes, SDK calls should have been made
         mock_client.create_session.assert_called_once()
@@ -5191,17 +5462,19 @@ class TestAutoIngest:
 
     @pytest.mark.asyncio
     async def test_for_run_resets_ingestion_state(self, mock_client: AsyncMock) -> None:
-        """for_run() resets _last_ingested_idx, _pending_conversation, _pending_tasks."""
+        """for_run() resets the ingestion cursor and deferred-remember state."""
         cap = VikingCapability(mode="all", auto_ingest_enabled=True)
         cap._client = mock_client
         cap._last_ingested_idx = 42
-        cap._pending_conversation = [{"role": "user", "content": "old"}]
+        cap._remember_pending = ["reason"]
+        cap._remember_drain_failures = 2
 
         ctx = _make_ctx()
         copy_cap = await cap.for_run(ctx)
 
         assert copy_cap._last_ingested_idx == 0
-        assert copy_cap._pending_conversation is None
+        assert copy_cap._remember_pending == []
+        assert copy_cap._remember_drain_failures == 0
         assert copy_cap._pending_tasks == set()
         # Identity should be shared
         assert copy_cap._identity is cap._identity
@@ -5246,9 +5519,9 @@ class TestAutoIngest:
         assert cfg.auto_ingest_sanitize is True
 
     def test_config_auto_ingest_source_type_default(self) -> None:
-        """VikingCapabilityConfig has auto_ingest_source_type='agentpool' by default."""
+        """VikingCapabilityConfig has auto_ingest_source_type='wolfharness' by default."""
         cfg = VikingCapabilityConfig()
-        assert cfg.auto_ingest_source_type == "agentpool"
+        assert cfg.auto_ingest_source_type == "wolfharness"
 
     def test_config_auto_ingest_keep_recent_turns_default(self) -> None:
         """VikingCapabilityConfig has auto_ingest_keep_recent_turns=0 by default."""

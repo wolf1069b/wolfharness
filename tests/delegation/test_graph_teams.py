@@ -13,24 +13,24 @@ from typing import Any, cast
 import anyio
 import pytest
 
-from agentpool import Agent
-from agentpool.agents.base_agent import _current_run_ctx_var
-from agentpool.agents.context import AgentRunContext
-from agentpool.agents.events import (
+from wolfharness import Agent
+from wolfharness.agents.base_agent import _current_run_ctx_var
+from wolfharness.agents.context import AgentRunContext
+from wolfharness.agents.events import (
     SpawnSessionStart,
     StreamCompleteEvent,
     SubAgentEvent,
 )
-from agentpool.delegation.base_team import BaseTeam
-from agentpool.delegation.graph_team import (
+from wolfharness.delegation.base_team import BaseTeam
+from wolfharness.delegation.graph_team import (
     _MemberOutput,
     _TeamGraphState,
     build_team_graph,
     run_team_graph,
 )
-from agentpool.messaging import AgentResponse, ChatMessage, TeamResponse
-from agentpool.messaging.messagenode import MessageNode
-from agentpool.talk import Talk
+from wolfharness.messaging import AgentResponse, ChatMessage, TeamResponse
+from wolfharness.messaging.messagenode import MessageNode
+from wolfharness.talk import Talk
 
 
 pytestmark = pytest.mark.unit
@@ -158,7 +158,7 @@ class _FakeAgentPool:
     def __init__(self, agents: list[Agent[Any, str]]) -> None:
         from types import SimpleNamespace
 
-        from agentpool.mcp_server.manager import MCPManager
+        from wolfharness.mcp_server.manager import MCPManager
 
         self.session_pool = _FakeSessionPool()
         self.all_agents = {agent.name: agent for agent in agents}

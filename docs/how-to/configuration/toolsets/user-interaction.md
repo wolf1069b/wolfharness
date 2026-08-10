@@ -50,4 +50,4 @@ Supported question types:
 
 The tool returns the user's answers through the agent tool result. Agents can then use the answers to decide next steps or personalize their response.
 
-For implementation details, see `agentpool_toolsets.builtin.question_tools`.
+For implementation details, see `wolfharness_toolsets.builtin.question_tools`.

@@ -23,8 +23,8 @@ from pydantic_ai.messages import (
 )
 import pytest
 
-from agentpool.agents.events.events import UserMessageInsertedEvent
-from agentpool.orchestrator.event_mapper import EventMapper
+from wolfharness.agents.events.events import UserMessageInsertedEvent
+from wolfharness.orchestrator.event_mapper import EventMapper
 
 
 def _make_enqueued_event(content: str = "Hello, steer me!") -> EnqueuedMessagesEvent:

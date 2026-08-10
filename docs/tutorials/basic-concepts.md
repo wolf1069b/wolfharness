@@ -12,7 +12,7 @@ AgentPool uses a unified **node** abstraction for all message-processing entitie
 
 
 ````python exec="true"
-from agentpool.messaging import MessageNode
+from wolfharness.messaging import MessageNode
 node = mk.MkClassDiagram(MessageNode, mode="subclasses")
 print(node)
 ````

@@ -14,8 +14,8 @@ from pathlib import Path
 import sys
 from typing import Any, Literal
 
-from agentpool import AgentsManifest
-from agentpool.log import configure_logging, get_logger
+from wolfharness import AgentsManifest
+from wolfharness.log import configure_logging, get_logger
 
 
 logger = get_logger(__name__)

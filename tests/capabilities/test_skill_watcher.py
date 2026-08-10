@@ -12,7 +12,7 @@ import tempfile
 
 import pytest
 
-from agentpool.capabilities.skill_watcher import SkillFilesystemWatcher
+from wolfharness.capabilities.skill_watcher import SkillFilesystemWatcher
 
 
 pytestmark = pytest.mark.unit

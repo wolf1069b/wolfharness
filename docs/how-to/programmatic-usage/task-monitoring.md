@@ -86,7 +86,7 @@ stats.error_log      # Any errors that occurred
 ### Example: Monitored Execution
 
 ```python
-from agentpool import AgentPool
+from wolfharness import AgentPool
 
 async def main():
     async with AgentPool() as pool:

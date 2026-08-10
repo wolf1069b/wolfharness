@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from agentpool_server.opencode_server.state import ServerState
+from wolfharness_server.opencode_server.state import ServerState
 
 
 pytestmark = pytest.mark.integration
@@ -131,8 +131,8 @@ async def test_bootstrap_preserves_pool_access(shared_agent: Mock, mock_pool: Mo
     After __post_init__, state.pool and state.storage must return the
     cached references without going through the shared agent.
     """
-    from agentpool.storage import StorageManager
-    from agentpool_config.storage import MemoryStorageConfig, StorageConfig
+    from wolfharness.storage import StorageManager
+    from wolfharness_config.storage import MemoryStorageConfig, StorageConfig
 
     storage_manager = StorageManager(config=StorageConfig(providers=[MemoryStorageConfig()]))
     shared_agent.storage = storage_manager

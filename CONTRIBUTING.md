@@ -1,4 +1,4 @@
-# Contributing to AgentPool
+# Contributing to WolfHarness
 
 Thank you for your interest in contributing! This guide covers the basics.
 

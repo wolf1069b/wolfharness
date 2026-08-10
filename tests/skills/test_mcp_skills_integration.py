@@ -17,9 +17,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agentpool.capabilities.resource_protocols import SkillEntry, SkillResource
-from agentpool.skills.skill import Skill
-from agentpool_toolsets.builtin.skills import list_skills, load_skill
+from wolfharness.capabilities.resource_protocols import SkillEntry, SkillResource
+from wolfharness.skills.skill import Skill
+from wolfharness_toolsets.builtin.skills import list_skills, load_skill
 
 
 pytestmark = pytest.mark.integration
@@ -90,7 +90,7 @@ def mock_agent_context():
             return True
 
     fake_child = _FakeSkillResource()
-    from agentpool.capabilities.skill_manager_cap import SkillManagerCap
+    from wolfharness.capabilities.skill_manager_cap import SkillManagerCap
 
     mock_cap = SkillManagerCap(local_skills={}, children=[fake_child], name="pool-skills")
     ctx_pool.skill_capabilities = [mock_cap]
@@ -119,7 +119,7 @@ def mock_agent_context():
 
     from types import SimpleNamespace
 
-    from agentpool.agents.context import AgentContext as RuntimeAgentContext
+    from wolfharness.agents.context import AgentContext as RuntimeAgentContext
 
     ctx = RuntimeAgentContext(node=SimpleNamespace(name="test"), pool=ctx_pool)
 

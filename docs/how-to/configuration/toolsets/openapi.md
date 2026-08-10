@@ -59,7 +59,7 @@ Each OpenAPI operation becomes a tool with:
 ## Configuration Reference
 
 /// mknodes
-{{ "agentpool_config.toolsets.OpenAPIToolsetConfig" | schema_to_markdown(display_mode="yaml", header_style="pymdownx", wrapped_in="toolsets") }}
+{{ "wolfharness_config.toolsets.OpenAPIToolsetConfig" | schema_to_markdown(display_mode="yaml", header_style="pymdownx", wrapped_in="toolsets") }}
 ///
 
 ## Tips

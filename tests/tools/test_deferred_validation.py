@@ -11,8 +11,8 @@ These tests enforce the rules documented in
 
 import pytest
 
-from agentpool.tools.base import Tool
-from agentpool.tools.exceptions import ToolError
+from wolfharness.tools.base import Tool
+from wolfharness.tools.exceptions import ToolError
 
 
 pytestmark = pytest.mark.unit

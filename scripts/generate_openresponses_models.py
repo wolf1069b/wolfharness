@@ -24,7 +24,7 @@ OPENAPI_URL = (
     "https://raw.githubusercontent.com/openresponses/openresponses/main/public/openapi/openapi.json"
 )
 PROJECT_ROOT = Path(__file__).parent.parent
-OUTPUT_DIR = PROJECT_ROOT / "src" / "agentpool" / "models" / "openresponses"
+OUTPUT_DIR = PROJECT_ROOT / "src" / "wolfharness" / "models" / "openresponses"
 OUTPUT_FILE = OUTPUT_DIR / "models.py"
 TEMP_OPENAPI = "/tmp/openresponses_openapi.json"
 
@@ -78,7 +78,7 @@ def generate_models() -> None:
         "--use-one-literal-as-default",
         "--collapse-root-models",
         "--base-class",
-        "agentpool.models.openresponses.base.OpenResponsesBase",
+        "wolfharness.models.openresponses.base.OpenResponsesBase",
         "--formatters",
         "ruff-check",
         "ruff-format",

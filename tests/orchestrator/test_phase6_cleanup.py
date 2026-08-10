@@ -23,13 +23,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agentpool.orchestrator.core import EventBus, SessionController, SessionState
-from agentpool.orchestrator.session_pool import SessionPool
-from agentpool.orchestrator.session_pool_config import SessionPoolConfig
+from wolfharness.orchestrator.core import EventBus, SessionController, SessionState
+from wolfharness.orchestrator.session_pool import SessionPool
+from wolfharness.orchestrator.session_pool_config import SessionPoolConfig
 
 
 if TYPE_CHECKING:
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
 
 pytestmark = [pytest.mark.unit]
@@ -143,7 +143,7 @@ async def test_close_during_mcp_tool_call_runhandle_cancel_first(minimal_pool: A
     controller._sessions[session_id] = session
 
     # Create a mock RunHandle that completes immediately when closed
-    from agentpool.orchestrator.run import RunHandle
+    from wolfharness.orchestrator.run import RunHandle
 
     run_handle = MagicMock(spec=RunHandle)
     run_handle.run_id = "run-mcp-1"
@@ -255,8 +255,8 @@ async def test_checkpoint_on_close_failure_preserves_session(minimal_pool: Agent
     log the error, keep the session in memory, and MCP cleanup should
     still run.
     """
-    from agentpool.sessions.models import SessionData
-    from agentpool_storage.protocols import SessionPersistence
+    from wolfharness.sessions.models import SessionData
+    from wolfharness_storage.protocols import SessionPersistence
 
     # Create a mock store that fails on save_session
     mock_store = AsyncMock(spec=SessionPersistence)

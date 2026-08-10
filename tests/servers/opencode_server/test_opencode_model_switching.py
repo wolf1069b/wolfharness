@@ -1,7 +1,7 @@
 """Tests to verify OpenCode model switching issues.
 
 These tests verify the root causes of the issue where model changes
-in OpenCode TUI are not reflected in agentpool runtime.
+in OpenCode TUI are not reflected in wolfharness runtime.
 """
 
 from __future__ import annotations
@@ -11,8 +11,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from agentpool import Agent, AgentPool, AgentsManifest
-from agentpool_server.opencode_server.models import (
+from tests.servers.opencode_server.conftest import run_message_phases
+from wolfharness import Agent, AgentPool, AgentsManifest
+from wolfharness_server.opencode_server.models import (
     MessageRequest,
     MessageWithParts,
     ModelRef,
@@ -20,8 +21,7 @@ from agentpool_server.opencode_server.models import (
     TimeCreated,
     UserMessage,
 )
-from agentpool_server.opencode_server.models.config import Config
-from tests.servers.opencode_server.conftest import run_message_phases
+from wolfharness_server.opencode_server.models.config import Config
 
 
 if TYPE_CHECKING:
@@ -315,7 +315,7 @@ async def test_opencode_model_flow_simulation():
     """Simulate the complete OpenCode model switching flow.
 
     This test simulates:
-    1. OpenCode TUI connects to agentpool
+    1. OpenCode TUI connects to wolfharness
     2. TUI gets available models (including model_variants as synthetic provider)
     3. User selects 'qwen35' in TUI
     4. TUI sends message with model override
@@ -432,9 +432,9 @@ def _make_mock_state_with_session_agent(
     """Create a ServerState wired so get_or_create_session_agent returns per-session mocks."""
     from unittest.mock import AsyncMock, Mock
 
-    from agentpool.lifecycle import RunOutcome, RunState
-    from agentpool.utils.time_utils import now_ms
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness.lifecycle import RunOutcome, RunState
+    from wolfharness.utils.time_utils import now_ms
+    from wolfharness_server.opencode_server.state import ServerState
 
     shared_agent = PerSessionAgentMock(name="shared-agent")
     shared_agent.env = Mock()
@@ -508,8 +508,8 @@ def _make_mock_state_with_session_agent(
 
     # Pre-populate sessions in state
     for session_id in session_agents:
-        from agentpool_server.opencode_server.models import Session
-        from agentpool_server.opencode_server.models.common import TimeCreatedUpdated
+        from wolfharness_server.opencode_server.models import Session
+        from wolfharness_server.opencode_server.models.common import TimeCreatedUpdated
 
         now = now_ms()
         session = Session(
@@ -535,7 +535,7 @@ async def test_model_switch_targets_per_session_agent(tmp_project_dir: Path) -> 
     ``session_pool.sessions.get_or_create_session_agent()`` so each session
     gets its own isolated model configuration.
     """
-    from agentpool.utils import identifiers as identifier
+    from wolfharness.utils import identifiers as identifier
 
     session_id = "test-session-a"
     session_agents: dict[str, PerSessionAgentMock] = {
@@ -580,7 +580,7 @@ async def test_model_switch_targets_per_session_agent(tmp_project_dir: Path) -> 
 @pytest.mark.unit
 async def test_model_switch_affects_only_target_session(tmp_project_dir: Path) -> None:
     """Switching model in session A must not affect session B's agent."""
-    from agentpool.utils import identifiers as identifier
+    from wolfharness.utils import identifiers as identifier
 
     session_a = "session-a"
     session_b = "session-b"
@@ -640,7 +640,7 @@ async def test_model_switch_affects_only_target_session(tmp_project_dir: Path) -
 @pytest.mark.unit
 async def test_other_sessions_retain_original_model(tmp_project_dir: Path) -> None:
     """After switching model in one session, other sessions keep their original model."""
-    from agentpool.utils import identifiers as identifier
+    from wolfharness.utils import identifiers as identifier
 
     session_a = "session-a"
     session_b = "session-b"

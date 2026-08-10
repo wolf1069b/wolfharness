@@ -10,8 +10,8 @@ from pydantic_ai import PartDeltaEvent, PartStartEvent, TextPart, TextPartDelta
 import pytest
 
 from acp.schema import AgentMessageChunk, ToolCallProgress, TurnCompleteUpdate
-from agentpool.agents.events import RunFailedEvent, ToolCallStartEvent
-from agentpool_server.acp_server.event_converter import ACPEventConverter
+from wolfharness.agents.events import RunFailedEvent, ToolCallStartEvent
+from wolfharness_server.acp_server.event_converter import ACPEventConverter
 
 
 pytestmark = pytest.mark.integration

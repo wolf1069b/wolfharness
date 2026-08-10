@@ -16,8 +16,8 @@ from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart, ToolCall
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 import pytest
 
-from agentpool.capabilities.team_comm_capability import TeamCommCapability
-from agentpool_config.team_mode import TeamModeConfig
+from wolfharness.capabilities.team_comm_capability import TeamCommCapability
+from wolfharness_config.team_mode import TeamModeConfig
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +85,7 @@ def _make_run_context(
     Returns:
         A MagicMock whose .deps is a mock AgentContextDeps.
     """
-    from agentpool.capabilities.agent_context import AgentContextDeps
+    from wolfharness.capabilities.agent_context import AgentContextDeps
 
     cfg = config or _make_enabled_config(base_dir=base_dir)
 
@@ -109,7 +109,7 @@ def _init_team(
     members: list[dict[str, str]] | None = None,
 ) -> None:
     """Initialize a real FileTeamState with a team and registered members."""
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     if members is None:
         members = [

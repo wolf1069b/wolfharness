@@ -19,8 +19,8 @@ from pydantic_ai.tools import (
 )
 import pytest
 
-from agentpool.agents.context import AgentContext, AgentRunContext
-from agentpool.agents.events.events import ToolCallDeferredEvent
+from wolfharness.agents.context import AgentContext, AgentRunContext
+from wolfharness.agents.events.events import ToolCallDeferredEvent
 
 
 pytestmark = pytest.mark.unit
@@ -103,7 +103,7 @@ class TestCreateDeferredBridgeCapability:
 
     def test_returns_handle_deferred_tool_calls(self) -> None:
         """Factory returns a HandleDeferredToolCalls capability."""
-        from agentpool.agents.native_agent.deferred_bridge import (
+        from wolfharness.agents.native_agent.deferred_bridge import (
             create_deferred_bridge_capability,
         )
 
@@ -112,7 +112,7 @@ class TestCreateDeferredBridgeCapability:
 
     def test_handler_is_callable(self) -> None:
         """Handler function is properly set on the capability."""
-        from agentpool.agents.native_agent.deferred_bridge import (
+        from wolfharness.agents.native_agent.deferred_bridge import (
             create_deferred_bridge_capability,
         )
 
@@ -126,7 +126,7 @@ class TestCreateDeferredBridgeCapability:
         block_tool_call: ToolCallPart,
     ) -> None:
         """When deferred_tools is empty, all calls pass through (return None)."""
-        from agentpool.agents.native_agent.deferred_bridge import (
+        from wolfharness.agents.native_agent.deferred_bridge import (
             create_deferred_bridge_capability,
         )
 
@@ -153,7 +153,7 @@ class TestBlockStrategy:
         block_tool_call: ToolCallPart,
     ) -> None:
         """Block-strategy tool emits ToolCallDeferredEvent."""
-        from agentpool.agents.native_agent.deferred_bridge import (
+        from wolfharness.agents.native_agent.deferred_bridge import (
             create_deferred_bridge_capability,
         )
 
@@ -163,7 +163,7 @@ class TestBlockStrategy:
         # We need to check that the event is emitted via the event_bus.
         # Patch the _emit_deferred_event to verify it's called correctly.
         with patch(
-            "agentpool.agents.native_agent.deferred_bridge._emit_deferred_event",
+            "wolfharness.agents.native_agent.deferred_bridge._emit_deferred_event",
             new_callable=AsyncMock,
         ) as mock_emit:
             await cap.handle_deferred_tool_calls(run_ctx, requests=requests)
@@ -188,7 +188,7 @@ class TestBlockStrategy:
         block_tool_call: ToolCallPart,
     ) -> None:
         """Block-strategy tool is EXCLUDED from returned DeferredToolResults."""
-        from agentpool.agents.native_agent.deferred_bridge import (
+        from wolfharness.agents.native_agent.deferred_bridge import (
             create_deferred_bridge_capability,
         )
 
@@ -196,7 +196,7 @@ class TestBlockStrategy:
         cap = create_deferred_bridge_capability(deferred_tools=deferred_tools)
 
         with patch(
-            "agentpool.agents.native_agent.deferred_bridge._emit_deferred_event",
+            "wolfharness.agents.native_agent.deferred_bridge._emit_deferred_event",
             new_callable=AsyncMock,
         ):
             result = await cap.handle_deferred_tool_calls(run_ctx, requests=requests)
@@ -216,7 +216,7 @@ class TestBlockStrategy:
         block_tool_call: ToolCallPart,
     ) -> None:
         """After results applied, block tool remains in remaining requests."""
-        from agentpool.agents.native_agent.deferred_bridge import (
+        from wolfharness.agents.native_agent.deferred_bridge import (
             create_deferred_bridge_capability,
         )
 
@@ -224,7 +224,7 @@ class TestBlockStrategy:
         cap = create_deferred_bridge_capability(deferred_tools=deferred_tools)
 
         with patch(
-            "agentpool.agents.native_agent.deferred_bridge._emit_deferred_event",
+            "wolfharness.agents.native_agent.deferred_bridge._emit_deferred_event",
             new_callable=AsyncMock,
         ):
             result = await cap.handle_deferred_tool_calls(run_ctx, requests=requests)
@@ -243,7 +243,7 @@ class TestBlockStrategy:
         deferred_tools: dict[str, str],
     ) -> None:
         """All block-strategy tools are excluded from results."""
-        from agentpool.agents.native_agent.deferred_bridge import (
+        from wolfharness.agents.native_agent.deferred_bridge import (
             create_deferred_bridge_capability,
         )
 
@@ -255,7 +255,7 @@ class TestBlockStrategy:
         cap = create_deferred_bridge_capability(deferred_tools=deferred_tools)
 
         with patch(
-            "agentpool.agents.native_agent.deferred_bridge._emit_deferred_event",
+            "wolfharness.agents.native_agent.deferred_bridge._emit_deferred_event",
             new_callable=AsyncMock,
         ) as mock_emit:
             result = await cap.handle_deferred_tool_calls(run_ctx, requests=requests)
@@ -285,7 +285,7 @@ class TestContinueStrategy:
         continue_tool_call: ToolCallPart,
     ) -> None:
         """Continue-strategy tool is resolved with a ToolReturn placeholder."""
-        from agentpool.agents.native_agent.deferred_bridge import (
+        from wolfharness.agents.native_agent.deferred_bridge import (
             create_deferred_bridge_capability,
         )
 
@@ -308,7 +308,7 @@ class TestContinueStrategy:
         continue_tool_call: ToolCallPart,
     ) -> None:
         """Continue-strategy tool is fully resolved — no remaining requests."""
-        from agentpool.agents.native_agent.deferred_bridge import (
+        from wolfharness.agents.native_agent.deferred_bridge import (
             create_deferred_bridge_capability,
         )
 
@@ -329,7 +329,7 @@ class TestContinueStrategy:
         continue_tool_call: ToolCallPart,
     ) -> None:
         """Continue-strategy tools do NOT emit ToolCallDeferredEvent."""
-        from agentpool.agents.native_agent.deferred_bridge import (
+        from wolfharness.agents.native_agent.deferred_bridge import (
             create_deferred_bridge_capability,
         )
 
@@ -337,7 +337,7 @@ class TestContinueStrategy:
         cap = create_deferred_bridge_capability(deferred_tools=deferred_tools)
 
         with patch(
-            "agentpool.agents.native_agent.deferred_bridge._emit_deferred_event",
+            "wolfharness.agents.native_agent.deferred_bridge._emit_deferred_event",
             new_callable=AsyncMock,
         ) as mock_emit:
             await cap.handle_deferred_tool_calls(run_ctx, requests=requests)
@@ -362,7 +362,7 @@ class TestMixedStrategies:
         continue_tool_call: ToolCallPart,
     ) -> None:
         """Block excluded, continue resolved with placeholder."""
-        from agentpool.agents.native_agent.deferred_bridge import (
+        from wolfharness.agents.native_agent.deferred_bridge import (
             create_deferred_bridge_capability,
         )
 
@@ -370,7 +370,7 @@ class TestMixedStrategies:
         cap = create_deferred_bridge_capability(deferred_tools=deferred_tools)
 
         with patch(
-            "agentpool.agents.native_agent.deferred_bridge._emit_deferred_event",
+            "wolfharness.agents.native_agent.deferred_bridge._emit_deferred_event",
             new_callable=AsyncMock,
         ) as mock_emit:
             result = await cap.handle_deferred_tool_calls(run_ctx, requests=requests)
@@ -403,7 +403,7 @@ class TestMixedStrategies:
         non_deferred_tool_call: ToolCallPart,
     ) -> None:
         """Non-deferred tools excluded from results → pass through to next capability."""
-        from agentpool.agents.native_agent.deferred_bridge import (
+        from wolfharness.agents.native_agent.deferred_bridge import (
             create_deferred_bridge_capability,
         )
 
@@ -411,7 +411,7 @@ class TestMixedStrategies:
         cap = create_deferred_bridge_capability(deferred_tools=deferred_tools)
 
         with patch(
-            "agentpool.agents.native_agent.deferred_bridge._emit_deferred_event",
+            "wolfharness.agents.native_agent.deferred_bridge._emit_deferred_event",
             new_callable=AsyncMock,
         ):
             result = await cap.handle_deferred_tool_calls(run_ctx, requests=requests)
@@ -445,7 +445,7 @@ class TestNonDeferredPassThrough:
         non_deferred_tool_call: ToolCallPart,
     ) -> None:
         """Non-deferred tools cause the bridge to return None."""
-        from agentpool.agents.native_agent.deferred_bridge import (
+        from wolfharness.agents.native_agent.deferred_bridge import (
             create_deferred_bridge_capability,
         )
 
@@ -462,7 +462,7 @@ class TestNonDeferredPassThrough:
         deferred_tools: dict[str, str],
     ) -> None:
         """Empty requests return None."""
-        from agentpool.agents.native_agent.deferred_bridge import (
+        from wolfharness.agents.native_agent.deferred_bridge import (
             create_deferred_bridge_capability,
         )
 
@@ -480,7 +480,7 @@ class TestNonDeferredPassThrough:
         non_deferred_tool_call: ToolCallPart,
     ) -> None:
         """Approval-only requests (not in deferred_tools) return None."""
-        from agentpool.agents.native_agent.deferred_bridge import (
+        from wolfharness.agents.native_agent.deferred_bridge import (
             create_deferred_bridge_capability,
         )
 
@@ -509,7 +509,7 @@ class TestApprovalListHandling:
         run_ctx: RunContext[Any],
     ) -> None:
         """Deferred unapproved tool with block strategy in approvals → pass through."""
-        from agentpool.agents.native_agent.deferred_bridge import (
+        from wolfharness.agents.native_agent.deferred_bridge import (
             create_deferred_bridge_capability,
         )
 
@@ -526,7 +526,7 @@ class TestApprovalListHandling:
 
         # Approvals are NOT handled by deferred bridge — pass through to approval_bridge
         with patch(
-            "agentpool.agents.native_agent.deferred_bridge._emit_deferred_event",
+            "wolfharness.agents.native_agent.deferred_bridge._emit_deferred_event",
             new_callable=AsyncMock,
         ) as mock_emit:
             result = await cap.handle_deferred_tool_calls(run_ctx, requests=requests)
@@ -541,7 +541,7 @@ class TestApprovalListHandling:
         run_ctx: RunContext[Any],
     ) -> None:
         """Deferred unapproved tool with continue strategy in approvals → pass through."""
-        from agentpool.agents.native_agent.deferred_bridge import (
+        from wolfharness.agents.native_agent.deferred_bridge import (
             create_deferred_bridge_capability,
         )
 
@@ -576,7 +576,7 @@ class TestEmitDeferredEvent:
         block_tool_call: ToolCallPart,
     ) -> None:
         """Event is published via event_bus when available."""
-        from agentpool.agents.native_agent.deferred_bridge import (
+        from wolfharness.agents.native_agent.deferred_bridge import (
             _emit_deferred_event,
         )
 
@@ -602,7 +602,7 @@ class TestEmitDeferredEvent:
         run_ctx: RunContext[Any],
     ) -> None:
         """No crash when event_bus is unavailable."""
-        from agentpool.agents.native_agent.deferred_bridge import (
+        from wolfharness.agents.native_agent.deferred_bridge import (
             _emit_deferred_event,
         )
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool import Agent, ChatMessage
+from wolfharness import Agent, ChatMessage
 
 
 pytestmark = pytest.mark.unit

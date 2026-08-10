@@ -12,13 +12,13 @@ from datetime import UTC, datetime
 from pydantic_ai.messages import ModelResponse, ThinkingPart
 import pytest
 
-from agentpool_server.opencode_server.models.message import (
+from wolfharness_server.opencode_server.models.message import (
     AssistantMessage,
     MessagePath,
     MessageTime,
 )
-from agentpool_server.opencode_server.models.parts import ReasoningPart
-from agentpool_storage.opencode_provider.helpers import (
+from wolfharness_server.opencode_server.models.parts import ReasoningPart
+from wolfharness_storage.opencode_provider.helpers import (
     _build_assistant_pydantic_messages,
 )
 
@@ -149,7 +149,7 @@ class TestThinkingPartRoundTrip:
         self, assistant_msg: AssistantMessage, timestamp: datetime
     ) -> None:
         """ThinkingPart and TextPart in the same message are both preserved."""
-        from agentpool_server.opencode_server.models.parts import TextPart
+        from wolfharness_server.opencode_server.models.parts import TextPart
 
         reasoning = ReasoningPart(
             id="prt_005",

@@ -26,18 +26,18 @@ The `serve()` function SHALL dispatch to `_serve_streamable_http()` when the tra
 - **THEN** the resulting server SHALL use `StreamableHTTPTransport` when starting the ACP agent
 
 ### Requirement: CLI --port and --host flags for serve-acp
-The `agentpool serve-acp` CLI command SHALL accept `--port` and `--host` optional flags. When provided, these flags SHALL create a `StreamableHTTPTransport` with the specified values. When neither flag is provided, the CLI SHALL default to stdio transport.
+The `wolfharness serve-acp` CLI command SHALL accept `--port` and `--host` optional flags. When provided, these flags SHALL create a `StreamableHTTPTransport` with the specified values. When neither flag is provided, the CLI SHALL default to stdio transport.
 
 #### Scenario: CLI with --port flag
-- **WHEN** the user runs `agentpool serve-acp config.yml --port 8080`
+- **WHEN** the user runs `wolfharness serve-acp config.yml --port 8080`
 - **THEN** the CLI SHALL create `StreamableHTTPTransport(port=8080)` and pass it to the ACP server
 
 #### Scenario: CLI with --port and --host flags
-- **WHEN** the user runs `agentpool serve-acp config.yml --host 0.0.0.0 --port 9000`
+- **WHEN** the user runs `wolfharness serve-acp config.yml --host 0.0.0.0 --port 9000`
 - **THEN** the CLI SHALL create `StreamableHTTPTransport(host="0.0.0.0", port=9000)`
 
 #### Scenario: CLI without transport flags
-- **WHEN** the user runs `agentpool serve-acp config.yml`
+- **WHEN** the user runs `wolfharness serve-acp config.yml`
 - **THEN** the CLI SHALL use the default stdio transport (no change from current behavior)
 
 ### Requirement: YAML config schema extension

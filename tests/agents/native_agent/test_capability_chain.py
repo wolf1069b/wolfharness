@@ -13,7 +13,7 @@ from pydantic_ai.capabilities import HandleDeferredToolCalls
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool import Agent
+from wolfharness import Agent
 
 
 pytestmark = pytest.mark.unit
@@ -41,16 +41,16 @@ async def test_deferred_bridge_before_approval_bridge(
     # uses local imports.
     with (
         patch(
-            "agentpool.agents.native_agent.deferred_bridge.create_deferred_bridge_capability",
+            "wolfharness.agents.native_agent.deferred_bridge.create_deferred_bridge_capability",
         ) as mock_create_deferred,
         patch(
-            "agentpool.agents.native_agent.elicitation_bridge.create_elicitation_bridge_capability",
+            "wolfharness.agents.native_agent.elicitation_bridge.create_elicitation_bridge_capability",
         ) as mock_create_elicitation,
         patch(
-            "agentpool.agents.native_agent.approval_bridge.create_approval_bridge_capability",
+            "wolfharness.agents.native_agent.approval_bridge.create_approval_bridge_capability",
         ) as mock_create_approval,
         patch(
-            "agentpool.agents.native_agent.agent.PydanticAgent",
+            "wolfharness.agents.native_agent.agent.PydanticAgent",
         ) as mock_pydantic_agent,
     ):
         # Create distinguishable mock capabilities
@@ -121,13 +121,13 @@ async def test_deferred_bridge_receives_deferred_tools_mapping(
 
     with (
         patch(
-            "agentpool.agents.native_agent.deferred_bridge.create_deferred_bridge_capability",
+            "wolfharness.agents.native_agent.deferred_bridge.create_deferred_bridge_capability",
         ) as mock_create_deferred,
         patch(
-            "agentpool.agents.native_agent.approval_bridge.create_approval_bridge_capability",
+            "wolfharness.agents.native_agent.approval_bridge.create_approval_bridge_capability",
         ) as mock_create_approval,
         patch(
-            "agentpool.agents.native_agent.agent.PydanticAgent",
+            "wolfharness.agents.native_agent.agent.PydanticAgent",
         ) as mock_pydantic_agent,
     ):
         deferred_cap = MagicMock(spec=HandleDeferredToolCalls)
@@ -176,13 +176,13 @@ async def test_deferred_bridge_empty_when_no_deferred_tools(
 
     with (
         patch(
-            "agentpool.agents.native_agent.deferred_bridge.create_deferred_bridge_capability",
+            "wolfharness.agents.native_agent.deferred_bridge.create_deferred_bridge_capability",
         ) as mock_create_deferred,
         patch(
-            "agentpool.agents.native_agent.approval_bridge.create_approval_bridge_capability",
+            "wolfharness.agents.native_agent.approval_bridge.create_approval_bridge_capability",
         ) as mock_create_approval,
         patch(
-            "agentpool.agents.native_agent.agent.PydanticAgent",
+            "wolfharness.agents.native_agent.agent.PydanticAgent",
         ) as mock_pydantic_agent,
     ):
         deferred_cap = MagicMock(spec=HandleDeferredToolCalls)
@@ -215,13 +215,13 @@ async def test_deferred_bridge_handles_get_tools_failure(
 
     with (
         patch(
-            "agentpool.agents.native_agent.deferred_bridge.create_deferred_bridge_capability",
+            "wolfharness.agents.native_agent.deferred_bridge.create_deferred_bridge_capability",
         ) as mock_create_deferred,
         patch(
-            "agentpool.agents.native_agent.approval_bridge.create_approval_bridge_capability",
+            "wolfharness.agents.native_agent.approval_bridge.create_approval_bridge_capability",
         ) as mock_create_approval,
         patch(
-            "agentpool.agents.native_agent.agent.PydanticAgent",
+            "wolfharness.agents.native_agent.agent.PydanticAgent",
         ) as mock_pydantic_agent,
     ):
         deferred_cap = MagicMock(spec=HandleDeferredToolCalls)

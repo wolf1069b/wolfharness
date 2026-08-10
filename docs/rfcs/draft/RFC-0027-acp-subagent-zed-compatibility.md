@@ -1191,17 +1191,17 @@ Phase 0 与 Phase 1 可并行执行。Phase 0 仅阻塞 Phase 2（需要传输�
 
 ### ACP Schema 文件
 
-- `packages/agentpool/src/acp/schema/base.py` — `AnnotatedObject` 基类，`field_meta` 字段（序列化为 `_meta`）
-- `packages/agentpool/src/acp/schema/session_updates.py` — `ToolCallStart`/`ToolCallProgress` 定义
+- `packages/wolfharness/src/acp/schema/base.py` — `AnnotatedObject` 基类，`field_meta` 字段（序列化为 `_meta`）
+- `packages/wolfharness/src/acp/schema/session_updates.py` — `ToolCallStart`/`ToolCallProgress` 定义
 
 ### AgentPool 源码
 
-- `packages/agentpool/src/agentpool_server/acp_server/event_converter.py` — 核心 ACP 事件转换器
-- `packages/agentpool/src/agentpool_server/acp_server/session.py` — ACP session 管理
-- `packages/agentpool/src/agentpool_server/acp_server/session_manager.py` — Session 生命周期管理
-- `packages/agentpool/src/agentpool_server/acp_server/server.py` — ACP server 入口
-- `packages/agentpool_toolsets/builtin/subagent_tools.py` — 发射 SubAgentEvent 和 SpawnSessionStart
-- `packages/agentpool/src/agentpool/agents/events/events.py` — 事件定义：SubAgentEvent（line 614）、SpawnSessionStart（line 646）
+- `packages/wolfharness/src/wolfharness_server/acp_server/event_converter.py` — 核心 ACP 事件转换器
+- `packages/wolfharness/src/wolfharness_server/acp_server/session.py` — ACP session 管理
+- `packages/wolfharness/src/wolfharness_server/acp_server/session_manager.py` — Session 生命周期管理
+- `packages/wolfharness/src/wolfharness_server/acp_server/server.py` — ACP server 入口
+- `packages/wolfharness_toolsets/builtin/subagent_tools.py` — 发射 SubAgentEvent 和 SpawnSessionStart
+- `packages/wolfharness/src/wolfharness/agents/events/events.py` — 事件定义：SubAgentEvent（line 614）、SpawnSessionStart（line 646）
 
 ### 相关 RFC
 

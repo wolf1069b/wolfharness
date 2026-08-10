@@ -8,8 +8,8 @@ import tempfile
 
 import pytest
 
-from agentpool.utils.inspection import get_fn_name
-from agentpool_config.commands import (
+from wolfharness.utils.inspection import get_fn_name
+from wolfharness_config.commands import (
     CallableCommandConfig,
     FileCommandConfig,
     StaticCommandConfig,

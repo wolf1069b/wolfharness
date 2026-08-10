@@ -19,7 +19,7 @@ Teams in AgentPool allow you to organize and orchestrate multiple agents as a gr
 ### Direct Creation
 
 ```python
-from agentpool.delegation import Team
+from wolfharness.delegation import Team
 
 team = Team(
     agents=[agent1, agent2, agent3],
@@ -62,7 +62,7 @@ for agent_name, error in team_response.errors.items():
 For sequential execution, use `TeamRun` instead:
 
 ```python
-from agentpool import TeamRun
+from wolfharness import TeamRun
 
 # Create sequential pipeline
 run = TeamRun([agent1, agent2, agent3])

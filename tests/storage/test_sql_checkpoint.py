@@ -11,9 +11,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from agentpool.sessions import SessionData
-from agentpool_config.storage import SQLStorageConfig
-from agentpool_storage.sql_provider import SQLModelProvider
+from wolfharness.sessions import SessionData
+from wolfharness_config.storage import SQLStorageConfig
+from wolfharness_storage.sql_provider import SQLModelProvider
 
 
 if TYPE_CHECKING:

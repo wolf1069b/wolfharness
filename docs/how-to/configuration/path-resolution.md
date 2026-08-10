@@ -2,8 +2,8 @@
 sync:
   agent: doc_sync_agent
   dependencies:
-    - src/agentpool_config/paths.py
-    - src/agentpool_config/context.py
+    - src/wolfharness_config/paths.py
+    - src/wolfharness_config/context.py
 title: Configuration Path Resolution
 description: How relative paths are resolved in configuration files
 icon: material/map-marker-path
@@ -49,7 +49,7 @@ skills:
 ```bash
 # Force all paths to resolve to a specific directory
 export AGENTPOOL_CONFIG_DIR=/custom/path
-agentpool serve-acp agents.yml
+wolfharness serve-acp agents.yml
 ```
 
 ### Legacy Mode
@@ -57,7 +57,7 @@ agentpool serve-acp agents.yml
 ```bash
 # Revert to CWD-relative resolution (pre-RFC-0009 behavior)
 export AGENTPOOL_LEGACY_PATHS=1
-agentpool serve-acp agents.yml
+wolfharness serve-acp agents.yml
 ```
 
 ## Implementation Details
@@ -73,14 +73,14 @@ agentpool serve-acp agents.yml
 Paths resolved relative to CWD:
 ```bash
 cd /home/user/project
-agentpool serve-acp agents.yml  # ./skills relative to CWD
+wolfharness serve-acp agents.yml  # ./skills relative to CWD
 ```
 
 **After (vX.Z):**
 Paths resolve relative to config file:
 ```bash
 cd /home/user/anywhere
-agentpool serve-acp /home/user/project/agents.yml  # ./skills relative to config dir
+wolfharness serve-acp /home/user/project/agents.yml  # ./skills relative to config dir
 ```
 
 To maintain old behavior, set `AGENTPOOL_LEGACY_PATHS=1`.

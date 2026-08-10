@@ -24,11 +24,11 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from agentpool.messaging import ChatMessage
-from agentpool.storage import StorageManager
-from agentpool.utils.time_utils import now_ms
-from agentpool_config.storage import SQLStorageConfig, StorageConfig
-from agentpool_server.opencode_server.models import (
+from wolfharness.messaging import ChatMessage
+from wolfharness.storage import StorageManager
+from wolfharness.utils.time_utils import now_ms
+from wolfharness_config.storage import SQLStorageConfig, StorageConfig
+from wolfharness_server.opencode_server.models import (
     AssistantMessage,
     MessagePath,
     MessageTime,
@@ -40,19 +40,19 @@ from agentpool_server.opencode_server.models import (
     TimeCreatedUpdated,
     UserMessage,
 )
-from agentpool_server.opencode_server.routes.message_routes import _commit_revert
-from agentpool_server.opencode_server.routes.session_routes import (
+from wolfharness_server.opencode_server.routes.message_routes import _commit_revert
+from wolfharness_server.opencode_server.routes.session_routes import (
     RevertRequest,
     revert_session,
 )
-from agentpool_storage.sql_provider.models import Message
-from agentpool_storage.sql_provider.sql_provider import SQLModelProvider
+from wolfharness_storage.sql_provider.models import Message
+from wolfharness_storage.sql_provider.sql_provider import SQLModelProvider
 
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness_server.opencode_server.state import ServerState
 
 
 pytestmark = pytest.mark.integration

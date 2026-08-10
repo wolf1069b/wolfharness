@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool_server.opencode_server.models import (
+from wolfharness_server.opencode_server.models import (
     MessagePath,
     MessageRequest,
     MessageTime,
@@ -17,7 +17,7 @@ from agentpool_server.opencode_server.models import (
     TimeCreated,
     UserMessage,
 )
-from agentpool_server.opencode_server.models.message import (
+from wolfharness_server.opencode_server.models.message import (
     AssistantMessage,
     TextPartInput,
 )
@@ -102,7 +102,7 @@ class TestMessageWithPartsFactories:
 
     def test_assistant_factory_creates_assistant_message(self):
         """MessageWithParts.assistant() should create an assistant message."""
-        from agentpool_server.opencode_server.models import AssistantMessage
+        from wolfharness_server.opencode_server.models import AssistantMessage
 
         msg = MessageWithParts.assistant(
             message_id="msg-1",

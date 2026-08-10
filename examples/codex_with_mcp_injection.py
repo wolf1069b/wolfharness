@@ -14,7 +14,7 @@ async def example_with_http_mcp_server():
     # Suppose we have a ToolManagerBridge running on port 8000
     # (In practice, you'd start the bridge first and get the URL)
     mcp_servers = {
-        "agentpool-tools": HttpMcpServer(
+        "wolfharness-tools": HttpMcpServer(
             url="http://localhost:8000/mcp",
             # Optional: if the MCP server requires authentication
             bearer_token_env_var="AGENTPOOL_MCP_TOKEN",
@@ -83,7 +83,7 @@ async def example_with_multiple_mcp_servers():
         print()
 
 
-async def example_integration_with_agentpool():
+async def example_integration_with_wolfharness():
     """Example: How this would integrate with AgentPool's ToolManagerBridge.
 
     This is conceptual - shows how you'd use a ToolManagerBridge's MCP server
@@ -94,7 +94,7 @@ async def example_integration_with_agentpool():
     # await bridge.start()
     # mcp_config = bridge.get_claude_mcp_server_config()
     # Simulating what that would return:
-    mcp_config = {"agentpool-tools": {"type": "http", "url": "http://localhost:8765/mcp"}}
+    mcp_config = {"wolfharness-tools": {"type": "http", "url": "http://localhost:8765/mcp"}}
     # Convert to CodexClient format
     mcp_servers = {
         name: HttpMcpServer(url=config["url"])
@@ -126,6 +126,6 @@ if __name__ == "__main__":
     # asyncio.run(example_with_multiple_mcp_servers())
 
     # Example 4: Integration with AgentPool
-    # asyncio.run(example_integration_with_agentpool())
+    # asyncio.run(example_integration_with_wolfharness())
 
     print("Examples ready to run - uncomment the ones you want to try!")

@@ -21,13 +21,13 @@ import anyio
 from anyio.abc import ByteReceiveStream, ByteSendStream
 
 from acp import AgentSideConnection, ClientSideConnection, DefaultACPClient
-from agentpool_server.acp_server.acp_agent import AgentPoolACPAgent
+from wolfharness_server.acp_server.acp_agent import AgentPoolACPAgent
 
 
 if TYPE_CHECKING:
     from typing import Any, Protocol
 
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
     class _PoolWithGetAgent(Protocol):
         """Protocol for a pool with the ``get_agent`` compat shim attached."""

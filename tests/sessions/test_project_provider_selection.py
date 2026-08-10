@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool.storage.manager import StorageManager
-from agentpool_config.storage import MemoryStorageConfig, StorageConfig
-from agentpool_storage.memory_provider import MemoryStorageProvider
-from agentpool_storage.opencode_provider import OpenCodeStorageProvider
+from wolfharness.storage.manager import StorageManager
+from wolfharness_config.storage import MemoryStorageConfig, StorageConfig
+from wolfharness_storage.memory_provider import MemoryStorageProvider
+from wolfharness_storage.opencode_provider import OpenCodeStorageProvider
 
 
 pytestmark = pytest.mark.unit

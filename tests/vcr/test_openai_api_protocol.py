@@ -20,14 +20,14 @@ from dirty_equals import IsPartialDict, IsStr
 from fastapi.testclient import TestClient
 import pytest
 
-from agentpool_server.openai_api_server.server import OpenAIAPIServer
 from tests.vcr.conftest import cassette_exists
+from wolfharness_server.openai_api_server.server import OpenAIAPIServer
 
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
 pytestmark = [pytest.mark.vcr, pytest.mark.integration]
 

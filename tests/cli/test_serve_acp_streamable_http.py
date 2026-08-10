@@ -16,7 +16,7 @@ import pytest
 import typer as t
 from typer.testing import CliRunner
 
-from agentpool_cli.serve_acp import acp_command
+from wolfharness_cli.serve_acp import acp_command
 
 
 if TYPE_CHECKING:
@@ -64,8 +64,8 @@ def test_default_transport_is_stdio(
 ) -> None:
     """Default --transport should create StdioTransport."""
     with (
-        patch("agentpool_server.acp_server.ACPServer.from_config") as mock_from_config,
-        patch("agentpool_cli.serve_acp.asyncio.run"),
+        patch("wolfharness_server.acp_server.ACPServer.from_config") as mock_from_config,
+        patch("wolfharness_cli.serve_acp.asyncio.run"),
     ):
         mock_server = MagicMock()
         mock_from_config.return_value = mock_server
@@ -86,8 +86,8 @@ def test_transport_streamable_http_creates_acp_websocket_transport(
 ) -> None:
     """--transport streamable-http should create ACPWebSocketTransport."""
     with (
-        patch("agentpool_server.acp_server.ACPServer.from_config") as mock_from_config,
-        patch("agentpool_cli.serve_acp.asyncio.run"),
+        patch("wolfharness_server.acp_server.ACPServer.from_config") as mock_from_config,
+        patch("wolfharness_cli.serve_acp.asyncio.run"),
     ):
         mock_server = MagicMock()
         mock_from_config.return_value = mock_server
@@ -107,8 +107,8 @@ def test_transport_streamable_http_with_custom_host_and_port(
 ) -> None:
     """--host and --port should be passed to ACPWebSocketTransport."""
     with (
-        patch("agentpool_server.acp_server.ACPServer.from_config") as mock_from_config,
-        patch("agentpool_cli.serve_acp.asyncio.run"),
+        patch("wolfharness_server.acp_server.ACPServer.from_config") as mock_from_config,
+        patch("wolfharness_cli.serve_acp.asyncio.run"),
     ):
         mock_server = MagicMock()
         mock_from_config.return_value = mock_server
@@ -140,8 +140,8 @@ def test_transport_streamable_http_uses_default_host_port(
 ) -> None:
     """ACPWebSocketTransport should use default host/port when not specified."""
     with (
-        patch("agentpool_server.acp_server.ACPServer.from_config") as mock_from_config,
-        patch("agentpool_cli.serve_acp.asyncio.run"),
+        patch("wolfharness_server.acp_server.ACPServer.from_config") as mock_from_config,
+        patch("wolfharness_cli.serve_acp.asyncio.run"),
     ):
         mock_server = MagicMock()
         mock_from_config.return_value = mock_server
@@ -161,8 +161,8 @@ def test_transport_websocket_emits_deprecation_warning(
 ) -> None:
     """--transport websocket should emit DeprecationWarning."""
     with (
-        patch("agentpool_server.acp_server.ACPServer.from_config") as mock_from_config,
-        patch("agentpool_cli.serve_acp.asyncio.run"),
+        patch("wolfharness_server.acp_server.ACPServer.from_config") as mock_from_config,
+        patch("wolfharness_cli.serve_acp.asyncio.run"),
     ):
         mock_server = MagicMock()
         mock_from_config.return_value = mock_server
@@ -182,8 +182,8 @@ def test_transport_websocket_uses_ws_host_and_ws_port(
 ) -> None:
     """--ws-host and --ws-port should be passed to WebSocketTransport."""
     with (
-        patch("agentpool_server.acp_server.ACPServer.from_config") as mock_from_config,
-        patch("agentpool_cli.serve_acp.asyncio.run"),
+        patch("wolfharness_server.acp_server.ACPServer.from_config") as mock_from_config,
+        patch("wolfharness_cli.serve_acp.asyncio.run"),
     ):
         mock_server = MagicMock()
         mock_from_config.return_value = mock_server
@@ -221,8 +221,8 @@ def test_short_options_for_host_and_port(
 ) -> None:
     """-h and -p should work as short options for --host and --port."""
     with (
-        patch("agentpool_server.acp_server.ACPServer.from_config") as mock_from_config,
-        patch("agentpool_cli.serve_acp.asyncio.run"),
+        patch("wolfharness_server.acp_server.ACPServer.from_config") as mock_from_config,
+        patch("wolfharness_cli.serve_acp.asyncio.run"),
     ):
         mock_server = MagicMock()
         mock_from_config.return_value = mock_server
@@ -258,8 +258,8 @@ def test_agent_option_is_passed_through(
 ) -> None:
     """--agent option should be passed to ACPServer.from_config."""
     with (
-        patch("agentpool_server.acp_server.ACPServer.from_config") as mock_from_config,
-        patch("agentpool_cli.serve_acp.asyncio.run"),
+        patch("wolfharness_server.acp_server.ACPServer.from_config") as mock_from_config,
+        patch("wolfharness_cli.serve_acp.asyncio.run"),
     ):
         mock_server = MagicMock()
         mock_from_config.return_value = mock_server
@@ -279,8 +279,8 @@ def test_debug_messages_option_is_passed_through(
 ) -> None:
     """--debug-messages option should be passed to ACPServer.from_config."""
     with (
-        patch("agentpool_server.acp_server.ACPServer.from_config") as mock_from_config,
-        patch("agentpool_cli.serve_acp.asyncio.run"),
+        patch("wolfharness_server.acp_server.ACPServer.from_config") as mock_from_config,
+        patch("wolfharness_cli.serve_acp.asyncio.run"),
     ):
         mock_server = MagicMock()
         mock_from_config.return_value = mock_server

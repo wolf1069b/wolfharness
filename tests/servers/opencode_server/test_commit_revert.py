@@ -16,10 +16,10 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from agentpool.messaging import ChatMessage
-from agentpool.utils.streams import FileChange
-from agentpool.utils.time_utils import now_ms
-from agentpool_server.opencode_server.models import (
+from wolfharness.messaging import ChatMessage
+from wolfharness.utils.streams import FileChange
+from wolfharness.utils.time_utils import now_ms
+from wolfharness_server.opencode_server.models import (
     AssistantMessage,
     MessagePath,
     MessageRequest,
@@ -33,14 +33,14 @@ from agentpool_server.opencode_server.models import (
     TimeCreatedUpdated,
     UserMessage,
 )
-from agentpool_server.opencode_server.routes.message_routes import (
+from wolfharness_server.opencode_server.routes.message_routes import (
     _commit_revert,
     _truncate_agent_history,
 )
 
 
 if TYPE_CHECKING:
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness_server.opencode_server.state import ServerState
 
 
 pytestmark = pytest.mark.unit
@@ -464,7 +464,7 @@ class TestCommitOrdering:
         original_broadcast = server_state.broadcast_event
 
         async def _tracking_broadcast(event: Any) -> None:
-            from agentpool_server.opencode_server.models import SessionUpdatedEvent
+            from wolfharness_server.opencode_server.models import SessionUpdatedEvent
 
             if isinstance(event, SessionUpdatedEvent):
                 call_order.append("broadcast_session_updated")

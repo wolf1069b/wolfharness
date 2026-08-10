@@ -22,8 +22,8 @@ from tests.vcr.conftest import cassette_exists
 
 
 if TYPE_CHECKING:
-    from agentpool import AgentPool
-    from agentpool.orchestrator.event_bus import EventBus
+    from wolfharness import AgentPool
+    from wolfharness.orchestrator.event_bus import EventBus
 
 pytestmark = [pytest.mark.vcr, pytest.mark.integration]
 

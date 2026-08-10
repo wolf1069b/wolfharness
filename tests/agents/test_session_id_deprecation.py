@@ -6,7 +6,7 @@ from dataclasses import asdict
 
 import pytest
 
-from agentpool.agents.context import AgentRunContext
+from wolfharness.agents.context import AgentRunContext
 
 
 pytestmark = pytest.mark.unit

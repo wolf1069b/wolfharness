@@ -12,10 +12,10 @@ from typing import Any
 
 import pytest
 
-from agentpool import Agent
-from agentpool.agents.context import AgentContext, AgentRunContext
-from agentpool.agents.events import RunStartedEvent, StreamEventEmitter
-from agentpool.orchestrator.core import EventBus
+from wolfharness import Agent
+from wolfharness.agents.context import AgentContext, AgentRunContext
+from wolfharness.agents.events import RunStartedEvent, StreamEventEmitter
+from wolfharness.orchestrator.core import EventBus
 
 
 def _stream_empty(queue: asyncio.Queue[Any]) -> bool:
@@ -143,11 +143,11 @@ async def test_descendant_scope_child_does_not_receive_parent() -> None:
 @pytest.mark.anyio
 async def test_descendant_scope_with_session_controller() -> None:
     """Descendant scope works when using a SessionController for hierarchy queries."""
-    from agentpool import AgentPool, AgentsManifest, NativeAgentConfig
+    from wolfharness import AgentPool, AgentsManifest, NativeAgentConfig
 
     manifest = AgentsManifest(agents={"agent1": NativeAgentConfig(name="agent1", model="test")})
     async with AgentPool(manifest) as pool:
-        from agentpool.orchestrator.core import SessionController
+        from wolfharness.orchestrator.core import SessionController
 
         controller = SessionController(pool)
         event_bus = EventBus(max_queue_size=10, session_controller=controller)

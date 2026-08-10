@@ -652,12 +652,12 @@ If issues are discovered:
 
 ### Related Documents
 
-- Subagent implementation: `src/agentpool_toolsets/builtin/subagent_tools.py`
-- Workers implementation: `src/agentpool_toolsets/builtin/workers.py`
-- Team implementation: `src/agentpool/delegation/team.py`
-- TeamRun implementation: `src/agentpool/delegation/teamrun.py`
-- Event definitions: `src/agentpool/agents/events/events.py`
-- Session ID generation: `src/agentpool/utils/identifiers.py`
+- Subagent implementation: `src/wolfharness_toolsets/builtin/subagent_tools.py`
+- Workers implementation: `src/wolfharness_toolsets/builtin/workers.py`
+- Team implementation: `src/wolfharness/delegation/team.py`
+- TeamRun implementation: `src/wolfharness/delegation/teamrun.py`
+- Event definitions: `src/wolfharness/agents/events/events.py`
+- Session ID generation: `src/wolfharness/utils/identifiers.py`
 
 ### External Resources
 

@@ -5,7 +5,7 @@ import os
 from pydantic_ai import ImageUrl
 import pytest
 
-from agentpool import Agent
+from wolfharness import Agent
 
 
 @pytest.mark.flaky(reruns=2)

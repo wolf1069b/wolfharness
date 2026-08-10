@@ -25,9 +25,9 @@ from acp.schema import (
     ToolCallStart,
     UserMessageChunk,
 )
-from agentpool.agents.acp_agent import ACPAgent
-from agentpool.agents.acp_agent.client_handler import ACPClientHandler
-from agentpool.agents.acp_agent.session_state import ACPSessionState
+from wolfharness.agents.acp_agent import ACPAgent
+from wolfharness.agents.acp_agent.client_handler import ACPClientHandler
+from wolfharness.agents.acp_agent.session_state import ACPSessionState
 
 
 def _mock_agent() -> MagicMock:
@@ -235,7 +235,7 @@ async def test_current_mode_update_emits_signal(
     handler: ACPClientHandler, mock_agent: MagicMock
 ) -> None:
     """CurrentModeUpdate should emit state_updated signal with ModeInfo."""
-    from agentpool.agents.modes import ModeInfo
+    from wolfharness.agents.modes import ModeInfo
 
     session_state = ACPSessionState(session_id="test-session")
     session_state.modes = SessionModeState(

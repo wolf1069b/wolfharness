@@ -11,18 +11,18 @@ import pytest
 import structlog
 from upathtools import UPath
 
-from agentpool.skills.manager import SkillsManager
-from agentpool_config.skills import SkillsConfig
+from wolfharness.skills.manager import SkillsManager
+from wolfharness_config.skills import SkillsConfig
 
 
 pytestmark = pytest.mark.unit
 
 
 @pytest.fixture(autouse=True)
-def _setup_agentpool_logging() -> None:
-    """Ensure agentpool loggers are configured for test capture.
+def _setup_wolfharness_logging() -> None:
+    """Ensure wolfharness loggers are configured for test capture.
 
-    Resets structlog to a minimal configuration and sets the agentpool
+    Resets structlog to a minimal configuration and sets the wolfharness
     logger tree to DEBUG so that caplog reliably captures log messages
     regardless of structlog auto-configuration order in parallel runs.
     """
@@ -38,9 +38,9 @@ def _setup_agentpool_logging() -> None:
         cache_logger_on_first_use=True,
     )
 
-    agentpool_root = logging.getLogger("agentpool")
-    agentpool_root.setLevel(logging.DEBUG)
-    agentpool_root.propagate = True
+    wolfharness_root = logging.getLogger("wolfharness")
+    wolfharness_root.setLevel(logging.DEBUG)
+    wolfharness_root.propagate = True
 
     logging.getLogger().setLevel(logging.DEBUG)
 
@@ -122,7 +122,7 @@ async def test_discover_skills_logging(
     caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ):
     """Test that missing custom paths log WARNING and missing default paths log DEBUG."""
-    from agentpool_config import skills
+    from wolfharness_config import skills
 
     mock_default = [UPath("/non/existent/default/path")]
     monkeypatch.setattr(skills, "DEFAULT_SKILLS_PATHS", mock_default)

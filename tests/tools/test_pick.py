@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool import Agent
+from wolfharness import Agent
 
 
 # All tests in this file create real Agent instances that need OPENAI_API_KEY.

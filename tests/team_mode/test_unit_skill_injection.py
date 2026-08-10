@@ -15,7 +15,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentpool.capabilities.team_comm_capability import TeamCommCapability
 from tests.team_mode.conftest import (
     init_team,
     make_enabled_config,
@@ -23,6 +22,7 @@ from tests.team_mode.conftest import (
     make_mock_pool,
     make_run_context,
 )
+from wolfharness.capabilities.team_comm_capability import TeamCommCapability
 
 
 # ---------------------------------------------------------------------------
@@ -78,7 +78,7 @@ async def test_team_create_with_member_skills_injects_instruction_blocks(
     cap = _make_cap()
 
     with patch(
-        "agentpool_toolsets.builtin.skills.load_skill_for_node",
+        "wolfharness_toolsets.builtin.skills.load_skill_for_node",
         new=AsyncMock(return_value="Skill instructions text"),
     ) as mock_load:
         result = await cap.team_create(
@@ -105,7 +105,7 @@ async def test_team_create_without_skills_no_injection(tmp_path: Any) -> None:
     cap = _make_cap()
 
     with patch(
-        "agentpool_toolsets.builtin.skills.load_skill_for_node", new=AsyncMock()
+        "wolfharness_toolsets.builtin.skills.load_skill_for_node", new=AsyncMock()
     ) as mock_load:
         result = await cap.team_create(
             ctx,
@@ -127,7 +127,7 @@ async def test_team_create_skills_before_instructions(tmp_path: Any) -> None:
     cap = _make_cap()
 
     with patch(
-        "agentpool_toolsets.builtin.skills.load_skill_for_node",
+        "wolfharness_toolsets.builtin.skills.load_skill_for_node",
         new=AsyncMock(return_value="Skill docs"),
     ):
         await cap.team_create(
@@ -158,7 +158,7 @@ async def test_team_create_skills_dedup(tmp_path: Any) -> None:
     cap = _make_cap()
 
     with patch(
-        "agentpool_toolsets.builtin.skills.load_skill_for_node",
+        "wolfharness_toolsets.builtin.skills.load_skill_for_node",
         new=AsyncMock(return_value="x"),
     ) as mock_load:
         await cap.team_create(
@@ -186,7 +186,7 @@ async def test_team_add_member_with_skills_injects_block(tmp_path: Any) -> None:
     cap = _make_cap()
 
     with patch(
-        "agentpool_toolsets.builtin.skills.load_skill_for_node",
+        "wolfharness_toolsets.builtin.skills.load_skill_for_node",
         new=AsyncMock(return_value="Skill text"),
     ) as mock_load:
         result = await cap.team_add_member(
@@ -213,7 +213,7 @@ async def test_team_add_member_without_skills_no_injection(tmp_path: Any) -> Non
     cap = _make_cap()
 
     with patch(
-        "agentpool_toolsets.builtin.skills.load_skill_for_node", new=AsyncMock()
+        "wolfharness_toolsets.builtin.skills.load_skill_for_node", new=AsyncMock()
     ) as mock_load:
         result = await cap.team_add_member(
             ctx,
@@ -236,7 +236,7 @@ async def test_team_add_member_empty_skills_list_no_injection(tmp_path: Any) -> 
     cap = _make_cap()
 
     with patch(
-        "agentpool_toolsets.builtin.skills.load_skill_for_node", new=AsyncMock()
+        "wolfharness_toolsets.builtin.skills.load_skill_for_node", new=AsyncMock()
     ) as mock_load:
         await cap.team_add_member(ctx, "new_worker", "worker", skills=[])
 
@@ -256,7 +256,7 @@ async def test_skill_not_visible_renders_error_text_member_created(tmp_path: Any
     cap = _make_cap()
 
     with patch(
-        "agentpool_toolsets.builtin.skills.load_skill_for_node",
+        "wolfharness_toolsets.builtin.skills.load_skill_for_node",
         new=AsyncMock(return_value=("Skill 'lodestone' not found. Available skills: some_other")),
     ):
         result = await cap.team_add_member(ctx, "new_worker", "worker", skills=["lodestone"])
@@ -274,7 +274,7 @@ async def test_skill_load_exception_renders_error_text_member_created(tmp_path: 
     cap = _make_cap()
 
     with patch(
-        "agentpool_toolsets.builtin.skills.load_skill_for_node",
+        "wolfharness_toolsets.builtin.skills.load_skill_for_node",
         new=AsyncMock(side_effect=RuntimeError("boom")),
     ):
         result = await cap.team_add_member(ctx, "new_worker", "worker", skills=["bad"])
@@ -298,7 +298,7 @@ async def test_skill_injection_no_tool_assembly_contract(tmp_path: Any) -> None:
     cap = _make_cap()
 
     with patch(
-        "agentpool_toolsets.builtin.skills.load_skill_for_node",
+        "wolfharness_toolsets.builtin.skills.load_skill_for_node",
         new=AsyncMock(return_value="docs"),
     ) as mock_load:
         await cap.team_add_member(ctx, "new_worker", "worker", skills=["s1"])
@@ -326,7 +326,7 @@ async def test_skill_uri_reference_path_display_name(tmp_path: Any) -> None:
     cap = _make_cap()
 
     with patch(
-        "agentpool_toolsets.builtin.skills.load_skill_for_node",
+        "wolfharness_toolsets.builtin.skills.load_skill_for_node",
         new=AsyncMock(return_value="ref content"),
     ) as mock_load:
         await cap.team_add_member(
@@ -355,7 +355,7 @@ async def test_team_create_skills_non_list_degrades_gracefully(tmp_path: Any) ->
     cap = _make_cap()
 
     with patch(
-        "agentpool_toolsets.builtin.skills.load_skill_for_node", new=AsyncMock()
+        "wolfharness_toolsets.builtin.skills.load_skill_for_node", new=AsyncMock()
     ) as mock_load:
         result = await cap.team_create(
             ctx,

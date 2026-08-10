@@ -5,7 +5,7 @@ converter's integration of that utility when handling ``FilePartInput`` with
 ``ResourceSource`` (L2 integration tests).
 
 The tests are written against the target API where:
-- ``resolve_resource_content()`` lives in ``agentpool.capabilities.resource_resolver``
+- ``resolve_resource_content()`` lives in ``wolfharness.capabilities.resource_resolver``
 - ``_resolve_resource()`` in the converter delegates to ``resolve_resource_content()``
   by filtering ``agent._all_capabilities`` via ``isinstance`` checks.
 """
@@ -19,13 +19,13 @@ from typing import TYPE_CHECKING, Any
 from pydantic_ai import BinaryContent
 import pytest
 
-from agentpool.capabilities.resource_protocols import (
+from wolfharness.capabilities.resource_protocols import (
     BlobResourceContent,
     ResourceEntry,
     SkillEntry,
     TextResourceContent,
 )
-from agentpool.capabilities.resource_resolver import resolve_resource_content
+from wolfharness.capabilities.resource_resolver import resolve_resource_content
 
 
 if TYPE_CHECKING:
@@ -104,7 +104,7 @@ class FakeAgent:
     """
 
     def __init__(self, capabilities: list[Any], name: str = "fake-agent") -> None:
-        from agentpool.capabilities.extension_registry import ExtensionRegistry, Scope, ScopeLevel
+        from wolfharness.capabilities.extension_registry import ExtensionRegistry, Scope, ScopeLevel
 
         registry = ExtensionRegistry()
         pool_scope = Scope(level=ScopeLevel.POOL)
@@ -332,7 +332,7 @@ async def test_resolve_resource_skill_reference_traversal_blocked(tmp_path: Any)
     """Path traversal in reference path is blocked by ResolvedSkillURI.parse()."""
     from upathtools import UPath
 
-    from agentpool.skills.exceptions import SecurityError
+    from wolfharness.skills.exceptions import SecurityError
 
     skill_dir = tmp_path / "my-skill"
     skill_dir.mkdir()
@@ -443,10 +443,10 @@ async def test_resolve_resource_text_truncation() -> None:
 
 async def test_extract_user_prompt_with_binary_resource() -> None:
     """Resource returns BlobResourceContent → result contains BinaryContent in XML sandwich."""
-    from agentpool_server.opencode_server.converters import extract_user_prompt_from_parts
-    from agentpool_server.opencode_server.models import FilePartInput
-    from agentpool_server.opencode_server.models.common import TextSpan
-    from agentpool_server.opencode_server.models.parts import ResourceSource
+    from wolfharness_server.opencode_server.converters import extract_user_prompt_from_parts
+    from wolfharness_server.opencode_server.models import FilePartInput
+    from wolfharness_server.opencode_server.models.common import TextSpan
+    from wolfharness_server.opencode_server.models.parts import ResourceSource
 
     blob_data = base64.b64encode(b"img").decode()
     cap = FakeResourceAccess(
@@ -475,10 +475,10 @@ async def test_extract_user_prompt_with_binary_resource() -> None:
 
 async def test_extract_user_prompt_resource_no_agent() -> None:
     """agent=None → FilePartInput falls through to generic file handler."""
-    from agentpool_server.opencode_server.converters import extract_user_prompt_from_parts
-    from agentpool_server.opencode_server.models import FilePartInput
-    from agentpool_server.opencode_server.models.common import TextSpan
-    from agentpool_server.opencode_server.models.parts import ResourceSource
+    from wolfharness_server.opencode_server.converters import extract_user_prompt_from_parts
+    from wolfharness_server.opencode_server.models import FilePartInput
+    from wolfharness_server.opencode_server.models.common import TextSpan
+    from wolfharness_server.opencode_server.models.parts import ResourceSource
 
     source = ResourceSource(
         text=TextSpan(value="@viking:doc.md", start=0, end=14),
@@ -500,14 +500,14 @@ async def test_extract_user_prompt_resource_no_agent() -> None:
 
 async def test_extract_user_prompt_mixed_parts() -> None:
     """Text + resource + agent parts all processed."""
-    from agentpool_server.opencode_server.converters import extract_user_prompt_from_parts
-    from agentpool_server.opencode_server.models import (
+    from wolfharness_server.opencode_server.converters import extract_user_prompt_from_parts
+    from wolfharness_server.opencode_server.models import (
         AgentPartInput,
         FilePartInput,
         TextPartInput,
     )
-    from agentpool_server.opencode_server.models.common import TextSpan
-    from agentpool_server.opencode_server.models.parts import ResourceSource
+    from wolfharness_server.opencode_server.models.common import TextSpan
+    from wolfharness_server.opencode_server.models.parts import ResourceSource
 
     cap = FakeResourceAccess(
         read_result=[TextResourceContent(text="resource content", uri="viking://doc")]
@@ -556,12 +556,12 @@ async def test_resolve_resource_timing_bug() -> None:
     Expected behavior after fix: ``_resolve_resource()`` should find the cap
     even when the registry hasn't registered it yet.
     """
-    from agentpool import AgentPool, AgentsManifest, NativeAgentConfig
-    from agentpool_config.capabilities import GenericCapabilityConfig
-    from agentpool_server.opencode_server.converters import extract_user_prompt_from_parts
-    from agentpool_server.opencode_server.models import FilePartInput
-    from agentpool_server.opencode_server.models.common import TextSpan
-    from agentpool_server.opencode_server.models.parts import ResourceSource
+    from wolfharness import AgentPool, AgentsManifest, NativeAgentConfig
+    from wolfharness_config.capabilities import GenericCapabilityConfig
+    from wolfharness_server.opencode_server.converters import extract_user_prompt_from_parts
+    from wolfharness_server.opencode_server.models import FilePartInput
+    from wolfharness_server.opencode_server.models.common import TextSpan
+    from wolfharness_server.opencode_server.models.parts import ResourceSource
 
     # Build a real agent config with a GenericCapabilityConfig pointing to
     # our test ResourceAccess capability.
@@ -581,7 +581,7 @@ async def test_resolve_resource_timing_bug() -> None:
         # This populates _config_capabilities_built (eager build in __init__)
         # but does NOT register them in the ExtensionRegistry — that only
         # happens in get_agentlet(), which we deliberately do NOT call.
-        from agentpool.agents.native_agent import Agent
+        from wolfharness.agents.native_agent import Agent
 
         agent = Agent.from_config(
             agent_config,
@@ -591,8 +591,8 @@ async def test_resolve_resource_timing_bug() -> None:
         assert agent._config_capabilities_built, "No config capabilities built"
 
         # Verify the cap is in _all_capabilities but NOT in the registry
-        from agentpool.capabilities.extension_registry import Scope, ScopeLevel
-        from agentpool.capabilities.resource_protocols import ResourceAccess
+        from wolfharness.capabilities.extension_registry import Scope, ScopeLevel
+        from wolfharness.capabilities.resource_protocols import ResourceAccess
 
         ra_caps = [c for c in agent._all_capabilities if isinstance(c, ResourceAccess)]
         assert len(ra_caps) >= 1, "No ResourceAccess cap in _all_capabilities"
@@ -616,7 +616,7 @@ async def test_resolve_resource_timing_bug() -> None:
 
         # Verify ResourceCapability is NOT in the registry (it's a tool wrapper,
         # not a ResourceAccess provider).
-        from agentpool.capabilities.resource_capability import ResourceCapability
+        from wolfharness.capabilities.resource_capability import ResourceCapability
 
         assert not any(isinstance(c, ResourceCapability) for c in registry_caps), (
             "ResourceCapability should not be in get_resource_access() results"
@@ -666,9 +666,9 @@ agents:
 
 def _make_resource_part(uri: str, client_name: str = "test") -> Any:
     """Build a FilePartInput with a ResourceSource for @-mention testing."""
-    from agentpool_server.opencode_server.models import FilePartInput
-    from agentpool_server.opencode_server.models.common import TextSpan
-    from agentpool_server.opencode_server.models.parts import ResourceSource
+    from wolfharness_server.opencode_server.models import FilePartInput
+    from wolfharness_server.opencode_server.models.common import TextSpan
+    from wolfharness_server.opencode_server.models.parts import ResourceSource
 
     return FilePartInput(
         mime="text/plain",
@@ -693,8 +693,8 @@ async def test_e2e_at_mention_resolves_resource() -> None:
     """
     import yamling
 
-    from agentpool import AgentPool, AgentsManifest
-    from agentpool_server.opencode_server.converters import extract_user_prompt_from_parts
+    from wolfharness import AgentPool, AgentsManifest
+    from wolfharness_server.opencode_server.converters import extract_user_prompt_from_parts
 
     config = _make_pool_config(
         cap_args={"read_text": "hello world", "read_uri": "test://doc.md"},
@@ -702,7 +702,7 @@ async def test_e2e_at_mention_resolves_resource() -> None:
     manifest = AgentsManifest.model_validate(yamling.load_yaml(config, verify_type=dict))
 
     async with AgentPool(manifest) as pool:
-        from agentpool.agents.native_agent import Agent
+        from wolfharness.agents.native_agent import Agent
 
         agent = Agent.from_config(
             pool.agent_configs["test_agent"],
@@ -721,8 +721,8 @@ async def test_e2e_at_mention_wrong_uri_returns_empty() -> None:
     """L2: @-mention with a URI that no cap can resolve → content dropped."""
     import yamling
 
-    from agentpool import AgentPool, AgentsManifest
-    from agentpool_server.opencode_server.converters import extract_user_prompt_from_parts
+    from wolfharness import AgentPool, AgentsManifest
+    from wolfharness_server.opencode_server.converters import extract_user_prompt_from_parts
 
     config = _make_pool_config(
         cap_args={"read_text": "hello world", "read_uri": "test://doc.md"},
@@ -730,7 +730,7 @@ async def test_e2e_at_mention_wrong_uri_returns_empty() -> None:
     manifest = AgentsManifest.model_validate(yamling.load_yaml(config, verify_type=dict))
 
     async with AgentPool(manifest) as pool:
-        from agentpool.agents.native_agent import Agent
+        from wolfharness.agents.native_agent import Agent
 
         agent = Agent.from_config(
             pool.agent_configs["test_agent"],
@@ -756,9 +756,9 @@ async def test_e2e_resource_capability_excluded_from_registry() -> None:
     """
     import yamling
 
-    from agentpool import AgentPool, AgentsManifest
-    from agentpool.capabilities.extension_registry import Scope, ScopeLevel
-    from agentpool.capabilities.resource_capability import ResourceCapability
+    from wolfharness import AgentPool, AgentsManifest
+    from wolfharness.capabilities.extension_registry import Scope, ScopeLevel
+    from wolfharness.capabilities.resource_capability import ResourceCapability
 
     config = _make_pool_config()
     manifest = AgentsManifest.model_validate(yamling.load_yaml(config, verify_type=dict))
@@ -786,9 +786,9 @@ async def test_e2e_multiple_agents_resource_isolation() -> None:
     """
     import yamling
 
-    from agentpool import AgentPool, AgentsManifest
-    from agentpool.capabilities.extension_registry import Scope, ScopeLevel
-    from agentpool.capabilities.resource_protocols import ResourceAccess
+    from wolfharness import AgentPool, AgentsManifest
+    from wolfharness.capabilities.extension_registry import Scope, ScopeLevel
+    from wolfharness.capabilities.resource_protocols import ResourceAccess
 
     config = """\
 agents:
@@ -830,8 +830,8 @@ async def test_e2e_skill_resource_resolution() -> None:
     """L2: SkillResource cap → skill:// URI resolved via _resolve_resource."""
     import yamling
 
-    from agentpool import AgentPool, AgentsManifest
-    from agentpool_server.opencode_server.converters import extract_user_prompt_from_parts
+    from wolfharness import AgentPool, AgentsManifest
+    from wolfharness_server.opencode_server.converters import extract_user_prompt_from_parts
 
     config = _make_pool_config(
         cap_type="tests.fixtures.test_resource_cap.TestSkillResourceCap",
@@ -840,7 +840,7 @@ async def test_e2e_skill_resource_resolution() -> None:
     manifest = AgentsManifest.model_validate(yamling.load_yaml(config, verify_type=dict))
 
     async with AgentPool(manifest) as pool:
-        from agentpool.agents.native_agent import Agent
+        from wolfharness.agents.native_agent import Agent
 
         agent = Agent.from_config(
             pool.agent_configs["test_agent"],
@@ -891,7 +891,7 @@ async def test_scope_visibility_matrix(
     Scope hierarchy: POOL > AGENT > SESSION > TURN
     Query at a scope sees everything at that scope level and above (outer).
     """
-    from agentpool.capabilities.extension_registry import (
+    from wolfharness.capabilities.extension_registry import (
         ExtensionRegistry,
         Scope,
         ScopeLevel,
@@ -933,7 +933,7 @@ async def test_agent_isolation_matrix(
     expected_found: bool,
 ) -> None:
     """Matrix: cap at AGENT scope for agent A → query for agent B → not found."""
-    from agentpool.capabilities.extension_registry import (
+    from wolfharness.capabilities.extension_registry import (
         ExtensionRegistry,
         Scope,
         ScopeLevel,
@@ -972,8 +972,8 @@ async def test_config_cap_no_duplicate_tools_after_get_agentlet() -> None:
     The fix: register config-defined caps directly at AGENT scope inside
     _compile_agent_capabilities() but do NOT include them in the returned list.
     """
-    from agentpool import AgentPool, AgentsManifest, NativeAgentConfig
-    from agentpool_config.capabilities import GenericCapabilityConfig
+    from wolfharness import AgentPool, AgentsManifest, NativeAgentConfig
+    from wolfharness_config.capabilities import GenericCapabilityConfig
 
     cap_config = GenericCapabilityConfig(
         type="tests.fixtures.test_resource_cap.TestToolAndResourceCap",
@@ -1002,7 +1002,7 @@ async def test_config_cap_no_duplicate_tools_after_get_agentlet() -> None:
         # (built in __init__). If both lists have the same cap type,
         # get_agentlet() will assemble duplicate tools → pydantic-ai
         # raises "tool name conflicts" error.
-        from agentpool.capabilities.resource_protocols import ResourceAccess
+        from wolfharness.capabilities.resource_protocols import ResourceAccess
 
         extra_ra = [c for c in agent._extra_capabilities if isinstance(c, ResourceAccess)]
         assert len(extra_ra) == 0, (

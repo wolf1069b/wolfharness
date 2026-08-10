@@ -2,7 +2,7 @@
 sync:
   agent: doc_sync_agent
   dependencies:
-    - src/agentpool_config/nodes.py
+    - src/wolfharness_config/nodes.py
 title: Agent
 description: Agent configuration options
 icon: material/robot
@@ -27,7 +27,7 @@ Agent configuration includes:
 ## Configuration Reference
 
 /// mknodes
-{{ "agentpool.models.agents.NativeAgentConfig" | schema_to_markdown(display_mode="yaml", header_style="pymdownx", as_listitem=False) }}
+{{ "wolfharness.models.agents.NativeAgentConfig" | schema_to_markdown(display_mode="yaml", header_style="pymdownx", as_listitem=False) }}
 ///
 
 ## Configuration Inheritance

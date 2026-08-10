@@ -9,7 +9,7 @@ last_updated: 2026-02-02
 ---
 
 ## Overview
-This RFC details the implementation of extended `Tool` definitions in `agentpool` to support features from `pydantic-ai`'s `Tool` class—specifically `prepare`, `function_schema`, `name`, and `description`—and the unification of tool conversion logic using `Tool.from_schema` for enhanced validation capabilities.
+This RFC details the implementation of extended `Tool` definitions in `wolfharness` to support features from `pydantic-ai`'s `Tool` class—specifically `prepare`, `function_schema`, `name`, and `description`—and the unification of tool conversion logic using `Tool.from_schema` for enhanced validation capabilities.
 
 ## Background & Context
 AgentPool's `Tool` abstraction serves as a bridge between multiple protocols. Previously, conversion to `pydantic-ai` tools was fragmented:
@@ -20,7 +20,7 @@ AgentPool's `Tool` abstraction serves as a bridge between multiple protocols. Pr
 ## Problem Statement
 1.  **Validation Gap**: The previous `SchemaWrapper` implementation for schema overrides did not support `validate_json`, causing runtime errors when PydanticAI attempted to validate tool arguments from JSON.
 2.  **Divergent Paths**: Tools with custom schemas used a different code path than standard tools, leading to feature disparity (e.g., missing `prepare` support).
-3.  **Context Type Hazard**: `pydantic-ai` expects `RunContext`, while `agentpool` internal tools often depend on `AgentContext`. Using `pydantic_ai.function_schema` on functions with `AgentContext` failed due to type inspection issues with abstract base classes.
+3.  **Context Type Hazard**: `pydantic-ai` expects `RunContext`, while `wolfharness` internal tools often depend on `AgentContext`. Using `pydantic_ai.function_schema` on functions with `AgentContext` failed due to type inspection issues with abstract base classes.
 
 ## Implementation Details
 

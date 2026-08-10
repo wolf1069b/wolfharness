@@ -12,8 +12,8 @@ import pytest
 from slashed import Command
 
 from acp import ClientCapabilities
-from agentpool import Agent, AgentPool
-from agentpool_server.acp_server.session import ACPSession
+from wolfharness import Agent, AgentPool
+from wolfharness_server.acp_server.session import ACPSession
 
 
 pytestmark = pytest.mark.integration
@@ -176,7 +176,7 @@ async def test_immediate_send_error_handling(caplog: pytest.LogCaptureFixture):
         sent_messages.append(message)
 
     async def capture_ext_notification(method: str, params: dict):
-        if method == "_agentpool/toast":
+        if method == "_wolfharness/toast":
             toast_messages.append(params.get("message", ""))
 
     session.notifications.send_agent_text = capture_message  # type: ignore[method-assign]

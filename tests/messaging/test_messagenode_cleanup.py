@@ -7,8 +7,8 @@ from typing import Any
 
 import pytest
 
-from agentpool.messaging.messagenode import MessageNode
-from agentpool.talk.stats import AggregatedMessageStats, MessageStats
+from wolfharness.messaging.messagenode import MessageNode
+from wolfharness.talk.stats import AggregatedMessageStats, MessageStats
 
 
 pytestmark = pytest.mark.unit

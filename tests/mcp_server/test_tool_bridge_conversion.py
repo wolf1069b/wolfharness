@@ -3,7 +3,7 @@ from __future__ import annotations
 from pydantic_ai import ToolReturn
 import pytest
 
-from agentpool.mcp_server.tool_bridge import _convert_to_tool_result
+from wolfharness.mcp_server.tool_bridge import _convert_to_tool_result
 
 
 pytestmark = pytest.mark.unit

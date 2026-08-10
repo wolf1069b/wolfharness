@@ -17,9 +17,9 @@ from unittest.mock import patch
 from pydantic_ai.mcp import MCPToolset
 import pytest
 
-from agentpool.mcp_server.config_snapshot import McpConfigEntry, McpConfigSnapshot
-from agentpool.mcp_server.manager import MCPManager
-from agentpool_config.mcp_server import StdioMCPServerConfig
+from wolfharness.mcp_server.config_snapshot import McpConfigEntry, McpConfigSnapshot
+from wolfharness.mcp_server.manager import MCPManager
+from wolfharness_config.mcp_server import StdioMCPServerConfig
 
 
 pytestmark = pytest.mark.unit
@@ -243,7 +243,7 @@ async def test_disconnect_all_timeout_does_not_block() -> None:
     # Use a short timeout for the test to avoid waiting 30s
     import unittest.mock
 
-    with unittest.mock.patch("agentpool.mcp_server.manager._MCP_CLEANUP_TIMEOUT", 0.1):
+    with unittest.mock.patch("wolfharness.mcp_server.manager._MCP_CLEANUP_TIMEOUT", 0.1):
         # disconnect_all should complete within the timeout, not hang
         await asyncio.wait_for(manager.disconnect_all(), timeout=5.0)
 

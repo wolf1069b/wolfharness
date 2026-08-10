@@ -21,10 +21,10 @@ MCP is a standardized protocol for AI tool integration:
 
 ```bash
 # Expose tools from a pool
-agentpool serve-mcp config.yml
+wolfharness serve-mcp config.yml
 
 # Or expose specific toolsets
-agentpool serve-mcp config.yml --toolset file_access --toolset search
+wolfharness serve-mcp config.yml --toolset file_access --toolset search
 ```
 
 See [`serve-mcp`](../../reference/cli/serve-mcp.md) for all CLI options.
@@ -37,7 +37,7 @@ Expose your custom tools to Claude Code:
 
 ```bash
 # Start MCP server
-agentpool serve-mcp tools.yml --transport sse --port 3001
+wolfharness serve-mcp tools.yml --transport sse --port 3001
 ```
 
 Configure Claude Code's `mcp.json`:
@@ -45,7 +45,7 @@ Configure Claude Code's `mcp.json`:
 ```json
 {
   "mcpServers": {
-    "agentpool": {
+    "wolfharness": {
       "url": "http://localhost:3001/sse"
     }
   }
@@ -80,8 +80,8 @@ External agents can now delegate to your experts via MCP.
 Expose custom Python functions:
 
 ```python
-from agentpool import Agent
-from agentpool.tools import tool
+from wolfharness import Agent
+from wolfharness.tools import tool
 
 @tool
 def analyze_data(data: str) -> str:
@@ -93,7 +93,7 @@ agent = Agent("analyzer", model="...", tools=[analyze_data])
 ```
 
 ```bash
-agentpool serve-mcp --config agent.yml
+wolfharness serve-mcp --config agent.yml
 ```
 
 ## Exposed Capabilities
@@ -165,7 +165,7 @@ graph LR
 For subprocess communication:
 
 ```bash
-agentpool serve-mcp config.yml --transport stdio
+wolfharness serve-mcp config.yml --transport stdio
 ```
 
 Used when the client spawns the server as a subprocess.
@@ -175,7 +175,7 @@ Used when the client spawns the server as a subprocess.
 For HTTP-based communication:
 
 ```bash
-agentpool serve-mcp config.yml --transport sse --port 3001
+wolfharness serve-mcp config.yml --transport sse --port 3001
 ```
 
 

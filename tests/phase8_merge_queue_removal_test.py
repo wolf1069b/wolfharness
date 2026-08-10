@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool.utils.streams import FileChange, FileOpsTracker
+from wolfharness.utils.streams import FileChange, FileOpsTracker
 
 
 def test_merge_queue_into_iterator_raises_import_error() -> None:
@@ -22,7 +22,7 @@ def test_merge_queue_into_iterator_raises_import_error() -> None:
     - Other stream utilities should still work
     """
     with pytest.raises(ImportError):
-        from agentpool.utils.streams import merge_queue_into_iterator  # noqa: F401
+        from wolfharness.utils.streams import merge_queue_into_iterator  # noqa: F401
 
     # Verify other utilities still work
     assert FileChange is not None

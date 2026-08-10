@@ -6,8 +6,8 @@ from evented.event_data import EventData
 from evented_config import TimeEventConfig
 import pytest
 
-from agentpool.messaging import EventManager
-from agentpool.utils.time_utils import get_now
+from wolfharness.messaging import EventManager
+from wolfharness.utils.time_utils import get_now
 
 
 pytestmark = pytest.mark.unit

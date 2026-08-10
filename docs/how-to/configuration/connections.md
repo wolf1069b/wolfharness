@@ -2,7 +2,7 @@
 sync:
   agent: doc_sync_agent
   dependencies:
-    - src/agentpool_config/forward_targets.py
+    - src/wolfharness_config/forward_targets.py
 title: Connections 
 description: Message routing and forwarding configuration
 icon: material/transit-connection
@@ -29,7 +29,7 @@ AgentPool supports three connection types:
 ## Configuration Reference
 
 /// mknodes
-{{ "agentpool_config.forward_targets.ForwardingTarget" | union_to_markdown(display_mode="yaml", header_style="pymdownx") }}
+{{ "wolfharness_config.forward_targets.ForwardingTarget" | union_to_markdown(display_mode="yaml", header_style="pymdownx") }}
 ///
 
 ## Connection Types

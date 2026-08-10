@@ -5,7 +5,7 @@ description: Agent and team run interface
 
 # Run Interface
 
-The run interface provides a consistent way to interact with all message handlers (Agents, Teams, TeamRuns) in agentpool.
+The run interface provides a consistent way to interact with all message handlers (Agents, Teams, TeamRuns) in wolfharness.
 It serves both as a messaging protocol and a public API.
 
 ## Core Methods

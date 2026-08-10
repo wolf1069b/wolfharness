@@ -1,8 +1,8 @@
 # ToolDisplayCapability
 
-`ToolDisplayCapability` 是 agentpool 的**全局装饰器能力** (Global Decorator Capability):在不修改任何子能力源码的前提下,对 agent 已装配的全部工具统一起作用 —— **改名** (`rename_mode`) 与 **注入 diff 富信息事件** (`emit_diff`)。它解决的核心问题是:第三方 capability(如 viking)的工具名不在协议客户端(OpenCode TUI / Zed)的渲染白名单内、工具返回不含 diff 富信息,导致客户端无法渲染文件变更的 diff 视图。
+`ToolDisplayCapability` 是 wolfharness 的**全局装饰器能力** (Global Decorator Capability):在不修改任何子能力源码的前提下,对 agent 已装配的全部工具统一起作用 —— **改名** (`rename_mode`) 与 **注入 diff 富信息事件** (`emit_diff`)。它解决的核心问题是:第三方 capability(如 viking)的工具名不在协议客户端(OpenCode TUI / Zed)的渲染白名单内、工具返回不含 diff 富信息,导致客户端无法渲染文件变更的 diff 视图。
 
-模式对齐 `ToolInterceptCapability`(`src/agentpool/agents/native_agent/tool_intercept.py`):独立 `AbstractCapability` 直接覆写 `get_wrapper_toolset()` 与 `wrap_tool_execute()`,作为全局中间件横切 agent 的全部工具 —— 不组合子能力、无 `capabilities` 字段。
+模式对齐 `ToolInterceptCapability`(`src/wolfharness/agents/native_agent/tool_intercept.py`):独立 `AbstractCapability` 直接覆写 `get_wrapper_toolset()` 与 `wrap_tool_execute()`,作为全局中间件横切 agent 的全部工具 —— 不组合子能力、无 `capabilities` 字段。
 
 ## 五个正交开关
 
@@ -49,8 +49,8 @@ wrap_tool_execute → ctx.deps.events.tool_call_progress(title, items=[DiffConte
   → 客户端(Zed/OpenCode TUI)渲染 diff
 ```
 
-- `ctx.deps` 在 agentpool 中**直接是 `AgentContext`**,携带 `.events` → `StreamEventEmitter`(POC 已验证,同 fsspec 工具集 `agentpool_toolsets/fsspec_toolset/toolset.py:575` 的先例通道)
-- `DiffContentItem(path, old_text, new_text)` 定义于 `src/agentpool/agents/events/events.py:203`
+- `ctx.deps` 在 wolfharness 中**直接是 `AgentContext`**,携带 `.events` → `StreamEventEmitter`(POC 已验证,同 fsspec 工具集 `wolfharness_toolsets/fsspec_toolset/toolset.py:575` 的先例通道)
+- `DiffContentItem(path, old_text, new_text)` 定义于 `src/wolfharness/agents/events/events.py:203`
 - **不依赖 metadata 通道**:`ToolReturn.metadata` 在 `process_tool_event`/`event_mapper` 构造 `ToolCallCompleteEvent` 时会被丢弃(仅 `is_error`),本能力刻意绕开该断点,改用事件注入
 
 ## 协议区分配置
@@ -84,7 +84,7 @@ capabilities:
       emit_rich_for: [viking_read, viking_search, viking_find, viking_glob]
 ```
 
-- 注册:entry-point 组 `agentpool.capabilities`,key `tool_display` → `agentpool.capabilities.tool_display_capability:ToolDisplayCapability`(见 `pyproject.toml`),由 `registry.py` 发现
+- 注册:entry-point 组 `wolfharness.capabilities`,key `tool_display` → `wolfharness.capabilities.tool_display_capability:ToolDisplayCapability`(见 `pyproject.toml`),由 `registry.py` 发现
 - 构造:`EntryPointCapabilityConfig(type=..., args={...}).build()` 以 `cls(**args)` 实例化 —— dataclass 字段(`rename_mode`/`name_map`/`emit_diff`/`emit_diff_for`/`emit_rich`/`emit_rich_for`)+ `id` 天然兼容 YAML 装配;`emit_rich_for` 传入的 YAML 列表在 `__post_init__` 转为 `set`
 
 ## 已知约束

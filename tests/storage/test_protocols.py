@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agentpool_storage.adapter import StorageProviderAdapter
-from agentpool_storage.base import StorageProvider
-from agentpool_storage.protocols import (
+from wolfharness_storage.adapter import StorageProviderAdapter
+from wolfharness_storage.base import StorageProvider
+from wolfharness_storage.protocols import (
     CheckpointStore,
     CommandLog,
     MessagePersistence,
@@ -189,19 +189,19 @@ class TestProviderProtocolConformance:
     """Test that concrete providers pass isinstance checks."""
 
     def test_memory_storage_provider_satisfies_session_persistence(self) -> None:
-        from agentpool_storage.memory_provider.provider import MemoryStorageProvider
+        from wolfharness_storage.memory_provider.provider import MemoryStorageProvider
 
         provider = MemoryStorageProvider()
         assert isinstance(provider, SessionPersistence)
 
     def test_memory_storage_provider_satisfies_checkpoint_store(self) -> None:
-        from agentpool_storage.memory_provider.provider import MemoryStorageProvider
+        from wolfharness_storage.memory_provider.provider import MemoryStorageProvider
 
         provider = MemoryStorageProvider()
         assert isinstance(provider, CheckpointStore)
 
     def test_memory_storage_provider_isinstance(self) -> None:
-        from agentpool_storage.memory_provider.provider import MemoryStorageProvider
+        from wolfharness_storage.memory_provider.provider import MemoryStorageProvider
 
         provider = MemoryStorageProvider()
         protocols = [

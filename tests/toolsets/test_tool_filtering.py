@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool.capabilities.filtered_toolset import FilteredToolsetCapability
-from agentpool_config.toolsets import CodeToolsetConfig, SkillsToolsetConfig, SubagentToolsetConfig
+from wolfharness.capabilities.filtered_toolset import FilteredToolsetCapability
+from wolfharness_config.toolsets import (
+    CodeToolsetConfig,
+    SkillsToolsetConfig,
+    SubagentToolsetConfig,
+)
 
 
 pytestmark = pytest.mark.unit

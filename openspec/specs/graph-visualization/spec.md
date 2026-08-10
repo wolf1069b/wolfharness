@@ -12,5 +12,5 @@ AgentPool SHALL enable Mermaid diagram generation for YAML-defined team and work
 - **THEN** `GraphBuilder` generates a Mermaid diagram showing the node chain
 
 #### Scenario: CLI diagram access
-- **WHEN** user runs `agentpool visualize <team_name>`
+- **WHEN** user runs `wolfharness visualize <team_name>`
 - **THEN** a Mermaid diagram is printed for the specified YAML team/workflow

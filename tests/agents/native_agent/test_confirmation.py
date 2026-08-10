@@ -20,9 +20,9 @@ from pydantic_ai.usage import RunUsage
 from pydantic_graph import End
 import pytest
 
-from agentpool import Agent
-from agentpool.agents.context import AgentContext
-from agentpool.tools.base import Tool
+from wolfharness import Agent
+from wolfharness.agents.context import AgentContext
+from wolfharness.tools.base import Tool
 
 
 # ============================================================================
@@ -388,7 +388,7 @@ async def test_multiple_confirmation_tools_same_run(
     mock_agent._builtin_provider.register_tool(confirmation_tool_1)
     mock_agent._builtin_provider.register_tool(confirmation_tool_2)
 
-    with patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
+    with patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
 
         def side_effect(**kwargs: Any) -> MagicMock:
             capabilities = kwargs.get("capabilities", []) or []
@@ -417,7 +417,7 @@ async def test_mixed_approval_denial_same_run(
     mock_agent._builtin_provider.register_tool(confirmation_tool_1)
     mock_agent._builtin_provider.register_tool(confirmation_tool_2)
 
-    with patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
+    with patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
 
         def side_effect(**kwargs: Any) -> MagicMock:
             capabilities = kwargs.get("capabilities", []) or []
@@ -448,7 +448,7 @@ async def test_never_mode_auto_approves_all_tools(
     mock_agent._builtin_provider.register_tool(confirmation_tool_1)
     mock_agent._builtin_provider.register_tool(confirmation_tool_2)
 
-    with patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
+    with patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
 
         def side_effect(**kwargs: Any) -> MagicMock:
             capabilities = kwargs.get("capabilities", []) or []
@@ -474,7 +474,7 @@ async def test_abort_run_stops_subsequent_confirmations(
     mock_agent._builtin_provider.register_tool(confirmation_tool_1)
     mock_agent._builtin_provider.register_tool(confirmation_tool_2)
 
-    with patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
+    with patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
 
         def side_effect(**kwargs: Any) -> MagicMock:
             capabilities = kwargs.get("capabilities", []) or []

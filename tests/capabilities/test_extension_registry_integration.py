@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool.capabilities.extension_registry import (
+from wolfharness.capabilities.extension_registry import (
     ExtensionRegistry,
     Scope,
     ScopeLevel,
@@ -30,7 +30,7 @@ class FakeSkillCap:
         return self._name
 
     async def list_skills(self) -> list:
-        from agentpool.capabilities.resource_protocols import SkillEntry
+        from wolfharness.capabilities.resource_protocols import SkillEntry
 
         return [
             SkillEntry(name=n, description=d, uri=f"skill://{n}") for n, d in self._skills.items()
@@ -112,7 +112,7 @@ class TestSessionLevelSkillScoping:
             Scope(level=ScopeLevel.SESSION, session_id="ses2"),
         )
 
-        from agentpool.skills.skill import Skill
+        from wolfharness.skills.skill import Skill
 
         assert isinstance(result1, Skill)
         assert result1.instructions == "Session 1 content"

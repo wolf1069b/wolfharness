@@ -20,7 +20,7 @@ from acp.schema import (
     ToolCallStart,
     UserMessageChunk,
 )
-from agentpool.agents.acp_agent.acp_converters import (
+from wolfharness.agents.acp_agent.acp_converters import (
     ACPMessageAccumulator,
     acp_notifications_to_messages,
 )

@@ -19,12 +19,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentpool.agents.base_agent import BaseAgent
-from agentpool.agents.context import AgentContext
-from agentpool.capabilities.background_task.capability import (
+from wolfharness.agents.base_agent import BaseAgent
+from wolfharness.agents.context import AgentContext
+from wolfharness.capabilities.background_task.capability import (
     BackgroundTaskCapability,
 )
-from agentpool.capabilities.background_task.manager import BackgroundTaskManager
+from wolfharness.capabilities.background_task.manager import BackgroundTaskManager
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +99,7 @@ def _make_agent_context(pool: MagicMock) -> MagicMock:
 
 @pytest.mark.unit
 @patch(
-    "agentpool.capabilities.background_task.capability.load_skill_for_node",
+    "wolfharness.capabilities.background_task.capability.load_skill_for_node",
     new_callable=AsyncMock,
 )
 async def test_load_skill_exception_propagates_uncaught(mock_load_skill: AsyncMock) -> None:
@@ -175,7 +175,7 @@ async def test_mkdirs_exception_propagates_from_task_async() -> None:
     ctx.internal_fs.mkdirs = MagicMock(side_effect=OSError("disk full"))
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_mkdir01",
     ):
         result = await capability._task(

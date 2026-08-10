@@ -120,7 +120,7 @@ When multiple sessions exist (ACP, OpenCode, or mixed), they all share a single 
 
 ### Impact of Inaction
 
-- **Risk**: Teams sharing an agentpool server see each other's task lists. This is a functional correctness issue, not just a UX concern.
+- **Risk**: Teams sharing an wolfharness server see each other's task lists. This is a functional correctness issue, not just a UX concern.
 - **Risk**: Session restore (`load_session`, `resume_session`) cannot reconstruct the user's task list because todos are not persisted per-session.
 - **Cost**: ACP `AgentPlanUpdate` integration remains incomplete, blocking proper plan management for ACP-connected clients.
 - **Cost**: Memory waste — deleted sessions' todo entries accumulate in the global tracker with no eviction.
@@ -521,7 +521,7 @@ async def _create_and_persist_session(self, session_id, parent_id):
 
     async def on_session_todo_change(t: TodoTracker) -> None:
         """Broadcast todo updates to this session only."""
-        from agentpool_server.opencode_server.models.events import Todo, TodoUpdatedEvent
+        from wolfharness_server.opencode_server.models.events import Todo, TodoUpdatedEvent
         todos = [
             Todo(id=e.id, content=e.content, status=e.status, priority=e.priority)
             for e in t.entries
@@ -573,7 +573,7 @@ tracker = await self.agent_pool.aget_or_create_session_todos(session_id)
 async def on_acp_todo_change(t: TodoTracker) -> None:
     """Emit ACP AgentPlanUpdate when todos change."""
     from acp.schema import AgentPlanUpdate, PlanEntry as ACPPlanEntry
-    from agentpool.utils.todos import PlanEntry
+    from wolfharness.utils.todos import PlanEntry
 
     entries = [
         ACPPlanEntry(content=e.content, priority=e.priority, status=e.status)
@@ -596,7 +596,7 @@ case AgentPlanUpdate(entries=entries):
     # Update per-session tracker with remote plan entries
     tracker = self._agent.agent_pool.get_session_todos(self._agent.session_id)
     if tracker is not None:
-        from agentpool.utils.todos import PlanEntry
+        from wolfharness.utils.todos import PlanEntry
         native_entries = [
             PlanEntry(content=e.content, priority=e.priority, status=e.status)
             for e in entries
@@ -778,12 +778,12 @@ Self-contained change. Revert by:
 
 ### Key Source Files
 
-- `src/agentpool/utils/todos.py` — `TodoTracker`, `TodoEntry`, `PlanEntry`
-- `src/agentpool/delegation/pool.py` — `AgentPool.todos` (global instance)
-- `src/agentpool/resource_providers/plan_provider.py` — `PlanProvider` (tool implementation)
-- `src/agentpool_server/opencode_server/server.py` — Global `on_todo_change` callback
-- `src/agentpool_server/opencode_server/state.py` — `ServerState.todos` (in-memory cache)
-- `src/agentpool_server/opencode_server/routes/session_routes.py` — `get_session_todos()` route
-- `src/agentpool_server/acp_server/event_converter.py` — `PlanUpdateEvent` → `AgentPlanUpdate`
-- `src/agentpool/agents/acp_agent/client_handler.py` — Unresolved `AgentPlanUpdate` TODO
-- `src/agentpool/agents/codex_agent/codex_agent.py` — `pool.todos.replace_all()` sync
+- `src/wolfharness/utils/todos.py` — `TodoTracker`, `TodoEntry`, `PlanEntry`
+- `src/wolfharness/delegation/pool.py` — `AgentPool.todos` (global instance)
+- `src/wolfharness/resource_providers/plan_provider.py` — `PlanProvider` (tool implementation)
+- `src/wolfharness_server/opencode_server/server.py` — Global `on_todo_change` callback
+- `src/wolfharness_server/opencode_server/state.py` — `ServerState.todos` (in-memory cache)
+- `src/wolfharness_server/opencode_server/routes/session_routes.py` — `get_session_todos()` route
+- `src/wolfharness_server/acp_server/event_converter.py` — `PlanUpdateEvent` → `AgentPlanUpdate`
+- `src/wolfharness/agents/acp_agent/client_handler.py` — Unresolved `AgentPlanUpdate` TODO
+- `src/wolfharness/agents/codex_agent/codex_agent.py` — `pool.todos.replace_all()` sync

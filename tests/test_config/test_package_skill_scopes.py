@@ -3,14 +3,14 @@ from __future__ import annotations
 import pytest
 import yaml
 
-from agentpool_config import resolution
+from wolfharness_config import resolution
 
 
 pytestmark = pytest.mark.unit
 
 
 def test_include_package_records_package_skill_scopes(tmp_path, monkeypatch):
-    config_path = tmp_path / "agentpool.yaml"
+    config_path = tmp_path / "wolfharness.yaml"
     config_path.write_text(
         yaml.safe_dump(
             {

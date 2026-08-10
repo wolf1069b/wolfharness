@@ -62,7 +62,7 @@ agents:
 ---
 # 示例 3:子能力已自发射 —— 仅改名,关闭 diff 注入避免重复
 #   fsspec 等工具集已在内部 emit DiffContentItem(见
-#   src/agentpool_toolsets/fsspec_toolset/toolset.py:575),装饰器只负责
+#   src/wolfharness_toolsets/fsspec_toolset/toolset.py:575),装饰器只负责
 #   改名,emit_diff: false。
 #   注意:fsspec_read 不在内置 extractor 注册表中,emit_rich 只注入 start
 #   事件(kind/locations),不含内容 —— 如需内容需自行注册 extractor。

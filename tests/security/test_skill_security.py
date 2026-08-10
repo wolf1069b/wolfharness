@@ -17,8 +17,8 @@ from __future__ import annotations
 import pytest
 from upathtools import UPath
 
-from agentpool.skills.exceptions import SecurityError
-from agentpool.skills.uri_resolver import ResolvedSkillURI
+from wolfharness.skills.exceptions import SecurityError
+from wolfharness.skills.uri_resolver import ResolvedSkillURI
 
 
 pytestmark = pytest.mark.unit
@@ -31,7 +31,7 @@ pytestmark = pytest.mark.unit
 
 def _make_skill(skill_dir):
     """Create a Skill object from a filesystem directory."""
-    from agentpool.skills.skill import Skill
+    from wolfharness.skills.skill import Skill
 
     return Skill(
         name="test-skill",
@@ -92,7 +92,7 @@ def local_skill(skill_with_references):
 @pytest.mark.security
 async def test_local_path_traversal_absolute_path(local_skill):
     """Test path traversal with absolute path attempt: /etc/passwd."""
-    from agentpool_toolsets.builtin.skills import _load_reference_content
+    from wolfharness_toolsets.builtin.skills import _load_reference_content
 
     with pytest.raises(SecurityError):
         await _load_reference_content(local_skill, "/etc/passwd")
@@ -102,7 +102,7 @@ async def test_local_path_traversal_absolute_path(local_skill):
 @pytest.mark.security
 async def test_local_path_traversal_basic_dotdot(local_skill):
     """Test basic path traversal: ../../../etc/passwd."""
-    from agentpool_toolsets.builtin.skills import _load_reference_content
+    from wolfharness_toolsets.builtin.skills import _load_reference_content
 
     with pytest.raises(SecurityError) as exc_info:
         await _load_reference_content(local_skill, "../../../etc/passwd")
@@ -114,7 +114,7 @@ async def test_local_path_traversal_basic_dotdot(local_skill):
 @pytest.mark.security
 async def test_local_path_traversal_embedded(local_skill):
     """Test embedded path traversal: subdir/../../../etc/passwd."""
-    from agentpool_toolsets.builtin.skills import _load_reference_content
+    from wolfharness_toolsets.builtin.skills import _load_reference_content
 
     with pytest.raises(SecurityError) as exc_info:
         await _load_reference_content(local_skill, "subdir/../../../etc/passwd")
@@ -126,7 +126,7 @@ async def test_local_path_traversal_embedded(local_skill):
 @pytest.mark.security
 async def test_local_path_traversal_multiple_dotdot(local_skill):
     """Test multiple .. sequences: ../../../../../../../etc/passwd."""
-    from agentpool_toolsets.builtin.skills import _load_reference_content
+    from wolfharness_toolsets.builtin.skills import _load_reference_content
 
     with pytest.raises(SecurityError) as exc_info:
         await _load_reference_content(local_skill, "../../../../../../../etc/passwd")
@@ -138,7 +138,7 @@ async def test_local_path_traversal_multiple_dotdot(local_skill):
 @pytest.mark.security
 async def test_local_path_traversal_leading_dotdot(local_skill):
     """Test leading .. sequence: ../etc/passwd."""
-    from agentpool_toolsets.builtin.skills import _load_reference_content
+    from wolfharness_toolsets.builtin.skills import _load_reference_content
 
     with pytest.raises(SecurityError) as exc_info:
         await _load_reference_content(local_skill, "../etc/passwd")
@@ -150,8 +150,8 @@ async def test_local_path_traversal_leading_dotdot(local_skill):
 @pytest.mark.security
 async def test_local_path_traversal_mixed_separators(local_skill):
     r"""Test path traversal with mixed separators: ..\..\..\etc\passwd."""
-    from agentpool.skills.exceptions import ReferenceNotFoundError
-    from agentpool_toolsets.builtin.skills import _load_reference_content
+    from wolfharness.skills.exceptions import ReferenceNotFoundError
+    from wolfharness_toolsets.builtin.skills import _load_reference_content
 
     # On Unix, backslash is treated as literal character
     # This test verifies the path is rejected
@@ -168,8 +168,8 @@ async def test_local_path_traversal_mixed_separators(local_skill):
 @pytest.mark.security
 async def test_local_url_encoded_traversal_percent_2f(local_skill):
     """Test URL-encoded path traversal: ..%2f..%2f..%2fetc%2fpasswd."""
-    from agentpool.skills.exceptions import ReferenceNotFoundError
-    from agentpool_toolsets.builtin.skills import _load_reference_content
+    from wolfharness.skills.exceptions import ReferenceNotFoundError
+    from wolfharness_toolsets.builtin.skills import _load_reference_content
 
     # _load_reference_content does not URL-decode before checking
     # This should fail as file not found (path still blocked)
@@ -181,8 +181,8 @@ async def test_local_url_encoded_traversal_percent_2f(local_skill):
 @pytest.mark.security
 async def test_local_url_encoded_traversal_lowercase(local_skill):
     """Test URL-encoded with lowercase: ..%2f..%2fetc%2fpasswd."""
-    from agentpool.skills.exceptions import ReferenceNotFoundError
-    from agentpool_toolsets.builtin.skills import _load_reference_content
+    from wolfharness.skills.exceptions import ReferenceNotFoundError
+    from wolfharness_toolsets.builtin.skills import _load_reference_content
 
     with pytest.raises((SecurityError, ReferenceNotFoundError)):
         await _load_reference_content(local_skill, "..%2f..%2fetc%2fpasswd")
@@ -192,8 +192,8 @@ async def test_local_url_encoded_traversal_lowercase(local_skill):
 @pytest.mark.security
 async def test_local_url_encoded_traversal_uppercase(local_skill):
     """Test URL-encoded with uppercase: ..%2F..%2Fetc%2Fpasswd."""
-    from agentpool.skills.exceptions import ReferenceNotFoundError
-    from agentpool_toolsets.builtin.skills import _load_reference_content
+    from wolfharness.skills.exceptions import ReferenceNotFoundError
+    from wolfharness_toolsets.builtin.skills import _load_reference_content
 
     with pytest.raises((SecurityError, ReferenceNotFoundError)):
         await _load_reference_content(local_skill, "..%2F..%2Fetc%2Fpasswd")
@@ -203,8 +203,8 @@ async def test_local_url_encoded_traversal_uppercase(local_skill):
 @pytest.mark.security
 async def test_local_url_encoded_dot(local_skill):
     """Test URL-encoded dot: %2e%2e/%2e%2e/%2e%2e/etc/passwd."""
-    from agentpool.skills.exceptions import ReferenceNotFoundError
-    from agentpool_toolsets.builtin.skills import _load_reference_content
+    from wolfharness.skills.exceptions import ReferenceNotFoundError
+    from wolfharness_toolsets.builtin.skills import _load_reference_content
 
     # %2e is encoded dot, but _load_reference_content doesn't URL-decode
     with pytest.raises((SecurityError, ReferenceNotFoundError)):
@@ -220,8 +220,8 @@ async def test_local_url_encoded_dot(local_skill):
 @pytest.mark.security
 async def test_local_null_byte_injection(local_skill):
     r"""Test null byte injection: file\x00.txt."""
-    from agentpool.skills.exceptions import ReferenceNotFoundError
-    from agentpool_toolsets.builtin.skills import _load_reference_content
+    from wolfharness.skills.exceptions import ReferenceNotFoundError
+    from wolfharness_toolsets.builtin.skills import _load_reference_content
 
     with pytest.raises((SecurityError, ReferenceNotFoundError)):
         await _load_reference_content(local_skill, "file\x00.txt")
@@ -231,8 +231,8 @@ async def test_local_null_byte_injection(local_skill):
 @pytest.mark.security
 async def test_local_null_byte_injection_with_path(local_skill):
     r"""Test null byte injection with path: subdir/file\x00.txt."""
-    from agentpool.skills.exceptions import ReferenceNotFoundError
-    from agentpool_toolsets.builtin.skills import _load_reference_content
+    from wolfharness.skills.exceptions import ReferenceNotFoundError
+    from wolfharness_toolsets.builtin.skills import _load_reference_content
 
     with pytest.raises((SecurityError, ReferenceNotFoundError)):
         await _load_reference_content(local_skill, "subdir/file\x00.txt")
@@ -242,8 +242,8 @@ async def test_local_null_byte_injection_with_path(local_skill):
 @pytest.mark.security
 async def test_local_null_byte_at_start(local_skill):
     r"""Test null byte at start of path: \x00file.txt."""
-    from agentpool.skills.exceptions import ReferenceNotFoundError
-    from agentpool_toolsets.builtin.skills import _load_reference_content
+    from wolfharness.skills.exceptions import ReferenceNotFoundError
+    from wolfharness_toolsets.builtin.skills import _load_reference_content
 
     with pytest.raises((SecurityError, ReferenceNotFoundError)):
         await _load_reference_content(local_skill, "\x00file.txt")
@@ -263,8 +263,8 @@ async def test_local_symlink_to_outside_directory(skill_with_references):
     the references directory. The _load_reference_content should resolve
     the symlink and reject the path.
     """
-    from agentpool.skills.exceptions import ReferenceNotFoundError
-    from agentpool_toolsets.builtin.skills import _load_reference_content
+    from wolfharness.skills.exceptions import ReferenceNotFoundError
+    from wolfharness_toolsets.builtin.skills import _load_reference_content
 
     refs_dir = skill_with_references / "references"
 
@@ -295,8 +295,8 @@ async def test_local_symlink_chain_traversal(skill_with_references):
     Creates a chain of symlinks where the final target is outside
     the allowed directory.
     """
-    from agentpool.skills.exceptions import ReferenceNotFoundError
-    from agentpool_toolsets.builtin.skills import _load_reference_content
+    from wolfharness.skills.exceptions import ReferenceNotFoundError
+    from wolfharness_toolsets.builtin.skills import _load_reference_content
 
     refs_dir = skill_with_references / "references"
     subdir = refs_dir / "subdir"
@@ -478,8 +478,8 @@ def test_uri_multiple_null_bytes():
 @pytest.mark.security
 async def test_local_empty_path(local_skill):
     """Test empty path handling."""
-    from agentpool.skills.exceptions import ReferenceNotFoundError
-    from agentpool_toolsets.builtin.skills import _load_reference_content
+    from wolfharness.skills.exceptions import ReferenceNotFoundError
+    from wolfharness_toolsets.builtin.skills import _load_reference_content
 
     # Empty path resolves to the skill directory itself — read_text fails
     # because it's a directory, not a file.
@@ -504,8 +504,8 @@ def test_uri_empty_path():
 @pytest.mark.security
 async def test_local_single_dot(local_skill):
     """Test single dot path: ./file.txt."""
-    from agentpool.skills.exceptions import ReferenceNotFoundError
-    from agentpool_toolsets.builtin.skills import _load_reference_content
+    from wolfharness.skills.exceptions import ReferenceNotFoundError
+    from wolfharness_toolsets.builtin.skills import _load_reference_content
 
     # Single dot should be allowed (refers to current directory)
     # But file doesn't exist, so ReferenceNotFoundError
@@ -517,7 +517,7 @@ async def test_local_single_dot(local_skill):
 @pytest.mark.security
 async def test_local_dot_slash_prefix(local_skill):
     """Test dot slash prefix: ./references/guide.md."""
-    from agentpool_toolsets.builtin.skills import _load_reference_content
+    from wolfharness_toolsets.builtin.skills import _load_reference_content
 
     # This should work - single dot is not traversal
     content = await _load_reference_content(local_skill, "references/guide.md")
@@ -528,8 +528,8 @@ async def test_local_dot_slash_prefix(local_skill):
 @pytest.mark.security
 async def test_local_path_with_special_chars(local_skill):
     """Test path with special characters that are NOT traversal."""
-    from agentpool.skills.exceptions import ReferenceNotFoundError
-    from agentpool_toolsets.builtin.skills import _load_reference_content
+    from wolfharness.skills.exceptions import ReferenceNotFoundError
+    from wolfharness_toolsets.builtin.skills import _load_reference_content
 
     # These should be treated as literal filenames (which don't exist)
     with pytest.raises(ReferenceNotFoundError):
@@ -569,8 +569,8 @@ async def test_all_attacks_raise_security_error_or_blocked(local_skill):
     3. Null byte injection
     4. Symlink-based attacks
     """
-    from agentpool.skills.exceptions import ReferenceNotFoundError
-    from agentpool_toolsets.builtin.skills import _load_reference_content
+    from wolfharness.skills.exceptions import ReferenceNotFoundError
+    from wolfharness_toolsets.builtin.skills import _load_reference_content
 
     attacks_blocked = []
 
@@ -619,7 +619,7 @@ def test_security_considerations_documented():
     This test checks that SecurityError has appropriate docstrings
     and is properly exported from the exceptions module.
     """
-    from agentpool.skills.exceptions import SecurityError
+    from wolfharness.skills.exceptions import SecurityError
 
     # Verify SecurityError can be instantiated
     error = SecurityError("Test security violation")
@@ -627,7 +627,7 @@ def test_security_considerations_documented():
     assert "Test security violation" in str(error)
 
     # Verify it's a proper exception hierarchy
-    from agentpool.skills.exceptions import SkillError
+    from wolfharness.skills.exceptions import SkillError
 
     assert issubclass(SecurityError, SkillError)
 

@@ -18,13 +18,13 @@ from pydantic_ai import RunContext
 import pytest
 from upathtools.filesystems.isolated_memory_fs import IsolatedMemoryFileSystem
 
-from agentpool.agents.base_agent import BaseAgent
-from agentpool.agents.context import AgentContext
-from agentpool.capabilities.background_task.capability import (
+from wolfharness.agents.base_agent import BaseAgent
+from wolfharness.agents.context import AgentContext
+from wolfharness.capabilities.background_task.capability import (
     BackgroundTaskCapability,
 )
-from agentpool.capabilities.background_task.manager import BackgroundTaskManager
-from agentpool.capabilities.background_task.types import BackgroundTask
+from wolfharness.capabilities.background_task.manager import BackgroundTaskManager
+from wolfharness.capabilities.background_task.types import BackgroundTask
 
 
 class _NullWaitManager(BackgroundTaskManager):

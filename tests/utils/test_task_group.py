@@ -7,7 +7,7 @@ import warnings
 import anyio
 import pytest
 
-from agentpool.utils.task_group import ManagedTaskGroup
+from wolfharness.utils.task_group import ManagedTaskGroup
 
 
 pytestmark = pytest.mark.unit

@@ -18,12 +18,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from agentpool.lifecycle.journal import MemoryJournal
 from tests.vcr.conftest import cassette_exists
+from wolfharness.lifecycle.journal import MemoryJournal
 
 
 if TYPE_CHECKING:
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
 pytestmark = [pytest.mark.vcr, pytest.mark.integration]
 

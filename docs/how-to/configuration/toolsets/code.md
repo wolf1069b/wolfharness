@@ -20,8 +20,8 @@ agents:
 ## Available Tools
 
 ```python exec="true"
-from agentpool_toolsets.builtin.code import CodeTools
-from agentpool.docs.utils import generate_tool_docs
+from wolfharness_toolsets.builtin.code import CodeTools
+from wolfharness.docs.utils import generate_tool_docs
 
 toolset = CodeTools()
 print(generate_tool_docs(toolset))
@@ -30,5 +30,5 @@ print(generate_tool_docs(toolset))
 ## Configuration Reference
 
 /// mknodes
-{{ "agentpool_config.toolsets.CodeToolsetConfig" | schema_to_markdown(display_mode="yaml", header_style="pymdownx", wrapped_in="toolsets", header_level=3) }}
+{{ "wolfharness_config.toolsets.CodeToolsetConfig" | schema_to_markdown(display_mode="yaml", header_style="pymdownx", wrapped_in="toolsets", header_level=3) }}
 ///

@@ -14,12 +14,12 @@ import tempfile
 
 import pytest
 
-from agentpool.messaging import ChatMessage
-from agentpool.sessions import SessionData
-from agentpool.utils.identifiers import ascending
-from agentpool_config.storage import OpenCodeStorageConfig, SQLStorageConfig
-from agentpool_storage.opencode_provider import OpenCodeStorageProvider
-from agentpool_storage.sql_provider import SQLModelProvider
+from wolfharness.messaging import ChatMessage
+from wolfharness.sessions import SessionData
+from wolfharness.utils.identifiers import ascending
+from wolfharness_config.storage import OpenCodeStorageConfig, SQLStorageConfig
+from wolfharness_storage.opencode_provider import OpenCodeStorageProvider
+from wolfharness_storage.sql_provider import SQLModelProvider
 
 
 pytestmark = pytest.mark.integration
@@ -166,7 +166,7 @@ class TestOpenCodeStorageProviderPathHandling:
     ) -> None:
         """Test that load_session returns SessionData for existing session."""
         # Use ascending() to generate unique IDs
-        from agentpool_server.opencode_server.models import (
+        from wolfharness_server.opencode_server.models import (
             Session,
             SessionSummary,
             TimeCreatedUpdated,
@@ -212,7 +212,7 @@ class TestOpenCodeStorageProviderPathHandling:
     async def test_delete_session(self, provider: OpenCodeStorageProvider) -> None:
         """Test that delete_session removes session and all data."""
         # Use ascending() to generate unique IDs
-        from agentpool_server.opencode_server.models import (
+        from wolfharness_server.opencode_server.models import (
             Session,
             SessionSummary,
             TimeCreatedUpdated,
@@ -259,7 +259,7 @@ class TestOpenCodeStorageProviderPathHandling:
         # Use ascending() to generate unique IDs
         import anyenv
 
-        from agentpool_server.opencode_server.models import (
+        from wolfharness_server.opencode_server.models import (
             Session,
             SessionSummary,
             TimeCreatedUpdated,
@@ -372,11 +372,11 @@ class TestOpenCodeListSessionIdsCwdParameter:
         """
         import anyenv
 
-        from agentpool_server.opencode_server.models import (
+        from wolfharness_server.opencode_server.models import (
             Session,
             TimeCreatedUpdated,
         )
-        from agentpool_storage.opencode_provider.helpers import compute_project_id
+        from wolfharness_storage.opencode_provider.helpers import compute_project_id
 
         # Create two separate git repos (simulating two different projects)
         alpha_dir = provider.base_path / "alpha_project"
@@ -439,7 +439,7 @@ class TestOpenCodeListSessionIdsCwdParameter:
         """list_session_ids(cwd=None) should return all sessions (no filtering)."""
         import anyenv
 
-        from agentpool_server.opencode_server.models import (
+        from wolfharness_server.opencode_server.models import (
             Session,
             TimeCreatedUpdated,
         )
@@ -476,7 +476,7 @@ class TestOpenCodeListSessionIdsCwdParameter:
         Regression test: previously, if read_session returned None (corrupted JSON / I/O error),
         the cwd filter was bypassed and the session was incorrectly included in results.
         """
-        from agentpool_storage.opencode_provider.helpers import compute_project_id
+        from wolfharness_storage.opencode_provider.helpers import compute_project_id
 
         # Create a real git repo so compute_project_id returns a valid project_id
         workdir = provider.base_path / "corrupt_project"
@@ -491,7 +491,7 @@ class TestOpenCodeListSessionIdsCwdParameter:
         valid_id = ascending("session")
         import anyenv
 
-        from agentpool_server.opencode_server.models import (
+        from wolfharness_server.opencode_server.models import (
             Session,
             TimeCreatedUpdated,
         )
@@ -529,7 +529,7 @@ class TestOpenCodeListSessionIdsCwdParameter:
         """
         import inspect
 
-        from agentpool_storage.base import StorageProvider
+        from wolfharness_storage.base import StorageProvider
 
         base_params = inspect.signature(StorageProvider.list_session_ids).parameters
         override_params = inspect.signature(OpenCodeStorageProvider.list_session_ids).parameters
@@ -558,7 +558,7 @@ class TestSerialization:
         """
         from pydantic_ai import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
-        from agentpool.storage.serialization import (
+        from wolfharness.storage.serialization import (
             deserialize_messages,
             serialize_messages,
         )
@@ -594,13 +594,13 @@ class TestSerialization:
 
     def test_deserialize_messages_empty_json(self) -> None:
         """Test that deserialize_messages handles empty/None input."""
-        from agentpool.storage.serialization import deserialize_messages
+        from wolfharness.storage.serialization import deserialize_messages
 
         assert deserialize_messages(None) == []
         assert deserialize_messages("") == []
 
     def test_serialize_messages_empty_list(self) -> None:
         """Test that serialize_messages returns None for empty list."""
-        from agentpool.storage.serialization import serialize_messages
+        from wolfharness.storage.serialization import serialize_messages
 
         assert serialize_messages([]) is None

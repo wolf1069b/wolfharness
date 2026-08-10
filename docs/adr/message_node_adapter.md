@@ -255,7 +255,7 @@ class MessageNode[TDeps, TResult](ABC):
 from dataclasses import dataclass, field
 from typing import Any
 
-from agentpool.messaging import ChatMessage
+from wolfharness.messaging import ChatMessage
 
 
 @dataclass
@@ -718,8 +718,8 @@ from pydantic_graph.graph_builder import Graph, GraphBuilder
 from pydantic_graph.step import Step, StepContext
 from typing_extensions import TypeVar
 
-from agentpool.agents.events import RichAgentStreamEvent
-from agentpool.messaging import ChatMessage, MessageNode
+from wolfharness.agents.events import RichAgentStreamEvent
+from wolfharness.messaging import ChatMessage, MessageNode
 
 StateT = TypeVar("StateT")
 DepsT = TypeVar("DepsT")

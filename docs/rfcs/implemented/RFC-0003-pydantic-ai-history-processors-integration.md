@@ -17,9 +17,9 @@ related_rfcs: [RFC-0002]
 
 ## Overview
 
-This RFC proposes adding support for pydantic-ai's `history_processors` mechanism to agentpool's native agent configuration. History processors are callables that transform message history before it's sent to the model, enabling advanced conversation management patterns like context-aware filtering, summarization, token budget management, and custom message selection logic.
+This RFC proposes adding support for pydantic-ai's `history_processors` mechanism to wolfharness's native agent configuration. History processors are callables that transform message history before it's sent to the model, enabling advanced conversation management patterns like context-aware filtering, summarization, token budget management, and custom message selection logic.
 
-The integration aims to provide a clean pass-through to pydantic-ai's native history processing capabilities with minimal code changes, allowing users to leverage the full power of pydantic-ai's history processor ecosystem directly from agentpool's YAML configuration.
+The integration aims to provide a clean pass-through to pydantic-ai's native history processing capabilities with minimal code changes, allowing users to leverage the full power of pydantic-ai's history processor ecosystem directly from wolfharness's YAML configuration.
 
 ## Table of Contents
 
@@ -43,21 +43,21 @@ The integration aims to provide a clean pass-through to pydantic-ai's native his
 
 ### Current State
 
-**agentpool's History Management:**
+**wolfharness's History Management:**
 
 AgentPool currently manages conversation history through:
 
-1. **MessageHistory** (`src/agentpool/messaging/message_history.py`):
+1. **MessageHistory** (`src/wolfharness/messaging/message_history.py`):
    - Stores conversation state in `chat_messages: ChatMessageList`
    - Applies `MemoryConfig` limits (`max_tokens`, `max_messages`)
    - Loads history from storage via `SessionQuery`
 
-2. **CompactionPipeline** (`src/agentpool/messaging/compaction.py`):
+2. **CompactionPipeline** (`src/wolfharness/messaging/compaction.py`):
    - Pipeline-based system with predefined steps (FilterThinking, TruncateToolOutputs, KeepLastMessages, etc.)
    - Configurable via YAML with presets (`minimal`, `balanced`, `summarizing`)
    - Applied during message history preparation
 
-3. **NativeAgent** (`src/agentpool/agents/native_agent/agent.py`):
+3. **NativeAgent** (`src/wolfharness/agents/native_agent/agent.py`):
    - Wraps pydantic-ai's `Agent` class
    - Creates `agentlet` via `get_agentlet()` which instantiates pydantic-ai Agent
    - Currently does NOT pass `history_processors` parameter to pydantic-ai Agent
@@ -93,7 +93,7 @@ Key characteristics:
 
 - **RFC-0002** established the pattern for extending pydantic-ai features by passing through configuration parameters (e.g., `prepare` hooks, `function_schema`)
 - AgentPool's `CompactionPipeline` was designed before pydantic-ai had native history processors, leading to overlapping functionality
-- Current agentpool users must write custom hooks or CompactionSteps to achieve what pydantic-ai's history processors can do natively
+- Current wolfharness users must write custom hooks or CompactionSteps to achieve what pydantic-ai's history processors can do natively
 
 ### Glossary
 
@@ -103,7 +103,7 @@ Key characteristics:
 | CompactionPipeline | AgentPool's internal message transformation system |
 | MessageHistory | AgentPool's conversation state manager |
 | RunContext | pydantic-ai's runtime context object providing access to deps, usage, model info |
-| Agentlet | Internal pydantic-ai Agent instance created by agentpool's `get_agentlet()` |
+| Agentlet | Internal pydantic-ai Agent instance created by wolfharness's `get_agentlet()` |
 
 ---
 
@@ -147,7 +147,7 @@ AgentPool lacks a native way to configure pydantic-ai's history processors, forc
 ### Non-Goals (Out of Scope)
 
 1. Replacing or deprecating CompactionPipeline (it remains for existing users)
-2. Creating agentpool-specific history processor abstractions (use pydantic-ai's directly)
+2. Creating wolfharness-specific history processor abstractions (use pydantic-ai's directly)
 3. **Inline code execution for history processors** - deferred to future RFC with security design
 4. History processor validation beyond basic import path verification and callable check
 5. Runtime debugging of history processor execution (rely on pydantic-ai's built-in logs)
@@ -199,7 +199,7 @@ agents:
 
 **Implementation:**
 1. Add `history_processors: list[str] | None` field to `MemoryConfig`
-2. In `NativeAgent.get_agentlet()`, resolve import paths to callables using existing `import_callable()` from `agentpool.utils.importing`
+2. In `NativeAgent.get_agentlet()`, resolve import paths to callables using existing `import_callable()` from `wolfharness.utils.importing`
 3. Cache resolved processors on the agent instance to avoid repeated resolution
 4. Pass processors to pydantic-ai Agent's `history_processors` parameter
 5. Validate processors are callable at import time
@@ -209,7 +209,7 @@ agents:
 - **Full pydantic-ai compatibility**: Supports all 4 signatures natively
 - **Type safe**: Uses pydantic-ai's type checking
 - **No reinvention**: Uses battle-tested pydantic-ai processor execution logic
-- **Clean separation**: Processor logic lives in pydantic-ai, not agentpool
+- **Clean separation**: Processor logic lives in pydantic-ai, not wolfharness
 - **Performance**: One-time import resolution per agent instance (cached)
 - **Security**: No inline code execution, only import paths
 
@@ -480,7 +480,7 @@ async with agentlet.iter(prompts, message_history=[m for run in history_list for
 
 #### 1. MemoryConfig Extension
 
-**Location**: `src/agentpool_config/session.py`
+**Location**: `src/wolfharness_config/session.py`
 
 ```python
 class MemoryConfig(Schema):
@@ -515,7 +515,7 @@ class MemoryConfig(Schema):
 
 #### 2. Processor Resolution and Caching
 
-**Location**: `src/agentpool/agents/native_agent/agent.py`
+**Location**: `src/wolfharness/agents/native_agent/agent.py`
 
 ```python
 class Agent[TDeps = None, OutputDataT = str](BaseAgent[TDeps, OutputDataT]):
@@ -532,7 +532,7 @@ class Agent[TDeps = None, OutputDataT = str](BaseAgent[TDeps, OutputDataT]):
         input_provider: InputProvider | None,
     ) -> PydanticAgent[AgentContext[TDeps], AgentOutputType]:
         """Create pydantic-ai agent from current state."""
-        from agentpool.utils.importing import import_callable
+        from wolfharness.utils.importing import import_callable
 
         # ... existing tool wrapping code ...
 
@@ -733,7 +733,7 @@ The rollback is straightforward because changes are purely additive.
 
 ## Testing Requirements
 
-### Unit Tests (`agentpool/tests/test_history_processors.py`)
+### Unit Tests (`wolfharness/tests/test_history_processors.py`)
 
 **Configuration Validation**
 - [ ] Empty history_processors list is valid
@@ -857,7 +857,7 @@ def context_aware_sync(
 
 - [pydantic-ai History Processors Guide](https://ai.pydantic.dev/history-processors/)
 - [pydantic-ai RunContext API](https://ai.pydantic.dev/run-context/)
-- [AgentPool Configuration Docs](https://million-mo.github.io/agentpool/YAML%20Configuration/session_configuration/)
+- [AgentPool Configuration Docs](https://million-mo.github.io/wolfharness/YAML%20Configuration/session_configuration/)
 
 ### Appendix
 

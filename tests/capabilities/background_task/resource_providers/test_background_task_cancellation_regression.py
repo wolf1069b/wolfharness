@@ -21,16 +21,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from pydantic_ai import RunContext
 import pytest
 
-from agentpool import ChatMessage
-from agentpool.agents.base_agent import BaseAgent
-from agentpool.agents.context import AgentContext
-from agentpool.agents.events import StreamCompleteEvent
-from agentpool.capabilities.background_task.capability import (
+from wolfharness import ChatMessage
+from wolfharness.agents.base_agent import BaseAgent
+from wolfharness.agents.context import AgentContext
+from wolfharness.agents.events import StreamCompleteEvent
+from wolfharness.capabilities.background_task.capability import (
     BackgroundTaskCapability,
 )
-from agentpool.capabilities.background_task.manager import BackgroundTaskManager
-from agentpool.capabilities.background_task.types import BackgroundTask
-from agentpool.delegation import AgentPool
+from wolfharness.capabilities.background_task.manager import BackgroundTaskManager
+from wolfharness.capabilities.background_task.types import BackgroundTask
+from wolfharness.delegation import AgentPool
 
 
 pytestmark = pytest.mark.anyio
@@ -297,7 +297,7 @@ class TestConcurrencyLimitDoesNotCancelUnrelatedTasks:
             )
 
             with patch(
-                "agentpool.capabilities.background_task.capability._generate_task_id",
+                "wolfharness.capabilities.background_task.capability._generate_task_id",
                 return_value=f"bg_parl{i:02d}",
             ):
                 result = await capability._task(
@@ -359,7 +359,7 @@ class TestBlockingOutputDoesNotCancelOtherTasks:
         )
 
         with patch(
-            "agentpool.capabilities.background_task.capability._generate_task_id",
+            "wolfharness.capabilities.background_task.capability._generate_task_id",
             return_value="bg_task_a01",
         ):
             await capability._task(
@@ -376,7 +376,7 @@ class TestBlockingOutputDoesNotCancelOtherTasks:
         mock_node.run_stream = MagicMock(return_value=_slow_stream_b())
 
         with patch(
-            "agentpool.capabilities.background_task.capability._generate_task_id",
+            "wolfharness.capabilities.background_task.capability._generate_task_id",
             return_value="bg_task_b01",
         ):
             await capability._task(
@@ -422,7 +422,7 @@ class TestBlockingOutputDoesNotCancelOtherTasks:
             mock_node.run_stream = MagicMock(return_value=_delayed_stream())
 
             with patch(
-                "agentpool.capabilities.background_task.capability._generate_task_id",
+                "wolfharness.capabilities.background_task.capability._generate_task_id",
                 return_value=f"bg_concur_{task_label}",
             ):
                 await capability._task(
@@ -482,7 +482,7 @@ class TestBlockingOutputDoesNotCancelOtherTasks:
         )
 
         with patch(
-            "agentpool.capabilities.background_task.capability._generate_task_id",
+            "wolfharness.capabilities.background_task.capability._generate_task_id",
             return_value="bg_three_a",
         ):
             await capability._task(
@@ -499,7 +499,7 @@ class TestBlockingOutputDoesNotCancelOtherTasks:
         mock_node.run_stream = MagicMock(return_value=_stream_b())
 
         with patch(
-            "agentpool.capabilities.background_task.capability._generate_task_id",
+            "wolfharness.capabilities.background_task.capability._generate_task_id",
             return_value="bg_three_b",
         ):
             await capability._task(
@@ -516,7 +516,7 @@ class TestBlockingOutputDoesNotCancelOtherTasks:
         mock_node.run_stream = MagicMock(return_value=_stream_c())
 
         with patch(
-            "agentpool.capabilities.background_task.capability._generate_task_id",
+            "wolfharness.capabilities.background_task.capability._generate_task_id",
             return_value="bg_three_c",
         ):
             await capability._task(
@@ -565,7 +565,7 @@ class TestBlockingOutputDoesNotCancelOtherTasks:
         )
 
         with patch(
-            "agentpool.capabilities.background_task.capability._generate_task_id",
+            "wolfharness.capabilities.background_task.capability._generate_task_id",
             return_value="bg_waiter01",
         ):
             await capability._task(
@@ -582,7 +582,7 @@ class TestBlockingOutputDoesNotCancelOtherTasks:
         mock_node.run_stream = MagicMock(return_value=_stream_2())
 
         with patch(
-            "agentpool.capabilities.background_task.capability._generate_task_id",
+            "wolfharness.capabilities.background_task.capability._generate_task_id",
             return_value="bg_waiter02",
         ):
             await capability._task(

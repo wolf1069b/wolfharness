@@ -16,9 +16,9 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from agentpool.utils.streams import FileOpsTracker
-from agentpool.utils.time_utils import now_ms
-from agentpool_server.opencode_server.models import (
+from wolfharness.utils.streams import FileOpsTracker
+from wolfharness.utils.time_utils import now_ms
+from wolfharness_server.opencode_server.models import (
     AssistantMessage,
     MessagePath,
     MessageTime,
@@ -27,7 +27,7 @@ from agentpool_server.opencode_server.models import (
     TimeCreated,
     UserMessage,
 )
-from agentpool_server.opencode_server.session_pool_integration import (
+from wolfharness_server.opencode_server.session_pool_integration import (
     append_message_to_session,
 )
 
@@ -38,7 +38,7 @@ pytestmark = pytest.mark.unit
 if TYPE_CHECKING:
     from httpx import AsyncClient
 
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness_server.opencode_server.state import ServerState
 
 
 # =============================================================================
@@ -213,12 +213,12 @@ class TestStageRevert:
         await _add_messages_to_state(server_state, session_id, count=3)
 
         # Set up a mock session state with populated queues
-        from agentpool.orchestrator.session_controller import SessionState
+        from wolfharness.orchestrator.session_controller import SessionState
 
         mock_session_state = SessionState(session_id=session_id, agent_name="test-agent")
         mock_session_state.prompt_queue.put_nowait("queued prompt 1")
         mock_session_state.prompt_queue.put_nowait("queued prompt 2")
-        from agentpool.lifecycle.types import Feedback
+        from wolfharness.lifecycle.types import Feedback
 
         mock_session_state.feedback_queue.put_nowait(Feedback(content="feedback 1", is_steer=False))
 
@@ -415,7 +415,7 @@ class TestClearUnrevert:
         assert stage_response.status_code == 200
 
         # Simulate a busy session
-        from agentpool.orchestrator.session_controller import SessionState
+        from wolfharness.orchestrator.session_controller import SessionState
 
         mock_session_state = SessionState(session_id=session_id, agent_name="test-agent")
         mock_session_state.current_run_id = "run-busy-123"
@@ -455,8 +455,8 @@ class TestClearUnrevert:
         revert_message_id = messages[0].info.id
 
         # Set up a mock session state with populated queues
-        from agentpool.lifecycle.types import Feedback
-        from agentpool.orchestrator.session_controller import SessionState
+        from wolfharness.lifecycle.types import Feedback
+        from wolfharness.orchestrator.session_controller import SessionState
 
         mock_session_state = SessionState(session_id=session_id, agent_name="test-agent")
         mock_session_state.prompt_queue.put_nowait("queued prompt")

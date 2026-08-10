@@ -9,7 +9,7 @@ from __future__ import annotations
 from pydantic_ai import RunUsage
 import pytest
 
-from agentpool.utils.usage import diff_usage
+from wolfharness.utils.usage import diff_usage
 
 
 @pytest.mark.unit

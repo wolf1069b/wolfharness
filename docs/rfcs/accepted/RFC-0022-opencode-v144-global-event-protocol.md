@@ -19,7 +19,7 @@ related_rfcs:
 
 OpenCode v1.4.4 introduced a breaking change to the SSE event protocol. The TUI now subscribes to `/global/event` (instead of `/event`) and expects events in a new `GlobalEvent` envelope format with `directory` routing field. Without this field, the TUI cannot route events to the correct project context and silently drops all SSE events, resulting in a completely non-functional UI despite the server processing messages successfully.
 
-This RFC proposes updating agentpool's `/global/event` SSE output to conform to the new `GlobalEvent` protocol, ensuring compatibility with OpenCode v1.4.4+ while maintaining backward compatibility with v1.4.3 clients via the unchanged `/event` endpoint.
+This RFC proposes updating wolfharness's `/global/event` SSE output to conform to the new `GlobalEvent` protocol, ensuring compatibility with OpenCode v1.4.4+ while maintaining backward compatibility with v1.4.3 clients via the unchanged `/event` endpoint.
 
 > **Review Status**: This RFC has been reviewed by Oracle and Metis against the actual OpenCode v1.4.4 source at `~/src/opencode`. Key corrections applied: (1) `directory` must use `working_dir` not `base_path` to match the `/path` endpoint, (2) `workspace` field is optional in the SDK and should be omitted for single-directory servers, (3) `server.connected`/`server.heartbeat` must NOT be wrapped in GlobalEvent, (4) SyncEvent support is unnecessary for basic TUI functionality.
 
@@ -118,8 +118,8 @@ AgentPool's `/global/event` endpoint produces events that lack the `directory` r
 
 ### Impact of Inaction
 
-- **Critical**: All users on OpenCode v1.4.4+ cannot use agentpool's `serve-opencode` at all
-- **Blocking**: agentpool is effectively incompatible with the current OpenCode release
+- **Critical**: All users on OpenCode v1.4.4+ cannot use wolfharness's `serve-opencode` at all
+- **Blocking**: wolfharness is effectively incompatible with the current OpenCode release
 - **Risk**: As OpenCode auto-updates, the user base on v1.4.4+ will only grow
 - **No workaround**: Pinning to v1.4.3 is not sustainable (security updates, bug fixes)
 
@@ -140,7 +140,7 @@ AgentPool's `/global/event` endpoint produces events that lack the `directory` r
 
 1. Rewriting the entire event system — only the serialization layer changes
 2. Supporting the OpenCode Desktop app (`packages/app`) — uses same protocol but different SDK entry point
-3. Adding workspace-level isolation (multi-workspace) — agentpool serves a single directory; `workspace` field omitted
+3. Adding workspace-level isolation (multi-workspace) — wolfharness serves a single directory; `workspace` field omitted
 4. Protocol versioning or negotiation — not needed for this change
 5. Changing the `/event` endpoint behavior (backward compat preserved by default)
 6. SyncEvent emission — TUI discards sync events in `useEvent()`; not needed for basic TUI functionality
@@ -186,7 +186,7 @@ Add `directory`, `project`, and `workspace` fields directly in the `_serialize_e
 
 - `_serialize_event()` gains awareness of server state (currently pure function)
 - `project_id` computation happens on every event (though lightweight)
-- `workspace` field is intentionally omitted — agentpool doesn't have a workspace concept
+- `workspace` field is intentionally omitted — wolfharness doesn't have a workspace concept
 
 **Evaluation Against Criteria**
 
@@ -208,7 +208,7 @@ Add `directory`, `project`, and `workspace` fields directly in the `_serialize_e
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|------------|--------|------------|
-| `workspace` field semantics unclear | Medium | Low | Omit `workspace` entirely; document that agentpool doesn't support workspaces |
+| `workspace` field semantics unclear | Medium | Low | Omit `workspace` entirely; document that wolfharness doesn't support workspaces |
 | OpenCode changes protocol again | Low | Medium | Centralized serialization makes updates easy |
 
 ---
@@ -434,7 +434,7 @@ class GlobalEventFactory:
         # symlinked paths won't match and events get dropped.
         self._directory = state.working_dir
         self._project = helpers.compute_project_id(state.working_dir)
-        # workspace is intentionally omitted (None) — agentpool
+        # workspace is intentionally omitted (None) — wolfharness
         # doesn't have workspaces, and workspace=project_id would
         # be wrong (WorkspaceID format is 'wrk_xxx', not a git SHA)
 
@@ -623,7 +623,7 @@ No new endpoints. Changes are limited to the SSE data format:
    - Owner: yuchen.liu
    - Status: Open (investigation needed)
 
-3. **Should agentpool support `directory: "global"` for cross-project events?**
+3. **Should wolfharness support `directory: "global"` for cross-project events?**
    - Context: OpenCode uses `directory: "global"` for events that should be delivered regardless of project context (e.g., `workspace.status`). AgentPool currently doesn't emit such events, but future features (like multi-agent status broadcasting) might need it.
    - Owner: yuchen.liu
    - Status: Open (not needed for Phase 1)

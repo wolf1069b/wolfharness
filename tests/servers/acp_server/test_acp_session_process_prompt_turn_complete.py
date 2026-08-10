@@ -14,9 +14,9 @@ import pytest
 
 from acp.schema import TextContentBlock
 from acp.schema.capabilities import ClientCapabilities
-from agentpool import Agent, AgentPool
-from agentpool_server.acp_server.event_converter import ACPEventConverter
-from agentpool_server.acp_server.session import ACPSession
+from wolfharness import Agent, AgentPool
+from wolfharness_server.acp_server.event_converter import ACPEventConverter
+from wolfharness_server.acp_server.session import ACPSession
 
 
 pytestmark = pytest.mark.unit
@@ -33,8 +33,8 @@ def agent_pool() -> AgentPool:
     def simple_callback(message: str) -> str:
         return f"Response: {message}"
 
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.manifest import AgentsManifest
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.manifest import AgentsManifest
 
     manifest = AgentsManifest(agents={"test_agent": NativeAgentConfig(model="test")})
 

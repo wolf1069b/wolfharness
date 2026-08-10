@@ -14,9 +14,9 @@ This avoids the need to pass the config file path each time you want to run a co
 The CLI maintains an "active agent file" setting which determines which agents are available for commands like `run`, `task`, or `watch`.
 You can:
 
-- Add agent files with `agentpool add <name> <path>`
-- Set the active file with `agentpool set <name>`
-- List agents from the active config with `agentpool list`
+- Add agent files with `wolfharness add <name> <path>`
+- Set the active file with `wolfharness set <name>`
+- List agents from the active config with `wolfharness list`
 
 Most commands will use the currently active agent file by default, but can be overridden with the `--config` option.
 
@@ -68,14 +68,14 @@ Most commands will use the currently active agent file by default, but can be ov
 
 ### Option 1: Automatic Config Discovery
 
-AgentPool automatically discovers config files. Just create `agentpool.yml` in your project:
+AgentPool automatically discovers config files. Just create `wolfharness.yml` in your project:
 
 ```bash
 # Create a starter config
-agentpool config init
+wolfharness config init
 
 # Edit the config, then run
-agentpool run myagent "Hello"
+wolfharness run myagent "Hello"
 ```
 
 ### Option 2: Named Configurations
@@ -85,20 +85,20 @@ For managing multiple config files:
 1. Add and activate an agent configuration:
 
    ```bash
-   agentpool add myconfig agents.yml
-   agentpool set myconfig
+   wolfharness add myconfig agents.yml
+   wolfharness set myconfig
    ```
 
 2. List available agents:
 
    ```bash
-   agentpool list
+   wolfharness list
    ```
 
 3. Run a prompt with an agent:
 
    ```bash
-   agentpool run analyzer "Analyze this text"
+   wolfharness run analyzer "Analyze this text"
    ```
 
 ## Command Examples
@@ -107,61 +107,61 @@ For managing multiple config files:
 
 ```bash
 # Run a single agent with a prompt
-agentpool run myagent "Analyze this"
+wolfharness run myagent "Analyze this"
 
 # Run a team
-agentpool run myteam "Process this"
+wolfharness run myteam "Process this"
 
 # Show detailed output with costs
-agentpool run myagent "Hello" --detail full --costs
+wolfharness run myagent "Hello" --detail full --costs
 ```
 
 ### Executing Tasks
 
 ```bash
 # Execute a defined task
-agentpool task docs write_api_docs
+wolfharness task docs write_api_docs
 
 # Execute with additional prompt
-agentpool task docs write_api_docs --prompt "Include code examples"
+wolfharness task docs write_api_docs --prompt "Include code examples"
 ```
 
 ### Server Commands
 
 ```bash
 # ACP server for IDE integration (Zed, Toad)
-agentpool serve-acp config.yml
+wolfharness serve-acp config.yml
 
 # OpenCode server for OpenCode TUI/Desktop
-agentpool serve-opencode config.yml --port 4096
+wolfharness serve-opencode config.yml --port 4096
 
 # MCP server (stdio transport)
-agentpool serve-mcp config.yml
+wolfharness serve-mcp config.yml
 
 # MCP server with SSE transport
-agentpool serve-mcp config.yml --transport sse --port 3001
+wolfharness serve-mcp config.yml --transport sse --port 3001
 
 # AG-UI server
-agentpool serve-agui config.yml --port 8002
+wolfharness serve-agui config.yml --port 8002
 
 # OpenAI-compatible API server
-agentpool serve-api config.yml --port 8000
+wolfharness serve-api config.yml --port 8000
 ```
 
 ### History Commands
 
 ```bash
 # Show last 5 conversations
-agentpool history show -n 5
+wolfharness history show -n 5
 
 # Show conversations from last 24 hours
-agentpool history show --period 24h
+wolfharness history show --period 24h
 
 # Show stats grouped by model
-agentpool history stats --period 1w --group-by model
+wolfharness history stats --period 1w --group-by model
 
 # Clear history for specific agent
-agentpool history reset --agent myagent
+wolfharness history reset --agent myagent
 ```
 
 ## Global Options

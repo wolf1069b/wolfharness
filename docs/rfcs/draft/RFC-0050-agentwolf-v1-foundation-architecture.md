@@ -60,14 +60,14 @@ The codebase has 9 top-level packages under `src/`:
 
 | Package | Role |
 |---------|------|
-| `agentpool/` | Core agent framework (agents, delegation, messaging, tools, models, prompts, storage, hooks, observability) |
-| `agentpool_config/` | YAML schema definitions (config models, separated for clean imports) |
-| `agentpool_server/` | Protocol servers (ACP, OpenCode, AG-UI, OpenAI API, MCP) |
-| `agentpool_toolsets/` | Reusable toolset implementations (builtin, MCP discovery, specialized) |
-| `agentpool_storage/` | Storage providers (SQL, Zed, Claude, OpenCode) |
-| `agentpool_cli/` | Command-line interface |
-| `agentpool_commands/` | Command implementations |
-| `agentpool_prompts/` | Prompt templates |
+| `wolfharness/` | Core agent framework (agents, delegation, messaging, tools, models, prompts, storage, hooks, observability) |
+| `wolfharness_config/` | YAML schema definitions (config models, separated for clean imports) |
+| `wolfharness_server/` | Protocol servers (ACP, OpenCode, AG-UI, OpenAI API, MCP) |
+| `wolfharness_toolsets/` | Reusable toolset implementations (builtin, MCP discovery, specialized) |
+| `wolfharness_storage/` | Storage providers (SQL, Zed, Claude, OpenCode) |
+| `wolfharness_cli/` | Command-line interface |
+| `wolfharness_commands/` | Command implementations |
+| `wolfharness_prompts/` | Prompt templates |
 | `acp/` | ACP protocol implementation (client, agent, schema, bridge, transports) |
 
 ### Cross-Framework Research Summary
@@ -476,7 +476,7 @@ host:
   
   storage:
     provider: sql
-    database: "sqlite:///agentpool.db"
+    database: "sqlite:///wolfharness.db"
   
   observability:
     logfire: {enabled: true}
@@ -2170,7 +2170,7 @@ Each phase is independently deployable:
 
 3. **RunScope propagation**: Should RunScope be explicitly passed to every method, or stored in a context variable (contextvars)? (Recommendation: context variable for ergonomics, explicitly passed at layer boundaries.)
 
-4. **Package naming**: Should v1.0 use `agentwolf_*` or keep `agentpool_*` package names? (Recommendation: keep `agentpool_*` for backward compatibility; `agentwolf` is an internal codename.)
+4. **Package naming**: Should v1.0 use `agentwolf_*` or keep `wolfharness_*` package names? (Recommendation: keep `wolfharness_*` for backward compatibility; `agentwolf` is an internal codename.)
 
 5. **AgentFactory pre-compilation**: Should teams/graphs always be pre-compiled, or allow lazy compilation for dynamic topologies? (Recommendation: pre-compile by default, `factory_mode: lazy` opt-in for dynamic use cases.)
 

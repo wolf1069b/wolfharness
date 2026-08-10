@@ -18,11 +18,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from agentpool.agents.events import RunStartedEvent, StateUpdate
-from agentpool.lifecycle.comm_channel import ProtocolChannel
-from agentpool.lifecycle.journal import MemoryJournal
-from agentpool.lifecycle.types import RunState
-from agentpool.orchestrator.event_bus import EventBus, EventEnvelope, OverflowPolicy
+from wolfharness.agents.events import RunStartedEvent, StateUpdate
+from wolfharness.lifecycle.comm_channel import ProtocolChannel
+from wolfharness.lifecycle.journal import MemoryJournal
+from wolfharness.lifecycle.types import RunState
+from wolfharness.orchestrator.event_bus import EventBus, EventEnvelope, OverflowPolicy
 
 
 pytestmark = [pytest.mark.unit, pytest.mark.anyio]

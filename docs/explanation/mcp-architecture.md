@@ -2,18 +2,18 @@
 
 ## Core Components
 
-### MCPManager (`agentpool.mcp_server.manager`)
+### MCPManager (`wolfharness.mcp_server.manager`)
 Manages MCP server **lifecycle** only. Spawns MCP server processes, wraps each in an
 `MCPResourceProvider`, and aggregates them into an `AggregatingResourceProvider`.
 Does NOT wire providers into ToolManager — that happens externally.
 
 Lives on `MessageNode` (every agent has one) and on `AgentPool` / `BaseTeam`.
 
-### ToolManager (`agentpool.tools.manager`)
+### ToolManager (`wolfharness.tools.manager`)
 Manages local tools + external resource providers. MCP tools become available when
 someone adds the MCPManager's aggregating provider to the ToolManager.
 
-### ToolManagerBridge (`agentpool.mcp_server.tool_bridge`)
+### ToolManagerBridge (`wolfharness.mcp_server.tool_bridge`)
 The inverse of MCPManager: exposes an agent's internal ToolManager as an HTTP MCP
 server. Used by wrapped agents (Claude Code, Codex, ACP) so the external process
 can call back into our tools.

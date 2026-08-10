@@ -18,9 +18,9 @@ related_rfcs:
 
 ## Overview
 
-本 RFC 提议在 agentpool 中增加对 MCP-over-ACP 传输协议的支持，允许 ACP 客户端通过现有 ACP 连接注入 MCP 工具服务，而无需单独的 stdio 进程或 HTTP 端口。实现后，agentpool 可作为 ACP Agent 向客户端声明 `mcpCapabilities.acp: true`，并在 session 初始化阶段**主动**通过 `mcp/connect` 向客户端请求建立连接（Agent→Client），通过 `mcp/message` 双向转发工具调用，在 session 结束时通过 `mcp/disconnect` 通知客户端清理（Agent→Client），完成完整的 MCP 工具调用生命周期。
+本 RFC 提议在 wolfharness 中增加对 MCP-over-ACP 传输协议的支持，允许 ACP 客户端通过现有 ACP 连接注入 MCP 工具服务，而无需单独的 stdio 进程或 HTTP 端口。实现后，wolfharness 可作为 ACP Agent 向客户端声明 `mcpCapabilities.acp: true`，并在 session 初始化阶段**主动**通过 `mcp/connect` 向客户端请求建立连接（Agent→Client），通过 `mcp/message` 双向转发工具调用，在 session 结束时通过 `mcp/disconnect` 通知客户端清理（Agent→Client），完成完整的 MCP 工具调用生命周期。
 
-该特性能够显著扩大 agentpool 的适用场景：客户端可注入项目感知工具（如代码感知的搜索工具）、沙箱环境（如 WASM 运行时）也能提供 MCP 工具，同时消除了通过"旁路"传输带来的沙箱逃逸风险。
+该特性能够显著扩大 wolfharness 的适用场景：客户端可注入项目感知工具（如代码感知的搜索工具）、沙箱环境（如 WASM 运行时）也能提供 MCP 工具，同时消除了通过"旁路"传输带来的沙箱逃逸风险。
 
 ## Table of Contents
 
@@ -43,7 +43,7 @@ related_rfcs:
 
 ### Current State
 
-agentpool 当前通过 ACP 协议对外提供 Agent 能力。在 `session/new` 和 `session/load` 请求中，客户端可传入 MCP 服务器配置（`mcp_servers`），agentpool 支持三种 MCP 传输类型：
+wolfharness 当前通过 ACP 协议对外提供 Agent 能力。在 `session/new` 和 `session/load` 请求中，客户端可传入 MCP 服务器配置（`mcp_servers`），wolfharness 支持三种 MCP 传输类型：
 
 | 类型 | 实现文件 | 状态 |
 |------|----------|------|
@@ -56,7 +56,7 @@ agentpool 当前通过 ACP 协议对外提供 Agent 能力。在 `session/new` �
 
 ### Historical Context
 
-- [RFC-0030](../draft/RFC-0030-acp-streamable-http-websocket-transport.md) 扩展了 agentpool 对 Streamable HTTP / WebSocket 的 ACP 传输层支持，为本 RFC 奠定了传输基础设施基础。
+- [RFC-0030](../draft/RFC-0030-acp-streamable-http-websocket-transport.md) 扩展了 wolfharness 对 Streamable HTTP / WebSocket 的 ACP 传输层支持，为本 RFC 奠定了传输基础设施基础。
 - ACP 协议官方 RFD [mcp-over-acp](../../../../agent-client-protocol/docs/rfds/mcp-over-acp.mdx) 定义了完整规范，包括消息格式、连接复用和 Bridging 策略。
 
 ### Prerequisites
@@ -69,7 +69,7 @@ agentpool 当前通过 ACP 协议对外提供 Agent 能力。在 `session/new` �
 
 | Term | Definition |
 |------|------------|
-| ACP | Agent Client Protocol，agentpool 使用的 Agent-客户端双向通信协议 |
+| ACP | Agent Client Protocol，wolfharness 使用的 Agent-客户端双向通信协议 |
 | MCP | Model Context Protocol，LLM 使用工具的标准协议 |
 | MCP-over-ACP | 通过 ACP 连接通道传输 MCP 消息的扩展 |
 | `acpId` | 客户端在 `session/new` 中为 ACP-transport MCP Server 生成的唯一标识 |
@@ -96,13 +96,13 @@ ACP 客户端（IDE、编辑器、代理中间层）希望向 Agent 注入与当
 ### Evidence
 
 - ACP 官方 RFD [mcp-over-acp](../../../../agent-client-protocol/docs/rfds/mcp-over-acp.mdx) 明确指出该问题并提出了规范解决方案
-- agentpool 的 `convert_acp_mcp_server_to_config()` 在遇到未知 MCP server 类型时直接 `assert_never`（即崩溃），无任何扩展入口
+- wolfharness 的 `convert_acp_mcp_server_to_config()` 在遇到未知 MCP server 类型时直接 `assert_never`（即崩溃），无任何扩展入口
 - `McpCapabilities` 中无 `acp` 字段，无法向客户端声明支持能力
 
 ### Impact of Inaction
 
 - **功能缺失**：无法支持 ACP 客户端的 MCP 工具注入场景（如 Zed 插件、WASM 沙箱工具）
-- **生态兼容性**：ACP 参考实现（Rust SDK sacp-conductor）已实现 Bridging，agentpool 无法与其互操作
+- **生态兼容性**：ACP 参考实现（Rust SDK sacp-conductor）已实现 Bridging，wolfharness 无法与其互操作
 - **扩展受阻**：未来的 proxy-chain 场景（RFC 参见 [proxy-chains RFD](../../../../agent-client-protocol/docs/rfds/)）依赖 MCP-over-ACP
 
 ---
@@ -111,25 +111,25 @@ ACP 客户端（IDE、编辑器、代理中间层）希望向 Agent 注入与当
 
 ### Goals (In Scope)
 
-1. agentpool 作为 ACP Agent 在 `InitializeResponse` 中声明 `mcpCapabilities.acp: true`
+1. wolfharness 作为 ACP Agent 在 `InitializeResponse` 中声明 `mcpCapabilities.acp: true`
 2. 支持在 `session/new`、`session/load`、`session/fork`、`session/resume` 请求中接收 `type: "acp"` 的 MCP Server 声明
 3. 实现 `mcp/connect` 消息处理：在 session 初始化阶段接收 `acpId`，返回唯一 `connectionId`
 4. 实现双向 `mcp/message` 消息转发：将 Agent 发出的 MCP 工具调用路由至提供该 Server 的 ACP 客户端，并将结果原路返回
 5. 实现 `mcp/disconnect` 消息处理：在 session 结束时清理连接状态
 6. 支持同一 MCP Server 的多路连接复用（每次 `mcp/connect` 返回独立 `connectionId`）
-7. **双向配置转换**：同步更新正向转换（`converters.py`）和反向转换（`acp_converters.py`），确保 agentpool 作为 ACP 客户端时代码不崩溃
+7. **双向配置转换**：同步更新正向转换（`converters.py`）和反向转换（`acp_converters.py`），确保 wolfharness 作为 ACP 客户端时代码不崩溃
 
 ### Non-Goals (Out of Scope)
 
 1. **Bridging（可选，后续 RFC）**：将 ACP-transport MCP Server 透明转为 stdio/HTTP shim 不在本 RFC 范围内
-2. **客户端侧实现**：本 RFC 仅覆盖 agentpool（Agent 侧）实现，不涉及客户端 SDK 变更
+2. **客户端侧实现**：本 RFC 仅覆盖 wolfharness（Agent 侧）实现，不涉及客户端 SDK 变更
 3. **MCP Server 能力缓存**：不在本 RFC 中实现跨连接的工具列表缓存
 4. **认证与鉴权扩展**：MCP-over-ACP 沿用与 ACP 相同的信任模型，不新增额外认证机制
 
 ### Success Criteria
 
 - [ ] `InitializeResponse` 包含 `mcpCapabilities.acp: true`
-- [ ] 客户端传入 `type: "acp"` MCP Server 后，agentpool 在 session 初始化阶段**主动**发送 `mcp/connect`（Agent→Client），客户端返回 `connectionId`
+- [ ] 客户端传入 `type: "acp"` MCP Server 后，wolfharness 在 session 初始化阶段**主动**发送 `mcp/connect`（Agent→Client），客户端返回 `connectionId`
 - [ ] Agent 可通过 `connectionId` 发起 `mcp/message` 工具调用并收到结果
 - [ ] `mcp/disconnect` 正确清理连接（Agent 主动向 Client 发送）
 - [ ] 现有 stdio/SSE/HTTP MCP 功能无回归（通过已有测试集验证）
@@ -155,7 +155,7 @@ ACP 客户端（IDE、编辑器、代理中间层）希望向 Agent 注入与当
 
 **Description**
 
-在 agentpool 的 ACP server 层直接实现完整的 MCP-over-ACP 协议处理器：
+在 wolfharness 的 ACP server 层直接实现完整的 MCP-over-ACP 协议处理器：
 
 - 扩展 `McpCapabilities` schema 添加 `acp` 字段
 - 新增 `AcpMcpServer` schema 类型
@@ -210,11 +210,11 @@ ACP 客户端（IDE、编辑器、代理中间层）希望向 Agent 注入与当
 
 **Description**
 
-不修改 agentpool 核心，而是在 agentpool 外层增加一个 Conductor/Proxy 进程：对外声明支持 `mcpCapabilities.acp`，接收到 ACP-transport MCP Server 声明后，生成一个本地 stdio shim 进程，将 ACP channel 消息转换为 stdio MCP 消息，再传给 agentpool（以普通 stdio MCP Server 形式传入）。
+不修改 wolfharness 核心，而是在 wolfharness 外层增加一个 Conductor/Proxy 进程：对外声明支持 `mcpCapabilities.acp`，接收到 ACP-transport MCP Server 声明后，生成一个本地 stdio shim 进程，将 ACP channel 消息转换为 stdio MCP 消息，再传给 wolfharness（以普通 stdio MCP Server 形式传入）。
 
 **Advantages**
 
-- agentpool 核心代码改动最小
+- wolfharness 核心代码改动最小
 - shim 进程可独立部署和测试
 - 与 ACP RFD 中描述的 Bridging 模式对齐
 
@@ -230,7 +230,7 @@ ACP 客户端（IDE、编辑器、代理中间层）希望向 Agent 注入与当
 | Criterion | Rating | Notes |
 |-----------|--------|-------|
 | 协议合规性 | ⭐⭐⭐ | 从外部看符合规范，但内部绕过了核心目标 |
-| 向后兼容性 | ⭐⭐⭐⭐⭐ | 对 agentpool 核心无侵入 |
+| 向后兼容性 | ⭐⭐⭐⭐⭐ | 对 wolfharness 核心无侵入 |
 | 实现复杂度 | ⭐⭐⭐ | shim 进程本身复杂度与 Option 1 相当 |
 | 可扩展性 | ⭐⭐ | Bridging 作为唯一实现路径，无原生支持扩展点 |
 | 可测试性 | ⭐⭐⭐ | 进程边界使集成测试更复杂 |
@@ -254,7 +254,7 @@ ACP 客户端（IDE、编辑器、代理中间层）希望向 Agent 注入与当
 
 **Description**
 
-等待 ACP 官方 Rust SDK（sacp-conductor）稳定后，通过集成官方 bridge 实现支持，agentpool 自身不做任何改动。
+等待 ACP 官方 Rust SDK（sacp-conductor）稳定后，通过集成官方 bridge 实现支持，wolfharness 自身不做任何改动。
 
 **Advantages**
 
@@ -333,7 +333,7 @@ Option 1 是唯一能够完整实现 ACP RFD 目标的方案：
 └──────────────────────────┬──────────────────────────────────────┘
                            │ ACP Channel (JSON-RPC over stdio/WS)
 ┌──────────────────────────▼──────────────────────────────────────┐
-│  agentpool ACP Server (AgentPoolACPAgent / acp_agent.py)        │
+│  wolfharness ACP Server (AgentPoolACPAgent / acp_agent.py)        │
 │                                                                  │
   │  ┌─────────────────────────────────────┐                        │
   │  │  AcpMcpConnectionManager            │                        │
@@ -359,7 +359,7 @@ Option 1 是唯一能够完整实现 ACP RFD 目标的方案：
 ### Message Flow
 
 ```
-Client                    agentpool                   Agent (LLM)
+Client                    wolfharness                   Agent (LLM)
   │                           │                           │
   │── session/new ───────────▶│                           │
   │   mcp_servers: [{          │                           │
@@ -440,7 +440,7 @@ ClientMethod = Literal[
 
 #### 2. AcpMcpConnectionManager
 
-新增 `agentpool_server/acp_server/acp_mcp_manager.py`：
+新增 `wolfharness_server/acp_server/acp_mcp_manager.py`：
 
 ```python
 from __future__ import annotations
@@ -573,7 +573,7 @@ async def ext_method(self, method: str, params: dict[str, Any]) -> dict[str, Any
 
 #### 4. fastmcp ClientTransport 实现
 
-**新增 `agentpool_server/acp_server/acp_mcp_transport.py`**：
+**新增 `wolfharness_server/acp_server/acp_mcp_transport.py`**：
 
 ```python
 from fastmcp.client.transports import ClientTransport
@@ -650,7 +650,7 @@ def mcp_config_to_acp(config: MCPServerConfig) -> McpServer:
 
 #### 7. AcpMCPServerConfig（新增）
 
-在 `agentpool_config/mcp_server.py` 中新增：
+在 `wolfharness_config/mcp_server.py` 中新增：
 
 ```python
 class AcpMCPServerConfig(MCPServerConfig):
@@ -671,7 +671,7 @@ MCPServerConfig = Annotated[
 
 #### 8. MCPResourceProvider 扩展
 
-在 `agentpool/mcp_server/provider.py` 中更新 `transport_type`：
+在 `wolfharness/mcp_server/provider.py` 中更新 `transport_type`：
 
 ```python
 @property
@@ -738,9 +738,9 @@ ACPSession (per-agent-session)
 
 | Threat | Impact | Likelihood | Mitigation |
 |--------|--------|------------|------------|
-| 客户端注入恶意 MCP 工具 | High | Medium | 与现有 MCP 信任模型一致：agentpool 不对 MCP 工具内容进行额外验证，工具调用权限由用户在会话级别授权 |
+| 客户端注入恶意 MCP 工具 | High | Medium | 与现有 MCP 信任模型一致：wolfharness 不对 MCP 工具内容进行额外验证，工具调用权限由用户在会话级别授权 |
 | `connectionId` 伪造/碰撞 | Medium | Low | `connectionId` 由客户端生成，Agent 仅验证其是否存在于本地连接表；使用完整 `uuid4().hex`（128-bit 熵），不可预测 |
-| `mcp/message` 参数注入 | Low | Low | 透明转发，agentpool 不解析工具参数内容；安全责任由 MCP Server（客户端侧）承担 |
+| `mcp/message` 参数注入 | Low | Low | 透明转发，wolfharness 不解析工具参数内容；安全责任由 MCP Server（客户端侧）承担 |
 | 连接未清理导致内存泄漏 | Medium | Low | 绑定 Agent 生命周期，Agent 关闭时强制 `close_all()` |
 
 ### Security Measures
@@ -775,7 +775,7 @@ MCP-over-ACP 遵循与现有 MCP 传输相同的信任模型：工具调用由 A
   - 新增 `AcpMcpServer` schema
   - 扩展 `AgentMethod`/`ClientMethod`
   - 更新 `AgentCapabilities.create()`
-  - 更新 `MCPServerConfig` union（`agentpool_config/mcp_server.py`）
+  - 更新 `MCPServerConfig` union（`wolfharness_config/mcp_server.py`）
   - 更新 `MCPResourceProvider.transport_type` 返回类型
 - **Deliverables**：Schema 变更 PR，附单元测试
 - **Dependencies**：Pre-Phase 0 通过
@@ -839,8 +839,8 @@ MCP-over-ACP 遵循与现有 MCP 传输相同的信任模型：工具调用由 A
    - **Rationale**：命名一致性优先，虽略显冗长但明确无歧义
 
 2. **pydantic-ai MCP transport 接入点**
-   - **Decision**：不直接对接 pydantic-ai，而是实现 `fastmcp.ClientTransport`，通过 `fastmcp.Client` 接入 agentpool 现有的 `MCPClient`
-   - **Rationale**：agentpool 实际使用 fastmcp（而非 pydantic-ai 的 MCP 抽象）管理 MCP 连接。`ClientTransport` 是正确的扩展点
+   - **Decision**：不直接对接 pydantic-ai，而是实现 `fastmcp.ClientTransport`，通过 `fastmcp.Client` 接入 wolfharness 现有的 `MCPClient`
+   - **Rationale**：wolfharness 实际使用 fastmcp（而非 pydantic-ai 的 MCP 抽象）管理 MCP 连接。`ClientTransport` 是正确的扩展点
 
 3. **`mcp/message` 的 method 归属**
    - **Decision**：`mcp/message` 注册在 `ClientMethod` 中（通过 `_` prefix 机制实现双向路由）
@@ -858,7 +858,7 @@ MCP-over-ACP 遵循与现有 MCP 传输相同的信任模型：工具调用由 A
    - Status: **已解决** — 通过 `client.ext_method()` 主动发起，`ext_method()` 被动接收 `_mcp/message`
 
 2. **fastmcp pinned 版本是否支持自定义 ClientTransport**
-   - Context：需确认 agentpool 当前锁定的 fastmcp 版本是否暴露 `ClientTransport` 接口
+   - Context：需确认 wolfharness 当前锁定的 fastmcp 版本是否暴露 `ClientTransport` 接口
    - Owner: 本 RFC 实现者
    - Status: **Blocker for Pre-Phase 0**
 
@@ -919,11 +919,11 @@ MCP-over-ACP 遵循与现有 MCP 传输相同的信任模型：工具调用由 A
 | `mcp/connect` method | `acp/schema/messages.py` | ClientMethod（Agent→Client） |
 | `mcp/disconnect` method | `acp/schema/messages.py` | ClientMethod（Agent→Client） |
 | `mcp/message` method | `acp/schema/messages.py` | ClientMethod（双向，通过 `_` prefix） |
-| `AcpMcpServer` handler | `agentpool_server/acp_server/converters.py` | 转换逻辑（正向） |
-| `AcpMcpServer` reverse handler | `agentpool_server/acp_server/acp_converters.py` | 转换逻辑（反向） |
-| `AcpMCPServerConfig` | `agentpool_config/mcp_server.py` | Config 类 |
-| `AcpMcpConnectionManager` | `agentpool_server/acp_server/acp_mcp_manager.py` | 核心逻辑 |
-| `AcpMcpTransport` | `agentpool_server/acp_server/acp_mcp_transport.py` | fastmcp Transport |
+| `AcpMcpServer` handler | `wolfharness_server/acp_server/converters.py` | 转换逻辑（正向） |
+| `AcpMcpServer` reverse handler | `wolfharness_server/acp_server/acp_converters.py` | 转换逻辑（反向） |
+| `AcpMCPServerConfig` | `wolfharness_config/mcp_server.py` | Config 类 |
+| `AcpMcpConnectionManager` | `wolfharness_server/acp_server/acp_mcp_manager.py` | 核心逻辑 |
+| `AcpMcpTransport` | `wolfharness_server/acp_server/acp_mcp_transport.py` | fastmcp Transport |
 
 #### B. `assert_never` 穷尽匹配更新清单
 
@@ -931,12 +931,12 @@ MCP-over-ACP 遵循与现有 MCP 传输相同的信任模型：工具调用由 A
 
 | 文件 | 函数/属性 | 操作 |
 |------|----------|------|
-| `agentpool_server/acp_server/converters.py` | `convert_acp_mcp_server_to_config()` | 新增 `case AcpMcpServer()` |
-| `agentpool_server/acp_server/acp_converters.py` | `mcp_config_to_acp()` | 新增 `case AcpMCPServerConfig()` |
-| `agentpool/mcp_server/provider.py` | `transport_type` property | 新增 `"acp"` 到 return `Literal` |
-| `agentpool/mcp_server/client.py` | `MCPClient._get_client()` | 新增 `case AcpMCPServerConfig()` |
-| `agentpool_config/mcp_server.py` | `MCPServerConfig` union | 新增 `AcpMCPServerConfig` |
-| `agentpool_config/mcp_server.py` | `parse_mcp_servers_json()` | 新增 `"acp"` transport 分支 |
+| `wolfharness_server/acp_server/converters.py` | `convert_acp_mcp_server_to_config()` | 新增 `case AcpMcpServer()` |
+| `wolfharness_server/acp_server/acp_converters.py` | `mcp_config_to_acp()` | 新增 `case AcpMCPServerConfig()` |
+| `wolfharness/mcp_server/provider.py` | `transport_type` property | 新增 `"acp"` 到 return `Literal` |
+| `wolfharness/mcp_server/client.py` | `MCPClient._get_client()` | 新增 `case AcpMCPServerConfig()` |
+| `wolfharness_config/mcp_server.py` | `MCPServerConfig` union | 新增 `AcpMCPServerConfig` |
+| `wolfharness_config/mcp_server.py` | `parse_mcp_servers_json()` | 新增 `"acp"` transport 分支 |
 
 #### C. 前置条件修复清单
 

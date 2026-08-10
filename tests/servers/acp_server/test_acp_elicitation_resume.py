@@ -20,14 +20,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentpool.agents.events.events import ElicitationDeferredEvent
-from agentpool_server.acp_server.event_converter import ACPEventConverter
-from agentpool_server.acp_server.handler import ACPProtocolHandler
-from agentpool_server.acp_server.session_manager import ACPSessionManager
+from wolfharness.agents.events.events import ElicitationDeferredEvent
+from wolfharness_server.acp_server.event_converter import ACPEventConverter
+from wolfharness_server.acp_server.handler import ACPProtocolHandler
+from wolfharness_server.acp_server.session_manager import ACPSessionManager
 
 
 if TYPE_CHECKING:
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
 
 pytestmark = pytest.mark.unit
@@ -130,7 +130,7 @@ async def test_start_event_consumer_called_before_resume(
             "client",
         ),
         patch(
-            "agentpool_server.acp_server.handler.ACPRequests",
+            "wolfharness_server.acp_server.handler.ACPRequests",
         ) as mock_acp_requests_class,
     ):
         mock_acp_requests = MagicMock()
@@ -177,7 +177,7 @@ async def test_resume_not_called_if_start_consumer_fails(
     minimal_pool.session_pool.resume_session = mock_resume  # type: ignore[assignment]
 
     with patch(
-        "agentpool_server.acp_server.handler.ACPRequests",
+        "wolfharness_server.acp_server.handler.ACPRequests",
     ) as mock_acp_requests_class:
         mock_acp_requests = MagicMock()
         mock_acp_requests.elicitation_create = AsyncMock(

@@ -23,7 +23,7 @@ agents:
 ## Configuration Reference
 
 /// mknodes
-{{ "agentpool_config.toolsets.ComposioToolSetConfig" | schema_to_markdown(display_mode="yaml", header_style="pymdownx", wrapped_in="toolsets") }}
+{{ "wolfharness_config.toolsets.ComposioToolSetConfig" | schema_to_markdown(display_mode="yaml", header_style="pymdownx", wrapped_in="toolsets") }}
 ///
 
 ## Available Apps

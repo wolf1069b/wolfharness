@@ -15,7 +15,7 @@ from pydantic_ai.messages import ToolCallPart
 from pydantic_ai.tools import ToolDefinition
 import pytest
 
-from agentpool.capabilities.tool_display_capability import (
+from wolfharness.capabilities.tool_display_capability import (
     ToolDisplayCapability,
     _parse_locations,
     _unwrap_result,
@@ -23,7 +23,7 @@ from agentpool.capabilities.tool_display_capability import (
 
 
 if TYPE_CHECKING:
-    from agentpool.agents.events import TextContentItem
+    from wolfharness.agents.events import TextContentItem
 
 
 pytestmark = pytest.mark.unit
@@ -302,7 +302,7 @@ class TestRichAndDiffIsolation:
 
         # rich target takes precedence: exactly one tool_call_progress (rich content)
         assert events.tool_call_progress.await_count == 1
-        from agentpool.agents.events import TextContentItem
+        from wolfharness.agents.events import TextContentItem
 
         items = events.tool_call_progress.await_args.kwargs["items"]
         assert len(items) == 1
@@ -329,7 +329,7 @@ class TestRichAndDiffIsolation:
         )
 
         assert events.tool_call_progress.await_count == 1
-        from agentpool.agents.events import DiffContentItem
+        from wolfharness.agents.events import DiffContentItem
 
         items = events.tool_call_progress.await_args.kwargs["items"]
         assert len(items) == 1

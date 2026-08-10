@@ -9,11 +9,11 @@ icon: material/api
 Start an OpenAI-compatible API server that exposes agents through a drop-in OpenAI API replacement.
 
 ```bash
-agentpool serve-api config.yml
+wolfharness serve-api config.yml
 ```
 
 For a full list of options, run:
 
 ```bash
-agentpool serve-api --help
+wolfharness serve-api --help
 ```

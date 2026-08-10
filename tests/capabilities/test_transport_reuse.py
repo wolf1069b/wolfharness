@@ -11,9 +11,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentpool.capabilities.mcp_server_cap import McpServerCap
-from agentpool.mcp_server.session_pool import SessionConnectionPool
-from agentpool_config.mcp_server import StdioMCPServerConfig
+from wolfharness.capabilities.mcp_server_cap import McpServerCap
+from wolfharness.mcp_server.session_pool import SessionConnectionPool
+from wolfharness_config.mcp_server import StdioMCPServerConfig
 
 
 pytestmark = pytest.mark.unit
@@ -44,11 +44,11 @@ async def test_two_caps_same_config_share_transport() -> None:
 
     with (
         patch(
-            "agentpool.mcp_server.session_pool._create_transport",
+            "wolfharness.mcp_server.session_pool._create_transport",
             side_effect=fake_create_transport,
         ),
         patch(
-            "agentpool.mcp_server.client.MCPClient",
+            "wolfharness.mcp_server.client.MCPClient",
             side_effect=[mock_client_1, mock_client_2],
         ),
     ):
@@ -92,11 +92,11 @@ async def test_two_caps_different_configs_separate_transports() -> None:
 
     with (
         patch(
-            "agentpool.mcp_server.session_pool._create_transport",
+            "wolfharness.mcp_server.session_pool._create_transport",
             side_effect=fake_create_transport,
         ),
         patch(
-            "agentpool.mcp_server.client.MCPClient",
+            "wolfharness.mcp_server.client.MCPClient",
             side_effect=[mock_client_1, mock_client_2],
         ),
     ):

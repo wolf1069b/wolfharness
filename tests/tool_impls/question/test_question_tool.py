@@ -18,9 +18,9 @@ from mcp.types import ElicitResult, ErrorData
 from pydantic_ai import ModelRetry
 import pytest
 
-from agentpool.tasks.exceptions import RunAbortedError
-from agentpool.tool_impls.question.tool import QuestionTool
-from agentpool.tools.base import ToolResult
+from wolfharness.tasks.exceptions import RunAbortedError
+from wolfharness.tool_impls.question.tool import QuestionTool
+from wolfharness.tools.base import ToolResult
 
 
 @pytest.mark.unit

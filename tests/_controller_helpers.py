@@ -10,11 +10,11 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
-from agentpool.lifecycle.types import DeliveryMode
+from wolfharness.lifecycle.types import DeliveryMode
 
 
 if TYPE_CHECKING:
-    from agentpool.orchestrator.session_controller import SessionController
+    from wolfharness.orchestrator.session_controller import SessionController
 
 
 async def send_via_controller(

@@ -13,9 +13,9 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from agentpool.sessions.models import SessionData
-from agentpool_server.opencode_server.models import Session, SessionUpdatedEvent
-from agentpool_server.opencode_server.routes.session_routes import get_or_load_session
+from wolfharness.sessions.models import SessionData
+from wolfharness_server.opencode_server.models import Session, SessionUpdatedEvent
+from wolfharness_server.opencode_server.routes.session_routes import get_or_load_session
 
 
 pytestmark = pytest.mark.integration
@@ -24,7 +24,7 @@ pytestmark = pytest.mark.integration
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness_server.opencode_server.state import ServerState
 
 
 @pytest.fixture
@@ -50,7 +50,7 @@ def mock_state_and_broadcast(
     Returns a tuple of (state, broadcast_mock) so the test can inspect
     broadcast calls without fighting pyright's type narrowing on overridden methods.
     """
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness_server.opencode_server.state import ServerState
 
     agent = Mock()
 

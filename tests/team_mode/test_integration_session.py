@@ -21,18 +21,18 @@ import uuid
 import pytest
 import yamling
 
-from agentpool import AgentPool, AgentsManifest
-from agentpool.capabilities.agent_context import AgentContextDeps
-from agentpool.capabilities.runloop_delegation import RunLoopDelegationService
-from agentpool.capabilities.team_comm_capability import TeamCommCapability
-from agentpool.host.context import RunScope
-from agentpool.host.registry import AgentRegistry
-from agentpool.orchestrator.core import SessionState  # noqa: TC001
-from agentpool.orchestrator.run import RunHandle
+from wolfharness import AgentPool, AgentsManifest
+from wolfharness.capabilities.agent_context import AgentContextDeps
+from wolfharness.capabilities.runloop_delegation import RunLoopDelegationService
+from wolfharness.capabilities.team_comm_capability import TeamCommCapability
+from wolfharness.host.context import RunScope
+from wolfharness.host.registry import AgentRegistry
+from wolfharness.orchestrator.core import SessionState  # noqa: TC001
+from wolfharness.orchestrator.run import RunHandle
 
 
 if TYPE_CHECKING:
-    from agentpool_config.team_mode import TeamModeConfig
+    from wolfharness_config.team_mode import TeamModeConfig
 
 
 def _make_manifest(
@@ -205,7 +205,7 @@ async def test_member_sessions_closed_when_lead_idle_and_no_active_runs(
         assert "Team 'test_team' created with 2 members" in create_result.return_value
 
         # Extract member session IDs from team state (exclude lead).
-        from agentpool.capabilities.file_team_state import FileTeamState
+        from wolfharness.capabilities.file_team_state import FileTeamState
 
         team_id = create_result.return_value.split("team_id=")[1].strip()
         team_state = FileTeamState(str(tmp_path))
@@ -304,7 +304,7 @@ async def test_cleanup_deferred_when_lead_has_active_run(
         )
         assert "Team 'test_team' created with 1 members" in create_result.return_value
 
-        from agentpool.capabilities.file_team_state import FileTeamState
+        from wolfharness.capabilities.file_team_state import FileTeamState
 
         team_id = create_result.return_value.split("team_id=")[1].strip()
         team_state = FileTeamState(str(tmp_path))
@@ -389,7 +389,7 @@ async def test_cleanup_deferred_when_member_has_active_run(
         )
         assert "Team 'test_team' created with 1 members" in create_result.return_value
 
-        from agentpool.capabilities.file_team_state import FileTeamState
+        from wolfharness.capabilities.file_team_state import FileTeamState
 
         team_id = create_result.return_value.split("team_id=")[1].strip()
         team_state = FileTeamState(str(tmp_path))

@@ -9,12 +9,12 @@ from unittest.mock import patch
 from pydantic import HttpUrl
 import pytest
 
-from agentpool.mcp_server.session_pool import (
+from wolfharness.mcp_server.session_pool import (
     SessionConnectionPool,
     _create_transport,
     _stdio_owner_task,
 )
-from agentpool_config.mcp_server import (
+from wolfharness_config.mcp_server import (
     AcpMCPServerConfig,
     SSEMCPServerConfig,
     StdioMCPServerConfig,
@@ -97,7 +97,7 @@ async def test_get_transport_sse_caches(
 ) -> None:
     """get_transport creates and caches transport for SSE config."""
     fake = _FakeTransport("sse")
-    with patch("agentpool.mcp_server.session_pool._create_transport", return_value=fake):
+    with patch("wolfharness.mcp_server.session_pool._create_transport", return_value=fake):
         t1 = await session_pool.get_transport(sse_config)
         t2 = await session_pool.get_transport(sse_config)
 
@@ -113,7 +113,7 @@ async def test_get_transport_http_caches(
 ) -> None:
     """get_transport creates and caches transport for HTTP config."""
     fake = _FakeTransport("http")
-    with patch("agentpool.mcp_server.session_pool._create_transport", return_value=fake):
+    with patch("wolfharness.mcp_server.session_pool._create_transport", return_value=fake):
         t1 = await session_pool.get_transport(http_config)
         t2 = await session_pool.get_transport(http_config)
 
@@ -127,7 +127,7 @@ async def test_get_transport_stdio(
 ) -> None:
     """get_transport for stdio spawns an owner task and waits for ready."""
     fake = _FakeTransport("stdio")
-    with patch("agentpool.mcp_server.session_pool._create_transport", return_value=fake):
+    with patch("wolfharness.mcp_server.session_pool._create_transport", return_value=fake):
         transport = await session_pool.get_transport(stdio_config)
 
     assert transport is fake
@@ -166,7 +166,7 @@ async def test_different_skill_names_get_different_transports(
         return fake1 if call_count == 1 else fake2
 
     with patch(
-        "agentpool.mcp_server.session_pool._create_transport",
+        "wolfharness.mcp_server.session_pool._create_transport",
         side_effect=_create_fake,
     ):
         t1 = await session_pool.get_transport(sse_config, skill_name="skill-a")
@@ -189,7 +189,7 @@ async def test_same_skill_name_shares_transport(
 ) -> None:
     """Same (client_id, skill_name) pair returns cached transport."""
     fake = _FakeTransport("shared")
-    with patch("agentpool.mcp_server.session_pool._create_transport", return_value=fake):
+    with patch("wolfharness.mcp_server.session_pool._create_transport", return_value=fake):
         t1 = await session_pool.get_transport(sse_config, skill_name="my-skill")
         t2 = await session_pool.get_transport(sse_config, skill_name="my-skill")
 
@@ -285,7 +285,7 @@ async def test_cleanup_clears_all_connections(
         return fake1 if call_count == 1 else fake2
 
     with patch(
-        "agentpool.mcp_server.session_pool._create_transport",
+        "wolfharness.mcp_server.session_pool._create_transport",
         side_effect=_create_fake,
     ):
         await session_pool.get_transport(sse_config)
@@ -305,7 +305,7 @@ async def test_cleanup_signals_stdio_owner_tasks(
 ) -> None:
     """Cleanup signals close_event for stdio owner tasks and waits for completion."""
     fake = _FakeTransport("stdio")
-    with patch("agentpool.mcp_server.session_pool._create_transport", return_value=fake):
+    with patch("wolfharness.mcp_server.session_pool._create_transport", return_value=fake):
         await session_pool.get_transport(stdio_config)
 
     key = (stdio_config.client_id, None)
@@ -326,7 +326,7 @@ async def test_cleanup_idempotent(
 ) -> None:
     """Cleanup can be called multiple times safely."""
     fake = _FakeTransport("sse")
-    with patch("agentpool.mcp_server.session_pool._create_transport", return_value=fake):
+    with patch("wolfharness.mcp_server.session_pool._create_transport", return_value=fake):
         await session_pool.get_transport(sse_config)
 
     await session_pool.cleanup()
@@ -353,7 +353,7 @@ async def test_cleanup_with_mixed_transports(
         return fake1 if call_count == 1 else fake2
 
     with patch(
-        "agentpool.mcp_server.session_pool._create_transport",
+        "wolfharness.mcp_server.session_pool._create_transport",
         side_effect=_create_fake,
     ):
         await session_pool.get_transport(stdio_config)
@@ -431,7 +431,7 @@ async def test_copy_pre_created_transports_copies_acp_only(
 
     await source.add_transport("acp-1", acp_transport)
     # Simulate a non-pre-created transport by inserting directly
-    from agentpool.mcp_server.session_pool import _SessionConnection
+    from wolfharness.mcp_server.session_pool import _SessionConnection
 
     source._connections[("http-1", None)] = _SessionConnection(
         transport=http_transport,

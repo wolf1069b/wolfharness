@@ -19,12 +19,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agentpool.agents.context import AgentRunContext
-from agentpool.agents.events import UserMessageInsertedEvent
-from agentpool.lifecycle.comm_channel import DirectChannel
-from agentpool.lifecycle.journal import MemoryJournal
-from agentpool.orchestrator.core import SessionState
-from agentpool.orchestrator.run import RunHandle
+from wolfharness.agents.context import AgentRunContext
+from wolfharness.agents.events import UserMessageInsertedEvent
+from wolfharness.lifecycle.comm_channel import DirectChannel
+from wolfharness.lifecycle.journal import MemoryJournal
+from wolfharness.orchestrator.core import SessionState
+from wolfharness.orchestrator.run import RunHandle
 
 
 pytestmark = pytest.mark.unit

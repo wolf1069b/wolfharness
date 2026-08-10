@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agentpool.agents.modes import ModeCategory, ModeInfo
-from agentpool_server.opencode_server.routes.config_routes import list_modes
+from wolfharness.agents.modes import ModeCategory, ModeInfo
+from wolfharness_server.opencode_server.routes.config_routes import list_modes
 
 
 pytestmark = pytest.mark.integration

@@ -10,9 +10,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agentpool.agents.context import AgentContext
-from agentpool.sessions import SessionData
-from agentpool_storage.memory_provider.provider import MemoryStorageProvider
+from wolfharness.agents.context import AgentContext
+from wolfharness.sessions import SessionData
+from wolfharness_storage.memory_provider.provider import MemoryStorageProvider
 
 
 pytestmark = pytest.mark.integration
@@ -65,7 +65,7 @@ def _make_mock_session_pool(store: MemoryStorageProvider) -> MagicMock:
         session_id: str | None = None,
         **kwargs: object,
     ) -> MagicMock:
-        from agentpool.utils.identifiers import generate_session_id
+        from wolfharness.utils.identifiers import generate_session_id
 
         child_sid = session_id or generate_session_id()
         parent_data = None

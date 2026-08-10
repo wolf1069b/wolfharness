@@ -7,7 +7,7 @@ from typing import Any
 from mcp.types import ElicitResult
 import pytest
 
-from agentpool_server.acp_server.input_provider import ACPInputProvider
+from wolfharness_server.acp_server.input_provider import ACPInputProvider
 
 
 class _FakeElicitationResponse:

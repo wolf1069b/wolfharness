@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic_ai.capabilities import AbstractCapability
 from pydantic_ai.toolsets import FunctionToolset
 
-from agentpool.capabilities.resource_protocols import (
+from wolfharness.capabilities.resource_protocols import (
     ResourceEntry,
     SkillEntry,
     TextResourceContent,

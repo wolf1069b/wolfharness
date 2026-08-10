@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from agentpool.lifecycle import (
+from wolfharness.lifecycle import (
     DurableSnapshotStore,
     MemorySnapshotStore,
     SnapshotStore,

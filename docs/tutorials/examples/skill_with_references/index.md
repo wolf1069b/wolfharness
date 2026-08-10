@@ -166,15 +166,15 @@ skills/testing/
 
 ```bash
 # Load the main skill
-agentpool run skill_with_references/documentation_helper \
+wolfharness run skill_with_references/documentation_helper \
   "Load the documentation-style-guide skill"
 
 # Load a reference file
-agentpool run skill_with_references/documentation_helper \
+wolfharness run skill_with_references/documentation_helper \
   "Load the structure reference from documentation-style-guide"
 
 # Explore all references
-agentpool run skill_with_references/reference_explorer \
+wolfharness run skill_with_references/reference_explorer \
   "Show me all references for documentation-style-guide"
 ```
 
@@ -195,7 +195,7 @@ agentpool run skill_with_references/reference_explorer \
 ### `config.yml`
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/Million-mo/agentpool/refs/heads/main/schema/config-schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Million-mo/wolfharness/refs/heads/main/schema/config-schema.json
 # Example: Skills with References
 #
 # This example demonstrates how to create skills with supporting reference files.

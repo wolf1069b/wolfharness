@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentpool.messaging.event_manager import EventManager
+from wolfharness.messaging.event_manager import EventManager
 
 
 pytestmark = pytest.mark.integration

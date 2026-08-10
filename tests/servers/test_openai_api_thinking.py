@@ -19,11 +19,11 @@ from pydantic_ai import (
 )
 import pytest
 
-from agentpool.messaging.messages import ChatMessage
-from agentpool_server.openai_api_server.completions.helpers import stream_response
-from agentpool_server.openai_api_server.completions.models import ChatCompletionRequest
-from agentpool_server.openai_api_server.responses.helpers import handle_request
-from agentpool_server.openai_api_server.responses.models import (
+from wolfharness.messaging.messages import ChatMessage
+from wolfharness_server.openai_api_server.completions.helpers import stream_response
+from wolfharness_server.openai_api_server.completions.models import ChatCompletionRequest
+from wolfharness_server.openai_api_server.responses.helpers import handle_request
+from wolfharness_server.openai_api_server.responses.models import (
     ResponseMessage,
     ResponseOutputReasoning,
     ResponseRequest,
@@ -72,7 +72,7 @@ def _make_assistant_with_thinking(
 
 def test_non_streaming_completion_includes_reasoning_content():
     """Test that reasoning_content is populated from ThinkingPart."""
-    from agentpool_server.openai_api_server.completions.models import OpenAIMessage
+    from wolfharness_server.openai_api_server.completions.models import OpenAIMessage
 
     msg = _make_assistant_with_thinking(
         thinking_content="Deep reasoning here.",
@@ -104,7 +104,7 @@ def test_non_streaming_completion_includes_reasoning_content():
 
 def test_non_streaming_completion_no_thinking_no_reasoning_content():
     """Test that reasoning_content is None without ThinkingPart."""
-    from agentpool_server.openai_api_server.completions.models import OpenAIMessage
+    from wolfharness_server.openai_api_server.completions.models import OpenAIMessage
 
     timestamp = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
     model_response = ModelResponse(

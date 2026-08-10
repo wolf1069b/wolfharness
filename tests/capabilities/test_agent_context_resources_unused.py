@@ -44,7 +44,7 @@ def test_no_agent_context_resources_reads() -> None:
     indicate a read, excluding:
     - Import statements
     - Comments/docstrings
-    - The agentpool_sync module (unrelated 'resources' attribute)
+    - The wolfharness_sync module (unrelated 'resources' attribute)
     - Dataclass field definitions
     """
     # Look for patterns like `.resources.list()`, `.resources.read(`, etc.

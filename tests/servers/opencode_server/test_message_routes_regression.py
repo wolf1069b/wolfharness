@@ -33,7 +33,7 @@ async def test_persist_message_to_storage_not_called_for_user_messages() -> None
     persist_message_to_storage function is not invoked.
     """
     with patch(
-        "agentpool_server.opencode_server.routes.message_routes.persist_message_to_storage",
+        "wolfharness_server.opencode_server.routes.message_routes.persist_message_to_storage",
         new_callable=AsyncMock,
     ) as mock_persist:
         # Verify the mock was not called during import or setup
@@ -43,7 +43,7 @@ async def test_persist_message_to_storage_not_called_for_user_messages() -> None
         assert mock_persist is not None
 
     # Verify the function exists in the module
-    from agentpool_server.opencode_server.routes import message_routes
+    from wolfharness_server.opencode_server.routes import message_routes
 
     assert hasattr(message_routes, "persist_message_to_storage"), (
         "persist_message_to_storage should exist in message_routes module"

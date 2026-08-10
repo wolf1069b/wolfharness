@@ -14,9 +14,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agentpool.capabilities.change_event import ChangeEvent
-from agentpool.skills.command import SkillCommand
-from agentpool.skills.skill import Skill
+from wolfharness.capabilities.change_event import ChangeEvent
+from wolfharness.skills.command import SkillCommand
+from wolfharness.skills.skill import Skill
 
 
 # ---------------------------------------------------------------------------
@@ -71,7 +71,7 @@ def _make_mock_session(
     """
     from slashed import CommandStore
 
-    from agentpool_server.acp_server.commands.skill_commands import ACPSkillBridge
+    from wolfharness_server.acp_server.commands.skill_commands import ACPSkillBridge
 
     session = MagicMock()
 
@@ -113,7 +113,7 @@ def _make_mock_session(
     session.notifications.send_agent_text = AsyncMock()
 
     # Bind real methods
-    from agentpool_server.acp_server.session import ACPSession
+    from wolfharness_server.acp_server.session import ACPSession
 
     session._register_skill_commands = ACPSession._register_skill_commands.__get__(
         session, ACPSession
@@ -369,7 +369,7 @@ async def test_skill_executor_loads_instructions_and_injects_into_staged_content
 
     Injects into staged_content.
     """
-    from agentpool_server.opencode_server.skill_bridge import create_skill_command
+    from wolfharness_server.opencode_server.skill_bridge import create_skill_command
 
     skill = _make_skill(
         name="inject-skill",
@@ -404,7 +404,7 @@ async def test_skill_executor_with_load_instructions_raising_value_error() -> No
 
     Sends 'no instructions' message, no injection.
     """
-    from agentpool_server.opencode_server.skill_bridge import create_skill_command
+    from wolfharness_server.opencode_server.skill_bridge import create_skill_command
 
     # Create a virtual skill (PurePosixPath) with instructions=None
     # load_instructions() will raise ValueError for virtual skills without pre-set instructions
@@ -463,7 +463,7 @@ async def test_injected_prompt_format_uses_correct_xml_tags() -> None:
 
     uses <skill-instruction> + <user-request> XML tags.
     """
-    from agentpool_server.opencode_server.skill_bridge import create_skill_command
+    from wolfharness_server.opencode_server.skill_bridge import create_skill_command
 
     skill = _make_skill(
         name="format-skill",

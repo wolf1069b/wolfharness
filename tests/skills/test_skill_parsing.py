@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 import pytest
 from upathtools import UPath
 
-from agentpool.skills.skill import Skill
+from wolfharness.skills.skill import Skill
 
 
 pytestmark = pytest.mark.unit

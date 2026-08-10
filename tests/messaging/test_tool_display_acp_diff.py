@@ -11,13 +11,13 @@ from __future__ import annotations
 import pytest
 
 from acp.schema import FileEditToolCallContent, ToolCallProgress, ToolCallStart
-from agentpool.agents.events import (
+from wolfharness.agents.events import (
     DiffContentItem,
     LocationContentItem,
     ToolCallProgressEvent,
     ToolCallStartEvent,
 )
-from agentpool_server.acp_server.event_converter import ACPEventConverter
+from wolfharness_server.acp_server.event_converter import ACPEventConverter
 
 
 pytestmark = pytest.mark.integration

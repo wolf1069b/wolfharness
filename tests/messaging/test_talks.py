@@ -3,8 +3,8 @@
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool import Agent
-from agentpool.talk.talk import Talk, TeamTalk
+from wolfharness import Agent
+from wolfharness.talk.talk import Talk, TeamTalk
 
 
 pytestmark = pytest.mark.unit
@@ -13,7 +13,7 @@ pytestmark = pytest.mark.unit
 async def test_basic_single_connection():
     """Test basic message forwarding between two agents."""
     async with (
-        Agent[str](model="test", name="agentpool") as source,
+        Agent[str](model="test", name="wolfharness") as source,
         Agent[str](model="test") as target,
     ):
         # Create explicit connection

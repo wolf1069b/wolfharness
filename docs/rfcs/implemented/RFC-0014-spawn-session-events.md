@@ -213,7 +213,7 @@ async def _process_subagent_event(self, subagent_event, ctx):
 
 ### Phase 1: Event Definition (0.5 day)
 
-**File**: `src/agentpool/agents/events/events.py`
+**File**: `src/wolfharness/agents/events/events.py`
 
 ```python
 @dataclass(kw_only=True)
@@ -238,7 +238,7 @@ type RichAgentStreamEvent[OutputDataT] = (
 
 ### Phase 2: Subagent Tools Integration (1 day)
 
-**File**: `src/agentpool_toolsets/builtin/subagent_tools.py`
+**File**: `src/wolfharness_toolsets/builtin/subagent_tools.py`
 
 Update `_stream_task()` function:
 
@@ -307,7 +307,7 @@ async def _stream_task(
 
 ### Phase 3: Event Processor Update (2 days)
 
-**File**: `src/agentpool_server/opencode_server/event_processor.py`
+**File**: `src/wolfharness_server/opencode_server/event_processor.py`
 
 Add handler with duplicate session protection:
 
@@ -445,5 +445,5 @@ if isinstance(event, SpawnSessionStart):
 ## References
 
 - [RFC-0013: Subagent Event Unification](./RFC-0013-subagent-event-unification.md)
-- [AgentPool Events](./src/agentpool/agents/events/events.py)
-- [Subagent Tools](./src/agentpool_toolsets/builtin/subagent_tools.py)
+- [AgentPool Events](./src/wolfharness/agents/events/events.py)
+- [Subagent Tools](./src/wolfharness_toolsets/builtin/subagent_tools.py)

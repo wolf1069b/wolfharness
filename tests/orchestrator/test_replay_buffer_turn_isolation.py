@@ -18,14 +18,14 @@ from __future__ import annotations
 import anyio
 import pytest
 
-from agentpool.agents.events.events import (
+from wolfharness.agents.events.events import (
     PartDeltaEvent,
     RunErrorEvent,
     RunStartedEvent,
     StreamCompleteEvent,
 )
-from agentpool.messaging import ChatMessage
-from agentpool.orchestrator.core import EventBus, EventEnvelope
+from wolfharness.messaging import ChatMessage
+from wolfharness.orchestrator.core import EventBus, EventEnvelope
 
 
 def _make_run_started(session_id: str = "s1") -> RunStartedEvent:

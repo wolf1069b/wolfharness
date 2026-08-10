@@ -563,7 +563,7 @@ Solution: First caller gets the prompt (queue.get() is atomic). Second caller se
 - `_pending_prompt_event` is lightweight — no task allocation, no timer.
 - No long-lived `asyncio.Task` is created by the agent — the caller decides when to start `run_stream()`.
 - `clear_pending_prompts()` provided for cleanup during agent shutdown. Should be wired into `__aexit__` or `stop()` (Phase 4).
-- **Event loop affinity**: `asyncio.Queue` and `asyncio.Event` are not thread-safe. All callers must be in the same event loop. This matches current agentpool architecture where all agent operations are asyncio-based.
+- **Event loop affinity**: `asyncio.Queue` and `asyncio.Event` are not thread-safe. All callers must be in the same event loop. This matches current wolfharness architecture where all agent operations are asyncio-based.
 
 ---
 
@@ -649,10 +649,10 @@ Solution: First caller gets the prompt (queue.get() is atomic). Second caller se
 
 ## References
 
-- `src/agentpool/agents/base_agent.py` — `inject_prompt()`, `queue_prompt()`, `run_stream()`
-- `src/agentpool/agents/prompt_injection.py` — `PromptInjectionManager`
-- `src/agentpool/agents/native_agent/hook_manager.py` — injection consumption in post-tool hooks
-- `src/agentpool_server/opencode_server/routes/message_routes.py` — `_run_async_prompt_queue()`
+- `src/wolfharness/agents/base_agent.py` — `inject_prompt()`, `queue_prompt()`, `run_stream()`
+- `src/wolfharness/agents/prompt_injection.py` — `PromptInjectionManager`
+- `src/wolfharness/agents/native_agent/hook_manager.py` — injection consumption in post-tool hooks
+- `src/wolfharness_server/opencode_server/routes/message_routes.py` — `_run_async_prompt_queue()`
 - xeno-agent `background_task_provider.py` L803-811 — `_on_task_completed()` callback
 - OpenCode TypeScript: `effect/runner.ts` — Runner state machine
 - OpenCode TypeScript: `session/prompt.ts` — `while(true)` run loop

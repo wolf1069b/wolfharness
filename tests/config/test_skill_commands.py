@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import ValidationError
 import pytest
 
-from agentpool_config.skill_commands import SkillCommandConfig, SkillSlashConfig
+from wolfharness_config.skill_commands import SkillCommandConfig, SkillSlashConfig
 
 
 pytestmark = pytest.mark.unit

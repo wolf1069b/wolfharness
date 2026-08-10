@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool import AgentsManifest, NativeAgentConfig
-from agentpool_config.capabilities import (
+from wolfharness import AgentsManifest, NativeAgentConfig
+from wolfharness_config.capabilities import (
     EntryPointCapabilityConfig,
     GenericCapabilityConfig,
     LoopDetectionCapabilityConfig,

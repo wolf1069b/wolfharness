@@ -1,7 +1,7 @@
 """L4 subprocess E2E test fixtures for AgentPool protocol servers.
 
 This conftest provides the ``subprocess_server`` fixture that spawns a real
-``agentpool serve-*`` process, waits for it to become healthy, and tears it
+``wolfharness serve-*`` process, waits for it to become healthy, and tears it
 down gracefully on test exit.
 
 Design decisions (see ``openspec/changes/layered-testing-infrastructure/design.md``):
@@ -45,12 +45,12 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-def _agentpool_binary_available() -> bool:
-    """Check whether the ``agentpool`` CLI binary is on PATH."""
-    return shutil.which("agentpool") is not None
+def _wolfharness_binary_available() -> bool:
+    """Check whether the ``wolfharness`` CLI binary is on PATH."""
+    return shutil.which("wolfharness") is not None
 
 
-SKIP_NO_BINARY = not _agentpool_binary_available()
+SKIP_NO_BINARY = not _wolfharness_binary_available()
 SKIP_WINDOWS = sys.platform == "win32"
 
 
@@ -61,7 +61,7 @@ SKIP_WINDOWS = sys.platform == "win32"
 
 @dataclass
 class SubprocessServer:
-    """Handle to a spawned ``agentpool serve-*`` subprocess.
+    """Handle to a spawned ``wolfharness serve-*`` subprocess.
 
     Attributes:
         process: The asyncio subprocess.
@@ -136,7 +136,7 @@ def _build_command(
         port: Bind port for HTTP servers.
         extra_args: Additional CLI arguments.
     """
-    cmd: list[str] = ["agentpool", serve_command, str(config_path)]
+    cmd: list[str] = ["wolfharness", serve_command, str(config_path)]
     if serve_command == "serve-acp":
         # ACP defaults to stdio; use streamable-http for HTTP-based e2e.
         # Caller must pass --transport via extra_args if HTTP is desired.
@@ -522,7 +522,7 @@ async def subprocess_server(  # noqa: PLR0915
     session_e2e_config: Path,
     allow_model_requests: Any,
 ) -> AsyncIterator[SubprocessServer]:
-    """Spawn an ``agentpool serve-*`` subprocess, reusing cached servers when possible.
+    """Spawn an ``wolfharness serve-*`` subprocess, reusing cached servers when possible.
 
     Cache bypass conditions:
     - ``--no-server-cache`` flag is set
@@ -742,7 +742,7 @@ async def _spawn_server(
     health_path: str = "/",
     extra_args: list[str] | None = None,
 ) -> AsyncIterator[SubprocessServer]:
-    """Spawn an agentpool server subprocess (internal helper for custom fixtures).
+    """Spawn an wolfharness server subprocess (internal helper for custom fixtures).
 
     Args:
         serve_command: The CLI subcommand (e.g. serve-api).
@@ -948,7 +948,7 @@ async def subprocess_server_with_mcp(
     session_e2e_config_with_mcp: Path,
     allow_model_requests: Any,
 ) -> AsyncIterator[SubprocessServer]:
-    """Spawn an ``agentpool serve-*`` subprocess with the fake MCP server config.
+    """Spawn an ``wolfharness serve-*`` subprocess with the fake MCP server config.
 
     Uses ``_spawn_server`` (non-cached) because the MCP-config variant is
     unique to MCP status tests and not worth caching. The fake MCP server
@@ -987,7 +987,7 @@ async def subprocess_server_with_mcp(
 
 @dataclass
 class ACPWSServerHandle:
-    """Handle to a spawned ``agentpool serve-acp --transport streamable-http`` server.
+    """Handle to a spawned ``wolfharness serve-acp --transport streamable-http`` server.
 
     Attributes:
         process: The asyncio subprocess.
@@ -1021,7 +1021,7 @@ async def _spawn_acp_ws_server(
     agent: str = "test_agent",
     health_timeout: float = 15.0,
 ) -> AsyncIterator[ACPWSServerHandle]:
-    """Spawn ``agentpool serve-acp --transport streamable-http`` and wait for health.
+    """Spawn ``wolfharness serve-acp --transport streamable-http`` and wait for health.
 
     Args:
         config_path: Path to the YAML config file.
@@ -1035,7 +1035,7 @@ async def _spawn_acp_ws_server(
     """
     port = allocate_ephemeral_port()
     cmd: list[str] = [
-        "agentpool",
+        "wolfharness",
         "serve-acp",
         str(config_path),
         "--agent",
@@ -1159,6 +1159,6 @@ def verify_no_orphaned_processes(
         import warnings
 
         warnings.warn(
-            f"{len(orphans)} orphaned agentpool subprocess(es) found and killed at session end.",
+            f"{len(orphans)} orphaned wolfharness subprocess(es) found and killed at session end.",
             stacklevel=2,
         )

@@ -57,8 +57,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from agentpool_toolsets.builtin.combined_toolset import CombinedToolsetCapability
-    from agentpool.skills.command_registry import SkillCommandRegistry
+    from wolfharness_toolsets.builtin.combined_toolset import CombinedToolsetCapability
+    from wolfharness.skills.command_registry import SkillCommandRegistry
 
 @runtime_checkable
 class SkillService(Protocol):
@@ -253,7 +253,7 @@ Phase 2 and Phase 3 can run in **parallel** — both depend only on Phase 1.
 |---|---|---|
 | `agents/native_agent/agent.py` | 3 | `skill_capabilities` → `skill_service.capabilities`; `is_skill_visible_to_node` → `skill_service.is_visible_to_node` |
 | `delegation/base_team.py` | 3 | `skill_provider` → `skill_service.provider`; `get_skill_instructions_for_node` → `skill_service.get_instructions_for_node` |
-| `agentpool_commands/utils.py` | 2 | `manifest.config_file_path` → `ctx.config_file_path` |
+| `wolfharness_commands/utils.py` | 2 | `manifest.config_file_path` → `ctx.config_file_path` |
 | `shared/model_utils.py` | 1 | `agent.agent_pool` → `agent.host_context` |
 
 **Verification**: Core agent code no longer triggers `DeprecationWarning`. Unit tests pass.

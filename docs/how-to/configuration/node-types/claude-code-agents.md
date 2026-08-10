@@ -2,7 +2,7 @@
 sync:
   agent: doc_sync_agent
   dependencies:
-    - src/agentpool/models/claude_code_agents.py
+    - src/wolfharness/models/claude_code_agents.py
 title: Claude Code Agents
 description: Native Claude Agent SDK integration
 icon: material/robot-outline

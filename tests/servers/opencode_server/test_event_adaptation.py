@@ -21,7 +21,7 @@ from pydantic_ai.messages import (
 )
 import pytest
 
-from agentpool.agents.events import (
+from wolfharness.agents.events import (
     PartDeltaEvent as AgentPoolPartDeltaEvent,
     PartStartEvent,
     RunErrorEvent,
@@ -32,11 +32,11 @@ from agentpool.agents.events import (
     ToolCallProgressEvent,
     ToolCallStartEvent,
 )
-from agentpool_server.opencode_server.event_adapter import OpenCodeEventAdapter
-from agentpool_server.opencode_server.event_processor_context import (
+from wolfharness_server.opencode_server.event_adapter import OpenCodeEventAdapter
+from wolfharness_server.opencode_server.event_processor_context import (
     EventProcessorContext,
 )
-from agentpool_server.opencode_server.models import (
+from wolfharness_server.opencode_server.models import (
     MessagePath,
     MessageTime,
     MessageWithParts,
@@ -45,7 +45,7 @@ from agentpool_server.opencode_server.models import (
     SessionErrorEvent,
     SessionStatusEvent,
 )
-from agentpool_server.opencode_server.models.parts import (
+from wolfharness_server.opencode_server.models.parts import (
     ReasoningPart,
     StepFinishPart,
     TextPart,
@@ -79,7 +79,7 @@ def adapter_context() -> EventProcessorContext:
         time=MessageTime(created=0),
         agent_name="test-agent",
         model_id="test-model",
-        provider_id="agentpool",
+        provider_id="wolfharness",
         path=MessagePath(cwd="/tmp", root="/tmp"),
         parent_id="msg-000",
     )
@@ -746,7 +746,7 @@ class TestConversionCompleteness:
         assert len(events) == 0, "PartEndEvent should not produce any OpenCode events"
 
     @pytest.mark.asyncio
-    async def test_no_agentpool_events_leak_through(
+    async def test_no_wolfharness_events_leak_through(
         self,
         adapter_context: EventProcessorContext,
     ) -> None:
@@ -773,7 +773,7 @@ class TestConversionCompleteness:
 @pytest.fixture
 def event_context():
     """Create an event context for testing event conversion."""
-    from agentpool_server.opencode_server.event_processor_context import (
+    from wolfharness_server.opencode_server.event_processor_context import (
         EventProcessorContext,
     )
 
@@ -785,7 +785,7 @@ def event_context():
         time=MessageTime(created=0),
         agent_name="test-agent",
         model_id="test-model",
-        provider_id="agentpool",
+        provider_id="wolfharness",
         path=MessagePath(cwd="/tmp", root="/tmp"),
         parent_id="msg-000",
     )
@@ -850,7 +850,7 @@ class TestPartStartEventConversionV2:
         event_context,
     ) -> None:
         """PartStartEvent with TextPart should yield PartUpdatedEvent with TextPart."""
-        from agentpool.agents.events import PartStartEvent
+        from wolfharness.agents.events import PartStartEvent
 
         adapter = OpenCodeEventAdapter(context=event_context)
 
@@ -868,7 +868,7 @@ class TestPartStartEventConversionV2:
         event_context,
     ) -> None:
         """PartStartEvent with ThinkingPart should yield PartUpdatedEvent with ReasoningPart."""
-        from agentpool.agents.events import PartStartEvent
+        from wolfharness.agents.events import PartStartEvent
 
         adapter = OpenCodeEventAdapter(context=event_context)
 
@@ -877,7 +877,7 @@ class TestPartStartEventConversionV2:
 
         part_updated = [e for e in events if isinstance(e, PartUpdatedEvent)]
         assert len(part_updated) == 1
-        from agentpool_server.opencode_server.models.parts import ReasoningPart
+        from wolfharness_server.opencode_server.models.parts import ReasoningPart
 
         assert isinstance(part_updated[0].properties.part, ReasoningPart)
         assert part_updated[0].properties.part.text == "Let me think..."
@@ -913,7 +913,7 @@ class TestPartDeltaEventConversionV2:
         event_context,
     ) -> None:
         """Text delta should yield PartDeltaEvent."""
-        from agentpool.agents.events import (
+        from wolfharness.agents.events import (
             PartDeltaEvent as AgentPoolPartDeltaEvent,
             PartStartEvent,
         )
@@ -938,7 +938,7 @@ class TestPartDeltaEventConversionV2:
         event_context,
     ) -> None:
         """Thinking delta should yield PartDeltaEvent."""
-        from agentpool.agents.events import (
+        from wolfharness.agents.events import (
             PartDeltaEvent as AgentPoolPartDeltaEvent,
             PartStartEvent,
         )
@@ -1335,7 +1335,7 @@ class TestStreamConversionV2:
         """convert_stream should yield OpenCode events for all AgentPool events."""
 
         async def _make_stream():
-            from agentpool.agents.events import PartStartEvent
+            from wolfharness.agents.events import PartStartEvent
 
             yield PartStartEvent.text(index=0, content="Hello")
             yield PartStartEvent.text(index=1, content="World")
@@ -1361,7 +1361,7 @@ class TestConversionCompletenessV2:
         event_context,
     ) -> None:
         """Every required AgentPool event type should have a conversion handler."""
-        from agentpool.agents.events import (
+        from wolfharness.agents.events import (
             PartDeltaEvent,
             PartStartEvent,
             ToolCallCompleteEvent,
@@ -1392,12 +1392,12 @@ class TestConversionCompletenessV2:
             assert len(events) >= 1, f"Event {type(event).__name__} produced no output"
 
     @pytest.mark.asyncio
-    async def test_no_agentpool_events_leak_through(
+    async def test_no_wolfharness_events_leak_through(
         self,
         event_context,
     ) -> None:
         """Converted events should all be OpenCode Event types, never raw AgentPool events."""
-        from agentpool.agents.events import RunStartedEvent
+        from wolfharness.agents.events import RunStartedEvent
 
         adapter = OpenCodeEventAdapter(context=event_context)
 

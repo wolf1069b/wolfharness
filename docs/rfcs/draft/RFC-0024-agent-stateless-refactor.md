@@ -19,7 +19,7 @@ related_rfcs:
 
 ## Overview
 
-This RFC proposes refactoring `BaseAgent` to be stateless with respect to sessions: move session-scoped state (`conversation`, `_input_provider`, `session_id`) off the agent instance and into parameters passed at call time. This aligns agentpool's agent model with pydantic-ai's design (where the agent is a stateless worker and conversation persistence is the caller's responsibility), and enables Phase 3's shared-agent architecture where a single `BaseAgent` instance serves all sessions.
+This RFC proposes refactoring `BaseAgent` to be stateless with respect to sessions: move session-scoped state (`conversation`, `_input_provider`, `session_id`) off the agent instance and into parameters passed at call time. This aligns wolfharness's agent model with pydantic-ai's design (where the agent is a stateless worker and conversation persistence is the caller's responsibility), and enables Phase 3's shared-agent architecture where a single `BaseAgent` instance serves all sessions.
 
 ## Background & Context
 
@@ -42,7 +42,7 @@ Key design elements:
 2. **`deps`** — Caller-injected business dependencies, per-call, NOT per-agent
 3. **`GraphAgentState`** — Internal framework state, created per-run, returned via `AgentRunResult`, NOT stored on the agent
 
-### agentpool's Current Misalignment
+### wolfharness's Current Misalignment
 
 `BaseAgent` holds session-scoped state as **instance variables**, making the agent stateful:
 
@@ -74,7 +74,7 @@ This coupling forces each session to have its own agent instance, incurring MCP 
 
 - **Resource waste**: 5 concurrent sessions × 2 MCP servers = 10 subprocesses, ~50–250MB
 - **Architecture fragility**: New session-scoped state added to `BaseAgent` automatically becomes shared-state risk
-- **pydantic-ai misalignment**: agentpool's agent model diverges from the framework it's built on
+- **pydantic-ai misalignment**: wolfharness's agent model diverges from the framework it's built on
 
 ## Goals & Non-Goals
 
@@ -210,7 +210,7 @@ iterator = agent.run_stream(
 | `session_routes.py:1437` | `agent.conversation.compact()` | `state.compact_messages(session_id)` |
 | `session_routes.py:564,599` | `agent.conversation.chat_messages` (read) | `state.messages[session_id]` (read) |
 
-**After refactor, `self.conversation` is REMOVED from `BaseAgent`** (hard cut — no dual-path deprecation). All callers must pass `message_history=` explicitly to `run_stream()`. This includes CLI usage (`agentpool run`), which must manage its own message history list.
+**After refactor, `self.conversation` is REMOVED from `BaseAgent`** (hard cut — no dual-path deprecation). All callers must pass `message_history=` explicitly to `run_stream()`. This includes CLI usage (`wolfharness run`), which must manage its own message history list.
 
 #### 1a. Non-Mechanical `self.conversation` Edge Cases
 
@@ -423,7 +423,7 @@ Each phase is independently revertable. If `_active_run_ctx` registry proves pro
     - Status: **Resolved** — per-instance dict, NOT ClassVar (avoids cross-agent-type collision as identified by Oracle/Metis review). ClassVar would cause `ACPAgent` and `AGUIAgent` to share the same dict, leading to `interrupt()` canceling the wrong agent type's run.
 
 2. **Backward compatibility for `self.conversation`**: Should `BaseAgent.conversation` still exist as a fallback for non-server callers?
-    - Context: Direct agent usage (e.g., `agentpool run`) doesn't have a server managing message history.
+    - Context: Direct agent usage (e.g., `wolfharness run`) doesn't have a server managing message history.
     - Status: **Resolved** — hard cut, no dual-path. Remove `self.conversation` as fallback entirely. All callers must pass `message_history=` explicitly. Dual-path (deprecation warning) creates maintenance burden and masks migration errors, as identified by Metis review.
 
 3. **`SessionState` dataclass**: Should the server consolidate per-session state into a single `SessionState` container?
@@ -472,6 +472,6 @@ Each phase is independently revertable. If `_active_run_ctx` registry proves pro
 
 ### Key Source Files
 
-- `packages/agentpool/src/agentpool/agents/base_agent.py` — `BaseAgent`, session-scoped instance variables
-- `packages/agentpool/src/agentpool/agents/agent.py` — `Agent`, `_run_stream_once()`, `self.conversation` references
-- `packages/agentpool/src/agentpool/running/run_context.py` — `AgentRunContext`, per-run isolation
+- `packages/wolfharness/src/wolfharness/agents/base_agent.py` — `BaseAgent`, session-scoped instance variables
+- `packages/wolfharness/src/wolfharness/agents/agent.py` — `Agent`, `_run_stream_once()`, `self.conversation` references
+- `packages/wolfharness/src/wolfharness/running/run_context.py` — `AgentRunContext`, per-run isolation

@@ -9,11 +9,11 @@ icon: material/clipboard-check
 Execute a defined task from the configuration.
 
 ```bash
-agentpool task <task_name>
+wolfharness task <task_name>
 ```
 
 For a full list of options, run:
 
 ```bash
-agentpool task --help
+wolfharness task --help
 ```

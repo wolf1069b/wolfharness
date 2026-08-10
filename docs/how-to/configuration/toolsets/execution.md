@@ -56,8 +56,8 @@ Execute on remote machines via SSH or other protocols.
 ## Available Tools
 
 ```python exec="true"
-from agentpool_toolsets.builtin.execution_environment import ProcessManagementTools
-from agentpool.docs.utils import generate_tool_docs
+from wolfharness_toolsets.builtin.execution_environment import ProcessManagementTools
+from wolfharness.docs.utils import generate_tool_docs
 
 toolset = ProcessManagementTools()
 print(generate_tool_docs(toolset))
@@ -80,7 +80,7 @@ tools:
 ## Configuration Reference
 
 /// mknodes
-{{ "agentpool_config.toolsets.ProcessManagementToolsetConfig" | schema_to_markdown(display_mode="yaml", header_style="pymdownx", wrapped_in="toolsets", header_level=3) }}
+{{ "wolfharness_config.toolsets.ProcessManagementToolsetConfig" | schema_to_markdown(display_mode="yaml", header_style="pymdownx", wrapped_in="toolsets", header_level=3) }}
 ///
 
 ## Security Considerations

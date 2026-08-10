@@ -12,18 +12,18 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from agentpool.agents.events.events import ToolCallDeferredEvent
-from agentpool_server.opencode_server.event_processor import EventProcessor
-from agentpool_server.opencode_server.event_processor_context import (
+from wolfharness.agents.events.events import ToolCallDeferredEvent
+from wolfharness_server.opencode_server.event_processor import EventProcessor
+from wolfharness_server.opencode_server.event_processor_context import (
     EventProcessorContext,
 )
-from agentpool_server.opencode_server.models import (
+from wolfharness_server.opencode_server.models import (
     MessagePath,
     MessageTime,
     MessageWithParts,
     PartUpdatedEvent,
 )
-from agentpool_server.opencode_server.models.parts import (
+from wolfharness_server.opencode_server.models.parts import (
     TimeStartEndCompacted,
     ToolPart,
     ToolStateCompleted,
@@ -35,7 +35,7 @@ pytestmark = pytest.mark.integration
 
 
 if TYPE_CHECKING:
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness_server.opencode_server.state import ServerState
 
 
 # =============================================================================
@@ -64,7 +64,7 @@ async def test_deferred_event_creates_tool_part_running(server_state: ServerStat
         agent_name="test-agent",
         model_id="test-model",
         parent_id="parent-1",
-        provider_id="agentpool",
+        provider_id="wolfharness",
         path=MessagePath(cwd="/tmp", root="/tmp"),
     )
     ctx = EventProcessorContext(
@@ -130,7 +130,7 @@ async def test_deferred_event_sets_title_with_deferred_strategy(
         agent_name="test-agent",
         model_id="test-model",
         parent_id="parent-1",
-        provider_id="agentpool",
+        provider_id="wolfharness",
         path=MessagePath(cwd="/tmp", root="/tmp"),
     )
     ctx = EventProcessorContext(
@@ -191,7 +191,7 @@ async def test_deferred_event_skipped_when_already_completed(
         agent_name="test-agent",
         model_id="test-model",
         parent_id="parent-1",
-        provider_id="agentpool",
+        provider_id="wolfharness",
         path=MessagePath(cwd="/tmp", root="/tmp"),
     )
     ctx = EventProcessorContext(
@@ -250,7 +250,7 @@ async def test_deferred_event_skipped_when_already_errored(
 
     Similar to the completed dedup test, but for ToolStateError.
     """
-    from agentpool_server.opencode_server.models.parts import (
+    from wolfharness_server.opencode_server.models.parts import (
         TimeStartEnd,
         ToolStateError,
     )
@@ -264,7 +264,7 @@ async def test_deferred_event_skipped_when_already_errored(
         agent_name="test-agent",
         model_id="test-model",
         parent_id="parent-1",
-        provider_id="agentpool",
+        provider_id="wolfharness",
         path=MessagePath(cwd="/tmp", root="/tmp"),
     )
     ctx = EventProcessorContext(

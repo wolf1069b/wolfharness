@@ -26,10 +26,10 @@ from pydantic_ai.tools import RunContext, ToolDefinition
 from pydantic_ai.usage import RunUsage
 import pytest
 
-from agentpool import Agent
-from agentpool.agents.native_agent.tool_intercept import ToolInterceptCapability
-from agentpool.hooks import AgentHooks, CallableHook
-from agentpool.hooks.base import HookResult
+from wolfharness import Agent
+from wolfharness.agents.native_agent.tool_intercept import ToolInterceptCapability
+from wolfharness.hooks import AgentHooks, CallableHook
+from wolfharness.hooks.base import HookResult
 
 
 pytestmark = pytest.mark.unit
@@ -230,7 +230,7 @@ async def test_wrap_tool_execute_reraises_run_aborted_error(
     run. If swallowed here, the LLM receives it as a tool error and continues
     executing.
     """
-    from agentpool.tasks.exceptions import RunAbortedError
+    from wolfharness.tasks.exceptions import RunAbortedError
 
     cap = make_capability(mock_hook_manager)
     ctx = make_run_context()
@@ -293,7 +293,7 @@ async def test_wrap_tool_execute_reraises_tool_skipped_error(
     MCP tool_bridge). It signals the tool was skipped, not failed — swallowing
     it converts a skip signal into a tool error response.
     """
-    from agentpool.tasks.exceptions import ToolSkippedError
+    from wolfharness.tasks.exceptions import ToolSkippedError
 
     cap = make_capability(mock_hook_manager)
     ctx = make_run_context()

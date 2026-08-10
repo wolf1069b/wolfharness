@@ -9,11 +9,11 @@ icon: material/file-cog
 Set the active configuration file.
 
 ```bash
-agentpool set <config_path>
+wolfharness set <config_path>
 ```
 
 For a full list of options, run:
 
 ```bash
-agentpool set --help
+wolfharness set --help
 ```

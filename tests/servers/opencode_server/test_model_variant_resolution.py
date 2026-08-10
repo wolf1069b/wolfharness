@@ -13,13 +13,13 @@ from unittest.mock import Mock
 
 import pytest
 
-from agentpool.agents.events import StreamCompleteEvent
-from agentpool.models.model_configs import AnyModelConfig, StringModelConfig
-from agentpool_server.opencode_server.event_adapter import OpenCodeEventAdapter
-from agentpool_server.opencode_server.event_processor_context import (
+from wolfharness.agents.events import StreamCompleteEvent
+from wolfharness.models.model_configs import AnyModelConfig, StringModelConfig
+from wolfharness_server.opencode_server.event_adapter import OpenCodeEventAdapter
+from wolfharness_server.opencode_server.event_processor_context import (
     EventProcessorContext,
 )
-from agentpool_server.opencode_server.models import (
+from wolfharness_server.opencode_server.models import (
     MessagePath,
     MessageTime,
     MessageUpdatedEvent,

@@ -19,11 +19,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from agentpool.agents.events import UserMessageInsertedEvent
-from agentpool.lifecycle.comm_channel import ProtocolChannel
-from agentpool.lifecycle.journal import MemoryJournal
-from agentpool.orchestrator.core import EventBus
-from agentpool.orchestrator.session_controller_runs import (
+from wolfharness.agents.events import UserMessageInsertedEvent
+from wolfharness.lifecycle.comm_channel import ProtocolChannel
+from wolfharness.lifecycle.journal import MemoryJournal
+from wolfharness.orchestrator.core import EventBus
+from wolfharness.orchestrator.session_controller_runs import (
     SessionControllerRunsMixin,
 )
 
@@ -32,7 +32,7 @@ pytestmark = pytest.mark.unit
 
 
 if TYPE_CHECKING:
-    from agentpool.orchestrator.session_controller import SessionState
+    from wolfharness.orchestrator.session_controller import SessionState
 
 
 class _FakeController(SessionControllerRunsMixin):
@@ -301,7 +301,7 @@ async def test_replayed_non_user_message_still_published() -> None:
     Then: The event IS still published to the EventBus (only
         UserMessageInsertedEvent is skipped during replay).
     """
-    from agentpool.agents.events.events import RunStartedEvent
+    from wolfharness.agents.events.events import RunStartedEvent
 
     event_bus = EventBus()
     protocol_channel = _make_protocol_channel(event_bus, "sess-p2")

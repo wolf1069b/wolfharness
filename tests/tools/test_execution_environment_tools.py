@@ -10,11 +10,11 @@ from exxec.mock_provider import MockExecutionEnvironment
 from exxec.models import ExecutionResult
 import pytest
 
-from agentpool import Agent, AgentContext
-from agentpool.agents.context import AgentRunContext
-from agentpool.tool_impls.bash import BashTool
-from agentpool.tool_impls.execute_code import ExecuteCodeTool
-from agentpool_toolsets.builtin.execution_environment import ProcessManagementTools
+from wolfharness import Agent, AgentContext
+from wolfharness.agents.context import AgentRunContext
+from wolfharness.tool_impls.bash import BashTool
+from wolfharness.tool_impls.execute_code import ExecuteCodeTool
+from wolfharness_toolsets.builtin.execution_environment import ProcessManagementTools
 
 
 pytestmark = pytest.mark.unit

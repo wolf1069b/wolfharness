@@ -12,8 +12,8 @@ import pytest
 
 
 if TYPE_CHECKING:
-    from agentpool import AgentPool
-    from agentpool.orchestrator.core import SessionController
+    from wolfharness import AgentPool
+    from wolfharness.orchestrator.core import SessionController
 
 
 pytestmark = pytest.mark.unit

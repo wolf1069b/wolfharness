@@ -15,11 +15,11 @@ from typing import Any
 from pydantic_ai import TextPartDelta
 import pytest
 
-from agentpool.agents.events import (
+from wolfharness.agents.events import (
     PartDeltaEvent,
     RunStartedEvent,
 )
-from agentpool.orchestrator.core import (
+from wolfharness.orchestrator.core import (
     EventBus,
     drain_and_merge,
 )

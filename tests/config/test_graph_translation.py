@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool_config import (
+from wolfharness_config import (
     GraphConfig,
     GraphEdgeConfig,
     GraphStepConfig,
@@ -15,12 +15,12 @@ from agentpool_config import (
     translate_team_to_graph,
     translate_teams_to_graphs,
 )
-from agentpool_config.forward_targets import (
+from wolfharness_config.forward_targets import (
     CallableConnectionConfig,
     FileConnectionConfig,
     NodeConnectionConfig,
 )
-from agentpool_config.nodes import NodeConfig
+from wolfharness_config.nodes import NodeConfig
 
 
 pytestmark = pytest.mark.unit
@@ -284,7 +284,7 @@ class TestConfigTranslation:
 
     def test_no_teams_no_connections_returns_none(self) -> None:
         """No teams or connections returns None."""
-        from agentpool_config.nodes import NodeConfig
+        from wolfharness_config.nodes import NodeConfig
 
         agents = {
             "solo": NodeConfig(name="solo"),
@@ -294,7 +294,7 @@ class TestConfigTranslation:
 
     def test_with_teams_produces_graph(self) -> None:
         """Teams produce a graph config."""
-        from agentpool_config.nodes import NodeConfig
+        from wolfharness_config.nodes import NodeConfig
 
         agents = {
             "analyzer": NodeConfig(name="analyzer"),

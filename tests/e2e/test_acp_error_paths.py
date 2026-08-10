@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
 pytestmark = [
     pytest.mark.e2e,
-    pytest.mark.skipif(SKIP_NO_BINARY, reason="agentpool binary not on PATH"),
+    pytest.mark.skipif(SKIP_NO_BINARY, reason="wolfharness binary not on PATH"),
     pytest.mark.skipif(SKIP_WINDOWS, reason="Windows stdio subprocess issues"),
 ]
 
@@ -89,7 +89,7 @@ async def _spawn_acp_server(
     *,
     agent: str = "test_agent",
 ) -> AsyncIterator[_ACPServerHandle]:
-    """Spawn ``agentpool serve-acp`` and return a handle with client connection."""
+    """Spawn ``wolfharness serve-acp`` and return a handle with client connection."""
     import os
 
     env = os.environ.copy()
@@ -99,7 +99,7 @@ async def _spawn_acp_server(
     client = DefaultACPClient(allow_file_operations=False)
     async with spawn_agent_process(
         lambda _conn: client,
-        "agentpool",
+        "wolfharness",
         "serve-acp",
         str(config_path),
         "--agent",

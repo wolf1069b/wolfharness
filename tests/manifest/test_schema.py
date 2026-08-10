@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool import AgentsManifest
+from wolfharness import AgentsManifest
 
 
 pytestmark = pytest.mark.unit

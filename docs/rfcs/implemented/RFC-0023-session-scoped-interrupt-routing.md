@@ -645,9 +645,9 @@ If the server later chooses to wait for stream completion before broadcasting id
 7. Update `is_cancelled()` to check per-run context for streaming runs
 
 **Files Modified**:
-- `src/agentpool/agents/context.py` (add `iteration_task` field)
-- `src/agentpool/agents/base_agent.py` (registry, interrupt routing)
-- `src/agentpool/agents/native_agent/agent.py` (use `run_ctx.iteration_task`)
+- `src/wolfharness/agents/context.py` (add `iteration_task` field)
+- `src/wolfharness/agents/base_agent.py` (registry, interrupt routing)
+- `src/wolfharness/agents/native_agent/agent.py` (use `run_ctx.iteration_task`)
 
 **Deliverable**: Core registry works, existing tests updated
 
@@ -662,8 +662,8 @@ If the server later chooses to wait for stream completion before broadcasting id
 4. Audit `ClaudeCodeAgent`, `CodexAgent`, and converter/helper call graphs for removed instance-state reads
 
 **Files Modified**:
-- `src/agentpool/agents/acp_agent/acp_agent.py`
-- `src/agentpool/agents/agui_agent/agui_agent.py`
+- `src/wolfharness/agents/acp_agent/acp_agent.py`
+- `src/wolfharness/agents/agui_agent/agui_agent.py`
 - Other subclasses as needed
 
 **Deliverable**: All subclasses use per-run context
@@ -680,8 +680,8 @@ If the server later chooses to wait for stream completion before broadcasting id
 5. Optional follow-up: if waiting for stream completion is implemented, use a per-session task map instead of a global task slot
 
 **Files Modified**:
-- `src/agentpool_server/opencode_server/routes/session_routes.py`
-- `src/agentpool_server/opencode_server/routes/message_routes.py`
+- `src/wolfharness_server/opencode_server/routes/session_routes.py`
+- `src/wolfharness_server/opencode_server/routes/message_routes.py`
 
 **Deliverable**: OpenCode abort flow uses session-scoped routing
 

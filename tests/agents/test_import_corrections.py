@@ -15,12 +15,12 @@ pytestmark = pytest.mark.unit
 def test_runusage_imports():
     """Test that RunUsage is imported from pydantic_ai.usage, not pydantic_ai."""
     files_to_check = [
-        "src/agentpool_storage/sql_provider/sql_provider.py",
-        "src/agentpool_storage/file_provider/provider.py",
+        "src/wolfharness_storage/sql_provider/sql_provider.py",
+        "src/wolfharness_storage/file_provider/provider.py",
         "tests/test_history.py",
         "tests/mcp_client/test_client_conversion.py",
-        "src/agentpool_storage/sql_provider/utils.py",
-        "src/agentpool_storage/claude_provider/converters.py",
+        "src/wolfharness_storage/sql_provider/utils.py",
+        "src/wolfharness_storage/claude_provider/converters.py",
     ]
 
     root = Path(__file__).parent.parent.parent

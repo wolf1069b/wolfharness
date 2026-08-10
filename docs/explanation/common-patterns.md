@@ -32,4 +32,4 @@ pytest && mypy src/ && ruff check src/
 
 - Examples in `site/examples/*/config.yml`
 - Schema reference auto-generated from Pydantic models
-- Validate with: `python -m agentpool_config.manifest config.yml`
+- Validate with: `python -m wolfharness_config.manifest config.yml`

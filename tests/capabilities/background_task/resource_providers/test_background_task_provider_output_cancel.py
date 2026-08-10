@@ -10,13 +10,13 @@ from pydantic_ai import RunContext
 import pytest
 from upathtools.filesystems.isolated_memory_fs import IsolatedMemoryFileSystem
 
-from agentpool.agents.base_agent import BaseAgent
-from agentpool.agents.context import AgentContext
-from agentpool.capabilities.background_task.capability import (
+from wolfharness.agents.base_agent import BaseAgent
+from wolfharness.agents.context import AgentContext
+from wolfharness.capabilities.background_task.capability import (
     BackgroundTaskCapability,
 )
-from agentpool.capabilities.background_task.types import BackgroundTask, TaskStatus
-from agentpool.tools.exceptions import ToolError
+from wolfharness.capabilities.background_task.types import BackgroundTask, TaskStatus
+from wolfharness.tools.exceptions import ToolError
 
 
 def _wrap_in_run_context(agent_ctx):

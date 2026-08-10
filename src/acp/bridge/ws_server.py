@@ -4,7 +4,7 @@ Spawns a stdio-based ACP agent subprocess and exposes it via WebSocket,
 allowing clients like mcp-ws to connect.
 
 Usage:
-    python -m acp.bridge.ws_server "uv run agentpool serve-acp" --port 8765
+    python -m acp.bridge.ws_server "uv run wolfharness serve-acp" --port 8765
 """
 
 from __future__ import annotations

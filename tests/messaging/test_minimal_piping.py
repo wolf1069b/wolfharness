@@ -2,7 +2,7 @@
 
 import pytest
 
-from agentpool import Agent
+from wolfharness import Agent
 
 
 pytestmark = pytest.mark.unit

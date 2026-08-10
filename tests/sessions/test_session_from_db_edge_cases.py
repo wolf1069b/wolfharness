@@ -13,12 +13,12 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from agentpool.sessions.models import SessionData
-from agentpool_storage.sql_provider.models import Conversation
+from wolfharness.sessions.models import SessionData
+from wolfharness_storage.sql_provider.models import Conversation
 
 
 if TYPE_CHECKING:
-    from agentpool_storage.sql_provider import SQLModelProvider
+    from wolfharness_storage.sql_provider import SQLModelProvider
 
 
 pytestmark = pytest.mark.unit

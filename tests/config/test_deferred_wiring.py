@@ -33,7 +33,7 @@ class TestDeferredToolConfigOnBaseConfig:
         Checks deferred, deferred_kind, deferred_strategy, deferred_placeholder,
         deferred_timeout fields.
         """
-        from agentpool_config.tools import BaseToolConfig
+        from wolfharness_config.tools import BaseToolConfig
 
         # Check fields exist and have correct defaults
         fields = BaseToolConfig.model_fields
@@ -57,7 +57,7 @@ class TestDeferredToolConfigOnBaseConfig:
 
     def test_deferred_fields_have_json_schema_annotations(self):
         """Deferred fields should have Field titles for YAML auto-completion."""
-        from agentpool_config.tools import BaseToolConfig
+        from wolfharness_config.tools import BaseToolConfig
 
         schema = BaseToolConfig.model_json_schema()
         props = schema["properties"]
@@ -74,7 +74,7 @@ class TestDeferredToolWiring:
 
     def test_import_tool_default_not_deferred(self):
         """ImportToolConfig with default settings produces non-deferred tool."""
-        from agentpool_config.tools import ImportToolConfig
+        from wolfharness_config.tools import ImportToolConfig
 
         config = ImportToolConfig(import_path=f"{__name__}:tool_conf")
         tool = config.get_tool()
@@ -83,7 +83,7 @@ class TestDeferredToolWiring:
 
     def test_import_tool_deferred_true(self):
         """ImportToolConfig with deferred=True produces deferred tool."""
-        from agentpool_config.tools import ImportToolConfig
+        from wolfharness_config.tools import ImportToolConfig
 
         config = ImportToolConfig(
             import_path=f"{__name__}:tool_conf",
@@ -95,7 +95,7 @@ class TestDeferredToolWiring:
 
     def test_import_tool_deferred_kind_unapproved(self):
         """deferred_kind='unapproved' forces strategy='block'."""
-        from agentpool_config.tools import ImportToolConfig
+        from wolfharness_config.tools import ImportToolConfig
 
         config = ImportToolConfig(
             import_path=f"{__name__}:tool_conf",
@@ -110,7 +110,7 @@ class TestDeferredToolWiring:
 
     def test_import_tool_deferred_strategy_continue(self):
         """deferred_strategy='continue' with deferred_kind='external'."""
-        from agentpool_config.tools import ImportToolConfig
+        from wolfharness_config.tools import ImportToolConfig
 
         config = ImportToolConfig(
             import_path=f"{__name__}:tool_conf",
@@ -125,7 +125,7 @@ class TestDeferredToolWiring:
 
     def test_import_tool_deferred_placeholder_custom(self):
         """Custom deferred_placeholder is passed through."""
-        from agentpool_config.tools import ImportToolConfig
+        from wolfharness_config.tools import ImportToolConfig
 
         config = ImportToolConfig(
             import_path=f"{__name__}:tool_conf",
@@ -138,7 +138,7 @@ class TestDeferredToolWiring:
 
     def test_import_tool_deferred_timeout_string(self):
         """deferred_timeout as a string '30s' is parsed to timedelta(seconds=30)."""
-        from agentpool_config.tools import ImportToolConfig
+        from wolfharness_config.tools import ImportToolConfig
 
         config = ImportToolConfig(
             import_path=f"{__name__}:tool_conf",
@@ -151,7 +151,7 @@ class TestDeferredToolWiring:
 
     def test_import_tool_deferred_timeout_timedelta(self):
         """deferred_timeout as timedelta is passed through directly."""
-        from agentpool_config.tools import ImportToolConfig
+        from wolfharness_config.tools import ImportToolConfig
 
         config = ImportToolConfig(
             import_path=f"{__name__}:tool_conf",
@@ -164,7 +164,7 @@ class TestDeferredToolWiring:
 
     def test_import_tool_deferred_timeout_none(self):
         """deferred_timeout=None means no timeout."""
-        from agentpool_config.tools import ImportToolConfig
+        from wolfharness_config.tools import ImportToolConfig
 
         config = ImportToolConfig(
             import_path=f"{__name__}:tool_conf",
@@ -177,7 +177,7 @@ class TestDeferredToolWiring:
 
     def test_import_tool_deferred_fields_are_all_kwargs_passthrough(self):
         """All deferred fields should pass through to Tool() via kwargs."""
-        from agentpool_config.tools import ImportToolConfig
+        from wolfharness_config.tools import ImportToolConfig
 
         config = ImportToolConfig(
             import_path=f"{__name__}:tool_conf",
@@ -198,8 +198,8 @@ class TestDeferredToolWiring:
 
     def test_invalid_combination_raises_tool_error(self):
         """deferred_kind='unapproved' with strategy='continue' should raise ToolError."""
-        from agentpool.tools.exceptions import ToolError
-        from agentpool_config.tools import ImportToolConfig
+        from wolfharness.tools.exceptions import ToolError
+        from wolfharness_config.tools import ImportToolConfig
 
         config = ImportToolConfig(
             import_path=f"{__name__}:tool_conf",
@@ -217,7 +217,7 @@ class TestCheckpointConfigWiring:
 
     def test_session_pool_config_has_checkpoint_field(self):
         """SessionPoolConfig should have a checkpoint field accepting CheckpointConfig."""
-        from agentpool_config.session_pool import SessionPoolConfig
+        from wolfharness_config.session_pool import SessionPoolConfig
 
         fields = SessionPoolConfig.model_fields
         assert "checkpoint" in fields
@@ -225,15 +225,15 @@ class TestCheckpointConfigWiring:
 
     def test_session_pool_config_default_checkpoint_is_none(self):
         """Default SessionPoolConfig should have checkpoint=None."""
-        from agentpool_config.session_pool import SessionPoolConfig
+        from wolfharness_config.session_pool import SessionPoolConfig
 
         config = SessionPoolConfig()
         assert config.checkpoint is None
 
     def test_session_pool_config_with_checkpoint_enabled(self):
         """SessionPoolConfig with checkpoint enabled."""
-        from agentpool_config.durable import CheckpointConfig
-        from agentpool_config.session_pool import SessionPoolConfig
+        from wolfharness_config.durable import CheckpointConfig
+        from wolfharness_config.session_pool import SessionPoolConfig
 
         config = SessionPoolConfig(
             checkpoint=CheckpointConfig(enabled=True),
@@ -243,8 +243,8 @@ class TestCheckpointConfigWiring:
 
     def test_session_pool_config_with_checkpoint_disabled(self):
         """SessionPoolConfig with checkpoint disabled."""
-        from agentpool_config.durable import CheckpointConfig
-        from agentpool_config.session_pool import SessionPoolConfig
+        from wolfharness_config.durable import CheckpointConfig
+        from wolfharness_config.session_pool import SessionPoolConfig
 
         config = SessionPoolConfig(
             checkpoint=CheckpointConfig(enabled=False),
@@ -254,7 +254,7 @@ class TestCheckpointConfigWiring:
 
     def test_checkpoint_field_json_schema(self):
         """Checkpoint field should have JSON schema annotations."""
-        from agentpool_config.session_pool import SessionPoolConfig
+        from wolfharness_config.session_pool import SessionPoolConfig
 
         schema = SessionPoolConfig.model_json_schema()
         assert "checkpoint" in schema["properties"]
@@ -264,14 +264,14 @@ class TestDeferredToolConfigExists:
     """Verify DeferredToolConfig is importable."""
 
     def test_deferred_tool_config_importable(self):
-        """DeferredToolConfig can be imported from agentpool_config.durable."""
-        from agentpool_config.durable import DeferredToolConfig
+        """DeferredToolConfig can be imported from wolfharness_config.durable."""
+        from wolfharness_config.durable import DeferredToolConfig
 
         assert DeferredToolConfig is not None
 
     def test_deferred_tool_config_defaults(self):
         """DeferredToolConfig has correct defaults."""
-        from agentpool_config.durable import DeferredToolConfig
+        from wolfharness_config.durable import DeferredToolConfig
 
         config = DeferredToolConfig()
         assert config.enabled is True
@@ -284,7 +284,7 @@ class TestYamlSchema:
 
     def test_import_tool_config_schema_has_deferred_fields(self):
         """ImportToolConfig JSON schema should include deferred fields."""
-        from agentpool_config.tools import ImportToolConfig
+        from wolfharness_config.tools import ImportToolConfig
 
         schema = ImportToolConfig.model_json_schema()
         props = schema["properties"]
@@ -296,7 +296,7 @@ class TestYamlSchema:
 
     def test_session_pool_config_schema_has_checkpoint_field(self):
         """SessionPoolConfig JSON schema should include checkpoint field."""
-        from agentpool_config.session_pool import SessionPoolConfig
+        from wolfharness_config.session_pool import SessionPoolConfig
 
         schema = SessionPoolConfig.model_json_schema()
         assert "checkpoint" in schema["properties"]

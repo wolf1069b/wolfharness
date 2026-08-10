@@ -23,7 +23,7 @@ def test_current_run_ctx_var_exists():
     # Check it's a ContextVar
     from contextvars import ContextVar
 
-    from agentpool.agents.base_agent import _current_run_ctx_var
+    from wolfharness.agents.base_agent import _current_run_ctx_var
 
     assert isinstance(_current_run_ctx_var, ContextVar)
 
@@ -35,8 +35,8 @@ def test_current_run_ctx_var_exists():
 
 def test_contextvar_isolation():
     """Test that ContextVar provides proper isolation between contexts."""
-    from agentpool.agents.base_agent import _current_run_ctx_var
-    from agentpool.agents.context import AgentRunContext
+    from wolfharness.agents.base_agent import _current_run_ctx_var
+    from wolfharness.agents.context import AgentRunContext
 
     # Create two different run contexts
     ctx1 = AgentRunContext(session_id="session1")
@@ -67,8 +67,8 @@ def test_contextvar_isolation():
 
 def test_contextvar_with_tasks():
     """Test ContextVar behavior with sequential asyncio tasks."""
-    from agentpool.agents.base_agent import _current_run_ctx_var
-    from agentpool.agents.context import AgentRunContext
+    from wolfharness.agents.base_agent import _current_run_ctx_var
+    from wolfharness.agents.context import AgentRunContext
 
     results = []
 
@@ -104,8 +104,8 @@ def test_contextvar_with_tasks():
 
 def test_contextvar_context_manager():
     """Test ContextVar usage with context manager pattern."""
-    from agentpool.agents.base_agent import _current_run_ctx_var
-    from agentpool.agents.context import AgentRunContext
+    from wolfharness.agents.base_agent import _current_run_ctx_var
+    from wolfharness.agents.context import AgentRunContext
 
     # Save current value
     old_value = _current_run_ctx_var.get()
@@ -129,7 +129,7 @@ def test_contextvar_context_manager():
 
 def test_no_instance_variable():
     """Test that _current_run_ctx is NOT an instance variable."""
-    from agentpool.agents.base_agent import BaseAgent
+    from wolfharness.agents.base_agent import BaseAgent
 
     # Create a mock agent instance
     class MockAgent(BaseAgent):
@@ -156,12 +156,12 @@ def test_no_instance_variable():
 
 def test_background_run_ctx_unchanged():
     """Test that _background_run_ctx is still an instance variable (unchanged)."""
-    from agentpool.agents.base_agent import BaseAgent
+    from wolfharness.agents.base_agent import BaseAgent
 
     # Create a minimal agent instance
     class TestAgent(BaseAgent):
         def create_turn(self, prompts, run_ctx, message_history):
-            from agentpool.orchestrator.turn import Turn
+            from wolfharness.orchestrator.turn import Turn
 
             class _EmptyTurn(Turn):
                 async def execute(self):
@@ -185,8 +185,8 @@ def test_background_run_ctx_unchanged():
 
 def test_concurrent_runs_isolation():
     """Test that concurrent agent runs have isolated contexts (RFC-0021)."""
-    from agentpool.agents.base_agent import _current_run_ctx_var
-    from agentpool.agents.context import AgentRunContext
+    from wolfharness.agents.base_agent import _current_run_ctx_var
+    from wolfharness.agents.context import AgentRunContext
 
     async def simulate_run(run_id: int):
         # Simulate setting up a run context

@@ -28,13 +28,13 @@ from typing import Any
 import anyio
 import pytest
 
-from agentpool.agents.events import (
+from wolfharness.agents.events import (
     PartDeltaEvent,
     RunStartedEvent,
     StateUpdate,
     StreamCompleteEvent,
 )
-from agentpool.lifecycle import (
+from wolfharness.lifecycle import (
     DurableJournal,
     DurableSnapshotStore,
     MemoryJournal,
@@ -42,9 +42,9 @@ from agentpool.lifecycle import (
     RunState,
     ToolExecutionRecord,
 )
-from agentpool.lifecycle.comm_channel import DirectChannel, ProtocolChannel
-from agentpool.messaging import ChatMessage
-from agentpool.orchestrator.event_bus import EventBus
+from wolfharness.lifecycle.comm_channel import DirectChannel, ProtocolChannel
+from wolfharness.messaging import ChatMessage
+from wolfharness.orchestrator.event_bus import EventBus
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.anyio]

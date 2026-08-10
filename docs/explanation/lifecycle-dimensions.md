@@ -72,7 +72,7 @@ When the `lifecycle:` section is omitted or all fields are at default, `create_d
 ## Factory Function
 
 ```python
-from agentpool.lifecycle.factory import create_dimensions
+from wolfharness.lifecycle.factory import create_dimensions
 
 trigger, journal, snapshot, comm, transport = create_dimensions(
     lifecycle_config, session_id="my_session",
@@ -92,7 +92,7 @@ run_handle = RunHandle(
 ## Lifecycle Package Structure
 
 ```
-src/agentpool/lifecycle/
+src/wolfharness/lifecycle/
   __init__.py         — Public exports for all types and implementations
   types.py            — RunState, Prompt, Feedback, ResumeResult,
                         ToolExecutionRecord, EventEnvelope (plain dataclasses;

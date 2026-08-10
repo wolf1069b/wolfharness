@@ -10,12 +10,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agentpool.messaging import ChatMessage
+from wolfharness.messaging import ChatMessage
 
 
 if TYPE_CHECKING:
-    from agentpool import AgentPool
-    from agentpool.orchestrator.core import SessionPool
+    from wolfharness import AgentPool
+    from wolfharness.orchestrator.core import SessionPool
 
 
 pytestmark = pytest.mark.unit
@@ -364,8 +364,8 @@ async def test_cache_copy_messages_invalidates_target_cache(
 # RunHandle delegation tests (feature-flag gated)
 # ---------------------------------------------------------------------------
 
-from agentpool.lifecycle import RunState  # noqa: E402
-from agentpool.orchestrator.run import RunHandle  # noqa: E402
+from wolfharness.lifecycle import RunState  # noqa: E402
+from wolfharness.orchestrator.run import RunHandle  # noqa: E402
 
 
 def _make_mock_agent() -> MagicMock:

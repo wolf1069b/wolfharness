@@ -1,8 +1,8 @@
 """CLI entry point for the ACP WebSocket server bridge.
 
 Usage:
-    python -m acp.bridge.ws_server_cli "uv run agentpool serve-acp"
-    python -m acp.bridge.ws_server_cli --port 8765 -- uv run agentpool serve-acp
+    python -m acp.bridge.ws_server_cli "uv run wolfharness serve-acp"
+    python -m acp.bridge.ws_server_cli --port 8765 -- uv run wolfharness serve-acp
 """
 
 from __future__ import annotations
@@ -21,8 +21,8 @@ def main() -> None:
         description="Bridge a stdio ACP agent to WebSocket transport.",
         epilog=(
             "Examples:\n"
-            '  acp-ws-server "uv run agentpool serve-acp"\n'
-            "  acp-ws-server --port 8765 -- uv run agentpool serve-acp\n"
+            '  acp-ws-server "uv run wolfharness serve-acp"\n'
+            "  acp-ws-server --port 8765 -- uv run wolfharness serve-acp\n"
             "  acp-ws-server -H 0.0.0.0 -p 9000 -- uv run my-agent\n"
         ),
         formatter_class=argparse.RawTextHelpFormatter,

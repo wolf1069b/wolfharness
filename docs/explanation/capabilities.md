@@ -1,6 +1,6 @@
 # Capabilities (M3 — Replaces Resource Providers)
 
-In M3, the old `ResourceProvider` hierarchy was replaced with native pydantic-ai `AbstractCapability` / `AbstractToolset` implementations. Each `AbstractCapability` produces tools, instructions, change notifications, and optionally implements `ResourceSource` for read-only data access. The old `src/agentpool/resource_providers/` directory (14 files, ~3860 LOC) was physically deleted after migration.
+In M3, the old `ResourceProvider` hierarchy was replaced with native pydantic-ai `AbstractCapability` / `AbstractToolset` implementations. Each `AbstractCapability` produces tools, instructions, change notifications, and optionally implements `ResourceSource` for read-only data access. The old `src/wolfharness/resource_providers/` directory (14 files, ~3860 LOC) was physically deleted after migration.
 
 ## Capability Registry
 
@@ -21,7 +21,7 @@ In M3, the old `ResourceProvider` hierarchy was replaced with native pydantic-ai
 - `AgentContext` (`capabilities/agent_context.py`) — Frozen dataclass carrying `agent_registry`, `delegation`, `session`, `scope`, `resources`, `host`. Constructed by RunLoop per-turn.
 - `DelegationService` (`capabilities/delegation.py`) — Protocol exposing `spawn_subagent(name, prompt)` and `get_available_agents()`. Limits tools to operations they need without exposing `AgentPool`.
 - `ChangeEvent` (`capabilities/change_event.py`) — Frozen dataclass for capability change notifications (`on_change()` stream).
-- Entry-point registry (`capabilities/registry.py`) — Discovers custom capabilities via `agentpool.capabilities` entry-point group.
+- Entry-point registry (`capabilities/registry.py`) — Discovers custom capabilities via `wolfharness.capabilities` entry-point group.
 - `ExtensionRegistry` (`capabilities/extension_registry.py`) — Unified capability registry with 4-level scope storage. See [ExtensionRegistry and Scope Hierarchy](#extensionregistry-and-scope-hierarchy) below.
 
 ## ExtensionRegistry and Scope Hierarchy
@@ -76,5 +76,5 @@ The `ScopeLevel` enum has been reordered from `POOL > SESSION > AGENT > TURN` to
 
 ## Deleted Alongside ResourceProviders
 
-- `src/agentpool/tools/factory.py` (194 LOC, 6 `ToolsetFactory` classes) — became dead code after all providers migrated.
-- `src/agentpool/tools/manager.py` (364 LOC, `ToolManager`) — all `agent.tools.X` access migrated to direct capability references.
+- `src/wolfharness/tools/factory.py` (194 LOC, 6 `ToolsetFactory` classes) — became dead code after all providers migrated.
+- `src/wolfharness/tools/manager.py` (364 LOC, `ToolManager`) — all `agent.tools.X` access migrated to direct capability references.

@@ -11,10 +11,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agentpool_server.opencode_server.models import GlobalEvent
-from agentpool_server.opencode_server.models.app import ProjectTime
-from agentpool_server.opencode_server.models.common import TimeCreated
-from agentpool_server.opencode_server.models.events import (
+from wolfharness_server.opencode_server.models import GlobalEvent
+from wolfharness_server.opencode_server.models.app import ProjectTime
+from wolfharness_server.opencode_server.models.common import TimeCreated
+from wolfharness_server.opencode_server.models.events import (
     CommandExecutedEvent,
     Event,
     FileEditedEvent,
@@ -58,26 +58,26 @@ from agentpool_server.opencode_server.models.events import (
     TuiToastShowEvent,
     VcsBranchUpdatedEvent,
 )
-from agentpool_server.opencode_server.models.message import (
+from wolfharness_server.opencode_server.models.message import (
     UserMessage,
 )
-from agentpool_server.opencode_server.models.parts import Part, TextPart
-from agentpool_server.opencode_server.models.pty import PtyInfo
-from agentpool_server.opencode_server.models.question import (
+from wolfharness_server.opencode_server.models.parts import Part, TextPart
+from wolfharness_server.opencode_server.models.pty import PtyInfo
+from wolfharness_server.opencode_server.models.question import (
     QuestionInfo,
     QuestionOption,
 )
-from agentpool_server.opencode_server.models.session import (
+from wolfharness_server.opencode_server.models.session import (
     Session,
     TimeCreatedUpdated,
 )
-from agentpool_server.opencode_server.routes.global_routes import (
+from wolfharness_server.opencode_server.routes.global_routes import (
     GlobalEventFactory,
     _event_generator,
     _extract_session_id,
     _serialize_event,
 )
-from agentpool_server.opencode_server.state import ServerState
+from wolfharness_server.opencode_server.state import ServerState
 
 
 if TYPE_CHECKING:
@@ -234,7 +234,7 @@ class _MockEventBus:
             queue.shutdown()
 
     async def publish(self, session_id: str, event: Any) -> None:
-        from agentpool.orchestrator.core import EventEnvelope
+        from wolfharness.orchestrator.core import EventEnvelope
 
         envelope = EventEnvelope(source_session_id=session_id, event=event)
         for subscriber_sid, subscribers in self._subscribers.items():
@@ -282,7 +282,7 @@ class _MockState:
 
     def get_event_factory(self) -> GlobalEventFactory:
         if self._event_factory is None:
-            from agentpool_storage.opencode_provider import helpers
+            from wolfharness_storage.opencode_provider import helpers
 
             self._event_factory = GlobalEventFactory(
                 directory=self.working_dir,
@@ -541,7 +541,7 @@ async def test_global_event_integration_project_computed(
     server_state: ServerState,
 ) -> None:
     """Test project field is computed via compute_project_id."""
-    from agentpool_storage.opencode_provider.helpers import compute_project_id
+    from wolfharness_storage.opencode_provider.helpers import compute_project_id
 
     event = SessionStatusEvent.create(session_id="s3", status_type="busy")
     results = await _collect_real_events(server_state, wrap_payload=True, events_to_send=[event])
@@ -1113,7 +1113,7 @@ def test_session_id_properties_base_class_hierarchy() -> None:
     SessionIdProperties, and that SessionErrorProperties (which has
     session_id: str | None) does NOT inherit from it.
     """
-    from agentpool_server.opencode_server.models.events import SessionErrorProperties
+    from wolfharness_server.opencode_server.models.events import SessionErrorProperties
 
     # SessionIdProperties must have session_id: str
     assert "session_id" in SessionIdProperties.model_fields
@@ -1364,7 +1364,7 @@ async def test_global_health_endpoint(async_client: AsyncClient) -> None:
 @pytest.mark.anyio
 async def test_global_health_endpoint_fields(async_client: AsyncClient) -> None:
     """GET /global/health returns correct healthy and version fields."""
-    from agentpool_server.opencode_server.routes.global_routes import VERSION
+    from wolfharness_server.opencode_server.routes.global_routes import VERSION
 
     response = await async_client.get("/global/health")
     data = response.json()

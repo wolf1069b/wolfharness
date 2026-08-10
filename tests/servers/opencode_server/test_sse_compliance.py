@@ -20,13 +20,13 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from agentpool_server.opencode_server.models import GlobalEvent
-from agentpool_server.opencode_server.models.common import (
+from wolfharness_server.opencode_server.models import GlobalEvent
+from wolfharness_server.opencode_server.models.common import (
     FileDiff,
     ModelRef,
     TimeCreated,
 )
-from agentpool_server.opencode_server.models.events import (
+from wolfharness_server.opencode_server.models.events import (
     CommandExecutedEvent,
     MessageUpdatedEvent,
     PartDeltaEvent,
@@ -42,24 +42,24 @@ from agentpool_server.opencode_server.models.events import (
     TodoUpdatedEvent,
     TuiSessionSelectEvent,
 )
-from agentpool_server.opencode_server.models.message import UserMessage
-from agentpool_server.opencode_server.models.parts import TextPart
-from agentpool_server.opencode_server.models.session import (
+from wolfharness_server.opencode_server.models.message import UserMessage
+from wolfharness_server.opencode_server.models.parts import TextPart
+from wolfharness_server.opencode_server.models.session import (
     Session,
     TimeCreatedUpdated as SessionTimeCreatedUpdated,
 )
-from agentpool_server.opencode_server.routes.global_routes import (
+from wolfharness_server.opencode_server.routes.global_routes import (
     GlobalEventFactory,
     _event_generator,
     _extract_session_id,
     _serialize_event,
 )
-from agentpool_server.opencode_server.routes.routing import tui_event_filter
+from wolfharness_server.opencode_server.routes.routing import tui_event_filter
 
 
 if TYPE_CHECKING:
-    from agentpool_server.opencode_server.models.events import Event
-    from agentpool_server.opencode_server.models.parts import Part
+    from wolfharness_server.opencode_server.models.events import Event
+    from wolfharness_server.opencode_server.models.parts import Part
 
 
 # =============================================================================
@@ -111,7 +111,7 @@ class _MockEventBus:
             queue.shutdown()
 
     async def publish(self, session_id: str, event: Any) -> None:
-        from agentpool.orchestrator.core import EventEnvelope
+        from wolfharness.orchestrator.core import EventEnvelope
 
         envelope = EventEnvelope(source_session_id=session_id, event=event)
         for subscriber_sid, subscribers in self._subscribers.items():
@@ -159,7 +159,7 @@ class _MockState:
 
     def get_event_factory(self) -> GlobalEventFactory:
         if self._event_factory is None:
-            from agentpool_storage.opencode_provider import helpers
+            from wolfharness_storage.opencode_provider import helpers
 
             directory = self.working_dir
             self._event_factory = GlobalEventFactory(

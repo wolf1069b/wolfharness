@@ -6,12 +6,12 @@ from decimal import Decimal
 from pydantic_ai.usage import RunUsage
 import pytest
 
-from agentpool.messaging import ChatMessage, TokenCost
-from agentpool.utils.parse_time import parse_time_period
-from agentpool.utils.time_utils import get_now
-from agentpool_config.storage import SQLStorageConfig
-from agentpool_storage.models import QueryFilters, StatsFilters
-from agentpool_storage.sql_provider import SQLModelProvider
+from wolfharness.messaging import ChatMessage, TokenCost
+from wolfharness.utils.parse_time import parse_time_period
+from wolfharness.utils.time_utils import get_now
+from wolfharness_config.storage import SQLStorageConfig
+from wolfharness_storage.models import QueryFilters, StatsFilters
+from wolfharness_storage.sql_provider import SQLModelProvider
 
 
 pytestmark = pytest.mark.unit

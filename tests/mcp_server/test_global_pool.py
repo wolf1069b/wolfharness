@@ -8,8 +8,8 @@ from unittest.mock import patch
 from pydantic import HttpUrl
 import pytest
 
-from agentpool.mcp_server.global_pool import GlobalConnectionPool
-from agentpool_config.mcp_server import (
+from wolfharness.mcp_server.global_pool import GlobalConnectionPool
+from wolfharness_config.mcp_server import (
     AcpMCPServerConfig,
     SSEMCPServerConfig,
     StdioMCPServerConfig,

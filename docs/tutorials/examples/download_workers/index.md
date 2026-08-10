@@ -24,7 +24,7 @@ Key features:
 
 ```python
 # /// script
-# dependencies = ["agentpool"]
+# dependencies = ["wolfharness"]
 # ///
 
 
@@ -41,8 +41,8 @@ from __future__ import annotations
 import os
 import time
 
-from agentpool import AgentPool, AgentsManifest
-from agentpool.docs.utils import get_config_path, is_pyodide, run
+from wolfharness import AgentPool, AgentsManifest
+from wolfharness.docs.utils import get_config_path, is_pyodide, run
 
 
 PROMPT = "Download this file using both agent tools available to you: http://speedtest.tele2.net/10MB.zip"
@@ -83,7 +83,7 @@ if __name__ == "__main__":
 ### `config.yml`
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/Million-mo/agentpool/refs/heads/main/schema/config-schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Million-mo/wolfharness/refs/heads/main/schema/config-schema.json
 agents:
   overseer:
     type: native

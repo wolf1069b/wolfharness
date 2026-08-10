@@ -17,11 +17,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agentpool.agents.context import AgentRunContext
-from agentpool.agents.events import (
+from wolfharness.agents.context import AgentRunContext
+from wolfharness.agents.events import (
     StreamCompleteEvent,
 )
-from agentpool.lifecycle import (
+from wolfharness.lifecycle import (
     DirectChannel,
     DurableJournal,
     DurableSnapshotStore,
@@ -30,11 +30,11 @@ from agentpool.lifecycle import (
     RunState,
     ToolExecutionRecord,
 )
-from agentpool.lifecycle.journal import _detect_inflight_turn, _extract_turn_id
-from agentpool.messaging import ChatMessage, MessageHistory
-from agentpool.orchestrator.run import RunHandle
-from agentpool.orchestrator.session_controller import SessionState
-from agentpool.orchestrator.turn import HookAwareTurn, Turn
+from wolfharness.lifecycle.journal import _detect_inflight_turn, _extract_turn_id
+from wolfharness.messaging import ChatMessage, MessageHistory
+from wolfharness.orchestrator.run import RunHandle
+from wolfharness.orchestrator.session_controller import SessionState
+from wolfharness.orchestrator.turn import HookAwareTurn, Turn
 
 
 if TYPE_CHECKING:

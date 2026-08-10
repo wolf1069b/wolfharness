@@ -25,9 +25,9 @@ from tests.fixtures.team_mode_pool import (  # noqa: F401
 if TYPE_CHECKING:
     from pydantic_ai.messages import ModelMessage, ModelResponse, ToolReturnPart
 
-    from agentpool import AgentPool
-    from agentpool.capabilities.agent_context import AgentContextDeps
-    from agentpool_config.team_mode import TeamModeConfig
+    from wolfharness import AgentPool
+    from wolfharness.capabilities.agent_context import AgentContextDeps
+    from wolfharness_config.team_mode import TeamModeConfig
 
 
 # ---------------------------------------------------------------------------
@@ -89,10 +89,10 @@ def build_agent_context(
     invoke ``TeamCommCapability`` methods without going through
     ``Agent.run()``.
     """
-    from agentpool.capabilities.agent_context import AgentContextDeps
-    from agentpool.capabilities.runloop_delegation import RunLoopDelegationService
-    from agentpool.host.context import RunScope
-    from agentpool.host.registry import AgentRegistry
+    from wolfharness.capabilities.agent_context import AgentContextDeps
+    from wolfharness.capabilities.runloop_delegation import RunLoopDelegationService
+    from wolfharness.host.context import RunScope
+    from wolfharness.host.registry import AgentRegistry
 
     session_pool = pool.session_pool
     assert session_pool is not None
@@ -200,7 +200,7 @@ def make_enabled_config(
     notice_delivery_mode: str = "steer",
 ) -> TeamModeConfig:
     """Create an enabled TeamModeConfig for testing."""
-    from agentpool_config.team_mode import TeamModeConfig
+    from wolfharness_config.team_mode import TeamModeConfig
 
     return TeamModeConfig(
         enabled=True,
@@ -250,7 +250,7 @@ def make_run_context(
     If ``session_pool`` is provided, ensures its async methods and
     sub-attributes are properly mocked for team tool operations.
     """
-    from agentpool.capabilities.agent_context import AgentContextDeps
+    from wolfharness.capabilities.agent_context import AgentContextDeps
 
     cfg = config or make_enabled_config(base_dir=base_dir)
 
@@ -289,7 +289,7 @@ def init_team(
     members: list[dict[str, str]] | None = None,
 ) -> None:
     """Initialize a real FileTeamState with a team and registered members."""
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     if members is None:
         members = [

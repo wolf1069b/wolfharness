@@ -27,13 +27,13 @@ from typing import TYPE_CHECKING, Any
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 import pytest
 
-from agentpool import AgentPool, AgentsManifest, NativeAgentConfig
-from agentpool.agents.events.events import (
+from wolfharness import AgentPool, AgentsManifest, NativeAgentConfig
+from wolfharness.agents.events.events import (
     StreamCompleteEvent,
     UserMessageInsertedEvent,
 )
-from agentpool.lifecycle.types import DeliveryMode
-from agentpool.orchestrator.event_bus import EventEnvelope
+from wolfharness.lifecycle.types import DeliveryMode
+from wolfharness.orchestrator.event_bus import EventEnvelope
 
 
 if TYPE_CHECKING:

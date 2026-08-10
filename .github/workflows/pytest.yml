@@ -131,7 +131,7 @@ jobs:
         run: uv sync --all-extras --no-group lint
       - name: Import smoke test
         run: |
-          uv run python -c "mods=['agentpool','agentpool_config','agentpool_cli','agentpool_commands','agentpool_storage','agentpool_prompts','agentpool_server','agentpool_toolsets','acp'];[(__import__(m),print(f'  OK {m}')) for m in mods];print(f'All {len(mods)} modules imported successfully')"
+          uv run python -c "mods=['wolfharness','wolfharness_config','wolfharness_cli','wolfharness_commands','wolfharness_storage','wolfharness_prompts','wolfharness_server','wolfharness_toolsets','acp'];[(__import__(m),print(f'  OK {m}')) for m in mods];print(f'All {len(mods)} modules imported successfully')"
       - name: Test collection check
         run: uv run pytest --co -q 2>&1 | tail -3
 

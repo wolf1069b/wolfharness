@@ -22,9 +22,9 @@ AgentPool's ACP implementation covers **most v1 stable features** but has severa
 
 This analysis was produced by:
 
-1. **Code-level verification** of AgentPool schema definitions in `packages/agentpool/src/acp/schema/`
-2. **Protocol interface audit** of `packages/agentpool/src/acp/agent/protocol.py` and `packages/agentpool/src/acp/client/protocol.py`
-3. **Server implementation review** of `packages/agentpool/src/agentpool_server/acp_server/`
+1. **Code-level verification** of AgentPool schema definitions in `packages/wolfharness/src/acp/schema/`
+2. **Protocol interface audit** of `packages/wolfharness/src/acp/agent/protocol.py` and `packages/wolfharness/src/acp/client/protocol.py`
+3. **Server implementation review** of `packages/wolfharness/src/wolfharness_server/acp_server/`
 4. **Cross-reference** with ACP spec Rust types in `packages/agent-client-protocol/src/v1/` and `src/v2/`
 5. **Documentation review** of ACP protocol docs in `packages/agent-client-protocol/docs/`
 
@@ -58,7 +58,7 @@ All claims below include specific file paths and line numbers for traceability.
 
 - `src/acp/schema/messages.py:34` — `AgentMethod` includes `"session/close"` in the Literal
 - `src/acp/agent/protocol.py:57` — Interface method is `stop_session()`
-- `src/agentpool_server/acp_server/acp_agent.py:843` — Implementation is `stop_session()`
+- `src/wolfharness_server/acp_server/acp_agent.py:843` — Implementation is `stop_session()`
 - `src/acp/bridge/bridge.py:143-146` — Bridge correctly maps `"session/close"` → `stop_session()`
 
 **Note:** The bridge handles the wire protocol mapping, so external clients using `session/close` work correctly. However, internal code and type names use `stop`, which is confusing and inconsistent with the spec.
@@ -94,7 +94,7 @@ This means the capability can never be advertised to clients, despite the method
 The spec defines `providers/list`, `providers/set`, `providers/disable` as **native agent methods** with typed responses (`ListProvidersResponse`, `SetProvidersResponse`, `DisableProvidersResponse`). AgentPool implements them in `ext_method()` returning raw dicts:
 
 ```python
-# src/agentpool_server/acp_server/acp_agent.py:875-898
+# src/wolfharness_server/acp_server/acp_agent.py:875-898
 async def ext_method(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
     match method:
         case "providers/list":
@@ -110,7 +110,7 @@ async def ext_method(self, method: str, params: dict[str, Any]) -> dict[str, Any
 **Evidence of partial schema support:**
 - `src/acp/schema/providers.py` — Defines `ProviderInfo`, `ProviderStatus`
 - `src/acp/schema/capabilities.py:272` — `providers: bool` capability flag
-- `src/agentpool_server/acp_server/provider_router.py` — Full provider management logic
+- `src/wolfharness_server/acp_server/provider_router.py` — Full provider management logic
 
 ---
 
@@ -224,7 +224,7 @@ The spec defines `$/cancel_request` as a protocol-level method to cancel in-flig
 **Status:** Confirmed missing  
 **Impact:** AgentPool cannot act as MCP proxy over ACP
 
-The spec defines `mcp/connect`, `mcp/message`, `mcp/disconnect` for tunneling MCP through ACP. AgentPool has MCP server support (`src/agentpool/mcp_server/`) but no MCP-over-ACP bridge.
+The spec defines `mcp/connect`, `mcp/message`, `mcp/disconnect` for tunneling MCP through ACP. AgentPool has MCP server support (`src/wolfharness/mcp_server/`) but no MCP-over-ACP bridge.
 
 **Evidence:**
 - `src/acp/schema/messages.py:22-35` — No `mcp/*` methods in `AgentMethod`
@@ -420,26 +420,26 @@ This document was reviewed by an Oracle agent with full codebase access. Key cor
 Key files referenced in this analysis:
 
 **Schema Definitions:**
-- `packages/agentpool/src/acp/schema/base.py` — Base models, `_meta` handling
-- `packages/agentpool/src/acp/schema/messages.py` — `AgentMethod`, `ClientMethod` enums
-- `packages/agentpool/src/acp/schema/client_requests.py` — All client→agent request types
-- `packages/agentpool/src/acp/schema/agent_responses.py` — All agent→client response types
-- `packages/agentpool/src/acp/schema/session_updates.py` — Session update notification types
-- `packages/agentpool/src/acp/schema/tool_call.py` — Tool call types, `ToolCallLocation`
-- `packages/agentpool/src/acp/schema/client_responses.py` — Client response types, terminal
-- `packages/agentpool/src/acp/schema/elicitation.py` — Elicitation types
-- `packages/agentpool/src/acp/schema/providers.py` — Provider types
-- `packages/agentpool/src/acp/schema/capabilities.py` — Capability flags
-- `packages/agentpool/src/acp/schema/notifications.py` — Notification types
+- `packages/wolfharness/src/acp/schema/base.py` — Base models, `_meta` handling
+- `packages/wolfharness/src/acp/schema/messages.py` — `AgentMethod`, `ClientMethod` enums
+- `packages/wolfharness/src/acp/schema/client_requests.py` — All client→agent request types
+- `packages/wolfharness/src/acp/schema/agent_responses.py` — All agent→client response types
+- `packages/wolfharness/src/acp/schema/session_updates.py` — Session update notification types
+- `packages/wolfharness/src/acp/schema/tool_call.py` — Tool call types, `ToolCallLocation`
+- `packages/wolfharness/src/acp/schema/client_responses.py` — Client response types, terminal
+- `packages/wolfharness/src/acp/schema/elicitation.py` — Elicitation types
+- `packages/wolfharness/src/acp/schema/providers.py` — Provider types
+- `packages/wolfharness/src/acp/schema/capabilities.py` — Capability flags
+- `packages/wolfharness/src/acp/schema/notifications.py` — Notification types
 
 **Protocol Interfaces:**
-- `packages/agentpool/src/acp/agent/protocol.py` — Agent-side protocol interface
-- `packages/agentpool/src/acp/client/protocol.py` — Client-side protocol interface
+- `packages/wolfharness/src/acp/agent/protocol.py` — Agent-side protocol interface
+- `packages/wolfharness/src/acp/client/protocol.py` — Client-side protocol interface
 
 **Server Implementation:**
-- `packages/agentpool/src/agentpool_server/acp_server/acp_agent.py` — ACP agent protocol implementation
-- `packages/agentpool/src/agentpool_server/acp_server/provider_router.py` — Provider management
-- `packages/agentpool/src/acp/bridge/bridge.py` — ACP bridge (stdio → HTTP)
+- `packages/wolfharness/src/wolfharness_server/acp_server/acp_agent.py` — ACP agent protocol implementation
+- `packages/wolfharness/src/wolfharness_server/acp_server/provider_router.py` — Provider management
+- `packages/wolfharness/src/acp/bridge/bridge.py` — ACP bridge (stdio → HTTP)
 
 **ACP Spec Reference:**
 - `packages/agent-client-protocol/src/v1/` — Rust v1 stable types

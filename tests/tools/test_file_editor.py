@@ -6,7 +6,7 @@ import tempfile
 
 import pytest
 
-from agentpool_toolsets.builtin.file_edit.file_edit import edit_file_tool
+from wolfharness_toolsets.builtin.file_edit.file_edit import edit_file_tool
 
 
 pytestmark = pytest.mark.unit

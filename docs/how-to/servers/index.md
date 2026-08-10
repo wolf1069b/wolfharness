@@ -12,11 +12,11 @@ AgentPool can expose agents through multiple server protocols, enabling integrat
 
 | Server | Protocol | Use Case | CLI Command |
 |--------|----------|----------|-------------|
-| [ACP Server](acp-server.md) | Agent Communication Protocol | IDE integration (Zed, etc.) | `agentpool serve-acp` |
-| [OpenCode Server](opencode-server.md) | OpenCode REST + SSE | OpenCode TUI/Desktop | `agentpool serve-opencode` |
-| [MCP Server](mcp-server.md) | Model Context Protocol | Expose tools to other agents | `agentpool serve-mcp` |
-| [AG-UI Server](agui-server.md) | AG-UI Protocol | AG-UI compatible clients | `agentpool serve-agui` |
-| [OpenAI API Server](openai-api-server.md) | OpenAI API | Drop-in OpenAI replacement | `agentpool serve-api` |
+| [ACP Server](acp-server.md) | Agent Communication Protocol | IDE integration (Zed, etc.) | `wolfharness serve-acp` |
+| [OpenCode Server](opencode-server.md) | OpenCode REST + SSE | OpenCode TUI/Desktop | `wolfharness serve-opencode` |
+| [MCP Server](mcp-server.md) | Model Context Protocol | Expose tools to other agents | `wolfharness serve-mcp` |
+| [AG-UI Server](agui-server.md) | AG-UI Protocol | AG-UI compatible clients | `wolfharness serve-agui` |
+| [OpenAI API Server](openai-api-server.md) | OpenAI API | Drop-in OpenAI replacement | `wolfharness serve-api` |
 
 ## Architecture Overview
 
@@ -113,19 +113,19 @@ You can run multiple servers simultaneously:
 
 ```bash
 # Terminal 1: ACP for IDE
-agentpool serve-acp config.yml
+wolfharness serve-acp config.yml
 
 # Terminal 2: OpenCode for TUI
-agentpool serve-opencode config.yml --port 4096
+wolfharness serve-opencode config.yml --port 4096
 
 # Terminal 3: MCP for tool sharing
-agentpool serve-mcp config.yml
+wolfharness serve-mcp config.yml
 
 # Terminal 4: AG-UI for custom frontends
-agentpool serve-agui config.yml --port 8002
+wolfharness serve-agui config.yml --port 8002
 
 # Terminal 5: OpenAI API for SDK compatibility
-agentpool serve-api config.yml --port 8000
+wolfharness serve-api config.yml --port 8000
 ```
 
 ### Common Configuration

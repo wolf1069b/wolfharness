@@ -19,12 +19,12 @@ from acp.schema import (
     ToolCallStart,
     TurnCompleteUpdate,
 )
-from agentpool.agents.acp_agent.turn import ACPTurn
-from agentpool.agents.context import AgentRunContext
-from agentpool.agents.events import (
+from wolfharness.agents.acp_agent.turn import ACPTurn
+from wolfharness.agents.context import AgentRunContext
+from wolfharness.agents.events import (
     StreamCompleteEvent,
 )
-from agentpool.hooks import AgentHooks, CallableHook, HookResult
+from wolfharness.hooks import AgentHooks, CallableHook, HookResult
 
 
 # ---------------------------------------------------------------------------

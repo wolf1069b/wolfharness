@@ -229,7 +229,7 @@ async def shared_analysis(
 The connection between your YAML manifest and the injection system is made through the AgentPool:
 
 ```python
-from agentpool import AgentPool, AgentsManifest
+from wolfharness import AgentPool, AgentsManifest
 
 # 1. Define your agents in YAML
 manifest = """

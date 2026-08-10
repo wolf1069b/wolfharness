@@ -23,37 +23,37 @@ from pydantic_ai.messages import (
 )
 import pytest
 
-from agentpool.agents.events import (
+from wolfharness.agents.events import (
     RunStartedEvent,
     StreamCompleteEvent,
     ToolCallCompleteEvent,
     ToolCallProgressEvent,
     ToolCallStartEvent,
 )
-from agentpool.messaging import ChatMessage
-from agentpool_server.opencode_server.models import PartDeltaEvent, PartUpdatedEvent
-from agentpool_server.opencode_server.models.events import (
+from wolfharness.messaging import ChatMessage
+from wolfharness_server.opencode_server.models import PartDeltaEvent, PartUpdatedEvent
+from wolfharness_server.opencode_server.models.events import (
     SessionErrorEvent,
     SessionStatusEvent,
 )
-from agentpool_server.opencode_server.models.parts import (
+from wolfharness_server.opencode_server.models.parts import (
     StepFinishPart,
     TextPart,
     ToolPart,
     ToolStateCompleted,
     ToolStateRunning,
 )
-from agentpool_server.opencode_server.session_pool_integration import (
+from wolfharness_server.opencode_server.session_pool_integration import (
     OpenCodeSessionPoolIntegration,
 )
-from agentpool_server.opencode_server.state import ServerState
+from wolfharness_server.opencode_server.state import ServerState
 
 
 pytestmark = pytest.mark.integration
 
 
 if TYPE_CHECKING:
-    from agentpool.orchestrator.core import SessionPool
+    from wolfharness.orchestrator.core import SessionPool
 
 
 # =============================================================================
@@ -74,8 +74,8 @@ def _extract_opencode_events(sse_queue: Any) -> list[Any]:
     event.  This helper filters for CustomEvent wrappers and extracts the
     underlying OpenCode event from ``.event_data``.
     """
-    from agentpool.agents.events.events import CustomEvent
-    from agentpool.orchestrator.core import EventEnvelope
+    from wolfharness.agents.events.events import CustomEvent
+    from wolfharness.orchestrator.core import EventEnvelope
 
     result: list[Any] = []
     while not _stream_empty(sse_queue):
@@ -117,7 +117,7 @@ def server_state(tmp_path: Any) -> ServerState:
 @pytest.fixture
 async def session_pool(server_state: ServerState):  # type: ignore[no-untyped-def]
     """Create a real SessionPool with a real EventBus."""
-    from agentpool.orchestrator.core import SessionPool
+    from wolfharness.orchestrator.core import SessionPool
 
     pool_mock = Mock()
     pool_mock.main_agent = Mock()
@@ -144,7 +144,7 @@ async def session_pool(server_state: ServerState):  # type: ignore[no-untyped-de
     server_state._pool = pool_mock
     pool_mock.session_pool = sp
     # Re-initialize event_bridge now that event_bus is available
-    from agentpool_server.opencode_server.event_bridge import OpenCodeEventBridge
+    from wolfharness_server.opencode_server.event_bridge import OpenCodeEventBridge
 
     server_state.event_bridge = OpenCodeEventBridge(server_state, sp.event_bus)
 
@@ -480,7 +480,7 @@ class TestEventPipelineE2E:
 
         Verifies error events pass through event_bridge correctly.
         """
-        from agentpool.agents.events import RunErrorEvent
+        from wolfharness.agents.events import RunErrorEvent
 
         integration = OpenCodeSessionPoolIntegration(
             session_pool=session_pool,

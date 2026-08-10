@@ -15,7 +15,7 @@ related_rfcs:
 
 # RFC-0025: Shared Agent Architecture — Single Agent, Per-Session State
 
-> **Phase 3 of the Multi-Session Isolation Roadmap.** Depends on [RFC-0024](./RFC-0024-agent-stateless-refactor.md) (Phase 2). This is the convergence point that aligns agentpool's server architecture with pydantic-ai's stateless agent model.
+> **Phase 3 of the Multi-Session Isolation Roadmap.** Depends on [RFC-0024](./RFC-0024-agent-stateless-refactor.md) (Phase 2). This is the convergence point that aligns wolfharness's server architecture with pydantic-ai's stateless agent model.
 
 ## Overview
 
@@ -46,7 +46,7 @@ result1 = await agent.run("hello", message_history=[], deps=deps1)
 result2 = await agent.run("hello", message_history=[], deps=deps2)  # Different session
 ```
 
-Phase 3 makes agentpool's server match this model exactly: one `BaseAgent` instance, many `run_stream()` calls, each with its own `message_history` and `input_provider`.
+Phase 3 makes wolfharness's server match this model exactly: one `BaseAgent` instance, many `run_stream()` calls, each with its own `message_history` and `input_provider`.
 
 ### Resource Savings
 
@@ -472,10 +472,10 @@ Revert to Phase 1's per-session agents by restoring `ServerState.agents: dict[st
 
 ### Key Source Files
 
-- `packages/agentpool/src/agentpool_server/opencode_server/state.py` — `ServerState`, per-session agent registry
-- `packages/agentpool/src/agentpool_server/opencode_server/routes/session_routes.py` — Session CRUD
-- `packages/agentpool/src/agentpool_server/opencode_server/routes/message_routes.py` — Message handling
-- `packages/agentpool/src/agentpool/agents/base_agent.py` — `BaseAgent` (stateless after Phase 2)
+- `packages/wolfharness/src/wolfharness_server/opencode_server/state.py` — `ServerState`, per-session agent registry
+- `packages/wolfharness/src/wolfharness_server/opencode_server/routes/session_routes.py` — Session CRUD
+- `packages/wolfharness/src/wolfharness_server/opencode_server/routes/message_routes.py` — Message handling
+- `packages/wolfharness/src/wolfharness/agents/base_agent.py` — `BaseAgent` (stateless after Phase 2)
 
 ## Review Notes
 

@@ -9,7 +9,7 @@ again (same canonical ID via ``_pending_message_ids``), causing
 Fix: ``append_message_to_session`` catches ``ValueError`` for duplicate
 message IDs and treats the write as idempotent.
 
-See: https://github.com/Leoyzen/agentpool/issues/229
+See: https://github.com/Leoyzen/wolfharness/issues/229
 """
 
 from __future__ import annotations
@@ -19,18 +19,18 @@ from unittest.mock import Mock
 
 import pytest
 
-from agentpool_server.opencode_server.models.message import (
+from wolfharness_server.opencode_server.models.message import (
     MessagePath,
     MessageTime,
     MessageWithParts,
 )
-from agentpool_server.opencode_server.opencode_message_bridge import (
+from wolfharness_server.opencode_server.opencode_message_bridge import (
     append_message_to_session,
 )
 
 
 if TYPE_CHECKING:
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness_server.opencode_server.state import ServerState
 
 
 pytestmark = pytest.mark.unit

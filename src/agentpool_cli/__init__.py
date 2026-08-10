@@ -1,34 +1,56 @@
-"""CLI commands for agentpool."""
+"""agentpool_cli — backward-compatible shim for wolfharness_cli.
+
+This package has been renamed to ``wolfharness_cli``. Importing ``agentpool_cli``
+is deprecated and will be removed in a future release.
+
+Submodule imports are forwarded to the corresponding ``wolfharness_cli`` submodule.
+"""
 
 from __future__ import annotations
 
-from agentpool_cli.store import ConfigStore
+import importlib
+import sys
+import warnings
+from importlib import abc, machinery
+
+from wolfharness_cli import *  # noqa: F403
+
+warnings.warn(
+    "``agentpool_cli`` has been renamed to ``wolfharness_cli``. "
+    "Update your imports: `from wolfharness_cli import ...`",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
-agent_store = ConfigStore("agents.json")
+def __getattr__(name: str) -> object:
+    """Forward top-level attribute access to wolfharness_cli."""
+    import wolfharness_cli
+
+    return getattr(wolfharness_cli, name)
 
 
-def resolve_agent_config(config: str | None) -> str:
-    """Resolve agent configuration path from name or direct path.
+class _ShimFinder(abc.MetaPathFinder):
+    """Redirect agentpool_cli.X submodule imports to wolfharness_cli.X."""
 
-    Args:
-        config: Configuration name or path. If None, uses active config.
+    _prefix = "agentpool_cli."
+    _target = "wolfharness_cli"
 
-    Returns:
-        Resolved configuration path
+    def find_spec(
+        self, fullname: str, path: object = None, target: object = None
+    ) -> machinery.ModuleSpec | None:
+        if not fullname.startswith(self._prefix):
+            return None
 
-    Raises:
-        ValueError: If no configuration is found or no active config is set
-    """
-    if not config:
-        if active := agent_store.get_active():
-            return active.path
+        wolf_name = self._target + fullname[len(self._prefix) - 1 :]
+        try:
+            wolf_mod = importlib.import_module(wolf_name)
+        except ModuleNotFoundError:
+            return None
 
-        raise ValueError("No active agent configuration set. Use 'agents set' to set one.")
+        sys.modules[fullname] = wolf_mod
+        return machinery.ModuleSpec(fullname, loader=None)
 
-    try:
-        # First try as stored config name
-        return agent_store.get_config(config)
-    except KeyError:
-        # If not found, treat as direct path
-        return config
+
+if not any(isinstance(f, _ShimFinder) for f in sys.meta_path):
+    sys.meta_path.insert(0, _ShimFinder())

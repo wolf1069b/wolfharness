@@ -35,7 +35,7 @@ agents:
 ```
 
 ```python
-from agentpool import AgentPool
+from wolfharness import AgentPool
 from myapp.config import AppConfig  # Your dependency type
 
 async def main():

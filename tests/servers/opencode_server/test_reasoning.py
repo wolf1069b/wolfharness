@@ -12,15 +12,15 @@ from pydantic_ai.messages import (
 )
 import pytest
 
-from agentpool_server.opencode_server.event_processor import EventProcessor
-from agentpool_server.opencode_server.event_processor_context import (
+from wolfharness_server.opencode_server.event_processor import EventProcessor
+from wolfharness_server.opencode_server.event_processor_context import (
     EventProcessorContext,
 )
-from agentpool_server.opencode_server.models import PartUpdatedEvent
-from agentpool_server.opencode_server.models.events import (
+from wolfharness_server.opencode_server.models import PartUpdatedEvent
+from wolfharness_server.opencode_server.models.events import (
     PartUpdatedEventProperties,
 )
-from agentpool_server.opencode_server.models.parts import (
+from wolfharness_server.opencode_server.models.parts import (
     ReasoningPart,
     TextPart as OpenCodeTextPart,
 )
@@ -333,7 +333,7 @@ async def test_reasoning_part_gets_end_time_on_stream_complete():
     )
 
     # Stream completes without any text starting
-    from agentpool.messaging import ChatMessage
+    from wolfharness.messaging import ChatMessage
 
     chat_msg = ChatMessage(content="", role="assistant")
     events.extend(list(processor._process_stream_complete(ctx, chat_msg)))

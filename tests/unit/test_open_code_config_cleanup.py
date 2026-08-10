@@ -2,7 +2,7 @@
 
 import pytest
 
-from agentpool_config.session_pool import OpenCodeConfig
+from wolfharness_config.session_pool import OpenCodeConfig
 
 
 pytestmark = pytest.mark.unit

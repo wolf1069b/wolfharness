@@ -12,14 +12,14 @@ from typing import Any
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool import Agent
-from agentpool.agents.context import AgentRunContext
-from agentpool.agents.events.events import (
+from wolfharness import Agent
+from wolfharness.agents.context import AgentRunContext
+from wolfharness.agents.events.events import (
     StepUsageEvent,
     StreamCompleteEvent,
     ToolCallCompleteEvent,
 )
-from agentpool.agents.native_agent.turn import NativeTurn
+from wolfharness.agents.native_agent.turn import NativeTurn
 
 
 # ---------------------------------------------------------------------------

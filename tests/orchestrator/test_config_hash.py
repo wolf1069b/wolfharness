@@ -6,14 +6,14 @@ from typing import TYPE_CHECKING, Literal
 
 import pytest
 
-from agentpool.agents.native_agent.checkpoint import compute_agent_config_hash
+from wolfharness.agents.native_agent.checkpoint import compute_agent_config_hash
 
 
 pytestmark = pytest.mark.unit
 
 
 if TYPE_CHECKING:
-    from agentpool.tools.base import Tool
+    from wolfharness.tools.base import Tool
 
 
 def _make_tool(
@@ -24,7 +24,7 @@ def _make_tool(
     description: str = "A test tool",
 ) -> Tool:
     """Helper to create a FunctionTool for testing."""
-    from agentpool.tools.base import FunctionTool
+    from wolfharness.tools.base import FunctionTool
 
     return FunctionTool(
         name=name,

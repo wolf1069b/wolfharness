@@ -23,9 +23,9 @@ from unittest.mock import patch
 
 import pytest
 
-from agentpool.mcp_server.config_snapshot import McpConfigEntry, McpConfigSnapshot
-from agentpool.mcp_server.manager import MCPManager
-from agentpool_config.mcp_server import AcpMCPServerConfig
+from wolfharness.mcp_server.config_snapshot import McpConfigEntry, McpConfigSnapshot
+from wolfharness.mcp_server.manager import MCPManager
+from wolfharness_config.mcp_server import AcpMCPServerConfig
 
 
 # ---------------------------------------------------------------------------
@@ -199,7 +199,7 @@ async def test_session_pool_provides_fresh_transport_on_resume() -> None:
     returns the fresh transport.  With per-session contexts, each
     session's pool is isolated from the others.
     """
-    from agentpool.mcp_server.session_pool import SessionConnectionPool
+    from wolfharness.mcp_server.session_pool import SessionConnectionPool
 
     acp_config = AcpMCPServerConfig(name="scratchpad", acp_id="acp-server-1")
     client_id = acp_config.client_id

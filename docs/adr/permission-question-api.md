@@ -27,7 +27,7 @@ In Migration B:
 ### Core Types
 
 ```python
-# agentpool/models/pending_interaction.py
+# wolfharness/models/pending_interaction.py
 from typing import Protocol
 from datetime import datetime
 
@@ -47,7 +47,7 @@ class PendingPermission(Protocol):
     content: str
     created_at: datetime
 
-# agentpool_server/opencode_server/models/question_permission.py
+# wolfharness_server/opencode_server/models/question_permission.py
 from dataclasses import dataclass, field
 from datetime import datetime
 

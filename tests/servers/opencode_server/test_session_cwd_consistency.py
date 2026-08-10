@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from agentpool.sessions.models import SessionData
+from wolfharness.sessions.models import SessionData
 
 
 pytestmark = pytest.mark.integration
@@ -27,7 +27,7 @@ pytestmark = pytest.mark.integration
 if TYPE_CHECKING:
     from httpx import AsyncClient
 
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness_server.opencode_server.state import ServerState
 
 
 class TestSessionCwdConsistency:

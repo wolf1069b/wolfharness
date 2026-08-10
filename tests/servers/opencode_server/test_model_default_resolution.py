@@ -1,6 +1,6 @@
 """Tests for ServerState.resolve_default_model_info() and dynamic model default propagation.
 
-Replaces hardcoded "sonnet"/"claude-code"/"default"/"agentpool" fallbacks with
+Replaces hardcoded "sonnet"/"claude-code"/"default"/"wolfharness" fallbacks with
 config-derived defaults resolved from the configured agent's model_name.
 """
 
@@ -10,7 +10,7 @@ from unittest.mock import Mock, PropertyMock
 
 import pytest
 
-from agentpool_server.opencode_server.state import ServerState
+from wolfharness_server.opencode_server.state import ServerState
 
 
 pytestmark = pytest.mark.unit
@@ -51,14 +51,14 @@ class TestResolveDefaultModelInfo:
         assert provider_id == "openai"
 
     def test_falls_back_when_model_name_is_none(self) -> None:
-        """When agent.model_name is None, returns ('default', 'agentpool')."""
+        """When agent.model_name is None, returns ('default', 'wolfharness')."""
         state = _make_server_state(None)
         model_id, provider_id = state.resolve_default_model_info()
         assert model_id == "default"
-        assert provider_id == "agentpool"
+        assert provider_id == "wolfharness"
 
     def test_falls_back_when_model_name_has_no_colon(self) -> None:
-        """When agent.model_name has no colon (e.g. 'gpt-4o'), returns ('default', 'agentpool').
+        """When agent.model_name has no colon (e.g. 'gpt-4o'), returns ('default', 'wolfharness').
 
         This is a graceful fallback — a well-formed model_name should always
         include a provider prefix, but we handle the edge case safely.
@@ -66,4 +66,4 @@ class TestResolveDefaultModelInfo:
         state = _make_server_state("gpt-4o")
         model_id, provider_id = state.resolve_default_model_info()
         assert model_id == "default"
-        assert provider_id == "agentpool"
+        assert provider_id == "wolfharness"

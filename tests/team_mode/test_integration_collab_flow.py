@@ -11,7 +11,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agentpool.capabilities.team_comm_capability import TeamCommCapability
 from tests.team_mode.conftest import (
     init_team,
     make_enabled_config,
@@ -21,6 +20,7 @@ from tests.team_mode.conftest import (
     make_mock_registry,
     make_run_context,
 )
+from wolfharness.capabilities.team_comm_capability import TeamCommCapability
 
 
 if TYPE_CHECKING:
@@ -192,7 +192,7 @@ async def test_send_message_with_persist_to_blackboard_integration(
     assert "Persisted to blackboard key 'critical_findings'" in result.return_value
 
     # Verify blackboard was actually written.
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     team_state = FileTeamState(str(tmp_path))
     bb = team_state.read_blackboard("team_123", "critical_findings")
@@ -256,7 +256,7 @@ async def test_batch_creation_with_hash_and_symbolic_refs(tmp_path: Path) -> Non
     assert "Created 3 tasks" in result.return_value
 
     # Verify dependencies were resolved.
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     team_state = FileTeamState(str(tmp_path))
     tasks = team_state.list_tasks("team_123")
@@ -472,7 +472,7 @@ async def test_agent_in_the_loop_team_tools(team_mode_pool: Any) -> None:
     ]
 
     # Collect all messages from the agent run result.
-    from agentpool.agents.events.events import StreamCompleteEvent
+    from wolfharness.agents.events.events import StreamCompleteEvent
 
     final_message = None
     for e in events:

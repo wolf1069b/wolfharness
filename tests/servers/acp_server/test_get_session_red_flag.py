@@ -14,7 +14,7 @@ import pytest
 
 
 if TYPE_CHECKING:
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
 
 pytestmark = pytest.mark.unit
@@ -26,7 +26,7 @@ def _make_manager_with_controller(pool: AgentPool) -> tuple[object, object]:
     Uses a real AgentPool — the SessionController returns None for
     non-existent sessions naturally.
     """
-    from agentpool_server.acp_server.session_manager import ACPSessionManager
+    from wolfharness_server.acp_server.session_manager import ACPSessionManager
 
     manager = ACPSessionManager(pool=pool)
     controller = pool.session_pool.sessions if pool.session_pool else None
@@ -39,7 +39,7 @@ def _make_manager_without_controller(pool: AgentPool) -> object:
     Sets pool._session_pool = None to simulate no SessionPool.
     Caller is responsible for restoring pool._session_pool after the test.
     """
-    from agentpool_server.acp_server.session_manager import ACPSessionManager
+    from wolfharness_server.acp_server.session_manager import ACPSessionManager
 
     pool._session_pool = None
     return ACPSessionManager(pool=pool)

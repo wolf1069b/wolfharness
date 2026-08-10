@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agentpool.mcp_server.global_pool import GlobalConnectionPool
+from wolfharness.mcp_server.global_pool import GlobalConnectionPool
 
 
 pytestmark = pytest.mark.unit
@@ -58,7 +58,7 @@ class TestGlobalConnectionPoolSharing:
         pool = GlobalConnectionPool()
 
         # Create a fake HTTP config
-        from agentpool_config.mcp_server import StreamableHTTPMCPServerConfig
+        from wolfharness_config.mcp_server import StreamableHTTPMCPServerConfig
 
         config = StreamableHTTPMCPServerConfig(
             name="test-http",
@@ -94,7 +94,7 @@ class TestGlobalConnectionPoolSharing:
         """
         pool = GlobalConnectionPool()
 
-        from agentpool_config.mcp_server import StdioMCPServerConfig
+        from wolfharness_config.mcp_server import StdioMCPServerConfig
 
         config = StdioMCPServerConfig(
             name="test-stdio",
@@ -125,7 +125,7 @@ class TestGlobalConnectionPoolSharing:
         """
         pool = GlobalConnectionPool()
 
-        from agentpool_config.mcp_server import StdioMCPServerConfig
+        from wolfharness_config.mcp_server import StdioMCPServerConfig
 
         config = StdioMCPServerConfig(
             name="test-stdio-shared",

@@ -108,8 +108,8 @@ invalid-await = "ignore"  # mock awaitable patterns
 # (.where(), .asc(), column comparisons). Suppress broadly.
 [[overrides]]
 include = [
-  "src/agentpool_storage/sql_provider/**",
-  "src/agentpool/lifecycle/journal.py",
+  "src/wolfharness_storage/sql_provider/**",
+  "src/wolfharness/lifecycle/journal.py",
 ]
 
 [overrides.rules]
@@ -117,14 +117,14 @@ invalid-argument-type = "ignore"  # .where() column expressions
 unresolved-attribute = "ignore"  # .asc() on column objects
 
 # Wrapper/decorator files: ty doesn't follow __wrapped__, __signature__,
-# __agentpool_wrapped__ dynamic attributes set on wrapper functions.
+# __wolfharness_wrapped__ dynamic attributes set on wrapper functions.
 [[overrides]]
 include = [
-  "src/agentpool/tools/tool_wrapping.py",
-  "src/agentpool/utils/signatures.py",
-  "src/agentpool/talk/talk.py",
-  "src/agentpool/running/discovery.py",
-  "src/agentpool/mcp_server/client.py",
+  "src/wolfharness/tools/tool_wrapping.py",
+  "src/wolfharness/utils/signatures.py",
+  "src/wolfharness/talk/talk.py",
+  "src/wolfharness/running/discovery.py",
+  "src/wolfharness/mcp_server/client.py",
 ]
 
 [overrides.rules]
@@ -154,8 +154,8 @@ invalid-assignment = "ignore"  # content union assignment
 # Pydantic model fields, nor anyio Timeout constructor signatures.
 [[overrides]]
 include = [
-  "src/agentpool_config/graph_translation.py",
-  "src/agentpool_config/mcp_server.py",
+  "src/wolfharness_config/graph_translation.py",
+  "src/wolfharness_config/mcp_server.py",
 ]
 
 [overrides.rules]
@@ -163,7 +163,7 @@ invalid-argument-type = "ignore"  # dict-spread to Pydantic, Timeout init
 
 # CLI ui: anyio's _parallel_safe attribute not recognized by ty.
 [[overrides]]
-include = ["src/agentpool_cli/ui.py"]
+include = ["src/wolfharness_cli/ui.py"]
 
 [overrides.rules]
 unresolved-attribute = "ignore"  # _parallel_safe on anyio decorator
@@ -172,8 +172,8 @@ unresolved-attribute = "ignore"  # _parallel_safe on anyio decorator
 # the actual session/proxy type after protocol dispatch.
 [[overrides]]
 include = [
-  "src/agentpool_server/acp_server/input_provider.py",
-  "src/agentpool_server/acp_server/session_agent_mgmt.py",
+  "src/wolfharness_server/acp_server/input_provider.py",
+  "src/wolfharness_server/acp_server/session_agent_mgmt.py",
 ]
 
 [overrides.rules]

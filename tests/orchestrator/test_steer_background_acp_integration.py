@@ -13,12 +13,12 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from agentpool.agents.events.events import UserMessageInsertedEvent
-from agentpool_server.acp_server.event_converter import ACPEventConverter
+from wolfharness.agents.events.events import UserMessageInsertedEvent
+from wolfharness_server.acp_server.event_converter import ACPEventConverter
 
 
 if TYPE_CHECKING:
-    from agentpool.delegation.pool import AgentPool
+    from wolfharness.delegation.pool import AgentPool
 
 
 pytestmark = [pytest.mark.integration]
@@ -51,8 +51,8 @@ async def test_steer_from_background_task_acp_converter(
 
     async def _blocking_create_turn(*args: Any, **kwargs: Any) -> Any:
         await release.wait()
-        from agentpool.agents.events.events import StreamCompleteEvent
-        from agentpool.messaging.messagenode import ChatMessage
+        from wolfharness.agents.events.events import StreamCompleteEvent
+        from wolfharness.messaging.messagenode import ChatMessage
 
         return StreamCompleteEvent(message=ChatMessage(role="assistant", content="done"))
 

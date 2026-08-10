@@ -21,7 +21,7 @@ The OpenCode API protocol can be used by any compatible client to interact with 
 
 ```bash
 # Start the OpenCode server
-agentpool serve-opencode config.yml --port 4096
+wolfharness serve-opencode config.yml --port 4096
 ```
 
 See [`serve-opencode`](../../reference/cli/serve-opencode.md) for all CLI options.
@@ -218,8 +218,8 @@ Connect to `/global/event` or `/event` to receive events.
 ## Programmatic Usage
 
 ```python
-from agentpool_server.opencode_server.server import OpenCodeServer
-from agentpool import Agent
+from wolfharness_server.opencode_server.server import OpenCodeServer
+from wolfharness import Agent
 
 async def main():
     agent = Agent("assistant", model="openai:gpt-4o")
@@ -250,7 +250,7 @@ Current limitations:
 - `fork` not yet implemented
 - Symbol search returns empty (LSP not integrated)
 
-See [ENDPOINTS.md](https://github.com/Million-mo/agentpool/blob/main/src/agentpool_server/opencode_server/ENDPOINTS.md) for full implementation status.
+See [ENDPOINTS.md](https://github.com/Million-mo/wolfharness/blob/main/src/wolfharness_server/opencode_server/ENDPOINTS.md) for full implementation status.
 
 ## See Also
 

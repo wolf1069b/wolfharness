@@ -13,19 +13,19 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentpool.lifecycle.types import DeliveryMode
-from agentpool.orchestrator.core import (
+from tests._controller_helpers import send_via_controller
+from wolfharness.lifecycle.types import DeliveryMode
+from wolfharness.orchestrator.core import (
     DEFAULT_SESSION_TTL_SECONDS,
     EventBus,
     SessionController,
     SessionState,
 )
-from agentpool.orchestrator.run import RunHandle
-from tests._controller_helpers import send_via_controller
+from wolfharness.orchestrator.run import RunHandle
 
 
 if TYPE_CHECKING:
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
 
 pytestmark = pytest.mark.unit
@@ -116,7 +116,7 @@ async def test_list_sessions_returns_session_info(
     controller: SessionController,
 ) -> None:
     """list_sessions returns SessionInfo DTOs for all active sessions."""
-    from agentpool_server.opencode_server.models.session_info import SessionInfo
+    from wolfharness_server.opencode_server.models.session_info import SessionInfo
 
     await controller.get_or_create_session("sess-1", agent_name="agent-a")
     await controller.get_or_create_session("sess-2", agent_name="agent-b")
@@ -452,7 +452,7 @@ async def test_steer_followup_inside_request_lock(minimal_pool: AgentPool) -> No
     Without this, current_run_id can be cleared between the check and
     the steer()/followup() call, causing silent message drops.
     """
-    from agentpool.orchestrator.core import SessionController
+    from wolfharness.orchestrator.core import SessionController
 
     controller = SessionController(pool=minimal_pool)
     controller._event_bus = EventBus()
@@ -498,7 +498,7 @@ def test_background_task_strong_reference() -> None:
 
     Without a strong reference, Python's GC can destroy the task mid-execution.
     """
-    import agentpool.orchestrator.core as core_module
+    import wolfharness.orchestrator.core as core_module
 
     source = inspect.getsource(core_module.SessionController._start_run_handle)
     assert "_background_tasks" in source, (
@@ -543,7 +543,7 @@ def test_background_tasks_initialized_in_init(minimal_pool: AgentPool) -> None:
     Without early initialization, the first call to _start_run_handle
     hits a hasattr check that could mask bugs.
     """
-    from agentpool.orchestrator.core import SessionController
+    from wolfharness.orchestrator.core import SessionController
 
     controller = SessionController(pool=minimal_pool)
     assert hasattr(controller, "_background_tasks"), (
@@ -559,7 +559,7 @@ def test_background_task_callback_is_named_function() -> None:
     """
     import re
 
-    import agentpool.orchestrator.core as core_module
+    import wolfharness.orchestrator.core as core_module
 
     source = inspect.getsource(core_module.SessionController._start_run_handle)
     # Should NOT contain the lambda tuple pattern

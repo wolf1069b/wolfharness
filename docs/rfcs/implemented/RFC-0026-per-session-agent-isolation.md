@@ -23,7 +23,7 @@ This RFC proposes the minimal change to enable concurrent multi-client access: r
 
 ## Problem Statement
 
-When multiple OpenCode clients connect to the same `agentpool serve-opencode` server, only the first can process messages. All others are blocked by a global `asyncio.Lock` held for the entire duration of LLM inference (10–120 seconds per response).
+When multiple OpenCode clients connect to the same `wolfharness serve-opencode` server, only the first can process messages. All others are blocked by a global `asyncio.Lock` held for the entire duration of LLM inference (10–120 seconds per response).
 
 **Root cause**: `ServerState.agent` is a single `BaseAgent` instance shared across all sessions. `bind_agent_to_session()` mutates `agent.session_id` and `agent._input_provider` per request. A global `agent_lock` serializes access, but blocks everything during inference.
 
@@ -36,7 +36,7 @@ When multiple OpenCode clients connect to the same `agentpool serve-opencode` se
 agent_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 ```
 
-**Impact**: Teams cannot share an agentpool server. Each user must run their own instance.
+**Impact**: Teams cannot share an wolfharness server. Each user must run their own instance.
 
 ## Goals & Non-Goals
 
@@ -343,7 +343,7 @@ Self-contained change. Revert by restoring `state.agent` + `state.agent_lock` + 
 
 ### Key Source Files
 
-- `packages/agentpool/src/agentpool_server/opencode_server/state.py` — `ServerState`, `agent_lock`, `bind_agent_to_session()`
-- `packages/agentpool/src/agentpool_server/opencode_server/routes/session_routes.py` — Session CRUD
-- `packages/agentpool/src/agentpool_server/opencode_server/routes/message_routes.py` — Message handling
-- `packages/agentpool/src/agentpool/agents/base_agent.py` — `BaseAgent`, shared mutable state
+- `packages/wolfharness/src/wolfharness_server/opencode_server/state.py` — `ServerState`, `agent_lock`, `bind_agent_to_session()`
+- `packages/wolfharness/src/wolfharness_server/opencode_server/routes/session_routes.py` — Session CRUD
+- `packages/wolfharness/src/wolfharness_server/opencode_server/routes/message_routes.py` — Message handling
+- `packages/wolfharness/src/wolfharness/agents/base_agent.py` — `BaseAgent`, shared mutable state

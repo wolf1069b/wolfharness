@@ -38,7 +38,7 @@ agents:
 ### In Agent Constructor
 
 ```python
-from agentpool import Agent, StdioMCPServerConfig
+from wolfharness import Agent, StdioMCPServerConfig
 
 # Create agent with MCP servers
 agent = Agent(

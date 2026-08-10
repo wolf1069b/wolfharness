@@ -2,7 +2,7 @@
 sync:
   agent: doc_sync_agent
   dependencies:
-    - src/agentpool_config/events.py
+    - src/wolfharness_config/events.py
 title: Event Sources
 description: Event source configuration for triggering agent actions
 icon: material/bell-ring
@@ -27,7 +27,7 @@ Event sources are typically used with task configurations to create event-driven
 ### Event Sources
 
 /// mknodes
-{{ "agentpool_config.events.EventConfig" | union_to_markdown(display_mode="yaml", header_style="pymdownx") }}
+{{ "wolfharness_config.events.EventConfig" | union_to_markdown(display_mode="yaml", header_style="pymdownx") }}
 ///
 
 ### Connection Event Conditions
@@ -35,7 +35,7 @@ Event sources are typically used with task configurations to create event-driven
 Connection events can be filtered using conditions:
 
 /// mknodes
-{{ "agentpool_config.events.ConnectionEventConditionType" | union_to_markdown(display_mode="yaml", header_style="pymdownx") }}
+{{ "wolfharness_config.events.ConnectionEventConditionType" | union_to_markdown(display_mode="yaml", header_style="pymdownx") }}
 ///
 
 ## Usage with Tasks

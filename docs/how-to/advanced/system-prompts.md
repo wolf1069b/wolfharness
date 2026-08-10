@@ -159,9 +159,9 @@ agents:
 Provider implementation:
 
 ```python
-from agentpool.resource_providers import ResourceProvider
-from agentpool.prompts.instructions import InstructionFunc
-from agentpool.agents.context import AgentContext
+from wolfharness.resource_providers import ResourceProvider
+from wolfharness.prompts.instructions import InstructionFunc
+from wolfharness.agents.context import AgentContext
 
 class UserContextProvider(ResourceProvider):
     async def get_instructions(self) -> list[InstructionFunc]:
@@ -255,7 +255,7 @@ If an instruction function fails, the error is logged and the instruction is ski
 System prompts can include callables that are evaluated when the agent context starts:
 
 ```python
-from agentpool import Agent
+from wolfharness import Agent
 
 async def get_weather_context():
     weather = await fetch_weather()
@@ -418,7 +418,7 @@ The template has access to:
 - `inject_tools` - tool injection mode (`"off"` or `"all"`)
 - `tool_usage_style` - tool usage style (`"suggestive"` or `"strict"`)
 
-See `src/agentpool/agents/sys_prompts.py` for implementation details.
+See `src/wolfharness/agents/sys_prompts.py` for implementation details.
 
 !!! info "About Prompt Engineering"
     By default, AgentPool does not engage in prompt engineering or manipulation. The features described

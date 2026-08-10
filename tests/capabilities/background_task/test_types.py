@@ -7,8 +7,8 @@ from datetime import UTC
 
 import pytest
 
-from agentpool.capabilities.background_task import BackgroundTask, TaskHandle, TaskStatus
-from agentpool.capabilities.background_task.types import TaskStatus as TaskStatusFromTypes
+from wolfharness.capabilities.background_task import BackgroundTask, TaskHandle, TaskStatus
+from wolfharness.capabilities.background_task.types import TaskStatus as TaskStatusFromTypes
 
 
 def test_background_task_defaults() -> None:

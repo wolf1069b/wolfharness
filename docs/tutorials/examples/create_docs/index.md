@@ -32,7 +32,7 @@ This demonstrates different ways agents can collaborate:
 
 ```python
 # /// script
-# dependencies = ["agentpool", "mypy"]
+# dependencies = ["wolfharness", "mypy"]
 # ///
 
 
@@ -52,8 +52,8 @@ from pathlib import Path
 from mypy import api
 import rich
 
-from agentpool import Agent, AgentPool, AgentsManifest
-from agentpool.docs.utils import run
+from wolfharness import Agent, AgentPool, AgentsManifest
+from wolfharness.docs.utils import run
 
 
 # set your OpenAI API key here
@@ -84,11 +84,11 @@ async def main() -> None:
         scanner.connect_to(writer)
 
         # Start async docs generation (the writer will start working in async fashion)
-        await scanner.run('List all Python files in "src/agentpool/agent"')
+        await scanner.run('List all Python files in "src/wolfharness/agent"')
         assert isinstance(scanner, Agent)
         # Use error checker as tool (this blocks until complete)
         scanner.register_worker(checker)
-        prompt = 'Check types for all Python files in "src/agentpool/agent"'
+        prompt = 'Check types for all Python files in "src/wolfharness/agent"'
         result = await scanner.run(prompt)
         rich.print(f"Type checking result:\n{result.data}")
 
@@ -103,7 +103,7 @@ if __name__ == "__main__":
 ### `config.yml`
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/Million-mo/agentpool/refs/heads/main/schema/config-schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Million-mo/wolfharness/refs/heads/main/schema/config-schema.json
 agents:
   file_scanner:
     type: native

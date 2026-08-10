@@ -3,7 +3,7 @@
 from pydantic_ai._utils import disable_threads
 import pytest
 
-from agentpool import Agent
+from wolfharness import Agent
 
 
 pytestmark = pytest.mark.unit

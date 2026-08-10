@@ -8,13 +8,13 @@ import pytest
 
 from acp.schema import LoadSessionRequest, ResumeSessionRequest, ResumeSessionResponse
 from acp.schema.mcp import StdioMcpServer
-from agentpool import Agent
-from agentpool.delegation import AgentPool
-from agentpool.orchestrator.core import SessionPool
-from agentpool.sessions import SessionData
-from agentpool_server.acp_server.acp_agent import AgentPoolACPAgent
-from agentpool_server.acp_server.session_manager import ACPSessionManager
-from agentpool_storage.memory_provider.provider import MemoryStorageProvider
+from wolfharness import Agent
+from wolfharness.delegation import AgentPool
+from wolfharness.orchestrator.core import SessionPool
+from wolfharness.sessions import SessionData
+from wolfharness_server.acp_server.acp_agent import AgentPoolACPAgent
+from wolfharness_server.acp_server.session_manager import ACPSessionManager
+from wolfharness_storage.memory_provider.provider import MemoryStorageProvider
 
 
 @pytest.fixture
@@ -30,8 +30,8 @@ def mock_agent_pool_with_agent():
     def simple_callback(message: str) -> str:
         return f"Test response: {message}"
 
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.manifest import AgentsManifest
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.manifest import AgentsManifest
 
     manifest = AgentsManifest(agents={"test_agent": NativeAgentConfig(model="test")})
 
@@ -189,8 +189,8 @@ async def test_resume_session_exception_returns_empty_response(
 @pytest.mark.unit
 async def test_resume_session_passes_mcp_servers_to_constructor():
     """Test that resume_session passes mcp_servers to the ACPSession constructor."""
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.manifest import AgentsManifest
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.manifest import AgentsManifest
 
     manifest = AgentsManifest(agents={"test_agent": NativeAgentConfig(model="test")})
 
@@ -219,8 +219,8 @@ async def test_resume_session_passes_mcp_servers_to_constructor():
     mock_server = MagicMock()
 
     with (
-        patch("agentpool_server.acp_server.session_manager.ACPSession") as mock_session_cls,
-        patch("agentpool_server.acp_server.session_manager.ClientCapabilities"),
+        patch("wolfharness_server.acp_server.session_manager.ACPSession") as mock_session_cls,
+        patch("wolfharness_server.acp_server.session_manager.ClientCapabilities"),
     ):
         mock_session = MagicMock()
         mock_session.register_update_callback = MagicMock()
@@ -246,8 +246,8 @@ async def test_resume_session_passes_mcp_servers_to_constructor():
 @pytest.mark.unit
 async def test_resume_session_initializes_mcp_servers():
     """Test that resume_session calls initialize_mcp_servers on the session."""
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.manifest import AgentsManifest
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.manifest import AgentsManifest
 
     manifest = AgentsManifest(agents={"test_agent": NativeAgentConfig(model="test")})
 
@@ -275,8 +275,8 @@ async def test_resume_session_initializes_mcp_servers():
     mock_acp_agent = MagicMock()
 
     with (
-        patch("agentpool_server.acp_server.session_manager.ACPSession") as mock_session_cls,
-        patch("agentpool_server.acp_server.session_manager.ClientCapabilities"),
+        patch("wolfharness_server.acp_server.session_manager.ACPSession") as mock_session_cls,
+        patch("wolfharness_server.acp_server.session_manager.ClientCapabilities"),
     ):
         mock_session = MagicMock()
         mock_session.register_update_callback = MagicMock()
@@ -298,8 +298,8 @@ async def test_resume_session_initializes_mcp_servers():
 @pytest.mark.unit
 async def test_resume_session_with_none_mcp_servers_calls_initialize():
     """Test that resume_session still calls initialize_mcp_servers when mcp_servers is None...."""
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.manifest import AgentsManifest
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.manifest import AgentsManifest
 
     manifest = AgentsManifest(agents={"test_agent": NativeAgentConfig(model="test")})
 
@@ -327,8 +327,8 @@ async def test_resume_session_with_none_mcp_servers_calls_initialize():
     mock_acp_agent = MagicMock()
 
     with (
-        patch("agentpool_server.acp_server.session_manager.ACPSession") as mock_session_cls,
-        patch("agentpool_server.acp_server.session_manager.ClientCapabilities"),
+        patch("wolfharness_server.acp_server.session_manager.ACPSession") as mock_session_cls,
+        patch("wolfharness_server.acp_server.session_manager.ClientCapabilities"),
     ):
         mock_session = MagicMock()
         mock_session.register_update_callback = MagicMock()
@@ -356,8 +356,8 @@ async def test_resume_session_does_not_call_load_session():
     get_or_create_session_agent(), so resume_session no longer
     calls agent.load_session() directly.
     """
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.manifest import AgentsManifest
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.manifest import AgentsManifest
 
     manifest = AgentsManifest(agents={"test_agent": NativeAgentConfig(model="test")})
 
@@ -385,8 +385,8 @@ async def test_resume_session_does_not_call_load_session():
     mock_acp_agent = MagicMock()
 
     with (
-        patch("agentpool_server.acp_server.session_manager.ACPSession") as mock_session_cls,
-        patch("agentpool_server.acp_server.session_manager.ClientCapabilities"),
+        patch("wolfharness_server.acp_server.session_manager.ACPSession") as mock_session_cls,
+        patch("wolfharness_server.acp_server.session_manager.ClientCapabilities"),
     ):
         mock_session = MagicMock()
         mock_session.register_update_callback = MagicMock()
@@ -408,8 +408,8 @@ async def test_resume_session_does_not_call_load_session():
 @pytest.mark.unit
 async def test_resume_session_closes_old_and_recreates():
     """Test resume_session closes old session and creates a fresh one."""
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.manifest import AgentsManifest
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.manifest import AgentsManifest
 
     manifest = AgentsManifest(agents={"test_agent": NativeAgentConfig(model="test")})
 
@@ -437,8 +437,8 @@ async def test_resume_session_closes_old_and_recreates():
     mock_acp_agent = MagicMock()
 
     with (
-        patch("agentpool_server.acp_server.session_manager.ACPSession") as mock_session_cls,
-        patch("agentpool_server.acp_server.session_manager.ClientCapabilities"),
+        patch("wolfharness_server.acp_server.session_manager.ACPSession") as mock_session_cls,
+        patch("wolfharness_server.acp_server.session_manager.ClientCapabilities"),
     ):
         mock_session = MagicMock()
         mock_session.register_update_callback = MagicMock()

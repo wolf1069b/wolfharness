@@ -96,7 +96,7 @@ Without this change, AgentPool can only serve ACP agents via stdio or a non-comp
 
 ### Success Criteria
 
-- [ ] ACP server can be started with `agentpool serve-acp config.yml --transport streamable-http --port 8080` and accepts WebSocket connections at `/acp`
+- [ ] ACP server can be started with `wolfharness serve-acp config.yml --transport streamable-http --port 8080` and accepts WebSocket connections at `/acp`
 - [ ] WebSocket upgrade response includes `Acp-Connection-Id` header with UUID v4
 - [ ] Pre-initialize requests receive JSON-RPC error code `-32002`
 - [ ] Post-initialize requests process normally through `AgentSideConnection`
@@ -456,10 +456,10 @@ Client connects via WebSocket upgrade at /acp
 ### CLI Integration
 
 ```
-agentpool serve-acp config.yml                                      # Default: stdio transport
-agentpool serve-acp config.yml --transport streamable-http          # WebSocket on localhost:8080
-agentpool serve-acp config.yml --transport streamable-http --port 9000   # WebSocket on localhost:9000
-agentpool serve-acp config.yml --transport streamable-http --host 0.0.0.0 --port 9000  # WebSocket on 0.0.0.0:9000
+wolfharness serve-acp config.yml                                      # Default: stdio transport
+wolfharness serve-acp config.yml --transport streamable-http          # WebSocket on localhost:8080
+wolfharness serve-acp config.yml --transport streamable-http --port 9000   # WebSocket on localhost:9000
+wolfharness serve-acp config.yml --transport streamable-http --host 0.0.0.0 --port 9000  # WebSocket on 0.0.0.0:9000
 ```
 
 The `--transport` flag accepts `stdio` (default), `websocket` (legacy, deprecated), or `streamable-http` (new compliant transport). When `--transport streamable-http` is used, `--host` and `--port` control the bind address. When `--transport websocket` is used, the legacy non-compliant `_serve_websocket()` transport is instantiated; a deprecation warning is emitted directing the user to switch to `--transport streamable-http`. The legacy `--ws-host` and `--ws-port` parameters are still accepted for backward compatibility but emit deprecation warnings directing users to `--host` and `--port`.
@@ -468,7 +468,7 @@ The `--transport` flag accepts `stdio` (default), `websocket` (legacy, deprecate
 
 #### ACPPoolServerConfig Fields
 
-The `ACPPoolServerConfig` model in `src/agentpool_config/pool_server.py` is extended with:
+The `ACPPoolServerConfig` model in `src/wolfharness_config/pool_server.py` is extended with:
 
 ```python
 class ACPPoolServerConfig(BasePoolServerConfig):
@@ -756,5 +756,5 @@ None recorded yet.
 ### Appendix
 
 Current transport code: `src/acp/transports.py`
-ACP server: `src/agentpool_server/acp_server/server.py`
-Pool server config: `src/agentpool_config/pool_server.py`
+ACP server: `src/wolfharness_server/acp_server/server.py`
+Pool server config: `src/wolfharness_config/pool_server.py`

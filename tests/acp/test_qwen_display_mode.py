@@ -15,8 +15,8 @@ from __future__ import annotations
 import pytest
 
 from acp.schema import AgentMessageChunk, ToolCallStart
-from agentpool.agents.events import SpawnSessionStart
-from agentpool_server.acp_server.event_converter import (
+from wolfharness.agents.events import SpawnSessionStart
+from wolfharness_server.acp_server.event_converter import (
     ACPEventConverter,
     SubagentContext,
 )

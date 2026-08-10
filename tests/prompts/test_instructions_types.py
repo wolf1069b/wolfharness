@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 # Test that all types can be imported (will fail if they don't exist)
-from agentpool.prompts.instructions import (
+from wolfharness.prompts.instructions import (
     AgentContextInstruction,
     BothContextsInstruction,
     InstructionFunc,
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
     from pydantic_ai import RunContext
 
-    from agentpool.agents.context import AgentContext
+    from wolfharness.agents.context import AgentContext
 
 
 class TestSimpleInstruction:

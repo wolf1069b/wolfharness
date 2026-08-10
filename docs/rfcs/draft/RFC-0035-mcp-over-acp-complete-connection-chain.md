@@ -50,7 +50,7 @@ RFC-0033 已经实现了：
 
 ### MCP 客户端完整生命周期（Non-ACP 传输）
 
-对于 stdio/SSE/HTTP 传输的 MCP server，agentpool 已经有一套成熟的连接链：
+对于 stdio/SSE/HTTP 传输的 MCP server，wolfharness 已经有一套成熟的连接链：
 
 ```
 session/new
@@ -69,8 +69,8 @@ session/new
 ```
 
 关键组件：
-- **`MCPResourceProvider`**（`agentpool/resource_providers/mcp_provider.py`）：MCP server 的 ResourceProvider 包装，管理工具/提示/资源的生命周期
-- **`MCPClient`**（`agentpool/mcp_server/client.py`）：fastmcp Client 的包装，处理连接、重连、消息路由
+- **`MCPResourceProvider`**（`wolfharness/resource_providers/mcp_provider.py`）：MCP server 的 ResourceProvider 包装，管理工具/提示/资源的生命周期
+- **`MCPClient`**（`wolfharness/mcp_server/client.py`）：fastmcp Client 的包装，处理连接、重连、消息路由
 - **`fastmcp.Client`**：底层 MCP 客户端，负责 JSON-RPC 协议握手
 
 ### ACP-transport MCP 当前状态
@@ -91,12 +91,12 @@ session/new
 已实现的组件（RFC-0033）：
 - **`AcpMcpConnectionManager`**：管理 `connectionId → AcpMcpConnection` 映射
 - **`AcpMcpConnection`**：持有内存流和 `send_to_client` 回调
-- **`AcpMcpTransport`**（`agentpool_server/acp_server/acp_mcp_transport.py`）：实现了 `fastmcp.ClientTransport` 接口，将内存流包装为 fastmcp 可用的传输层
+- **`AcpMcpTransport`**（`wolfharness_server/acp_server/acp_mcp_transport.py`）：实现了 `fastmcp.ClientTransport` 接口，将内存流包装为 fastmcp 可用的传输层
 
 未实现的组件：
 - **没有代码创建 fastmcp Client**：`AcpMcpTransport` 已经就绪，但没有任何地方调用 `fastmcp.Client(AcpMcpTransport(...))`
 - **没有 MCP initialize 握手**：即使创建了 Client，也需要进入 async context 才能触发 fastmcp 的自动初始化
-- **没有工具注册**：`tools/list` 的结果需要转换为 agentpool 的 `Tool` 对象并注册到 Agent 运行时
+- **没有工具注册**：`tools/list` 的结果需要转换为 wolfharness 的 `Tool` 对象并注册到 Agent 运行时
 
 ### 现有代码的关键限制
 
@@ -401,7 +401,7 @@ ACPSession
 #### 1. MCPClient._get_client() 支持 ACP
 
 ```python
-# agentpool/mcp_server/client.py
+# wolfharness/mcp_server/client.py
 
 case AcpMCPServerConfig(acp_id=acp_id):
     # AcpMcpTransport 延迟初始化：在 connect() 时从 manager 获取连接
@@ -411,7 +411,7 @@ case AcpMCPServerConfig(acp_id=acp_id):
 #### 2. AcpMcpTransport 支持延迟初始化
 
 ```python
-# agentpool_server/acp_server/acp_mcp_transport.py
+# wolfharness_server/acp_server/acp_mcp_transport.py
 
 class AcpMcpTransport(ClientTransport):
     def __init__(self, acp_id: str) -> None:
@@ -428,7 +428,7 @@ class AcpMcpTransport(ClientTransport):
 #### 3. session.py 中 ACP server 的初始化流程
 
 ```python
-# agentpool_server/acp_server/session.py
+# wolfharness_server/acp_server/session.py
 
 async def initialize_mcp_servers(self) -> None:
     for server in self.mcp_servers:
@@ -565,12 +565,12 @@ async def initialize_mcp_servers(self) -> None:
 
 | 文件 | 说明 |
 |------|------|
-| `agentpool/mcp_server/client.py` | MCPClient，需修改 `_get_client()` |
-| `agentpool/resource_providers/mcp_provider.py` | MCPResourceProvider，工具注册 |
-| `agentpool_server/acp_server/acp_mcp_transport.py` | AcpMcpTransport，需支持延迟初始化 |
-| `agentpool_server/acp_server/acp_agent.py` | connect_acp_mcp_server() |
-| `agentpool_server/acp_server/session.py` | initialize_mcp_servers() |
-| `agentpool_server/acp_server/acp_mcp_manager.py` | AcpMcpConnectionManager |
+| `wolfharness/mcp_server/client.py` | MCPClient，需修改 `_get_client()` |
+| `wolfharness/resource_providers/mcp_provider.py` | MCPResourceProvider，工具注册 |
+| `wolfharness_server/acp_server/acp_mcp_transport.py` | AcpMcpTransport，需支持延迟初始化 |
+| `wolfharness_server/acp_server/acp_agent.py` | connect_acp_mcp_server() |
+| `wolfharness_server/acp_server/session.py` | initialize_mcp_servers() |
+| `wolfharness_server/acp_server/acp_mcp_manager.py` | AcpMcpConnectionManager |
 
 ### External Resources
 

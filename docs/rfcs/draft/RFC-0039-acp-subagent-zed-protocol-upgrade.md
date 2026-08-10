@@ -992,17 +992,17 @@ Phase 2 和 Phase 3 可并行执行，均依赖 Phase 1。
 
 ### AgentPool 源码
 
-- `packages/agentpool/src/agentpool_server/acp_server/event_converter.py` — 核心 ACP 事件转换器（723 行，活跃）
-- `packages/agentpool/src/agentpool_server/acp_server/handler.py` — 协议处理器（521 行）
-- `packages/agentpool/src/agentpool_server/mixins.py` — `ProtocolEventConsumerMixin`（258 行，`_consumer_done_events` 在 line 60，`_consumer_task_refs` 在 line 61，`_after_consumer_loop` 在 line 91-100）
-- `packages/agentpool/src/agentpool/agents/context.py` — `AgentRunContext.create_child_session()`（line 231-276）
-- `packages/agentpool/src/agentpool_server/acp_server/session.py` — ACP session 管理（929 行）
-- `packages/agentpool/src/acp/schema/tool_call.py` — `SubagentRunInfo` 定义
-- `packages/agentpool/src/acp/schema/base.py` — `AnnotatedObject` 基类，`field_meta` 字段
-- `packages/agentpool_toolsets/builtin/subagent_tools.py` — subagent tool 实现（3 处手动 SpawnSessionStart 之一）
-- `packages/agentpool_toolsets/builtin/workers.py` — worker tool 实现（3 处之二）
-- `packages/agentpool/src/agentpool/delegation/team.py` — team 实现（使用 yield 模式，不受 auto-emit 影响）
-- `packages/agentpool/src/agentpool/delegation/teamrun.py` — sequential team 实现（同 team.py，使用 yield 模式）
+- `packages/wolfharness/src/wolfharness_server/acp_server/event_converter.py` — 核心 ACP 事件转换器（723 行，活跃）
+- `packages/wolfharness/src/wolfharness_server/acp_server/handler.py` — 协议处理器（521 行）
+- `packages/wolfharness/src/wolfharness_server/mixins.py` — `ProtocolEventConsumerMixin`（258 行，`_consumer_done_events` 在 line 60，`_consumer_task_refs` 在 line 61，`_after_consumer_loop` 在 line 91-100）
+- `packages/wolfharness/src/wolfharness/agents/context.py` — `AgentRunContext.create_child_session()`（line 231-276）
+- `packages/wolfharness/src/wolfharness_server/acp_server/session.py` — ACP session 管理（929 行）
+- `packages/wolfharness/src/acp/schema/tool_call.py` — `SubagentRunInfo` 定义
+- `packages/wolfharness/src/acp/schema/base.py` — `AnnotatedObject` 基类，`field_meta` 字段
+- `packages/wolfharness_toolsets/builtin/subagent_tools.py` — subagent tool 实现（3 处手动 SpawnSessionStart 之一）
+- `packages/wolfharness_toolsets/builtin/workers.py` — worker tool 实现（3 处之二）
+- `packages/wolfharness/src/wolfharness/delegation/team.py` — team 实现（使用 yield 模式，不受 auto-emit 影响）
+- `packages/wolfharness/src/wolfharness/delegation/teamrun.py` — sequential team 实现（同 team.py，使用 yield 模式）
 
 ### 相关 RFC
 

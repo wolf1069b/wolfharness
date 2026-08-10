@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from agentpool.host.registry import AgentRegistry
+from wolfharness.host.registry import AgentRegistry
 
 
 pytestmark = pytest.mark.unit

@@ -19,7 +19,7 @@ import warnings
 
 import pytest
 
-from agentpool.capabilities.runloop_delegation import RunLoopDelegationService
+from wolfharness.capabilities.runloop_delegation import RunLoopDelegationService
 
 
 pytestmark = pytest.mark.unit
@@ -33,8 +33,8 @@ pytestmark = pytest.mark.unit
 @pytest.mark.anyio
 async def test_delegation_service_spawn_subagent_deprecation() -> None:
     """RunLoopDelegationService.spawn_subagent() emits DeprecationWarning."""
-    from agentpool.agents.events.events import StreamCompleteEvent
-    from agentpool.orchestrator.core import EventBus
+    from wolfharness.agents.events.events import StreamCompleteEvent
+    from wolfharness.orchestrator.core import EventBus
 
     registry = MagicMock()
     registry.exists = MagicMock(return_value=True)
@@ -109,8 +109,8 @@ def test_delegation_service_get_available_agents_deprecation() -> None:
 @pytest.mark.anyio
 async def test_subagent_capability_uses_run_agent() -> None:
     """SubagentCapability.spawn_subagent calls run_agent() when session_pool is available."""
-    from agentpool.capabilities.agent_context import AgentContextDeps
-    from agentpool.capabilities.subagent_capability import SubagentCapability
+    from wolfharness.capabilities.agent_context import AgentContextDeps
+    from wolfharness.capabilities.subagent_capability import SubagentCapability
 
     # Build a mock AgentContextDeps with a non-None session_pool.
     session_pool = MagicMock()
@@ -164,8 +164,8 @@ async def test_subagent_capability_fallback() -> None:
         yield "chunk1"
         yield "chunk2"
 
-    from agentpool.capabilities.agent_context import AgentContextDeps
-    from agentpool.capabilities.subagent_capability import SubagentCapability
+    from wolfharness.capabilities.agent_context import AgentContextDeps
+    from wolfharness.capabilities.subagent_capability import SubagentCapability
 
     host = MagicMock()
     host.session_pool = None

@@ -35,12 +35,12 @@ When invoked with arguments, process them appropriately:
 
 With single argument:
 ```bash
-agentpool skill test-with-args "my test input"
+wolfharness skill test-with-args "my test input"
 ```
 
 With multiple arguments:
 ```bash
-agentpool skill test-with-args arg1 arg2 arg3
+wolfharness skill test-with-args arg1 arg2 arg3
 ```
 
 Expected output:

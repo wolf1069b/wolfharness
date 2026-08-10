@@ -62,8 +62,8 @@ tools:
 ## Available Tools
 
 ```python exec="true"
-from agentpool_toolsets.fsspec_toolset import FSSpecTools
-from agentpool.docs.utils import generate_tool_docs
+from wolfharness_toolsets.fsspec_toolset import FSSpecTools
+from wolfharness.docs.utils import generate_tool_docs
 
 toolset = FSSpecTools()
 print(generate_tool_docs(toolset))
@@ -72,7 +72,7 @@ print(generate_tool_docs(toolset))
 ## Configuration Reference
 
 /// mknodes
-{{ "agentpool_config.toolsets.FSSpecToolsetConfig" | schema_to_markdown(display_mode="yaml", header_style="pymdownx", wrapped_in="toolsets", header_level=3) }}
+{{ "wolfharness_config.toolsets.FSSpecToolsetConfig" | schema_to_markdown(display_mode="yaml", header_style="pymdownx", wrapped_in="toolsets", header_level=3) }}
 ///
 
 ## Examples

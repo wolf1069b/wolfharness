@@ -2,7 +2,7 @@
 
 ## Overview
 
-Standalone JSON-RPC 2.0 protocol implementation for the Agent Communication Protocol (69 files). Independent from agentpool framework -- used by it, not part of it.
+Standalone JSON-RPC 2.0 protocol implementation for the Agent Communication Protocol (69 files). Independent from wolfharness framework -- used by it, not part of it.
 
 ## Where To Look
 
@@ -39,4 +39,4 @@ Standalone JSON-RPC 2.0 protocol implementation for the Agent Communication Prot
 - The `connection.py` `Connection` class is the central wire-protocol engine. It handles JSON-RPC framing, message dispatch, stream observers, and bidirectional communication. Both `AgentSideConnection` and `ClientSideConnection` wrap it with protocol-specific method handlers.
 - `ToolCallState` sends delta-only updates (per ACP spec, all fields except `toolCallId` are optional in updates). Re-sends nothing unless data changed.
 - Entry points in pyproject.toml: `acp-bridge` console script, `acp = ACPFileSystem` (fsspec), `acp = ACPPath` (universal_pathlib).
-- The debug server at `agent/implementations/debug_server/` provides a full standalone ACP agent + HTML UI for testing without agentpool.
+- The debug server at `agent/implementations/debug_server/` provides a full standalone ACP agent + HTML UI for testing without wolfharness.

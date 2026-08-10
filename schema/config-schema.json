@@ -988,7 +988,7 @@
     },
     "AGUIAgentConfig": {
       "additionalProperties": false,
-      "description": "Configuration for AG-UI protocol agents.\n\nAG-UI agents connect to remote HTTP endpoints that implement the AG-UI protocol,\nenabling integration of any AG-UI compatible server into the agentpool pool.\n\nExample:\n    ```yaml\n    agents:\n      remote_assistant:\n        type: agui\n        endpoint: http://localhost:8000/agent/run\n        timeout: 30.0\n        headers:\n          X-API-Key: ${API_KEY}\n        tools:\n          - import_path: mymodule.my_tool_function\n\n      managed_agent:\n        endpoint: http://localhost:8765/agent/run\n        startup_command: \"uv run ag-ui-server config.yml\"\n        startup_delay: 3.0\n        tools:\n          - import_path: package.tool_one\n          - import_path: package.tool_two\n    ```",
+      "description": "Configuration for AG-UI protocol agents.\n\nAG-UI agents connect to remote HTTP endpoints that implement the AG-UI protocol,\nenabling integration of any AG-UI compatible server into the wolfharness pool.\n\nExample:\n    ```yaml\n    agents:\n      remote_assistant:\n        type: agui\n        endpoint: http://localhost:8000/agent/run\n        timeout: 30.0\n        headers:\n          X-API-Key: ${API_KEY}\n        tools:\n          - import_path: mymodule.my_tool_function\n\n      managed_agent:\n        endpoint: http://localhost:8765/agent/run\n        startup_command: \"uv run ag-ui-server config.yml\"\n        startup_delay: 3.0\n        tools:\n          - import_path: package.tool_one\n          - import_path: package.tool_two\n    ```",
       "properties": {
         "name": {
           "default": null,
@@ -1836,7 +1836,7 @@
         "service_name": {
           "default": null,
           "examples": [
-            "agentpool",
+            "wolfharness",
             "my-ai-service",
             "production-bot"
           ],
@@ -2730,7 +2730,7 @@
         "service_name": {
           "default": null,
           "examples": [
-            "agentpool",
+            "wolfharness",
             "my-ai-service",
             "production-bot"
           ],
@@ -3728,7 +3728,7 @@
         "service_name": {
           "default": null,
           "examples": [
-            "agentpool",
+            "wolfharness",
             "my-ai-service",
             "production-bot"
           ],
@@ -5889,7 +5889,7 @@
           ],
           "default": null,
           "description": "System prompt for the agent.\n        Can be a string or list of strings/prompt configs",
-          "documentation_url": "https://phil65.github.io/agentpool/YAML%20Configuration/system_prompts_configuration/",
+          "documentation_url": "https://phil65.github.io/wolfharness/YAML%20Configuration/system_prompts_configuration/",
           "examples": [
             "You are a helpful assistant.",
             [
@@ -6190,7 +6190,7 @@
           "type": "boolean"
         },
         "tools": {
-          "description": "Tools and toolsets to expose to this Claude Code agent via MCP bridge.\n\nSupports both single tools and toolsets. These will be started as an\nin-process MCP server and made available to Claude Code.\n\nDocs: https://phil65.github.io/agentpool/YAML%20Configuration/tool_configuration/",
+          "description": "Tools and toolsets to expose to this Claude Code agent via MCP bridge.\n\nSupports both single tools and toolsets. These will be started as an\nin-process MCP server and made available to Claude Code.\n\nDocs: https://phil65.github.io/wolfharness/YAML%20Configuration/tool_configuration/",
           "examples": [
             [
               {
@@ -6581,7 +6581,7 @@
     },
     "ClaudeStorageConfig": {
       "additionalProperties": false,
-      "description": "Claude Code native storage format configuration.\n\nReads/writes to Claude Code's native JSONL format in ~/.claude/projects/.\nUseful for sharing conversation history between agentpool and Claude Code CLI.",
+      "description": "Claude Code native storage format configuration.\n\nReads/writes to Claude Code's native JSONL format in ~/.claude/projects/.\nUseful for sharing conversation history between wolfharness and Claude Code CLI.",
       "properties": {
         "type": {
           "const": "claude",
@@ -7237,7 +7237,7 @@
     },
     "CodexAgentConfig": {
       "additionalProperties": false,
-      "description": "Configuration for Codex app-server agent.\n\nWraps the Codex app-server via its JSON-RPC protocol, enabling\nintegration with agentpool's agent ecosystem.",
+      "description": "Configuration for Codex app-server agent.\n\nWraps the Codex app-server via its JSON-RPC protocol, enabling\nintegration with wolfharness's agent ecosystem.",
       "properties": {
         "name": {
           "default": null,
@@ -8674,7 +8674,7 @@
     },
     "CronToolsetConfig": {
       "additionalProperties": false,
-      "description": "Configuration for cron scheduling toolset.\n\nGives agents the ability to schedule, list, and remove recurring or\none-shot jobs at runtime. Jobs are persisted to a JSON file.\n\nRequires the ``bot`` extra: ``pip install agentpool[bot]``",
+      "description": "Configuration for cron scheduling toolset.\n\nGives agents the ability to schedule, list, and remove recurring or\none-shot jobs at runtime. Jobs are persisted to a JSON file.\n\nRequires the ``bot`` extra: ``pip install wolfharness[bot]``",
       "properties": {
         "namespace": {
           "default": null,
@@ -8697,10 +8697,10 @@
           "type": "string"
         },
         "store_path": {
-          "default": "~/.agentpool/cron_jobs.json",
+          "default": "~/.wolfharness/cron_jobs.json",
           "description": "Path to the JSON file where scheduled jobs are persisted.",
           "examples": [
-            "~/.agentpool/cron_jobs.json",
+            "~/.wolfharness/cron_jobs.json",
             "/tmp/cron.json"
           ],
           "title": "Job store path",
@@ -8732,7 +8732,7 @@
         "service_name": {
           "default": null,
           "examples": [
-            "agentpool",
+            "wolfharness",
             "my-ai-service",
             "production-bot"
           ],
@@ -18969,7 +18969,7 @@
           "description": "The task instruction/prompt.",
           "examples": [
             "Analyze the following code",
-            "agentpool.prompts.prompts:BasePrompt"
+            "wolfharness.prompts.prompts:BasePrompt"
           ],
           "title": "Task prompt"
         },
@@ -18988,7 +18988,7 @@
           "default": null,
           "description": "Dependencies or context data needed for task execution",
           "examples": [
-            "agentpool.agents.context:AgentContext"
+            "wolfharness.agents.context:AgentContext"
           ],
           "title": "Required dependencies",
           "type": [
@@ -19390,7 +19390,7 @@
     },
     "Knowledge": {
       "additionalProperties": false,
-      "description": "Collection of context sources for an agent.\n\nSupports both simple paths and rich resource types for content loading,\nplus AgentPool's prompt system for dynamic content generation.\n\nDocs: https://phil65.github.io/agentpool/YAML%20Configuration/knowledge_configuration/",
+      "description": "Collection of context sources for an agent.\n\nSupports both simple paths and rich resource types for content loading,\nplus AgentPool's prompt system for dynamic content generation.\n\nDocs: https://phil65.github.io/wolfharness/YAML%20Configuration/knowledge_configuration/",
       "properties": {
         "paths": {
           "description": "Quick access to files and URLs.\n\nPaths are automatically resolved relative to the config file location\nvia ConfigPath validation.",
@@ -19642,7 +19642,7 @@
         "service_name": {
           "default": null,
           "examples": [
-            "agentpool",
+            "wolfharness",
             "my-ai-service",
             "production-bot"
           ],
@@ -20502,7 +20502,7 @@
         "service_name": {
           "default": null,
           "examples": [
-            "agentpool",
+            "wolfharness",
             "my-ai-service",
             "production-bot"
           ],
@@ -20576,7 +20576,7 @@
     },
     "MCPDiscoveryToolsetConfig": {
       "additionalProperties": false,
-      "description": "Configuration for MCP discovery toolset.\n\nEnables dynamic discovery and use of MCP servers without preloading tools.\nUses semantic search over 1000+ indexed servers for intelligent matching.\n\nRequires the `mcp-discovery` extra: `pip install agentpool[mcp-discovery]`",
+      "description": "Configuration for MCP discovery toolset.\n\nEnables dynamic discovery and use of MCP servers without preloading tools.\nUses semantic search over 1000+ indexed servers for intelligent matching.\n\nRequires the `mcp-discovery` extra: `pip install wolfharness[mcp-discovery]`",
       "properties": {
         "namespace": {
           "default": null,
@@ -22635,7 +22635,7 @@
     },
     "NativeAgentConfig": {
       "additionalProperties": false,
-      "description": "Configuration for a single agent in the system.\n\nDefines an agent's complete configuration including its model, environment,\nand behavior settings.\n\nDocs: https://phil65.github.io/agentpool/YAML%20Configuration/agent_configuration/",
+      "description": "Configuration for a single agent in the system.\n\nDefines an agent's complete configuration including its model, environment,\nand behavior settings.\n\nDocs: https://phil65.github.io/wolfharness/YAML%20Configuration/agent_configuration/",
       "properties": {
         "name": {
           "default": null,
@@ -23889,16 +23889,16 @@
               "type": "string"
             }
           ],
-          "description": "The model to use for this agent. Can be either a simple model name\nstring (e.g. 'openai:gpt-5') or a structured model definition.\n\nDocs: https://phil65.github.io/agentpool/YAML%20Configuration/model_configuration/",
-          "documentation_url": "https://phil65.github.io/agentpool/YAML%20Configuration/model_configuration/",
+          "description": "The model to use for this agent. Can be either a simple model name\nstring (e.g. 'openai:gpt-5') or a structured model definition.\n\nDocs: https://phil65.github.io/wolfharness/YAML%20Configuration/model_configuration/",
+          "documentation_url": "https://phil65.github.io/wolfharness/YAML%20Configuration/model_configuration/",
           "examples": [
             "openai:gpt-5-nano"
           ],
           "title": "Model configuration or name"
         },
         "tools": {
-          "description": "A list of tools and toolsets to register with this agent.\n\nSupports both single tools (bash, import, web_search, etc.) and\ntoolsets (file_access, process_management, code, etc.).\n\nDocs: https://phil65.github.io/agentpool/YAML%20Configuration/tool_configuration/",
-          "documentation_url": "https://phil65.github.io/agentpool/YAML%20Configuration/tool_configuration/",
+          "description": "A list of tools and toolsets to register with this agent.\n\nSupports both single tools (bash, import, web_search, etc.) and\ntoolsets (file_access, process_management, code, etc.).\n\nDocs: https://phil65.github.io/wolfharness/YAML%20Configuration/tool_configuration/",
+          "documentation_url": "https://phil65.github.io/wolfharness/YAML%20Configuration/tool_configuration/",
           "examples": [
             [
               "webbrowser:open",
@@ -24153,8 +24153,8 @@
             }
           ],
           "default": null,
-          "description": "Session configuration for conversation recovery.\n\nDocs: https://phil65.github.io/agentpool/YAML%20Configuration/session_configuration/",
-          "documentation_url": "https://phil65.github.io/agentpool/YAML%20Configuration/session_configuration/",
+          "description": "Session configuration for conversation recovery.\n\nDocs: https://phil65.github.io/wolfharness/YAML%20Configuration/session_configuration/",
+          "documentation_url": "https://phil65.github.io/wolfharness/YAML%20Configuration/session_configuration/",
           "examples": [
             "main_session",
             "user_123"
@@ -24278,7 +24278,7 @@
           ],
           "default": null,
           "description": "System prompt for the agent.\n        Can be a string or list of strings/prompt configs",
-          "documentation_url": "https://phil65.github.io/agentpool/YAML%20Configuration/system_prompts_configuration/",
+          "documentation_url": "https://phil65.github.io/wolfharness/YAML%20Configuration/system_prompts_configuration/",
           "examples": [
             "You are a helpful assistant.",
             [
@@ -24298,13 +24298,13 @@
             }
           ],
           "default": null,
-          "description": "Knowledge sources for this agent.\n\nDocs: https://phil65.github.io/agentpool/YAML%20Configuration/knowledge_configuration/",
-          "documentation_url": "https://phil65.github.io/agentpool/YAML%20Configuration/knowledge_configuration/",
+          "description": "Knowledge sources for this agent.\n\nDocs: https://phil65.github.io/wolfharness/YAML%20Configuration/knowledge_configuration/",
+          "documentation_url": "https://phil65.github.io/wolfharness/YAML%20Configuration/knowledge_configuration/",
           "title": "Knowledge sources"
         },
         "workers": {
-          "description": "Worker agents which will be available as tools.\n\nDocs: https://phil65.github.io/agentpool/YAML%20Configuration/worker_configuration/",
-          "documentation_url": "https://phil65.github.io/agentpool/YAML%20Configuration/worker_configuration/",
+          "description": "Worker agents which will be available as tools.\n\nDocs: https://phil65.github.io/wolfharness/YAML%20Configuration/worker_configuration/",
+          "documentation_url": "https://phil65.github.io/wolfharness/YAML%20Configuration/worker_configuration/",
           "examples": [
             [
               {
@@ -27432,7 +27432,7 @@
     },
     "PromptLibraryConfig": {
       "additionalProperties": false,
-      "description": "Complete prompt configuration.\n\nDocs: https://phil65.github.io/agentpool/YAML%20Configuration/prompt_configuration/",
+      "description": "Complete prompt configuration.\n\nDocs: https://phil65.github.io/wolfharness/YAML%20Configuration/prompt_configuration/",
       "properties": {
         "system_prompts": {
           "additionalProperties": {
@@ -32231,7 +32231,7 @@
     },
     "StorageConfig": {
       "additionalProperties": false,
-      "description": "Global storage configuration.\n\nDocs: https://phil65.github.io/agentpool/YAML%20Configuration/storage_configuration/",
+      "description": "Global storage configuration.\n\nDocs: https://phil65.github.io/wolfharness/YAML%20Configuration/storage_configuration/",
       "properties": {
         "providers": {
           "anyOf": [
@@ -34309,7 +34309,7 @@
     },
     "StructuredResponseConfig": {
       "additionalProperties": false,
-      "description": "Base class for response definitions.\n\nDocs: https://phil65.github.io/agentpool/YAML%20Configuration/response_configuration/",
+      "description": "Base class for response definitions.\n\nDocs: https://phil65.github.io/wolfharness/YAML%20Configuration/response_configuration/",
       "properties": {
         "response_schema": {
           "description": "A model describing the response schema.",
@@ -34811,7 +34811,7 @@
     },
     "TeamConfig": {
       "additionalProperties": false,
-      "description": "Configuration for a team or chain of message nodes.\n\nTeams can be either parallel execution groups or sequential chains.\nThey can contain both agents and other teams as members.\n\nDocs: https://phil65.github.io/agentpool/YAML%20Configuration/team_configuration/",
+      "description": "Configuration for a team or chain of message nodes.\n\nTeams can be either parallel execution groups or sequential chains.\nThey can contain both agents and other teams as members.\n\nDocs: https://phil65.github.io/wolfharness/YAML%20Configuration/team_configuration/",
       "properties": {
         "name": {
           "default": null,
@@ -38406,7 +38406,7 @@
   },
   "additionalProperties": true,
   "description": "Complete agent configuration manifest defining all available agents.\n\nThis is the root configuration that:\n- Defines available response types (both inline and imported)\n- Configures all agent instances and their settings\n- Sets up custom role definitions and capabilities\n- Manages environment configurations\n\nA single manifest can define multiple agents that can work independently\nor collaborate through the orchestrator.",
-  "documentation_url": "https://phil65.github.io/agentpool/YAML%20Configuration/manifest_configuration/",
+  "documentation_url": "https://phil65.github.io/wolfharness/YAML%20Configuration/manifest_configuration/",
   "patternProperties": {
     "^\\.": {
       "description": "YAML anchor or hidden field"
@@ -38761,8 +38761,8 @@
           }
         ]
       },
-      "description": "Mapping of agent IDs to their configurations.\n\nAll agent types are unified under this single dict, discriminated by the 'type' field:\n- type: \"native\" (default) - pydantic-ai based agents\n- type: \"agui\" - AG-UI protocol agents\n- type: \"claude_code\" - Claude Agent SDK agents\n- type: \"acp\" - ACP protocol agents (further discriminated by 'provider')\n\nExample:\n    ```yaml\n    agents:\n      assistant:\n        type: native\n        model: openai:gpt-4\n        system_prompt: \"You are a helpful assistant.\"\n\n      coder:\n        type: claude_code\n        cwd: /path/to/project\n        model: claude-sonnet-4-5\n\n      orchestrator:\n        type: acp\n        provider: claude\n        model: sonnet\n\n      remote:\n        type: agui\n        endpoint: http://localhost:8000/agent/run\n    ```\n\nDocs: https://phil65.github.io/agentpool/YAML%20Configuration/agent_configuration/",
-      "documentation_url": "https://phil65.github.io/agentpool/YAML%20Configuration/agent_configuration/",
+      "description": "Mapping of agent IDs to their configurations.\n\nAll agent types are unified under this single dict, discriminated by the 'type' field:\n- type: \"native\" (default) - pydantic-ai based agents\n- type: \"agui\" - AG-UI protocol agents\n- type: \"claude_code\" - Claude Agent SDK agents\n- type: \"acp\" - ACP protocol agents (further discriminated by 'provider')\n\nExample:\n    ```yaml\n    agents:\n      assistant:\n        type: native\n        model: openai:gpt-4\n        system_prompt: \"You are a helpful assistant.\"\n\n      coder:\n        type: claude_code\n        cwd: /path/to/project\n        model: claude-sonnet-4-5\n\n      orchestrator:\n        type: acp\n        provider: claude\n        model: sonnet\n\n      remote:\n        type: agui\n        endpoint: http://localhost:8000/agent/run\n    ```\n\nDocs: https://phil65.github.io/wolfharness/YAML%20Configuration/agent_configuration/",
+      "documentation_url": "https://phil65.github.io/wolfharness/YAML%20Configuration/agent_configuration/",
       "title": "Agents",
       "type": "object"
     },
@@ -38810,15 +38810,15 @@
       "additionalProperties": {
         "$ref": "#/$defs/TeamConfig"
       },
-      "description": "Mapping of team IDs to their configurations.\n\nDocs: https://phil65.github.io/agentpool/YAML%20Configuration/team_configuration/",
-      "documentation_url": "https://phil65.github.io/agentpool/YAML%20Configuration/team_configuration/",
+      "description": "Mapping of team IDs to their configurations.\n\nDocs: https://phil65.github.io/wolfharness/YAML%20Configuration/team_configuration/",
+      "documentation_url": "https://phil65.github.io/wolfharness/YAML%20Configuration/team_configuration/",
       "title": "Teams",
       "type": "object"
     },
     "storage": {
       "$ref": "#/$defs/StorageConfig",
-      "description": "Storage provider configuration.\n\nDocs: https://phil65.github.io/agentpool/YAML%20Configuration/storage_configuration/",
-      "documentation_url": "https://phil65.github.io/agentpool/YAML%20Configuration/storage_configuration/"
+      "description": "Storage provider configuration.\n\nDocs: https://phil65.github.io/wolfharness/YAML%20Configuration/storage_configuration/",
+      "documentation_url": "https://phil65.github.io/wolfharness/YAML%20Configuration/storage_configuration/"
     },
     "observability": {
       "$ref": "#/$defs/ObservabilityConfig",
@@ -38832,8 +38832,8 @@
       "additionalProperties": {
         "$ref": "#/$defs/StructuredResponseConfig"
       },
-      "description": "Mapping of response names to their definitions.\n\nDocs: https://phil65.github.io/agentpool/YAML%20Configuration/response_configuration/",
-      "documentation_url": "https://phil65.github.io/agentpool/YAML%20Configuration/response_configuration/",
+      "description": "Mapping of response names to their definitions.\n\nDocs: https://phil65.github.io/wolfharness/YAML%20Configuration/response_configuration/",
+      "documentation_url": "https://phil65.github.io/wolfharness/YAML%20Configuration/response_configuration/",
       "title": "Responses",
       "type": "object"
     },
@@ -38938,8 +38938,8 @@
       "type": "object"
     },
     "mcp_servers": {
-      "description": "List of MCP server configurations:\n\nThese MCP servers are used to provide tools and other resources to the nodes.\n\nDocs: https://phil65.github.io/agentpool/YAML%20Configuration/mcp_configuration/",
-      "documentation_url": "https://phil65.github.io/agentpool/YAML%20Configuration/mcp_configuration/",
+      "description": "List of MCP server configurations:\n\nThese MCP servers are used to provide tools and other resources to the nodes.\n\nDocs: https://phil65.github.io/wolfharness/YAML%20Configuration/mcp_configuration/",
+      "documentation_url": "https://phil65.github.io/wolfharness/YAML%20Configuration/mcp_configuration/",
       "examples": [
         [
           "uvx some-server"
@@ -38996,8 +38996,8 @@
     },
     "prompts": {
       "$ref": "#/$defs/PromptLibraryConfig",
-      "description": "Prompt library configuration.\n\nThis configuration defines the prompt library, which is used to provide prompts to the nodes.\n\nDocs: https://phil65.github.io/agentpool/YAML%20Configuration/prompt_configuration/",
-      "documentation_url": "https://phil65.github.io/agentpool/YAML%20Configuration/prompt_configuration/"
+      "description": "Prompt library configuration.\n\nThis configuration defines the prompt library, which is used to provide prompts to the nodes.\n\nDocs: https://phil65.github.io/wolfharness/YAML%20Configuration/prompt_configuration/",
+      "documentation_url": "https://phil65.github.io/wolfharness/YAML%20Configuration/prompt_configuration/"
     },
     "skills": {
       "$ref": "#/$defs/SkillsConfig",

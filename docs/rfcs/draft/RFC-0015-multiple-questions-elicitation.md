@@ -19,7 +19,7 @@ references:
 
 ## Overview
 
-This RFC proposes extending agentpool's OpenCode Server to support multi-question elicitation through the MCP Elicitation protocol. Currently, the `OpenCodeInputProvider` only supports single-question elicitation with enum/array schemas. This limitation prevents tools like `question_for_user` (defined in RFC-0010) from presenting multiple questions in a single interaction.
+This RFC proposes extending wolfharness's OpenCode Server to support multi-question elicitation through the MCP Elicitation protocol. Currently, the `OpenCodeInputProvider` only supports single-question elicitation with enum/array schemas. This limitation prevents tools like `question_for_user` (defined in RFC-0010) from presenting multiple questions in a single interaction.
 
 The proposal involves extending `_handle_question_elicitation` to support `object` type schemas with multiple properties, where each property represents a separate question.
 
@@ -39,7 +39,7 @@ The proposal involves extending `_handle_question_elicitation` to support `objec
 
 ### Current State
 
-The agentpool OpenCode Server (`agentpool_server/opencode_server/`) provides user interaction capabilities through two main input providers:
+The wolfharness OpenCode Server (`wolfharness_server/opencode_server/`) provides user interaction capabilities through two main input providers:
 
 1. **OpenCodeInputProvider**: Handles elicitation via OpenCode protocol (SSE events)
 2. **ACPInputProvider**: Handles elicitation via ACP protocol (permission requests)
@@ -47,7 +47,7 @@ The agentpool OpenCode Server (`agentpool_server/opencode_server/`) provides use
 The current `OpenCodeInputProvider._handle_question_elicitation()` implementation:
 
 ```python
-# Current limitation (agentpool_server/opencode_server/input_provider.py)
+# Current limitation (wolfharness_server/opencode_server/input_provider.py)
 async def _handle_question_elicitation(self, params, schema):
     match schema:
         case {"type": "array", "items": {"enum": [...]}}:  # Multi-select single question
@@ -70,7 +70,7 @@ async def _handle_question_elicitation(self, params, schema):
 Importantly, the OpenCode data models already support multiple questions:
 
 ```python
-# agentpool_server/opencode_server/models/question.py
+# wolfharness_server/opencode_server/models/question.py
 class QuestionRequest:
     questions: list[QuestionInfo]  # ✅ Already supports list
 
@@ -164,7 +164,7 @@ When a tool sends an elicitation request with an object schema containing multip
 
 ### Implementation Location
 
-**Primary File**: `src/agentpool_server/opencode_server/input_provider.py`
+**Primary File**: `src/wolfharness_server/opencode_server/input_provider.py`
 
 The implementation extends `OpenCodeInputProvider._handle_question_elicitation()` to support `object` type schemas with multiple properties.
 
@@ -273,7 +273,7 @@ content = {key: answers[i] for i, key in enumerate(properties.keys())}
 #### 1. Schema Parsing Extension
 
 ```python
-# agentpool_server/opencode_server/input_provider.py
+# wolfharness_server/opencode_server/input_provider.py
 
 async def _handle_question_elicitation(
     self,
@@ -311,8 +311,8 @@ async def _handle_multi_question(
     properties: dict[str, dict[str, Any]],
 ) -> types.ElicitResult | types.ErrorData:
     """Handle object schema with multiple properties as multiple questions."""
-    from agentpool_server.opencode_server.models import QuestionInfo, QuestionOption
-    from agentpool_server.opencode_server.models.events import QuestionAskedEvent
+    from wolfharness_server.opencode_server.models import QuestionInfo, QuestionOption
+    from wolfharness_server.opencode_server.models.events import QuestionAskedEvent
 
     question_id = self._generate_permission_id()
     questions: list[QuestionInfo] = []
@@ -359,7 +359,7 @@ def _property_to_question(
     prop_schema: dict[str, Any],
 ) -> QuestionInfo:
     """Convert a JSON Schema property to QuestionInfo."""
-    from agentpool_server.opencode_server.models import QuestionInfo, QuestionOption
+    from wolfharness_server.opencode_server.models import QuestionInfo, QuestionOption
 
     title = prop_schema.get("title", key)
     description = prop_schema.get("description", "")
@@ -443,7 +443,7 @@ def resolve_question(self, question_id: str, answers: list[list[str]]) -> bool:
 4. Add unit tests for multi-question scenarios
 
 **Files Modified**:
-- `agentpool_server/opencode_server/input_provider.py`
+- `wolfharness_server/opencode_server/input_provider.py`
 
 ### Phase 2: Testing & Validation
 
@@ -494,9 +494,9 @@ def resolve_question(self, question_id: str, answers: list[list[str]]) -> bool:
 
 ### Code References
 
-- `/packages/agentpool/src/agentpool_server/opencode_server/input_provider.py`
-- `/packages/agentpool/src/agentpool_server/opencode_server/models/question.py`
-- `/packages/agentpool/src/agentpool_server/opencode_server/state.py`
+- `/packages/wolfharness/src/wolfharness_server/opencode_server/input_provider.py`
+- `/packages/wolfharness/src/wolfharness_server/opencode_server/models/question.py`
+- `/packages/wolfharness/src/wolfharness_server/opencode_server/state.py`
 
 ### Protocol References
 

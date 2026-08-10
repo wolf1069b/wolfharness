@@ -26,6 +26,6 @@ Fallback models: `type: fallback, models: [primary, backup]`
 ## Entry Points
 
 The project uses entry points for extensibility:
-- `agentpool_toolsets` - Register custom toolsets
+- `wolfharness_toolsets` - Register custom toolsets
 - `fsspec.specs` - Filesystem implementations (ACP)
 - `universal_pathlib.implementations` - Path implementations

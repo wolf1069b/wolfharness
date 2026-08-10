@@ -21,13 +21,13 @@ from mcp.types import Implementation, InitializeResult, ServerCapabilities
 import pytest
 
 from acp.schema.mcp import AcpMcpServer
-from agentpool import Agent, AgentPool
-from agentpool.mcp_server.manager import MCPManager
-from agentpool.models.agents import NativeAgentConfig
-from agentpool.models.manifest import AgentsManifest
-from agentpool_server.acp_server.acp_agent import AgentPoolACPAgent
-from agentpool_server.acp_server.acp_mcp_manager import AcpMcpConnectionManager
-from agentpool_server.acp_server.session import ACPSession
+from wolfharness import Agent, AgentPool
+from wolfharness.mcp_server.manager import MCPManager
+from wolfharness.models.agents import NativeAgentConfig
+from wolfharness.models.manifest import AgentsManifest
+from wolfharness_server.acp_server.acp_agent import AgentPoolACPAgent
+from wolfharness_server.acp_server.acp_mcp_manager import AcpMcpConnectionManager
+from wolfharness_server.acp_server.session import ACPSession
 
 
 # ---------------------------------------------------------------------------
@@ -208,7 +208,7 @@ async def test_initialize_mcp_servers_registers_transport_and_syncs_snapshot() -
 
         # Bug 1: transport registered in connection_pool
         assert ctx.connection_pool is not None
-        from agentpool_config.mcp_server import AcpMCPServerConfig
+        from wolfharness_config.mcp_server import AcpMCPServerConfig
 
         acp_config = AcpMCPServerConfig(name="test-server", acp_id="test-acp-id")
         transport = await ctx.connection_pool.get_transport(acp_config)
@@ -279,8 +279,8 @@ async def test_child_session_inherits_acp_configs_and_transports() -> None:
     - ``connection_pool`` with pre-created transport (copied via
       ``copy_pre_created_transports()``).
     """
-    from agentpool.orchestrator.session_pool import SessionPool
-    from agentpool_storage.memory_provider.provider import MemoryStorageProvider
+    from wolfharness.orchestrator.session_pool import SessionPool
+    from wolfharness_storage.memory_provider.provider import MemoryStorageProvider
 
     mcp_manager, _acp_manager, _base_agent, acp_agent, _acp_session, mock_client = (
         _build_test_fixture("test3-parent")
@@ -343,7 +343,7 @@ async def test_child_session_inherits_acp_configs_and_transports() -> None:
 
         # Assert child's connection_pool has pre-created transport
         assert child_ctx.connection_pool is not None
-        from agentpool_config.mcp_server import AcpMCPServerConfig
+        from wolfharness_config.mcp_server import AcpMCPServerConfig
 
         acp_config = AcpMCPServerConfig(name="test-server", acp_id="test-acp-id")
         inherited_transport = await child_ctx.connection_pool.get_transport(acp_config)
@@ -371,8 +371,8 @@ async def test_child_get_capabilities_finds_inherited_acp_configs() -> None:
     calling ``get_capabilities(session_id=child_session_id)`` on the
     child's MCPManager should return a non-empty list.
     """
-    from agentpool.orchestrator.session_pool import SessionPool
-    from agentpool_storage.memory_provider.provider import MemoryStorageProvider
+    from wolfharness.orchestrator.session_pool import SessionPool
+    from wolfharness_storage.memory_provider.provider import MemoryStorageProvider
 
     mcp_manager, _acp_manager, _base_agent, acp_agent, _acp_session, mock_client = (
         _build_test_fixture("test4-parent")

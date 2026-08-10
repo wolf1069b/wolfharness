@@ -7,7 +7,7 @@ disconnected instances like the removed VCR tests).
 Crash recovery is lifecycle-internal and does not depend on model API
 responses, so these are L2 integration tests (not L3 VCR tests).
 
-See: https://github.com/Leoyzen/agentpool/issues/205
+See: https://github.com/Leoyzen/wolfharness/issues/205
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from typing import Any
 
 import pytest
 
-from agentpool.lifecycle import (
+from wolfharness.lifecycle import (
     DurableJournal,
     MemoryJournal,
     MemorySnapshotStore,

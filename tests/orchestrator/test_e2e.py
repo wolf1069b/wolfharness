@@ -15,23 +15,23 @@ from unittest.mock import MagicMock
 from pydantic_ai import TextPartDelta
 import pytest
 
-from agentpool.agents.events import (
+from wolfharness.agents.events import (
     PartDeltaEvent,
     RunStartedEvent,
     StreamCompleteEvent,
     ToolCallCompleteEvent,
     ToolCallStartEvent,
 )
-from agentpool.lifecycle import DirectChannel, MemoryJournal
-from agentpool.messaging import ChatMessage
-from agentpool.orchestrator.core import EventBus, EventEnvelope, SessionPool
+from wolfharness.lifecycle import DirectChannel, MemoryJournal
+from wolfharness.messaging import ChatMessage
+from wolfharness.orchestrator.core import EventBus, EventEnvelope, SessionPool
 
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-    from agentpool import AgentPool
-    from agentpool.agents.context import AgentRunContext
+    from wolfharness import AgentPool
+    from wolfharness.agents.context import AgentRunContext
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.anyio]
@@ -206,8 +206,8 @@ async def test_multi_turn_same_session_both_complete_via_consume_run(
     Current behavior: _consume_run breaks on StreamCompleteEvent + aclose()
     → RunHandle killed after turn 1 → turn 2's followup message is lost.
     """
-    from agentpool.lifecycle.types import DeliveryMode
     from tests._controller_helpers import send_via_controller
+    from wolfharness.lifecycle.types import DeliveryMode
 
     session_pool = minimal_pool.session_pool
     assert session_pool is not None

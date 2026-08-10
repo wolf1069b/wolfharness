@@ -11,7 +11,7 @@ from typing import Any
 from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
 import pytest
 
-from agentpool.orchestrator.event_mapper import (
+from wolfharness.orchestrator.event_mapper import (
     _extract_first_json_object,
     sanitize_tool_call_args_in_messages,
 )

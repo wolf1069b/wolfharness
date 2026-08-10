@@ -31,7 +31,7 @@ from tests.vcr.conftest import cassette_exists
 
 
 if TYPE_CHECKING:
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
 
 pytestmark = [pytest.mark.vcr, pytest.mark.integration]

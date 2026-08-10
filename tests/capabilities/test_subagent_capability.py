@@ -9,10 +9,10 @@ from pydantic_ai.capabilities import AbstractCapability
 from pydantic_ai.toolsets import FunctionToolset
 import pytest
 
-from agentpool.capabilities.agent_context import AgentContextDeps
-from agentpool.capabilities.delegation import AgentNotFoundError, DelegationService
-from agentpool.capabilities.subagent_capability import SubagentCapability
-from agentpool.host.context import RunScope
+from wolfharness.capabilities.agent_context import AgentContextDeps
+from wolfharness.capabilities.delegation import AgentNotFoundError, DelegationService
+from wolfharness.capabilities.subagent_capability import SubagentCapability
+from wolfharness.host.context import RunScope
 
 
 pytestmark = pytest.mark.unit
@@ -246,7 +246,7 @@ async def test_resolve_agent_context_from_runtime_context() -> None:
     ctx.deps = agents.context.AgentContext, and our
     capabilities.agent_context.AgentContextDeps is at ctx.deps.data.
     """
-    from agentpool.agents.context import AgentContext as RuntimeAgentContext
+    from wolfharness.agents.context import AgentContext as RuntimeAgentContext
 
     delegation = FakeDelegationService(agents=["alpha", "beta"])
     host = MagicMock()
@@ -285,7 +285,7 @@ async def test_resolve_agent_context_none_deps() -> None:
 
 async def test_resolve_agent_context_runtime_ctx_none_data() -> None:
     """_resolve_agent_context raises RuntimeError when RuntimeAgentContext.data is None."""
-    from agentpool.agents.context import AgentContext as RuntimeAgentContext
+    from wolfharness.agents.context import AgentContext as RuntimeAgentContext
 
     runtime_ctx = RuntimeAgentContext(node=MagicMock())
     runtime_ctx.data = None

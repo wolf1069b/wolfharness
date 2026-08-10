@@ -50,10 +50,10 @@ from pydantic_ai import PartDeltaEvent, TextPartDelta
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool import Agent, AgentPool
-from agentpool.agents.events import StreamCompleteEvent, ToolCallStartEvent
-from agentpool.lifecycle import DirectChannel, MemoryJournal
-from agentpool.orchestrator.core import SessionPool
+from wolfharness import Agent, AgentPool
+from wolfharness.agents.events import StreamCompleteEvent, ToolCallStartEvent
+from wolfharness.lifecycle import DirectChannel, MemoryJournal
+from wolfharness.orchestrator.core import SessionPool
 
 
 pytestmark = pytest.mark.unit

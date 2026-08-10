@@ -15,15 +15,15 @@ from typing import TYPE_CHECKING, Any, Literal
 import anyio
 from pydantic_ai import PartDeltaEvent, PartStartEvent, TextPart, TextPartDelta
 
-from agentpool import Agent
-from agentpool_config.event_handlers import EdgeTTSEventHandlerConfig, TTSEventHandlerConfig
+from wolfharness import Agent
+from wolfharness_config.event_handlers import EdgeTTSEventHandlerConfig, TTSEventHandlerConfig
 
 
 if TYPE_CHECKING:
     from anyvoice import TTSMode
 
-    from agentpool.agents.context import AgentContext
-    from agentpool.agents.events import RichAgentStreamEvent
+    from wolfharness.agents.context import AgentContext
+    from wolfharness.agents.events import RichAgentStreamEvent
 
 
 TTSProvider = Literal["openai", "edge"]

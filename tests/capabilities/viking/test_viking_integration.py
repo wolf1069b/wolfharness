@@ -26,10 +26,10 @@ from pydantic_ai.models.test import TestModel
 import pytest
 import yamling
 
-from agentpool.capabilities.viking import VikingCapability
-from agentpool.capabilities.viking.identity import VikingIdentity
-from agentpool.capabilities.viking.tools import build_tools
-from agentpool_config.capabilities import VikingCapabilityConfig, build_capability
+from wolfharness.capabilities.viking import VikingCapability
+from wolfharness.capabilities.viking.identity import VikingIdentity
+from wolfharness.capabilities.viking.tools import build_tools
+from wolfharness_config.capabilities import VikingCapabilityConfig, build_capability
 
 
 pytestmark = pytest.mark.integration
@@ -41,30 +41,14 @@ pytestmark = pytest.mark.integration
 
 
 def _make_mock_client() -> AsyncMock:
-    """Create a fully populated mock AsyncHTTPClient for L2 integration tests."""
-    client = AsyncMock()
-    client.initialize = AsyncMock()
-    client.close = AsyncMock()
-    client.search = AsyncMock(return_value={"results": []})
-    client.find = AsyncMock(return_value={"results": []})
-    client.grep = AsyncMock(return_value={"matches": []})
-    client.glob = AsyncMock(return_value={"matches": []})
-    client.ls = AsyncMock(return_value=[])
-    client.read = AsyncMock(return_value="file content")
-    client.abstract = AsyncMock(return_value="abstract summary")
-    client.overview = AsyncMock(return_value="overview content")
-    client.write = AsyncMock(return_value={"status": "ok"})
-    client.mkdir = AsyncMock(return_value=None)
-    client.rm = AsyncMock(return_value=None)
-    client.link = AsyncMock(return_value=None)
-    client.set_tags = AsyncMock(return_value={"status": "ok"})
-    client.add_resource = AsyncMock(return_value={"status": "ok"})
-    client.create_session = AsyncMock(return_value={"session_id": "test-session"})
-    client.add_message = AsyncMock(return_value={"status": "ok"})
-    client.commit_session = AsyncMock(return_value={"status": "ok"})
-    client.get_session_context = AsyncMock(return_value={})
-    client._request = AsyncMock(return_value={})
-    return client
+    """Create a fully populated mock AsyncHTTPClient for L2 integration tests.
+
+    Delegates to the shared factory so the canned SDK surface is defined
+    exactly once (see ``tests/capabilities/viking/conftest.py``).
+    """
+    from tests.capabilities.viking.conftest import build_mock_client
+
+    return build_mock_client()
 
 
 def _make_request_context(messages: list[Any]) -> ModelRequestContext:
@@ -114,7 +98,7 @@ def _build_cap_from_config(
 
 def test_yaml_config_loading_viking_all() -> None:
     """YAML config with type=viking, mode=all produces VikingCapabilityConfig."""
-    from agentpool import AgentsManifest
+    from wolfharness import AgentsManifest
 
     yaml_str = """
 agents:
@@ -137,7 +121,7 @@ agents:
 
 def test_yaml_config_loading_viking_retrieve() -> None:
     """YAML config with mode=retrieve produces VikingCapabilityConfig with that mode."""
-    from agentpool import AgentsManifest
+    from wolfharness import AgentsManifest
 
     yaml_str = """
 agents:
@@ -157,7 +141,7 @@ agents:
 
 def test_yaml_config_loading_viking_with_fields() -> None:
     """YAML config with all fields populated parses correctly."""
-    from agentpool import AgentsManifest
+    from wolfharness import AgentsManifest
 
     yaml_str = """
 agents:
@@ -190,7 +174,7 @@ agents:
 
 def test_yaml_config_loading_default_mode() -> None:
     """YAML config without mode defaults to 'all'."""
-    from agentpool import AgentsManifest
+    from wolfharness import AgentsManifest
 
     yaml_str = """
 agents:
@@ -519,7 +503,7 @@ def test_resource_read_level_read() -> None:
 
 def test_resource_read_level_yaml_parsing() -> None:
     """YAML config with resource_read_level parses correctly."""
-    from agentpool import AgentsManifest
+    from wolfharness import AgentsManifest
 
     yaml_str = """
 agents:

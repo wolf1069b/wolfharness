@@ -2,24 +2,24 @@
 
 Regression tests for the bug where the OpenCode TUI showed correct agent name
 and model in the input box, but after execution started, both agent and model
-became 'default'/'agentpool' for the lead agent AND sub-agents.
+became 'default'/'wolfharness' for the lead agent AND sub-agents.
 
 Root cause: ``_before_consumer_loop`` and ``_reconstruct_tool_parts_from_checkpoint``
-hardcoded ``agent_name="agentpool"``, ``model_id="default"``,
-``provider_id="agentpool"`` when creating the assistant message for the async
+hardcoded ``agent_name="wolfharness"``, ``model_id="default"``,
+``provider_id="wolfharness"`` when creating the assistant message for the async
 path. The sync path (``_process_message_locked``) correctly used values from
 the HTTP request, but the TUI uses ``prompt_async`` which goes through the
 async path.
 
 These tests verify that:
 1. ``_before_consumer_loop`` uses ``agent_name`` from the session state
-   (not the hardcoded "agentpool").
+   (not the hardcoded "wolfharness").
 2. ``_before_consumer_loop`` uses model info from pending metadata when
-   provided by the REST handler (not the hardcoded "default"/"agentpool").
-3. ``_before_consumer_loop`` falls back to "default"/"agentpool" only when
+   provided by the REST handler (not the hardcoded "default"/"wolfharness").
+3. ``_before_consumer_loop`` falls back to "default"/"wolfharness" only when
    no model info is available.
 4. ``_reconstruct_tool_parts_from_checkpoint`` uses ``agent_name`` from the
-   session state (not the hardcoded "agentpool").
+   session state (not the hardcoded "wolfharness").
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from agentpool.orchestrator.session_controller import SessionState
+from wolfharness.orchestrator.session_controller import SessionState
 
 
 pytestmark = pytest.mark.unit
@@ -49,7 +49,7 @@ def _make_integration(
     server_state: Mock | None = None,
 ) -> Any:
     """Build an OpenCodeSessionPoolIntegration with mocked deps."""
-    from agentpool_server.opencode_server.session_pool_integration import (
+    from wolfharness_server.opencode_server.session_pool_integration import (
         OpenCodeSessionPoolIntegration,
     )
 
@@ -58,7 +58,7 @@ def _make_integration(
     if server_state is None:
         server_state = Mock()
         server_state.working_dir = "/tmp"
-        server_state.resolve_default_model_info = Mock(return_value=("default", "agentpool"))
+        server_state.resolve_default_model_info = Mock(return_value=("default", "wolfharness"))
         server_state.model_variants = {}
     return OpenCodeSessionPoolIntegration(session_pool, server_state)
 
@@ -72,8 +72,8 @@ class TestBeforeConsumerLoopAgentName:
     """_before_consumer_loop must use agent_name from session state."""
 
     @pytest.mark.asyncio
-    async def test_uses_session_agent_name_not_agentpool(self) -> None:
-        """Assistant message should carry the session's agent_name, not 'agentpool'."""
+    async def test_uses_session_agent_name_not_wolfharness(self) -> None:
+        """Assistant message should carry the session's agent_name, not 'wolfharness'."""
         session_pool = Mock()
         session_pool.sessions = Mock()
         session_pool.sessions.get_session = Mock(
@@ -111,8 +111,8 @@ class TestBeforeConsumerLoopAgentName:
         assert ctx_l.assistant_msg.info.agent == "logician"
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_agentpool_when_no_session_state(self) -> None:
-        """When session state is unavailable, fall back to 'agentpool' (graceful degradation)."""
+    async def test_falls_back_to_wolfharness_when_no_session_state(self) -> None:
+        """When session state is unavailable, fall back to 'wolfharness' (graceful degradation)."""
         session_pool = Mock()
         session_pool.sessions = Mock()
         session_pool.sessions.get_session = Mock(return_value=None)
@@ -125,7 +125,7 @@ class TestBeforeConsumerLoopAgentName:
         assert ctx is not None
         # Graceful fallback — should still create a message, just with the
         # default agent_name.
-        assert ctx.assistant_msg.info.agent == "agentpool"
+        assert ctx.assistant_msg.info.agent == "wolfharness"
 
 
 # =============================================================================
@@ -167,7 +167,7 @@ class TestBeforeConsumerLoopModelInfo:
 
     @pytest.mark.asyncio
     async def test_falls_back_to_default_when_no_pending_model(self) -> None:
-        """Without pending model metadata, fall back to 'default'/'agentpool'."""
+        """Without pending model metadata, fall back to 'default'/'wolfharness'."""
         session_pool = Mock()
         session_pool.sessions = Mock()
         session_pool.sessions.get_session = Mock(
@@ -184,7 +184,7 @@ class TestBeforeConsumerLoopModelInfo:
         assert ctx.assistant_msg.info.agent == "engineer"
         # model falls back to defaults
         assert ctx.assistant_msg.info.model_id == "default"
-        assert ctx.assistant_msg.info.provider_id == "agentpool"
+        assert ctx.assistant_msg.info.provider_id == "wolfharness"
 
     @pytest.mark.asyncio
     async def test_pending_message_id_still_works_with_metadata(self) -> None:
@@ -238,7 +238,7 @@ class TestBeforeConsumerLoopChildSession:
         ctx = integration._contexts.get(child_id)
         assert ctx is not None
         assert ctx.assistant_msg.info.agent == "researcher"
-        assert ctx.assistant_msg.info.agent != "agentpool"
+        assert ctx.assistant_msg.info.agent != "wolfharness"
 
     @pytest.mark.asyncio
     async def test_child_session_uses_child_agent_model(self) -> None:
@@ -323,7 +323,7 @@ class TestReconstructToolPartsAgentName:
     @pytest.mark.asyncio
     async def test_uses_session_agent_name(self) -> None:
         """Checkpoint recovery should preserve the session's agent_name on the assistant message."""
-        from agentpool_server.opencode_server.opencode_message_bridge import (
+        from wolfharness_server.opencode_server.opencode_message_bridge import (
             _reconstruct_tool_parts_from_checkpoint,
         )
 
@@ -338,7 +338,7 @@ class TestReconstructToolPartsAgentName:
 
         server_state = Mock()
         server_state.working_dir = "/tmp"
-        server_state.resolve_default_model_info = Mock(return_value=("default", "agentpool"))
+        server_state.resolve_default_model_info = Mock(return_value=("default", "wolfharness"))
         server_state.model_variants = {}
         server_state.pool_or_none = pool
         server_state.messages = {}
@@ -359,12 +359,12 @@ class TestReconstructToolPartsAgentName:
         assert len(messages) == 1
         assistant_msg = messages[0]
         assert assistant_msg.info.agent == "visionary"
-        assert assistant_msg.info.agent != "agentpool"
+        assert assistant_msg.info.agent != "wolfharness"
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_agentpool_when_no_session_state(self) -> None:
-        """When session state is unavailable, fall back to 'agentpool'."""
-        from agentpool_server.opencode_server.opencode_message_bridge import (
+    async def test_falls_back_to_wolfharness_when_no_session_state(self) -> None:
+        """When session state is unavailable, fall back to 'wolfharness'."""
+        from wolfharness_server.opencode_server.opencode_message_bridge import (
             _reconstruct_tool_parts_from_checkpoint,
         )
 
@@ -377,7 +377,7 @@ class TestReconstructToolPartsAgentName:
 
         server_state = Mock()
         server_state.working_dir = "/tmp"
-        server_state.resolve_default_model_info = Mock(return_value=("default", "agentpool"))
+        server_state.resolve_default_model_info = Mock(return_value=("default", "wolfharness"))
         server_state.model_variants = {}
         server_state.pool_or_none = pool
         server_state.messages = {}
@@ -395,12 +395,12 @@ class TestReconstructToolPartsAgentName:
 
         messages = server_state.messages.get("test-session", [])
         assert len(messages) == 1
-        assert messages[0].info.agent == "agentpool"
+        assert messages[0].info.agent == "wolfharness"
 
     @pytest.mark.asyncio
     async def test_no_op_when_no_pending_calls(self) -> None:
         """Function should be a no-op when pending_calls is empty."""
-        from agentpool_server.opencode_server.opencode_message_bridge import (
+        from wolfharness_server.opencode_server.opencode_message_bridge import (
             _reconstruct_tool_parts_from_checkpoint,
         )
 

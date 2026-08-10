@@ -33,8 +33,8 @@ agents:
 ## Available Tools
 
 ```python exec="true"
-from agentpool_toolsets.vfs_toolset import VFSTools
-from agentpool.docs.utils import generate_tool_docs
+from wolfharness_toolsets.vfs_toolset import VFSTools
+from wolfharness.docs.utils import generate_tool_docs
 
 toolset = VFSTools()
 print(generate_tool_docs(toolset))
@@ -61,7 +61,7 @@ vfs_read("code/src", recursive=True)
 ## Configuration Reference
 
 /// mknodes
-{{ "agentpool_config.toolsets.VFSToolsetConfig" | schema_to_markdown(display_mode="yaml", header_style="pymdownx", wrapped_in="toolsets", header_level=3) }}
+{{ "wolfharness_config.toolsets.VFSToolsetConfig" | schema_to_markdown(display_mode="yaml", header_style="pymdownx", wrapped_in="toolsets", header_level=3) }}
 ///
 
 ## When to Use VFS vs File Access

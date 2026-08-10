@@ -11,9 +11,9 @@ from unittest.mock import MagicMock
 import pytest
 from slashed import Command as SlashedCommand, CommandStore
 
-from agentpool.skills.command import SkillCommand
-from agentpool.skills.skill import Skill
-from agentpool_server.acp_server.commands.skill_commands import ACPSkillBridge
+from wolfharness.skills.command import SkillCommand
+from wolfharness.skills.skill import Skill
+from wolfharness_server.acp_server.commands.skill_commands import ACPSkillBridge
 
 
 # ---------------------------------------------------------------------------
@@ -191,7 +191,7 @@ def _make_minimal_session(
 def _call_register_skill_commands(session: MagicMock) -> None:
     """Invoke the real _register_skill_commands method on a mock session."""
     # We need to call the unbound method from ACPSession on our mock
-    from agentpool_server.acp_server.session import ACPSession
+    from wolfharness_server.acp_server.session import ACPSession
 
     ACPSession._register_skill_commands(session)  # type: ignore[arg-type]
 

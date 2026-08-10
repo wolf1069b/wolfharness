@@ -9,8 +9,8 @@ from mcp.types import ErrorData
 from pydantic_ai import ModelRetry
 import pytest
 
-from agentpool.tasks.exceptions import RunAbortedError
-from agentpool_toolsets.builtin.question_tools import (
+from wolfharness.tasks.exceptions import RunAbortedError
+from wolfharness_toolsets.builtin.question_tools import (
     Question,
     QuestionTools,
     Suggest,

@@ -12,16 +12,16 @@ from unittest.mock import AsyncMock, Mock
 
 import uvicorn
 
-from agentpool.storage import StorageManager
-from agentpool.utils.streams import FileOpsTracker
-from agentpool.utils.todos import TodoTracker
-from agentpool_server.opencode_server.server import create_app
+from wolfharness.storage import StorageManager
+from wolfharness.utils.streams import FileOpsTracker
+from wolfharness.utils.todos import TodoTracker
+from wolfharness_server.opencode_server.server import create_app
 
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
 
-    from agentpool.sessions.models import SessionData
+    from wolfharness.sessions.models import SessionData
 
 
 def create_test_app() -> FastAPI:  # noqa: PLR0915
@@ -33,7 +33,7 @@ def create_test_app() -> FastAPI:  # noqa: PLR0915
     pool.manifest.opencode = Mock()
 
     # Storage
-    from agentpool_config.storage import MemoryStorageConfig, StorageConfig
+    from wolfharness_config.storage import MemoryStorageConfig, StorageConfig
 
     storage_manager = StorageManager(config=StorageConfig(providers=[MemoryStorageConfig()]))
     pool.storage = storage_manager
@@ -60,7 +60,7 @@ def create_test_app() -> FastAPI:  # noqa: PLR0915
     ) -> Mock:
         from datetime import datetime
 
-        from agentpool.sessions.models import SessionData
+        from wolfharness.sessions.models import SessionData
 
         data = SessionData(
             session_id=session_id,
@@ -97,7 +97,7 @@ def create_test_app() -> FastAPI:  # noqa: PLR0915
     def _mock_session_state():
         from datetime import datetime
 
-        from agentpool.orchestrator.core import SessionState
+        from wolfharness.orchestrator.core import SessionState
 
         state = Mock(spec=SessionState)
         state.created_at = datetime.now().timestamp()

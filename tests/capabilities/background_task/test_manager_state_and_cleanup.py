@@ -18,7 +18,7 @@ import contextlib
 
 import pytest
 
-from agentpool.capabilities.background_task import BackgroundTask, BackgroundTaskManager
+from wolfharness.capabilities.background_task import BackgroundTask, BackgroundTaskManager
 
 
 # ---------------------------------------------------------------------------

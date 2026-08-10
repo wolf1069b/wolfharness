@@ -14,11 +14,11 @@ from pydantic_ai import (
 )
 import pytest
 
-from agentpool.sessions.models import PendingDeferredCall
-from agentpool.storage.manager import StorageManager
-from agentpool.storage.serialization import serialize_messages
-from agentpool_config.storage import MemoryStorageConfig, StorageConfig
-from agentpool_storage.memory_provider.provider import MemoryStorageProvider
+from wolfharness.sessions.models import PendingDeferredCall
+from wolfharness.storage.manager import StorageManager
+from wolfharness.storage.serialization import serialize_messages
+from wolfharness_config.storage import MemoryStorageConfig, StorageConfig
+from wolfharness_storage.memory_provider.provider import MemoryStorageProvider
 
 
 pytestmark = pytest.mark.unit

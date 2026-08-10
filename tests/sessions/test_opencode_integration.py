@@ -13,12 +13,12 @@ import tempfile
 
 import pytest
 
-from agentpool.sessions.models import ProjectData, SessionData
-from agentpool.utils.identifiers import ascending
-from agentpool_config.storage import OpenCodeStorageConfig
-from agentpool_storage.opencode_provider import OpenCodeStorageProvider
-from agentpool_storage.opencode_provider.helpers import compute_project_id
-from agentpool_storage.project_store import generate_project_id
+from wolfharness.sessions.models import ProjectData, SessionData
+from wolfharness.utils.identifiers import ascending
+from wolfharness_config.storage import OpenCodeStorageConfig
+from wolfharness_storage.opencode_provider import OpenCodeStorageProvider
+from wolfharness_storage.opencode_provider.helpers import compute_project_id
+from wolfharness_storage.project_store import generate_project_id
 
 
 pytestmark = pytest.mark.integration
@@ -141,18 +141,18 @@ async def test_both_project_ids_accessible() -> None:
         _init_git_repo(str(project_dir))
 
         opencode_id = compute_project_id(str(project_dir))
-        agentpool_id = generate_project_id(str(project_dir))
+        wolfharness_id = generate_project_id(str(project_dir))
 
         # Both should return valid hex strings (or "global" for compute_project_id)
         assert len(opencode_id) >= 1
-        assert len(agentpool_id) == 40  # SHA1 hex digest
+        assert len(wolfharness_id) == 40  # SHA1 hex digest
 
         # With a git repo, compute_project_id returns the root commit SHA
         assert opencode_id != "global"
         assert len(opencode_id) == 40  # commit SHA1 hex digest
 
         # They are different algorithms — expect different values
-        assert opencode_id != agentpool_id, (
+        assert opencode_id != wolfharness_id, (
             "compute_project_id (git root SHA) and generate_project_id (path SHA) "
             "use different algorithms and should produce different values"
         )

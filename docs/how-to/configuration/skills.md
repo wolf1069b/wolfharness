@@ -24,7 +24,7 @@ Skills injection allows you to:
 skills:
   # Skill discovery paths
   paths:
-    - ~/.config/agentpool/skills
+    - ~/.config/wolfharness/skills
     - ./skills
   
   # Include default AgentPool skills (default: true)
@@ -87,7 +87,7 @@ With `inject: all` (or matcher-selected skills), full content is also injected:
 # Global skills configuration
 skills:
   paths:
-    - ~/.config/agentpool/skills
+    - ~/.config/wolfharness/skills
     - ./project-skills
   include_default: true
   

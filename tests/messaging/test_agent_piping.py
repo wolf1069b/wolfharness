@@ -5,9 +5,9 @@ import logging
 import anyio
 import pytest
 
-from agentpool import Agent
-from agentpool.messaging import AgentResponse
-from agentpool.talk.talk import Talk
+from wolfharness import Agent
+from wolfharness.messaging import AgentResponse
+from wolfharness.talk.talk import Talk
 
 
 pytestmark = pytest.mark.unit

@@ -14,9 +14,9 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from agentpool.sessions.models import SessionData
-from agentpool_server.opencode_server.input_provider import OpenCodeInputProvider
-from agentpool_server.opencode_server.routes.session_routes import get_or_load_session
+from wolfharness.sessions.models import SessionData
+from wolfharness_server.opencode_server.input_provider import OpenCodeInputProvider
+from wolfharness_server.opencode_server.routes.session_routes import get_or_load_session
 
 
 pytestmark = pytest.mark.integration
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
     from httpx import AsyncClient
 
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness_server.opencode_server.state import ServerState
 
 
 class TestSessionSwitchInputProvider:

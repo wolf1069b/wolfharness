@@ -10,10 +10,10 @@ import pytest
 from acp import ClientCapabilities
 
 # Add another agent to the pool for switching
-from agentpool import Agent
-from agentpool.delegation import AgentPool
-from agentpool_server.acp_server import ACPServer
-from agentpool_server.acp_server.session import ACPSession
+from wolfharness import Agent
+from wolfharness.delegation import AgentPool
+from wolfharness_server.acp_server import ACPServer
+from wolfharness_server.acp_server.session import ACPSession
 
 
 pytestmark = pytest.mark.integration
@@ -22,8 +22,8 @@ pytestmark = pytest.mark.integration
 @pytest.fixture
 async def agent_pool():
     """Create a real agent pool from config."""
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.manifest import AgentsManifest
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.manifest import AgentsManifest
 
     manifest = AgentsManifest(agents={"test_agent": NativeAgentConfig(model="test")})
 
@@ -47,8 +47,8 @@ async def test_acp_server_creation(agent_pool: AgentPool):
 
 async def test_agent_switching_workflow(agent_pool: AgentPool, mock_acp_agent):
     """Test the complete agent switching workflow."""
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.manifest import AgentsManifest
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.manifest import AgentsManifest
 
     config1 = NativeAgentConfig(name="agent1", model="test")
     config2 = NativeAgentConfig(name="agent2", model="test")

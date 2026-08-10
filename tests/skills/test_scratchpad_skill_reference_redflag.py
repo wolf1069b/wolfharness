@@ -31,10 +31,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentpool.skills.exceptions import SkillNotFoundError
-from agentpool.skills.skill import Skill
-from agentpool.skills.uri_resolver import SkillURIResolver
-from agentpool_toolsets.builtin.skills import load_skill
+from wolfharness.skills.exceptions import SkillNotFoundError
+from wolfharness.skills.skill import Skill
+from wolfharness.skills.uri_resolver import SkillURIResolver
+from wolfharness_toolsets.builtin.skills import load_skill
 
 
 pytestmark = pytest.mark.integration
@@ -56,7 +56,7 @@ class _FakeSkillResource:
         self._skills = skills
 
     async def list_skills(self):
-        from agentpool.capabilities.resource_protocols import SkillEntry
+        from wolfharness.capabilities.resource_protocols import SkillEntry
 
         return [
             SkillEntry(
@@ -245,7 +245,7 @@ class TestScratchpadSkillReferenceLoading:
         ctx = mock_agent_context_with_resolver
 
         # We need to mock _load_reference_content to avoid actual MCP calls
-        with patch("agentpool_toolsets.builtin.skills._load_reference_content") as mock_load_ref:
+        with patch("wolfharness_toolsets.builtin.skills._load_reference_content") as mock_load_ref:
             mock_load_ref.return_value = (
                 "\n\n## Reference: expert_knowledge/excavator/excavator-hard-starting.md\n\n"
                 "# Excavator Hard Starting\n\nDiagnostic procedure."

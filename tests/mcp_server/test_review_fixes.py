@@ -27,9 +27,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentpool.mcp_server.manager import MCPManager
-from agentpool.sessions import SessionData
-from agentpool_server.acp_server.session_manager import ACPSessionManager
+from wolfharness.mcp_server.manager import MCPManager
+from wolfharness.sessions import SessionData
+from wolfharness_server.acp_server.session_manager import ACPSessionManager
 
 
 # ============================================================================
@@ -215,7 +215,7 @@ async def test_resume_session_cleans_connection_sessions() -> None:
     mock_new_session.register_update_callback = MagicMock()
 
     with patch(
-        "agentpool_server.acp_server.session_manager.ACPSession",
+        "wolfharness_server.acp_server.session_manager.ACPSession",
         return_value=mock_new_session,
     ):
         result = await acp_manager.resume_session(
@@ -295,12 +295,12 @@ async def test_acp_session_wires_acp_mcp_manager() -> None:
     Fix: In ``__post_init__``, after ``self.agent.env = self.acp_env``,
     wire the manager for native agents.
     """
-    from agentpool import Agent
-    from agentpool.delegation import AgentPool
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.manifest import AgentsManifest
-    from agentpool_server.acp_server.acp_agent import AgentPoolACPAgent
-    from agentpool_server.acp_server.session import ACPSession
+    from wolfharness import Agent
+    from wolfharness.delegation import AgentPool
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.manifest import AgentsManifest
+    from wolfharness_server.acp_server.acp_agent import AgentPoolACPAgent
+    from wolfharness_server.acp_server.session import ACPSession
 
     def simple_callback(message: str) -> str:
         return f"Test: {message}"

@@ -12,13 +12,13 @@ from typing import TYPE_CHECKING, Any
 from pydantic_ai import RequestUsage, RunUsage
 import pytest
 
-from agentpool.agents.events.events import (
+from wolfharness.agents.events.events import (
     PartDeltaEvent,
     PartStartEvent,
     StepUsageEvent,
     StreamCompleteEvent,
 )
-from agentpool.messaging import ChatMessage
+from wolfharness.messaging import ChatMessage
 
 
 if TYPE_CHECKING:
@@ -59,7 +59,7 @@ async def test_agui_handles_step_usage_event() -> None:
     """Feed StepUsageEvent to AG-UI adapter, assert no exception and CustomEvent emitted."""
     from ag_ui.core import CustomEvent, RunAgentInput
 
-    from agentpool_server.agui_server.base_agent_adapter import BaseAgentAGUIAdapter
+    from wolfharness_server.agui_server.base_agent_adapter import BaseAgentAGUIAdapter
 
     step_usage = RunUsage(input_tokens=100, output_tokens=50)
     cumulative = RunUsage(input_tokens=200, output_tokens=100)
@@ -120,7 +120,7 @@ async def _collect_stream_chunks(
     """Collect all SSE chunks from stream_response as parsed dicts."""
     import anyenv
 
-    from agentpool_server.openai_api_server.completions.helpers import stream_response
+    from wolfharness_server.openai_api_server.completions.helpers import stream_response
 
     chunks: list[dict[str, Any]] = []
     async for sse_data in stream_response(events, request):
@@ -137,7 +137,7 @@ async def _collect_stream_chunks(
 @pytest.mark.asyncio
 async def test_openai_api_handles_step_usage_event() -> None:
     """Feed StepUsageEvent to OpenAI API helper, assert usage in output."""
-    from agentpool_server.openai_api_server.completions.models import ChatCompletionRequest
+    from wolfharness_server.openai_api_server.completions.models import ChatCompletionRequest
 
     step_usage = RunUsage(input_tokens=120, output_tokens=80)
     cumulative = RunUsage(input_tokens=240, output_tokens=160)
@@ -182,7 +182,7 @@ async def test_openai_api_mixed_content_and_usage_chunks() -> None:
     - The usage chunk has ``choices: []`` (usage-only, no content).
     - The usage chunk appears before`` sentinel.
     """
-    from agentpool_server.openai_api_server.completions.models import ChatCompletionRequest
+    from wolfharness_server.openai_api_server.completions.models import ChatCompletionRequest
 
     step_usage = RunUsage(input_tokens=10, output_tokens=5)
     cumulative = RunUsage(input_tokens=10, output_tokens=5)

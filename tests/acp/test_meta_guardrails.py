@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool.agents.events import SpawnSessionStart
-from agentpool_server.acp_server.event_converter import ACPEventConverter
+from wolfharness.agents.events import SpawnSessionStart
+from wolfharness_server.acp_server.event_converter import ACPEventConverter
 
 
 @pytest.fixture

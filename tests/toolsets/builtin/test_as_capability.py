@@ -13,8 +13,8 @@ from pydantic_ai.capabilities import AbstractCapability
 from pydantic_ai.toolsets import AbstractToolset
 import pytest
 
-from agentpool.capabilities.function_toolset import FunctionToolsetCapability
-from agentpool_toolsets.builtin import (
+from wolfharness.capabilities.function_toolset import FunctionToolsetCapability
+from wolfharness_toolsets.builtin import (
     CodeTools,
     DebugTools,
     ProcessManagementTools,
@@ -145,8 +145,8 @@ class TestSkillsToolsAsCapability:
 
     async def test_skill_manager_cap_exposes_load_and_list_tools(self) -> None:
         """SkillManagerCap toolset includes load_skill and list_skills tools."""
-        from agentpool.capabilities.skill_manager_cap import SkillManagerCap
-        from agentpool.skills.skill import Skill
+        from wolfharness.capabilities.skill_manager_cap import SkillManagerCap
+        from wolfharness.skills.skill import Skill
 
         local_skill = Skill(
             name="test-skill",

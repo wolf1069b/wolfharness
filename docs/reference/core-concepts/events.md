@@ -179,10 +179,10 @@ Run agents in event-watching mode to handle events:
 
 ```bash
 # Start watching with default configuration
-agentpool watch agents.yml
+wolfharness watch agents.yml
 
 # With specific log level
-agentpool watch agents.yml --log-level DEBUG
+wolfharness watch agents.yml --log-level DEBUG
 ```
 
 The agents will:

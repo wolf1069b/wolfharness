@@ -19,7 +19,7 @@ import warnings
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool import Agent, AgentPool
+from wolfharness import Agent, AgentPool
 
 
 pytestmark = pytest.mark.integration

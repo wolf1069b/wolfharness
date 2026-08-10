@@ -13,7 +13,7 @@ AgentPool provides multiple agent implementations with a shared interface. These
 Create and use an agent:
 
 ```python
-from agentpool import Agent
+from wolfharness import Agent
 from pydantic import BaseModel
 
 

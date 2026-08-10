@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from pydantic import TypeAdapter
 import pytest
 
-from agentpool.sessions.models import PendingDeferredCall, SessionData
+from wolfharness.sessions.models import PendingDeferredCall, SessionData
 
 
 pytestmark = pytest.mark.unit

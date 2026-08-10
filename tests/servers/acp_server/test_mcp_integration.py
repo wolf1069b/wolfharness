@@ -9,13 +9,13 @@ from typing import TYPE_CHECKING
 import pytest
 
 from acp import EnvVariable, StdioMcpServer
-from agentpool import Agent
-from agentpool.delegation import AgentPool
-from agentpool.log import get_logger
-from agentpool.tools.base import Tool
-from agentpool_server.acp_server.converters import convert_acp_mcp_server_to_config
-from agentpool_server.acp_server.session import ACPSession
-from agentpool_server.acp_server.session_manager import ACPSessionManager
+from wolfharness import Agent
+from wolfharness.delegation import AgentPool
+from wolfharness.log import get_logger
+from wolfharness.tools.base import Tool
+from wolfharness_server.acp_server.converters import convert_acp_mcp_server_to_config
+from wolfharness_server.acp_server.session import ACPSession
+from wolfharness_server.acp_server.session_manager import ACPSessionManager
 
 
 pytestmark = pytest.mark.integration
@@ -23,7 +23,7 @@ pytestmark = pytest.mark.integration
 
 if TYPE_CHECKING:
     from acp import ClientCapabilities
-    from agentpool_server.acp_server.acp_agent import AgentPoolACPAgent
+    from wolfharness_server.acp_server.acp_agent import AgentPoolACPAgent
 
 
 logger = get_logger(__name__)
@@ -116,7 +116,7 @@ async def test_session_manager_with_mcp(
     mcp_servers = [StdioMcpServer(name="tools", command="echo", args=["tools"], env=[])]
     async with agent_pool:
         # Register agent config in runtime registry so create_session() can find it
-        from agentpool.models.agents import NativeAgentConfig
+        from wolfharness.models.agents import NativeAgentConfig
 
         agent_pool.session_pool.sessions.runtime_registry.register(
             "test_agent", NativeAgentConfig(name="test_agent", model="test:")

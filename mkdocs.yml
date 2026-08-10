@@ -1,16 +1,15 @@
-site_name: "AgentPool"
-site_description: "Pydantic-AI based Multi-Agent Framework with YAML-based Agents, Teams, Workflows & Extended ACP / AGUI integration"
-repo_url: "https://github.com/Leoyzen/agentpool/"
-site_url: https://leoyzen.github.io/agentpool/
+site_name: "WolfHarness"
+site_description: "One YAML, every protocol. PydanticAI-based framework for orchestrating multi-agent teams and workflows — ACP, OpenCode, MCP, AG-UI, and OpenAI-compatible APIs."
+repo_url: "https://github.com/wolf1069b/wolfharness/"
+site_url: https://leoyzen.github.io/wolfharness/
 site_author: "Leoyzen"
 copyright: Copyright &copy; 2025 Leoyzen (forked from phil65/agentpool)
 edit_uri: edit/main/docs/
 
 theme:
   name: material
-  custom_dir: overrides
-  icon:
-    logo: material/robot-outline
+  logo: assets/logo.png
+  favicon: assets/favicon.png
   font:
     text: Inter
     code: JetBrains Mono
@@ -57,6 +56,9 @@ theme:
     - search.highlight
     - search.suggest
   # - search.share
+
+extra_css:
+  - stylesheets/extra.css
 
 extra_javascript: # for code blocks with { .interactive }
   - js/run_code_config.js
@@ -133,7 +135,7 @@ extra:
     - icon: fontawesome/brands/github
       link: https://github.com/Leoyzen
     - icon: fontawesome/brands/python
-      link: https://pypi.org/project/agentpool/
+      link: https://pypi.org/project/wolfharness/
 
 nav:
   - Home: index.md
@@ -265,7 +267,7 @@ nav:
           - task: reference/cli/task.md
       - ACP Meta Fields: reference/acp-meta-field-reference.md
       - API:
-          - AgentPool: reference/api/agentpool.md
+          - AgentPool: reference/api/wolfharness.md
           - Agent: reference/api/agent.md
           - MessageNode: reference/api/messagenode.md
           - EventBus & SessionController: reference/api/eventbus.md
@@ -284,7 +286,7 @@ nav:
           - Telemetry: explanation/telemetry.md
           - Python Features: explanation/python-features.md
           - Import Patterns: explanation/import-patterns.md
-          - Extending AgentPool: explanation/extending-agentpool.md
+          - Extending AgentPool: explanation/extending-wolfharness.md
           - Common Patterns: explanation/common-patterns.md
           - Special Considerations: explanation/special-considerations.md
           - Usage Examples: explanation/usage-examples.md
@@ -303,3 +305,4 @@ nav:
           - Status Index: rfcs/STATUS.md
       - Meta:
           - Documentation Guide: meta/documentation-guide.md
+  - Examples: examples.md

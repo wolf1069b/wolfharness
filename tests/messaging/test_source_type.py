@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
-from agentpool.messaging import ChatMessage, MessageNode
-from agentpool.messaging.messagenode import SourceType, get_source_type
+from wolfharness.messaging import ChatMessage, MessageNode
+from wolfharness.messaging.messagenode import SourceType, get_source_type
 
 
 pytestmark = pytest.mark.unit
@@ -36,7 +36,7 @@ def test_source_type_literal_values() -> None:
 @pytest.mark.real_model
 def test_get_source_type_native_agent() -> None:
     """Native Agent instances should return 'agent'."""
-    from agentpool.agents import Agent
+    from wolfharness.agents import Agent
 
     agent = Agent(name="test_agent", model="openai:gpt-4o-mini")
     assert get_source_type(agent) == "agent"
@@ -45,8 +45,8 @@ def test_get_source_type_native_agent() -> None:
 @pytest.mark.real_model
 def test_get_source_type_team() -> None:
     """Team (parallel) instances should return 'team_parallel'."""
-    from agentpool.agents import Agent
-    from agentpool.delegation.base_team import BaseTeam
+    from wolfharness.agents import Agent
+    from wolfharness.delegation.base_team import BaseTeam
 
     agent_a = Agent(name="a", model="openai:gpt-4o-mini")
     agent_b = Agent(name="b", model="openai:gpt-4o-mini")
@@ -57,8 +57,8 @@ def test_get_source_type_team() -> None:
 @pytest.mark.real_model
 def test_get_source_type_teamrun() -> None:
     """TeamRun (sequential) instances should return 'team_sequential'."""
-    from agentpool.agents import Agent
-    from agentpool.delegation.base_team import BaseTeam
+    from wolfharness.agents import Agent
+    from wolfharness.delegation.base_team import BaseTeam
 
     agent_a = Agent(name="a", model="openai:gpt-4o-mini")
     agent_b = Agent(name="b", model="openai:gpt-4o-mini")
@@ -69,7 +69,7 @@ def test_get_source_type_teamrun() -> None:
 def test_get_source_type_unknown_subclass_defaults_to_agent() -> None:
     """Unknown MessageNode subclasses should default to 'agent' with a warning."""
     stub = StubMessageNode(name="stub")
-    with patch("agentpool.messaging.messagenode.logger"):
+    with patch("wolfharness.messaging.messagenode.logger"):
         result = get_source_type(stub)
     assert result == "agent"
     # No warning for valid MessageNode subclass — it's just not Team/BaseTeam
@@ -79,7 +79,7 @@ def test_get_source_type_unknown_subclass_defaults_to_agent() -> None:
 @pytest.mark.real_model
 def test_agent_type_property_on_agent() -> None:
     """MessageNode.agent_type on a native Agent returns persistence value."""
-    from agentpool.agents import Agent
+    from wolfharness.agents import Agent
 
     agent = Agent(name="test_agent", model="openai:gpt-4o-mini")
     assert agent.agent_type == "agent"
@@ -88,8 +88,8 @@ def test_agent_type_property_on_agent() -> None:
 @pytest.mark.real_model
 def test_agent_type_property_on_team() -> None:
     """MessageNode.agent_type on a Team returns the source_type value."""
-    from agentpool.agents import Agent
-    from agentpool.delegation.base_team import BaseTeam
+    from wolfharness.agents import Agent
+    from wolfharness.delegation.base_team import BaseTeam
 
     agent_a = Agent(name="a", model="openai:gpt-4o-mini")
     agent_b = Agent(name="b", model="openai:gpt-4o-mini")
@@ -100,8 +100,8 @@ def test_agent_type_property_on_team() -> None:
 @pytest.mark.real_model
 def test_agent_type_property_on_teamrun() -> None:
     """MessageNode.agent_type on a TeamRun returns the source_type value."""
-    from agentpool.agents import Agent
-    from agentpool.delegation.base_team import BaseTeam
+    from wolfharness.agents import Agent
+    from wolfharness.delegation.base_team import BaseTeam
 
     agent_a = Agent(name="a", model="openai:gpt-4o-mini")
     agent_b = Agent(name="b", model="openai:gpt-4o-mini")
@@ -114,11 +114,11 @@ def test_circular_import_safety() -> None:
     import importlib
 
     # Force re-import of messagenode to verify no circular import
-    mod = importlib.import_module("agentpool.messaging.messagenode")
+    mod = importlib.import_module("wolfharness.messaging.messagenode")
     importlib.reload(mod)
 
     # Verify the module still exports the expected symbols
     assert hasattr(mod, "SourceType")
     assert hasattr(mod, "get_source_type")
 
-    importlib.import_module("agentpool.delegation.base_team")
+    importlib.import_module("wolfharness.delegation.base_team")

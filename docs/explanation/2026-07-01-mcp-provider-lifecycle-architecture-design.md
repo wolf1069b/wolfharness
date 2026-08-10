@@ -4,7 +4,7 @@
 **Status**: Draft
 **Author**: Sisyphus (via brainstorming session)
 **Branch**: `refactor/migrate-to-mcptoolset`
-**Worktree**: `/Users/yuchen.liu/src/yilab/iroot-llm/packages/agentpool-fix-mcp`
+**Worktree**: `/Users/yuchen.liu/src/yilab/iroot-llm/packages/wolfharness-fix-mcp`
 
 ## Problem Statement
 
@@ -108,7 +108,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
-    from agentpool_config.mcp_server import BaseMCPServerConfig
+    from wolfharness_config.mcp_server import BaseMCPServerConfig
 
 @dataclass(frozen=True)
 class McpConfigEntry:

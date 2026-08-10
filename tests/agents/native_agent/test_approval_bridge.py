@@ -20,9 +20,9 @@ from pydantic_ai.tools import (
 )
 import pytest
 
-from agentpool import Agent
-from agentpool.agents.context import AgentContext, AgentRunContext
-from agentpool.agents.native_agent.approval_bridge import (
+from wolfharness import Agent
+from wolfharness.agents.context import AgentContext, AgentRunContext
+from wolfharness.agents.native_agent.approval_bridge import (
     _map_confirmation_result,
     _resolve_deferred_approvals,
     create_approval_bridge_capability,
@@ -315,7 +315,7 @@ class TestGetAgentletIntegration:
         """get_agentlet() includes the approval bridge capability."""
         from pydantic_ai.capabilities import HandleDeferredToolCalls
 
-        with patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
+        with patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
             mock_pydantic_agent.return_value = MagicMock()
             await mock_agent.get_agentlet(None, None, None)
 

@@ -11,7 +11,7 @@ import pytest
 if TYPE_CHECKING:
     from httpx import AsyncClient
 
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness_server.opencode_server.state import ServerState
 
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]

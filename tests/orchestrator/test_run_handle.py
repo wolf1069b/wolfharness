@@ -27,19 +27,19 @@ from unittest.mock import AsyncMock, MagicMock
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool import Agent
-from agentpool.agents.context import AgentRunContext
-from agentpool.agents.events import (
+from wolfharness import Agent
+from wolfharness.agents.context import AgentRunContext
+from wolfharness.agents.events import (
     RunErrorEvent,
     StreamCompleteEvent,
 )
-from agentpool.lifecycle import RunOutcome
-from agentpool.lifecycle.comm_channel import DirectChannel
-from agentpool.lifecycle.journal import MemoryJournal
-from agentpool.messaging import ChatMessage, MessageHistory
-from agentpool.orchestrator.core import EventBus, SessionState
-from agentpool.orchestrator.run import RunHandle
-from agentpool.orchestrator.turn import Turn
+from wolfharness.lifecycle import RunOutcome
+from wolfharness.lifecycle.comm_channel import DirectChannel
+from wolfharness.lifecycle.journal import MemoryJournal
+from wolfharness.messaging import ChatMessage, MessageHistory
+from wolfharness.orchestrator.core import EventBus, SessionState
+from wolfharness.orchestrator.run import RunHandle
+from wolfharness.orchestrator.turn import Turn
 
 
 pytestmark = pytest.mark.unit
@@ -190,7 +190,7 @@ async def test_steer_with_agent_run_emits_user_message_inserted_event() -> None:
     ``source="processed"`` instead of the fire-and-forget
     ``_schedule_user_message_emission()`` path.
     """
-    from agentpool.agents.events.events import UserMessageInsertedEvent
+    from wolfharness.agents.events.events import UserMessageInsertedEvent
 
     bus = EventBus()
     handle = _make_run_handle(event_bus=bus)
@@ -416,7 +416,7 @@ async def test_start_allows_event_bus_none_with_comm_channel() -> None:
     Regression test: _initialize_lifecycle_and_recovery() now creates a
     DirectChannel when event_bus is None, so start() must allow it.
     """
-    from agentpool.lifecycle import DirectChannel, MemoryJournal
+    from wolfharness.lifecycle import DirectChannel, MemoryJournal
 
     agent = MagicMock()
     agent.create_turn = MagicMock(return_value=_StubTurn())
@@ -784,7 +784,7 @@ async def test_input_provider_contextvar_set_during_turn() -> None:
     MCP elicitation depends on this ContextVar. Without it,
     _current_input_provider.get() returns None during turn execution.
     """
-    from agentpool.mcp_server.manager import _current_input_provider
+    from wolfharness.mcp_server.manager import _current_input_provider
 
     captured_provider: list[Any] = []
 
@@ -849,7 +849,7 @@ def test_start_sets_current_task() -> None:
     Without this, cancel() in _interrupt() gets None for current_task
     and cannot interrupt the running turn.
     """
-    import agentpool.orchestrator.run as run_module
+    import wolfharness.orchestrator.run as run_module
 
     source = inspect.getsource(run_module.RunHandle.start)
     assert "current_task" in source, (
@@ -1036,7 +1036,7 @@ async def test_start_empty_prompt_no_staged_content_terminates_immediately() -> 
     In the per-prompt model, an empty prompt with no staged_content means
     no turn is executed and the generator returns immediately.
     """
-    from agentpool.agents.staged_content import StagedContent
+    from wolfharness.agents.staged_content import StagedContent
 
     agent = MagicMock()
     agent.create_turn = MagicMock(return_value=_StubTurn())
@@ -1070,7 +1070,7 @@ async def test_start_empty_list_no_staged_content_terminates_immediately() -> No
     An empty list is falsy and should be treated the same as an empty
     string — no turn executes.
     """
-    from agentpool.agents.staged_content import StagedContent
+    from wolfharness.agents.staged_content import StagedContent
 
     agent = MagicMock()
     agent.create_turn = MagicMock(return_value=_StubTurn())
@@ -1104,7 +1104,7 @@ async def test_start_empty_list_with_staged_content_executes_turn() -> None:
     consume the staged content. Without this, skill instructions are
     silently discarded (issue #284).
     """
-    from agentpool.agents.staged_content import StagedContent
+    from wolfharness.agents.staged_content import StagedContent
 
     staged = StagedContent()
     staged.add_text("IMPORTANT_SKILL_DIRECTIVE")
@@ -1354,7 +1354,7 @@ async def test_lifecycle_dimensions_not_closed_when_run_handle_terminates() -> N
     In the per-prompt model, lifecycle dimensions are session-owned.
     RunHandle.close() only sets complete_event and clears steer_callback.
     """
-    from agentpool.lifecycle import DirectChannel, MemoryJournal
+    from wolfharness.lifecycle import DirectChannel, MemoryJournal
 
     journal = MemoryJournal()
     comm_channel = DirectChannel(journal)
@@ -1447,8 +1447,8 @@ async def test_standalone_session_without_event_bus_executes_turn() -> None:
     to fail in _execute_turn(). Now a DirectChannel is created and start() allows
     event_bus=None when session._comm_channel is set.
     """
-    from agentpool.lifecycle import DirectChannel, MemoryJournal
-    from agentpool.orchestrator.session_controller import SessionState
+    from wolfharness.lifecycle import DirectChannel, MemoryJournal
+    from wolfharness.orchestrator.session_controller import SessionState
 
     agent = MagicMock()
     agent.create_turn = MagicMock(return_value=_StubTurn(events=[_stream_complete_event()]))
@@ -1493,8 +1493,8 @@ async def test_feedback_queue_drained_on_new_run_handle_start() -> None:
     The fix drains feedback_queue in start() before the turn begins, routing
     messages to queued_steer_messages via self.steer().
     """
-    from agentpool.lifecycle import DirectChannel, Feedback, MemoryJournal
-    from agentpool.orchestrator.session_controller import SessionState
+    from wolfharness.lifecycle import DirectChannel, Feedback, MemoryJournal
+    from wolfharness.orchestrator.session_controller import SessionState
 
     agent = MagicMock()
     agent.create_turn = MagicMock(return_value=_StubTurn())
@@ -1541,8 +1541,8 @@ async def test_multiple_steer_messages_drained_fifo_from_feedback_queue() -> Non
     all their steer messages should be enqueued to feedback_queue and
     drained in FIFO order when the next RunHandle starts.
     """
-    from agentpool.lifecycle import DirectChannel, Feedback, MemoryJournal
-    from agentpool.orchestrator.session_controller import SessionState
+    from wolfharness.lifecycle import DirectChannel, Feedback, MemoryJournal
+    from wolfharness.orchestrator.session_controller import SessionState
 
     agent = MagicMock()
     agent.create_turn = MagicMock(return_value=_StubTurn())
@@ -1604,9 +1604,9 @@ async def test_empty_prompt_drains_feedback_queue_but_messages_unprocessed() -> 
     queued_steer_messages after start() returns and re-enqueue any
     unprocessed messages back to feedback_queue for the next RunHandle.
     """
-    from agentpool.agents.staged_content import StagedContent
-    from agentpool.lifecycle import DirectChannel, Feedback, MemoryJournal
-    from agentpool.orchestrator.session_controller import SessionState
+    from wolfharness.agents.staged_content import StagedContent
+    from wolfharness.lifecycle import DirectChannel, Feedback, MemoryJournal
+    from wolfharness.orchestrator.session_controller import SessionState
 
     agent = MagicMock()
     agent.create_turn = MagicMock(return_value=_StubTurn())
@@ -1659,8 +1659,8 @@ async def test_feedback_queue_drains_multimodal_content_blocks() -> None:
     text), the Feedback object has content_blocks set instead of content.
     The draining code should handle both paths.
     """
-    from agentpool.lifecycle import DirectChannel, Feedback, MemoryJournal
-    from agentpool.orchestrator.session_controller import SessionState
+    from wolfharness.lifecycle import DirectChannel, Feedback, MemoryJournal
+    from wolfharness.orchestrator.session_controller import SessionState
 
     agent = MagicMock()
     agent.create_turn = MagicMock(return_value=_StubTurn())

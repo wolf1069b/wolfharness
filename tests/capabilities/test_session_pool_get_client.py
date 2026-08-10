@@ -14,8 +14,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentpool.mcp_server.session_pool import SessionConnectionPool
-from agentpool_config.mcp_server import StdioMCPServerConfig
+from wolfharness.mcp_server.session_pool import SessionConnectionPool
+from wolfharness_config.mcp_server import StdioMCPServerConfig
 
 
 pytestmark = pytest.mark.unit
@@ -40,11 +40,11 @@ async def test_get_client_returns_connected_client() -> None:
 
     with (
         patch(
-            "agentpool.mcp_server.session_pool._create_transport",
+            "wolfharness.mcp_server.session_pool._create_transport",
             return_value=MagicMock(),
         ),
         patch(
-            "agentpool.mcp_server.client.MCPClient",
+            "wolfharness.mcp_server.client.MCPClient",
             return_value=mock_client_instance,
         ),
     ):
@@ -84,11 +84,11 @@ async def test_get_client_transport_reuse_same_config() -> None:
 
     with (
         patch(
-            "agentpool.mcp_server.session_pool._create_transport",
+            "wolfharness.mcp_server.session_pool._create_transport",
             side_effect=fake_create_transport,
         ),
         patch(
-            "agentpool.mcp_server.client.MCPClient",
+            "wolfharness.mcp_server.client.MCPClient",
             side_effect=[mock_client_1, mock_client_2],
         ),
     ):
@@ -132,11 +132,11 @@ async def test_get_client_different_configs_separate_transports() -> None:
 
     with (
         patch(
-            "agentpool.mcp_server.session_pool._create_transport",
+            "wolfharness.mcp_server.session_pool._create_transport",
             side_effect=fake_create_transport,
         ),
         patch(
-            "agentpool.mcp_server.client.MCPClient",
+            "wolfharness.mcp_server.client.MCPClient",
             side_effect=[mock_client_1, mock_client_2],
         ),
     ):

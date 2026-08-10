@@ -24,8 +24,8 @@ import anyio
 from pydantic_ai import RunContext  # noqa: TC002
 import pytest
 
-from agentpool import Agent, AgentPool, AgentsManifest, NativeAgentConfig
-from agentpool.agents.events import StreamCompleteEvent, ToolCallCompleteEvent
+from wolfharness import Agent, AgentPool, AgentsManifest, NativeAgentConfig
+from wolfharness.agents.events import StreamCompleteEvent, ToolCallCompleteEvent
 
 
 # Mark all tests in this module as integration tests
@@ -125,7 +125,7 @@ Follow these instructions exactly:
 @pytest.fixture
 def acp_agent_config_with_tool(tmp_path: Path) -> tuple[Any, Path]:
     """Create ACPAgent config with echo tool via config file."""
-    from agentpool.models.acp_agents import ACPAgentConfig
+    from wolfharness.models.acp_agents import ACPAgentConfig
 
     config_yaml = """
 agents:
@@ -142,7 +142,7 @@ agents:
         command="uv",
         args=[
             "run",
-            "agentpool",
+            "wolfharness",
             "serve-acp",
             str(config_file),
             "--agent",
@@ -215,7 +215,7 @@ async def test_native_agent_event_sequence():
 
 async def test_acp_agent_event_sequence(acp_agent_config_with_tool: tuple[Any, Path]):
     """Test ACPAgent emits events in expected sequence."""
-    from agentpool.agents.acp_agent import ACPAgent
+    from wolfharness.agents.acp_agent import ACPAgent
 
     config, _ = acp_agent_config_with_tool
     collector = EventCollector()
@@ -242,7 +242,7 @@ async def test_event_sequence_consistency_across_agents(
     acp_agent_config_with_tool: tuple[Any, Path],
 ):
     """Test that native Agent and ACPAgent emit consistent key event sequences."""
-    from agentpool.agents.acp_agent import ACPAgent
+    from wolfharness.agents.acp_agent import ACPAgent
 
     # Collect from native agent
     native_collector = EventCollector()

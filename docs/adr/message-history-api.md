@@ -45,7 +45,7 @@ This document specifies **new message history API methods to add to SessionPool*
 └─────────────────────────────────────────┘
 ```
 
-**Key point**: `SessionPool` lives in `src/agentpool/orchestrator/core.py` and does not have message history methods yet. It has `self.sessions` (SessionController) and `self.sessions.store` (SessionStore for session metadata). Message history operations must be added to SessionPool as new methods. The storage layer is accessed via `AgentPool.storage`, which is a **`StorageManager`** (not `StorageProvider`). `StorageManager` is a proxy that forwards to configured `StorageProvider` instances.
+**Key point**: `SessionPool` lives in `src/wolfharness/orchestrator/core.py` and does not have message history methods yet. It has `self.sessions` (SessionController) and `self.sessions.store` (SessionStore for session metadata). Message history operations must be added to SessionPool as new methods. The storage layer is accessed via `AgentPool.storage`, which is a **`StorageManager`** (not `StorageProvider`). `StorageManager` is a proxy that forwards to configured `StorageProvider` instances.
 
 ### Type Conversion
 
@@ -199,7 +199,7 @@ The existing `StorageProvider` has methods that map to the new API:
 3. Add pagination forwarding to `StorageManager.get_session_messages()`
 
 ```python
-# In agentpool_storage/base.py (StorageProvider)
+# In wolfharness_storage/base.py (StorageProvider)
 async def truncate_messages(
     self,
     session_id: str,
@@ -230,7 +230,7 @@ async def get_session_messages(
         limit: Maximum number of messages to return (new parameter for Migration B).
     """
 
-# In agentpool/storage/manager.py (StorageManager)
+# In wolfharness/storage/manager.py (StorageManager)
 async def get_session_messages(
     self,
     session_id: str,

@@ -17,9 +17,9 @@ from unittest.mock import patch
 
 import pytest
 
-from agentpool.skills.skill_tool_manager import SkillToolManager
-from agentpool.tools.base import Tool
-from agentpool_config.skills import SkillToolConfig
+from wolfharness.skills.skill_tool_manager import SkillToolManager
+from wolfharness.tools.base import Tool
+from wolfharness_config.skills import SkillToolConfig
 
 
 pytestmark = pytest.mark.unit
@@ -67,7 +67,7 @@ class TestImportTool:
             import_path="nonexistent_module_xyz__test:nonexistent_func",
         )
 
-        with patch("agentpool.skills.skill_tool_manager.logger") as mock_logger:
+        with patch("wolfharness.skills.skill_tool_manager.logger") as mock_logger:
             tool = manager.import_tool(config)
 
         assert tool is None
@@ -77,7 +77,7 @@ class TestImportTool:
         """Import path without ':' logs warning and returns None."""
         config = SkillToolConfig(type="python", import_path="os")
 
-        with patch("agentpool.skills.skill_tool_manager.logger") as mock_logger:
+        with patch("wolfharness.skills.skill_tool_manager.logger") as mock_logger:
             tool = manager.import_tool(config)
 
         assert tool is None
@@ -89,7 +89,7 @@ class TestImportTool:
         # os.sep is a plain string, not callable
         config = SkillToolConfig(type="python", import_path="os:sep")
 
-        with patch("agentpool.skills.skill_tool_manager.logger") as mock_logger:
+        with patch("wolfharness.skills.skill_tool_manager.logger") as mock_logger:
             tool = manager.import_tool(config)
 
         assert tool is None
@@ -103,7 +103,7 @@ class TestImportTool:
             import_path="os:this_attr_does_not_exist_xyz",
         )
 
-        with patch("agentpool.skills.skill_tool_manager.logger") as mock_logger:
+        with patch("wolfharness.skills.skill_tool_manager.logger") as mock_logger:
             tool = manager.import_tool(config)
 
         assert tool is None
@@ -141,7 +141,7 @@ class TestImportTools:
             SkillToolConfig(type="python", import_path="os:sep"),  # non-callable
         ]
 
-        with patch("agentpool.skills.skill_tool_manager.logger"):
+        with patch("wolfharness.skills.skill_tool_manager.logger"):
             tools = manager.import_tools(configs)
 
         assert len(tools) == 2
@@ -154,7 +154,7 @@ class TestImportTools:
             SkillToolConfig(type="python", import_path="os:sep"),  # non-callable
         ]
 
-        with patch("agentpool.skills.skill_tool_manager.logger"):
+        with patch("wolfharness.skills.skill_tool_manager.logger"):
             tools = manager.import_tools(configs)
 
         assert tools == []

@@ -13,11 +13,11 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import pytest
 
 from acp.schema.mcp import AcpMcpServer
-from agentpool.mcp_server.config_snapshot import McpConfigSnapshot
-from agentpool.mcp_server.manager import MCPManager
-from agentpool.orchestrator.session_controller import SessionController, SessionState
-from agentpool_server.acp_server.acp_mcp_manager import AcpMcpConnectionManager
-from agentpool_server.acp_server.session_manager import ACPSessionManager
+from wolfharness.mcp_server.config_snapshot import McpConfigSnapshot
+from wolfharness.mcp_server.manager import MCPManager
+from wolfharness.orchestrator.session_controller import SessionController, SessionState
+from wolfharness_server.acp_server.acp_mcp_manager import AcpMcpConnectionManager
+from wolfharness_server.acp_server.session_manager import ACPSessionManager
 
 
 # ============================================================================
@@ -89,7 +89,7 @@ async def test_on_disconnect_full_cleanup_chain_with_real_components() -> None: 
 
     try:
         with patch(
-            "agentpool_server.acp_server.session_manager.ACPSession",
+            "wolfharness_server.acp_server.session_manager.ACPSession",
             return_value=mock_session,
         ):
             session_id = await acp_manager.create_session(
@@ -204,7 +204,7 @@ async def test_connection_id_propagation_create_session_populates_connection_ses
     mock_session.register_update_callback = MagicMock()
 
     with patch(
-        "agentpool_server.acp_server.session_manager.ACPSession",
+        "wolfharness_server.acp_server.session_manager.ACPSession",
         return_value=mock_session,
     ):
         session_id = await acp_manager.create_session(
@@ -340,7 +340,7 @@ async def test_multiple_sessions_same_connection_real_acpsessions() -> None:  # 
     mock_session_2.close = AsyncMock()
 
     with patch(
-        "agentpool_server.acp_server.session_manager.ACPSession",
+        "wolfharness_server.acp_server.session_manager.ACPSession",
         side_effect=[mock_session_1, mock_session_2],
     ):
         session_id_1 = await acp_manager.create_session(

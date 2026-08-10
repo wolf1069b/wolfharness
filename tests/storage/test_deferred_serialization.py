@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from agentpool.sessions.models import PendingDeferredCall
-from agentpool.storage.serialization import (
+from wolfharness.sessions.models import PendingDeferredCall
+from wolfharness.storage.serialization import (
     deserialize_pending_calls,
     serialize_pending_calls,
 )

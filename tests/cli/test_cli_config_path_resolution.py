@@ -22,8 +22,8 @@ from pathlib import Path
 
 import pytest
 
-from agentpool.models.manifest import AgentsManifest
-from agentpool_config.context import CONFIG_DIR, ConfigContextManager
+from wolfharness.models.manifest import AgentsManifest
+from wolfharness_config.context import CONFIG_DIR, ConfigContextManager
 
 
 pytestmark = pytest.mark.unit
@@ -108,7 +108,7 @@ class TestServeOpenCode:
             os.chdir(cwd_outside_config)
 
             # Import and test the resolution logic
-            from agentpool_config.resolution import resolve_config
+            from wolfharness_config.resolution import resolve_config
 
             resolved = resolve_config(explicit_path=str(config_path))
 
@@ -147,7 +147,7 @@ class TestServeOpenCode:
         try:
             os.chdir(cwd_outside_config)
 
-            from agentpool_config.resolution import resolve_config
+            from wolfharness_config.resolution import resolve_config
 
             resolved = resolve_config(explicit_path=str(config_path))
 
@@ -185,7 +185,7 @@ class TestServeAcp:
         try:
             os.chdir(cwd_outside_config)
 
-            from agentpool_config.resolution import resolve_config
+            from wolfharness_config.resolution import resolve_config
 
             resolved = resolve_config(explicit_path=str(config_path))
 

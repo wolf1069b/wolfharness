@@ -14,20 +14,20 @@ from unittest.mock import AsyncMock, patch
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool.agents.native_agent.agent import (
+from wolfharness.agents.native_agent.agent import (
     Agent,
     _intersect_capabilities,
     _model_config_names,
 )
-from agentpool.capabilities.modality_filter import ModalityFilterCapability
-from agentpool.models.agents import NativeAgentConfig
-from agentpool.models.model_configs import (
+from wolfharness.capabilities.modality_filter import ModalityFilterCapability
+from wolfharness.models.agents import NativeAgentConfig
+from wolfharness.models.model_configs import (
     FallbackModelConfig,
     OpenAIModelConfig,
     StringModelConfig,
     TestModelConfig as _TestModelConfig,
 )
-from agentpool_config.model_capabilities import ModelCapabilities
+from wolfharness_config.model_capabilities import ModelCapabilities
 
 
 pytestmark = [pytest.mark.unit]
@@ -211,7 +211,7 @@ async def test_viking_cap_populated_with_resolved_caps() -> None:
     A user-configured VikingCapability must receive the resolved model
     capabilities so ``viking_read`` can auto-detect image-byte returns.
     """
-    from agentpool.capabilities.viking import VikingCapability
+    from wolfharness.capabilities.viking import VikingCapability
 
     viking = VikingCapability(mode="all")
     config = NativeAgentConfig(
@@ -237,7 +237,7 @@ async def test_viking_cap_populated_with_resolved_caps() -> None:
 
 async def test_viking_cap_text_only_model_returns_false() -> None:
     """Text-only model resolution prevents image-byte returns in viking_read."""
-    from agentpool.capabilities.viking import VikingCapability
+    from wolfharness.capabilities.viking import VikingCapability
 
     viking = VikingCapability(mode="all")
     config = NativeAgentConfig(
@@ -265,7 +265,7 @@ async def test_viking_cap_no_model_name_gets_all_none_caps() -> None:
     _should_return_image_bytes must degrade to text-only (safe default),
     even though model_capabilities is a non-None object.
     """
-    from agentpool.capabilities.viking import VikingCapability
+    from wolfharness.capabilities.viking import VikingCapability
 
     viking = VikingCapability(mode="all")
     agent = Agent(
@@ -293,7 +293,7 @@ async def test_viking_injected_caps_feed_multimodal_bridge() -> None:
     model (bridge keeps images as HTTP URLs), False for text-only (bridge
     replaces images with viking:// text links).
     """
-    from agentpool.capabilities.viking import VikingCapability
+    from wolfharness.capabilities.viking import VikingCapability
 
     for caps in (_all_true_caps(), _text_only_caps()):
         viking = VikingCapability(mode="all", multimodal_bridge=True)
@@ -430,7 +430,7 @@ async def test_resolve_capabilities_called_for_string_model() -> None:
     # Mock resolve_capabilities to avoid real tokonomics calls.
     mock_caps = _text_only_caps()
     with patch(
-        "agentpool.host.stubs.resolve_capabilities",
+        "wolfharness.host.stubs.resolve_capabilities",
         new_callable=AsyncMock,
         return_value=mock_caps,
     ) as mock_resolve:
@@ -457,7 +457,7 @@ async def test_fallback_model_does_not_call_resolve_per_sub_model() -> None:
     agent = Agent(name="test", model="test", agent_config=config)
 
     with patch(
-        "agentpool.host.stubs.resolve_capabilities",
+        "wolfharness.host.stubs.resolve_capabilities",
         new_callable=AsyncMock,
     ) as mock_resolve:
         await agent.get_agentlet(model=None, output_type=str)
@@ -491,7 +491,7 @@ async def test_fallback_model_user_filter_gets_declared_caps() -> None:
     )
 
     with patch(
-        "agentpool.host.stubs.resolve_capabilities",
+        "wolfharness.host.stubs.resolve_capabilities",
         new_callable=AsyncMock,
     ):
         pydantic_agent = await agent.get_agentlet(model=None, output_type=str)
@@ -523,7 +523,7 @@ async def test_agent_creation_no_tokonomics_query_for_custom_model() -> None:
     agent = Agent(name="test", model="test", agent_config=config)
 
     with patch(
-        "agentpool.host.stubs.CapabilityCache.get_capability",
+        "wolfharness.host.stubs.CapabilityCache.get_capability",
         new_callable=AsyncMock,
     ) as mock_get:
         pydantic_agent = await agent.get_agentlet(model=None, output_type=str)
@@ -541,7 +541,7 @@ async def test_agent_creation_no_tokonomics_query_for_custom_model() -> None:
 @pytest.mark.integration
 async def test_agent_creation_uses_cached_values() -> None:
     """Agent creation should use cached capability values when available."""
-    from agentpool.host.stubs import _get_default_cache
+    from wolfharness.host.stubs import _get_default_cache
 
     cache = _get_default_cache()
     # Pre-populate cache for the model.

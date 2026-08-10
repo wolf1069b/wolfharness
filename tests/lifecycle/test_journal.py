@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from agentpool.lifecycle import (
+from wolfharness.lifecycle import (
     DurableJournal,
     Journal,
     MemoryJournal,

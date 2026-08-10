@@ -16,8 +16,8 @@ from typing import Any
 
 import pytest
 
-from agentpool.capabilities.change_event import ChangeEvent
-from agentpool.capabilities.extension_registry import (
+from wolfharness.capabilities.change_event import ChangeEvent
+from wolfharness.capabilities.extension_registry import (
     CircularCompositionError,
     ExtensionRegistry,
     Scope,
@@ -50,7 +50,7 @@ class FakeSkillResource(FakeCapability):
         self._skills = skills or {"test-skill": "skill content"}
 
     async def list_skills(self) -> list[Any]:
-        from agentpool.capabilities.resource_protocols import SkillEntry
+        from wolfharness.capabilities.resource_protocols import SkillEntry
 
         return [
             SkillEntry(name=n, description=d, uri=f"skill://{n}") for n, d in self._skills.items()
@@ -79,17 +79,17 @@ class FakeMcpResource(FakeCapability):
         return []
 
     async def call_tool(self, name: str, args: dict[str, Any]) -> Any:
-        from agentpool.capabilities.resource_protocols import ToolResult
+        from wolfharness.capabilities.resource_protocols import ToolResult
 
         return ToolResult(content="tool result")
 
     async def list_resources(self) -> list[Any]:
-        from agentpool.capabilities.resource_protocols import ResourceEntry
+        from wolfharness.capabilities.resource_protocols import ResourceEntry
 
         return [ResourceEntry(uri=u, name=n) for u, n in self._resources.items()]
 
     async def read_resource(self, uri: str) -> list[Any] | None:
-        from agentpool.capabilities.resource_protocols import TextResourceContent
+        from wolfharness.capabilities.resource_protocols import TextResourceContent
 
         content = self._resources.get(uri)
         if content is None:
@@ -126,12 +126,12 @@ class FakeCommandResource(FakeCapability):
         super().__init__(name)
 
     async def list_commands(self) -> list[Any]:
-        from agentpool.capabilities.resource_protocols import CommandEntry
+        from wolfharness.capabilities.resource_protocols import CommandEntry
 
         return [CommandEntry(name="test-cmd", description="Test command")]
 
     async def get_command(self, name: str) -> Any:
-        from agentpool.capabilities.resource_protocols import CommandEntry
+        from wolfharness.capabilities.resource_protocols import CommandEntry
 
         if name == "test-cmd":
             return CommandEntry(name=name, description="Test command")
@@ -145,7 +145,7 @@ class FakeResourceTemplateAccess(FakeCapability):
         super().__init__(name)
 
     async def list_resource_templates(self) -> list[Any]:
-        from agentpool.capabilities.resource_protocols import ResourceTemplateEntry
+        from wolfharness.capabilities.resource_protocols import ResourceTemplateEntry
 
         return [
             ResourceTemplateEntry(
@@ -161,7 +161,7 @@ class FakeResourceTemplateAccess(FakeCapability):
         argument: Any,
         context: dict[str, str] | None = None,
     ) -> Any:
-        from agentpool.capabilities.resource_protocols import CompletionResult
+        from wolfharness.capabilities.resource_protocols import CompletionResult
 
         return CompletionResult(values=["completion1", "completion2"])
 
@@ -408,7 +408,7 @@ class TestURIRouting:
 
     @pytest.mark.asyncio
     async def test_resolve_skill_uri(self) -> None:
-        from agentpool.skills.skill import Skill
+        from wolfharness.skills.skill import Skill
 
         reg = ExtensionRegistry()
         skill_cap = FakeSkillResource(skills={"my-skill": "skill content here"})

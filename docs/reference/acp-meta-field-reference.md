@@ -6,7 +6,7 @@ icon: material/file-document
 
 ## Overview
 
-The Agent Client Protocol (ACP) includes a `_meta` field (called `field_meta` in agentpool's Python implementation) on all message types for extensibility. This field allows clients and agents to pass custom metadata that isn't part of the core protocol.
+The Agent Client Protocol (ACP) includes a `_meta` field (called `field_meta` in wolfharness's Python implementation) on all message types for extensibility. This field allows clients and agents to pass custom metadata that isn't part of the core protocol.
 
 ## Protocol Specification
 

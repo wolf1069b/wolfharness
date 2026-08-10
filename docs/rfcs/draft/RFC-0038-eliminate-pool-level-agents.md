@@ -61,7 +61,7 @@ AgentPool does not leverage these capabilities. It calls `cfg.get_agent()` eager
 
 ### Historical Precedent in AgentPool
 
-- `2026-06-17-thin-agentpool-core` (archived OpenSpec change): Already thinned agent types from 5 → 2 (native + acp), removing ~16K LOC. The `file` agent type was deliberately kept as a "config-only" mechanism — proving this pattern is viable.
+- `2026-06-17-thin-wolfharness-core` (archived OpenSpec change): Already thinned agent types from 5 → 2 (native + acp), removing ~16K LOC. The `file` agent type was deliberately kept as a "config-only" mechanism — proving this pattern is viable.
 - `2026-06-03-thin-pydantic-ai-wrappers` (archived): Established the "Complement, Don't Wrap" vision. Event stream thinning was deferred (Phase 2g, never implemented).
 - `refactor-skills-as-capabilities` (active OpenSpec change): Already implements lazy MCP server connections — servers connect on first tool call, not activation.
 
@@ -469,7 +469,7 @@ Each phase is independently revertible via git. Phase 1 can ship alone (adds API
 3. **What about programmatic `Agent` construction (not from config)?**
    - `AgentPool.__init__()` currently supports `manifest=None` (empty config) and programmatic `add_agent(agent_instance)`. The programmatic path should remain for direct agent construction use cases.
 
-4. **Does this affect `agentpool run <agent_name> "prompt"` CLI?**
+4. **Does this affect `wolfharness run <agent_name> "prompt"` CLI?**
    - Yes. The CLI currently calls `pool.get_agent(name).run(prompt)`. It should instead create a session via SessionPool or directly call `cfg.get_agent().run(prompt)`.
 
 5. **Should `AgentPool` still extend `BaseRegistry[NodeName, MessageNode]`?**

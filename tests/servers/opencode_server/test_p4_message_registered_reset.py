@@ -19,22 +19,22 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 
-from agentpool.agents.events.events import (
+from wolfharness.agents.events.events import (
     RunFailedEvent,
     RunStartedEvent,
     StreamCompleteEvent,
 )
-from agentpool.messaging import ChatMessage
-from agentpool.orchestrator.core import EventEnvelope
-from agentpool_server.opencode_server.event_processor_context import (
+from wolfharness.messaging import ChatMessage
+from wolfharness.orchestrator.core import EventEnvelope
+from wolfharness_server.opencode_server.event_processor_context import (
     EventProcessorContext,
 )
-from agentpool_server.opencode_server.models import (
+from wolfharness_server.opencode_server.models import (
     MessagePath,
     MessageTime,
     MessageWithParts,
 )
-from agentpool_server.opencode_server.opencode_event_bridge import (
+from wolfharness_server.opencode_server.opencode_event_bridge import (
     OpenCodeEventBridgeMixin,
 )
 
@@ -138,11 +138,11 @@ def _patch_mocks():
     def _ctx():
         with (
             __import__("unittest.mock").mock.patch(
-                "agentpool_server.opencode_server.opencode_event_bridge.set_session_status",
+                "wolfharness_server.opencode_server.opencode_event_bridge.set_session_status",
                 new_callable=AsyncMock,
             ),
             __import__("unittest.mock").mock.patch(
-                "agentpool_server.opencode_server.opencode_event_bridge.append_message_to_session",
+                "wolfharness_server.opencode_server.opencode_event_bridge.append_message_to_session",
                 new_callable=AsyncMock,
             ) as mock_append,
         ):
@@ -223,7 +223,7 @@ async def test_d1_fires_on_turn2_after_stream_complete() -> None:
     - Turn 2: RunStarted → D1 fires (True) → new msg → _message_registered=False
     - Turn 2: register → _message_registered=True
     """
-    import agentpool_server.opencode_server.opencode_event_bridge as bridge_module
+    import wolfharness_server.opencode_server.opencode_event_bridge as bridge_module
 
     session_id = "sess-p4-d1"
     bridge, ctx, _broadcast = _setup_bridge(

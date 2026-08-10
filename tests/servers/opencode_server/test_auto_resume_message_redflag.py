@@ -34,19 +34,19 @@ from pydantic_ai.messages import (
 )
 import pytest
 
-from agentpool.agents.events import StreamCompleteEvent
-from agentpool.messaging import ChatMessage
-from agentpool.orchestrator.core import SessionPool
-from agentpool_server.opencode_server.models import (
+from wolfharness.agents.events import StreamCompleteEvent
+from wolfharness.messaging import ChatMessage
+from wolfharness.orchestrator.core import SessionPool
+from wolfharness_server.opencode_server.models import (
     AssistantMessage,
     MessageUpdatedEvent,
     PartUpdatedEvent,
 )
-from agentpool_server.opencode_server.session_pool_integration import (
+from wolfharness_server.opencode_server.session_pool_integration import (
     OpenCodeSessionPoolIntegration,
     get_messages_for_session,
 )
-from agentpool_server.opencode_server.state import ServerState
+from wolfharness_server.opencode_server.state import ServerState
 
 
 pytestmark = pytest.mark.integration
@@ -59,8 +59,8 @@ if TYPE_CHECKING:
 @pytest.fixture
 def mock_agent_pool() -> Mock:
     """Create a mock AgentPool for SessionPool construction."""
-    from agentpool.agents.events import RunStartedEvent, StreamCompleteEvent
-    from agentpool.messaging.messages import ChatMessage
+    from wolfharness.agents.events import RunStartedEvent, StreamCompleteEvent
+    from wolfharness.messaging.messages import ChatMessage
 
     pool = Mock()
     pool.main_agent = Mock()

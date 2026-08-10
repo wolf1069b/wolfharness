@@ -20,17 +20,17 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from agentpool import AgentPool, AgentsManifest
-from agentpool.agents.context import AgentContext, AgentRunContext
-from agentpool.agents.events import (
+from wolfharness import AgentPool, AgentsManifest
+from wolfharness.agents.context import AgentContext, AgentRunContext
+from wolfharness.agents.events import (
     RunStartedEvent,
     SpawnSessionStart,
     SubAgentEvent,
 )
-from agentpool.agents.exceptions import MAX_DELEGATION_DEPTH, DelegationDepthError
-from agentpool.orchestrator.core import EventEnvelope
-from agentpool_storage.memory_provider.provider import MemoryStorageProvider
-from agentpool_toolsets.builtin.subagent_tools import SubagentTools
+from wolfharness.agents.exceptions import MAX_DELEGATION_DEPTH, DelegationDepthError
+from wolfharness.orchestrator.core import EventEnvelope
+from wolfharness_storage.memory_provider.provider import MemoryStorageProvider
+from wolfharness_toolsets.builtin.subagent_tools import SubagentTools
 
 
 pytestmark = pytest.mark.integration
@@ -357,7 +357,7 @@ agents:
 
 async def test_subagent_tools_does_not_import_identifiers() -> None:
     """subagent_tools module does not import identifier — uses create_child_session instead."""
-    import agentpool_toolsets.builtin.subagent_tools as mod
+    import wolfharness_toolsets.builtin.subagent_tools as mod
 
     # The module should not have 'identifier' in its namespace
     assert not hasattr(mod, "identifier"), (

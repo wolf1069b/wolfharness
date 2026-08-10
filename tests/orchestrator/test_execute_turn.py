@@ -10,11 +10,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agentpool.agents.events.events import (
+from wolfharness.agents.events.events import (
     RunErrorEvent,
     StreamCompleteEvent,
 )
-from agentpool.messaging.messagenode import ChatMessage
+from wolfharness.messaging.messagenode import ChatMessage
 
 
 def _make_mock_session() -> MagicMock:
@@ -36,7 +36,7 @@ async def test_execute_turn_breaks_on_run_error_event() -> None:
     _execute_turn() breaks on RunErrorEvent and does NOT yield the trailing
     StreamCompleteEvent.
     """
-    from agentpool.orchestrator.run import RunHandle
+    from wolfharness.orchestrator.run import RunHandle
 
     error_event = RunErrorEvent(
         message="Something went wrong",
@@ -96,7 +96,7 @@ async def test_execute_turn_breaks_on_stream_complete() -> None:
     When turn.execute() yields StreamCompleteEvent (no RunErrorEvent),
     _execute_turn() breaks normally.
     """
-    from agentpool.orchestrator.run import RunHandle
+    from wolfharness.orchestrator.run import RunHandle
 
     complete_event = StreamCompleteEvent(
         message=ChatMessage(content="done", role="assistant"),

@@ -7,11 +7,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentpool.host.factory import AgentFactory
+from wolfharness.host.factory import AgentFactory
 
 
 if TYPE_CHECKING:
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
 
 pytestmark = pytest.mark.unit
@@ -103,7 +103,7 @@ def test_compile_does_not_register_skills_tools_provider_at_agent_scope(
     otherwise it gets registered at AGENT scope too, causing duplicate
     capability entries in get_visible_capabilities() and tool name conflicts.
     """
-    from agentpool.capabilities.extension_registry import Scope, ScopeLevel
+    from wolfharness.capabilities.extension_registry import Scope, ScopeLevel
 
     skills_provider = MagicMock()
     skills_provider.__class__ = type("FakeSkillsProvider", (), {})
@@ -134,10 +134,9 @@ def test_compile_registers_config_capabilities_at_agent_scope(
     minimal_pool: AgentPool,
 ) -> None:
     """Config-defined capabilities (e.g. Viking) are registered at AGENT scope."""
-    from agentpool.capabilities.extension_registry import Scope, ScopeLevel
-
     # Use our test ResourceAccess capability
     from tests.fixtures.test_resource_cap import TestResourceAccessCap
+    from wolfharness.capabilities.extension_registry import Scope, ScopeLevel
 
     test_cap = TestResourceAccessCap(read_text="test", read_uri="test://x")
 
@@ -155,7 +154,7 @@ def test_compile_registers_config_capabilities_at_agent_scope(
 
     factory = AgentFactory(pool=minimal_pool)
 
-    with patch("agentpool.models.agents.NativeAgentConfig", (type(cfg),)):
+    with patch("wolfharness.models.agents.NativeAgentConfig", (type(cfg),)):
         factory.compile(
             manifest=manifest,
             host_context=_make_host_context(),
@@ -164,7 +163,7 @@ def test_compile_registers_config_capabilities_at_agent_scope(
     agent_scope = Scope(level=ScopeLevel.AGENT, agent_name="test_agent")
     visible = minimal_pool.extension_registry.get_visible_capabilities(agent_scope)
     # TestResourceAccessCap should be at AGENT scope
-    from agentpool.capabilities.resource_protocols import ResourceAccess
+    from wolfharness.capabilities.resource_protocols import ResourceAccess
 
     ra_caps = [c for c in visible if isinstance(c, ResourceAccess)]
     assert len(ra_caps) == 1
@@ -180,7 +179,7 @@ def test_get_visible_capabilities_no_duplicates_across_scopes(
     This test documents that behavior so callers know to handle duplicates
     or avoid cross-scope registration of the same instance.
     """
-    from agentpool.capabilities.extension_registry import Scope, ScopeLevel
+    from wolfharness.capabilities.extension_registry import Scope, ScopeLevel
 
     cap = MagicMock()
     reg = minimal_pool.extension_registry
@@ -211,7 +210,7 @@ async def test_create_session_agent_native_main_calls_get_agent_with_pool(
 
     factory = AgentFactory(pool=pool)
 
-    with patch("agentpool.models.agents.NativeAgentConfig", (type(cfg),)):
+    with patch("wolfharness.models.agents.NativeAgentConfig", (type(cfg),)):
         result = await factory.create_session_agent(
             agent_name="test_agent",
             session_id="sess-1",
@@ -236,7 +235,7 @@ async def test_create_session_agent_native_main_calls_aenter(minimal_pool: Agent
 
     factory = AgentFactory(pool=minimal_pool)
 
-    with patch("agentpool.models.agents.NativeAgentConfig", (type(cfg),)):
+    with patch("wolfharness.models.agents.NativeAgentConfig", (type(cfg),)):
         await factory.create_session_agent(
             agent_name="test_agent",
             session_id="sess-1",
@@ -260,7 +259,7 @@ async def test_create_session_agent_native_main_no_pool_providers(minimal_pool: 
 
     factory = AgentFactory(pool=minimal_pool)
 
-    with patch("agentpool.models.agents.NativeAgentConfig", (type(cfg),)):
+    with patch("wolfharness.models.agents.NativeAgentConfig", (type(cfg),)):
         await factory.create_session_agent(
             agent_name="test_agent",
             session_id="sess-1",
@@ -304,7 +303,7 @@ async def test_create_session_agent_non_native_builds_snapshot_manually(
     factory = AgentFactory(pool=pool)
 
     # empty tuple → isinstance always False
-    with patch("agentpool.models.agents.NativeAgentConfig", ()):
+    with patch("wolfharness.models.agents.NativeAgentConfig", ()):
         result = await factory.create_session_agent(
             agent_name="acp_agent",
             session_id="sess-1",
@@ -343,7 +342,7 @@ async def test_create_session_agent_fixes_missing_name(minimal_pool: AgentPool) 
     host_context = _make_host_context()
     factory = AgentFactory(pool=minimal_pool)
 
-    with patch("agentpool.models.agents.NativeAgentConfig", (type(new_cfg),)):
+    with patch("wolfharness.models.agents.NativeAgentConfig", (type(new_cfg),)):
         await factory.create_session_agent(
             agent_name="fixed_name",
             session_id="sess-1",
@@ -370,7 +369,7 @@ async def test_create_session_agent_native_main_loads_session(minimal_pool: Agen
 
     factory = AgentFactory(pool=minimal_pool)
 
-    with patch("agentpool.models.agents.NativeAgentConfig", (type(cfg),)):
+    with patch("wolfharness.models.agents.NativeAgentConfig", (type(cfg),)):
         await factory.create_session_agent(
             agent_name="test_agent",
             session_id="sess-42",

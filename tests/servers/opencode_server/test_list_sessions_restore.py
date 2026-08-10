@@ -13,10 +13,10 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from agentpool.sessions.models import SessionData
-from agentpool_server.opencode_server.models import Session
-from agentpool_server.opencode_server.models.common import TimeCreatedUpdated
-from agentpool_server.opencode_server.routes.session_routes import list_sessions
+from wolfharness.sessions.models import SessionData
+from wolfharness_server.opencode_server.models import Session
+from wolfharness_server.opencode_server.models.common import TimeCreatedUpdated
+from wolfharness_server.opencode_server.routes.session_routes import list_sessions
 
 
 pytestmark = pytest.mark.integration
@@ -109,7 +109,7 @@ async def test_list_sessions_returns_persisted_sessions_after_restart():
     state = _make_state(store=store, session_controller_sessions=[])
 
     with patch(
-        "agentpool_server.opencode_server.routes.session_routes.session_data_to_opencode"
+        "wolfharness_server.opencode_server.routes.session_routes.session_data_to_opencode"
     ) as mock_convert:
         mock_convert.side_effect = lambda data: _make_session(
             data.session_id, directory=data.cwd or "/test", title=data.metadata.get("title", "")
@@ -144,7 +144,7 @@ async def test_in_memory_session_overrides_store_version():
     )
 
     with patch(
-        "agentpool_server.opencode_server.routes.session_routes.session_data_to_opencode"
+        "wolfharness_server.opencode_server.routes.session_routes.session_data_to_opencode"
     ) as mock_convert:
         mock_convert.return_value = _make_session("ses_1", directory="/test", title="From Store")
         result = await list_sessions(state, directory="/test")
@@ -195,7 +195,7 @@ async def test_python_cwd_filter_catches_other_directories():
     state = _make_state(store=store, session_controller_sessions=[])
 
     with patch(
-        "agentpool_server.opencode_server.routes.session_routes.session_data_to_opencode"
+        "wolfharness_server.opencode_server.routes.session_routes.session_data_to_opencode"
     ) as mock_convert:
         mock_convert.side_effect = lambda data: _make_session(
             data.session_id, directory=data.cwd or "", title=data.metadata.get("title", "")
@@ -218,7 +218,7 @@ async def test_legacy_path_when_no_session_controller():
     state.session_controller = None
 
     with patch(
-        "agentpool_server.opencode_server.routes.session_routes.session_data_to_opencode"
+        "wolfharness_server.opencode_server.routes.session_routes.session_data_to_opencode"
     ) as mock_convert:
         mock_convert.return_value = _make_session("ses_1", directory="/test")
         result = await list_sessions(state, directory="/test")
@@ -239,7 +239,7 @@ async def test_cwd_filter_on_store_first_path():
     state = _make_state(store=store, session_controller_sessions=[])
 
     with patch(
-        "agentpool_server.opencode_server.routes.session_routes.session_data_to_opencode"
+        "wolfharness_server.opencode_server.routes.session_routes.session_data_to_opencode"
     ) as mock_convert:
         mock_convert.return_value = _make_session("ses_1", directory="/test")
         await list_sessions(state, directory="/test")
@@ -316,7 +316,7 @@ async def test_merged_list_sorted_by_recency():
     state = _make_state(store=store, session_controller_sessions=[])
 
     with patch(
-        "agentpool_server.opencode_server.routes.session_routes.session_data_to_opencode"
+        "wolfharness_server.opencode_server.routes.session_routes.session_data_to_opencode"
     ) as mock_convert:
         mock_convert.side_effect = lambda data: _make_session(
             data.session_id,
@@ -383,7 +383,7 @@ async def test_state_sessions_cache_populated():
     state = _make_state(store=store, session_controller_sessions=[])
 
     with patch(
-        "agentpool_server.opencode_server.routes.session_routes.session_data_to_opencode"
+        "wolfharness_server.opencode_server.routes.session_routes.session_data_to_opencode"
     ) as mock_convert:
         mock_convert.return_value = _make_session("ses_1", directory="/test")
         await list_sessions(state, directory="/test")

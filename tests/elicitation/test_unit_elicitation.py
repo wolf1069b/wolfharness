@@ -3,7 +3,7 @@
 Covers Tasks 9.1-9.7, 9.14-9.16, 9.18-9.19, 9.21-9.22 from the
 durable-elicitation-bridge plan.
 
-Refs: https://github.com/Leoyzen/agentpool/issues/107
+Refs: https://github.com/Leoyzen/wolfharness/issues/107
 
 
 # TODO: L2 migration — test uses complex inline mock_pool + mock_session_pool
@@ -22,21 +22,21 @@ from pydantic_ai.messages import ToolCallPart
 from pydantic_ai.tools import DeferredToolRequests, RunContext
 import pytest
 
-from agentpool.agents.context import AgentContext, AgentRunContext
-from agentpool.agents.events.events import ElicitationDeferredEvent
-from agentpool.agents.native_agent.elicitation_bridge import (
+from wolfharness.agents.context import AgentContext, AgentRunContext
+from wolfharness.agents.events.events import ElicitationDeferredEvent
+from wolfharness.agents.native_agent.elicitation_bridge import (
     ElicitationFutureRegistry,
     create_elicitation_bridge_capability,
 )
-from agentpool.agents.native_agent.elicitation_strategy import (
+from wolfharness.agents.native_agent.elicitation_strategy import (
     CheckpointResolutionStrategy,
     ElicitationResolutionStrategy,
     ProtocolResolutionStrategy,
 )
-from agentpool.sessions.models import ElicitationResumePayload, PendingDeferredCall
-from agentpool.tools import CallDeferred
-from agentpool.ui.base import InputProvider
-from agentpool.ui.elicitation import normalize_elicit_content
+from wolfharness.sessions.models import ElicitationResumePayload, PendingDeferredCall
+from wolfharness.tools import CallDeferred
+from wolfharness.ui.base import InputProvider
+from wolfharness.ui.elicitation import normalize_elicit_content
 
 
 # ============================================================================
@@ -173,10 +173,10 @@ async def test_handle_elicitation_durable_true_local(
     """
     import asyncio
 
-    from agentpool.agents.native_agent.elicitation_bridge import (
+    from wolfharness.agents.native_agent.elicitation_bridge import (
         ElicitationFutureRegistry,
     )
-    from agentpool.sessions.models import ElicitationResumePayload
+    from wolfharness.sessions.models import ElicitationResumePayload
 
     provider = MagicMock(spec=InputProvider)
     provider.supports_durable_elicitation = True
@@ -238,8 +238,8 @@ async def test_handle_elicitation_durable_false(
 @pytest.mark.unit
 async def test_call_tool_raises_call_deferred(agent_ctx: AgentContext) -> None:
     """MCPClient.call_tool raises CallDeferred when side-channel is set."""
-    from agentpool.mcp_server.client import MCPClient
-    from agentpool_config.mcp_server import StdioMCPServerConfig
+    from wolfharness.mcp_server.client import MCPClient
+    from wolfharness_config.mcp_server import StdioMCPServerConfig
 
     agent_ctx._pending_elicitation_deferral = {
         "message": "Enter credentials",
@@ -261,7 +261,7 @@ async def test_call_tool_raises_call_deferred(agent_ctx: AgentContext) -> None:
 
     with (
         patch(
-            "agentpool.mcp_server.conversions.from_mcp_content",
+            "wolfharness.mcp_server.conversions.from_mcp_content",
             new=AsyncMock(return_value=[]),
         ),
         pytest.raises(CallDeferred) as exc_info,
@@ -282,8 +282,8 @@ async def test_call_tool_raises_call_deferred(agent_ctx: AgentContext) -> None:
 @pytest.mark.unit
 async def test_call_tool_normal_path(agent_ctx: AgentContext) -> None:
     """MCPClient.call_tool returns normally when no deferral is pending."""
-    from agentpool.mcp_server.client import MCPClient
-    from agentpool_config.mcp_server import StdioMCPServerConfig
+    from wolfharness.mcp_server.client import MCPClient
+    from wolfharness_config.mcp_server import StdioMCPServerConfig
 
     assert agent_ctx._pending_elicitation_deferral is None
     config = StdioMCPServerConfig(command="echo", args=["test"])
@@ -300,7 +300,7 @@ async def test_call_tool_normal_path(agent_ctx: AgentContext) -> None:
     client._client = mock_inner_client
 
     with patch(
-        "agentpool.mcp_server.conversions.from_mcp_content",
+        "wolfharness.mcp_server.conversions.from_mcp_content",
         new=AsyncMock(return_value=[]),
     ):
         result = await client.call_tool("test_tool", MagicMock(), {"arg": "val"}, agent_ctx)
@@ -354,7 +354,7 @@ async def test_bridge_handles_elicitation_and_passthrough(run_ctx: RunContext[An
     run_ctx.deps.run_ctx.event_bus = mock_bus
 
     with patch(
-        "agentpool.agents.native_agent.elicitation_bridge._emit_elicitation_event",
+        "wolfharness.agents.native_agent.elicitation_bridge._emit_elicitation_event",
         new_callable=AsyncMock,
     ) as mock_emit:
         result = await cap.handle_deferred_tool_calls(run_ctx, requests=requests)
@@ -414,7 +414,7 @@ async def test_future_registry_lifecycle() -> None:
 @pytest.mark.unit
 def test_acp_input_provider_supports_durable_elicitation() -> None:
     """ACPInputProvider.supports_durable_elicitation reflects session.checkpoint_enabled."""
-    from agentpool_server.acp_server.input_provider import ACPInputProvider
+    from wolfharness_server.acp_server.input_provider import ACPInputProvider
 
     mock_session = MagicMock()
     mock_session.checkpoint_enabled = True
@@ -427,7 +427,7 @@ def test_acp_input_provider_supports_durable_elicitation() -> None:
 @pytest.mark.unit
 def test_opencode_input_provider_supports_durable_elicitation() -> None:
     """OpenCodeInputProvider.supports_durable_elicitation checks session state."""
-    from agentpool_server.opencode_server.input_provider import OpenCodeInputProvider
+    from wolfharness_server.opencode_server.input_provider import OpenCodeInputProvider
 
     mock_state = MagicMock()
     mock_session = MagicMock()
@@ -458,8 +458,8 @@ async def test_side_channel_cleanup_on_error(agent_ctx: AgentContext) -> None:
     regardless of success or failure, ensuring no stale handler leaks
     into the next call.
     """
-    from agentpool.mcp_server.client import MCPClient
-    from agentpool_config.mcp_server import StdioMCPServerConfig
+    from wolfharness.mcp_server.client import MCPClient
+    from wolfharness_config.mcp_server import StdioMCPServerConfig
 
     agent_ctx._pending_elicitation_deferral = {
         "message": "Enter key",
@@ -514,7 +514,7 @@ async def test_bridge_positioning_elicitation_before_approval(run_ctx: RunContex
     run_ctx.deps.run_ctx.event_bus = mock_bus
 
     with patch(
-        "agentpool.agents.native_agent.elicitation_bridge._emit_elicitation_event",
+        "wolfharness.agents.native_agent.elicitation_bridge._emit_elicitation_event",
         new_callable=AsyncMock,
     ):
         result = await cap.handle_deferred_tool_calls(run_ctx, requests=requests)
@@ -719,10 +719,10 @@ async def test_handle_elicitation_passes_current_messages_to_checkpoint(
     """
     import asyncio
 
-    from agentpool.agents.native_agent.elicitation_bridge import (
+    from wolfharness.agents.native_agent.elicitation_bridge import (
         ElicitationFutureRegistry,
     )
-    from agentpool.sessions.models import ElicitationResumePayload
+    from wolfharness.sessions.models import ElicitationResumePayload
 
     provider = MagicMock(spec=InputProvider)
     provider.supports_durable_elicitation = True
@@ -792,10 +792,10 @@ async def test_handle_elicitation_checkpoint_failure_doesnt_set_checkpointed(
     """
     import asyncio
 
-    from agentpool.agents.native_agent.elicitation_bridge import (
+    from wolfharness.agents.native_agent.elicitation_bridge import (
         ElicitationFutureRegistry,
     )
-    from agentpool.sessions.models import ElicitationResumePayload
+    from wolfharness.sessions.models import ElicitationResumePayload
 
     provider = MagicMock(spec=InputProvider)
     provider.supports_durable_elicitation = True
@@ -856,10 +856,10 @@ async def test_handle_elicitation_updates_session_status_to_checkpointed(
     """
     import asyncio
 
-    from agentpool.agents.native_agent.elicitation_bridge import (
+    from wolfharness.agents.native_agent.elicitation_bridge import (
         ElicitationFutureRegistry,
     )
-    from agentpool.sessions.models import ElicitationResumePayload, SessionData
+    from wolfharness.sessions.models import ElicitationResumePayload, SessionData
 
     provider = MagicMock(spec=InputProvider)
     provider.supports_durable_elicitation = True
@@ -936,10 +936,10 @@ async def test_handle_elicitation_skips_status_update_if_not_active(
     """
     import asyncio
 
-    from agentpool.agents.native_agent.elicitation_bridge import (
+    from wolfharness.agents.native_agent.elicitation_bridge import (
         ElicitationFutureRegistry,
     )
-    from agentpool.sessions.models import ElicitationResumePayload, SessionData
+    from wolfharness.sessions.models import ElicitationResumePayload, SessionData
 
     provider = MagicMock(spec=InputProvider)
     provider.supports_durable_elicitation = True
@@ -1018,10 +1018,10 @@ async def test_handle_elicitation_uses_active_agent_run_messages_for_checkpoint(
     """
     import asyncio
 
-    from agentpool.agents.native_agent.elicitation_bridge import (
+    from wolfharness.agents.native_agent.elicitation_bridge import (
         ElicitationFutureRegistry,
     )
-    from agentpool.sessions.models import ElicitationResumePayload
+    from wolfharness.sessions.models import ElicitationResumePayload
 
     provider = MagicMock(spec=InputProvider)
     provider.supports_durable_elicitation = True
@@ -1082,10 +1082,10 @@ async def test_handle_elicitation_empty_checkpoint_when_no_active_run(
     """
     import asyncio
 
-    from agentpool.agents.native_agent.elicitation_bridge import (
+    from wolfharness.agents.native_agent.elicitation_bridge import (
         ElicitationFutureRegistry,
     )
-    from agentpool.sessions.models import ElicitationResumePayload
+    from wolfharness.sessions.models import ElicitationResumePayload
 
     provider = MagicMock(spec=InputProvider)
     provider.supports_durable_elicitation = True
@@ -1164,10 +1164,10 @@ async def test_handle_elicitation_resume_payload_normalizes_nested_content(
     """
     import asyncio
 
-    from agentpool.agents.native_agent.elicitation_bridge import (
+    from wolfharness.agents.native_agent.elicitation_bridge import (
         ElicitationFutureRegistry,
     )
-    from agentpool.sessions.models import ElicitationResumePayload
+    from wolfharness.sessions.models import ElicitationResumePayload
 
     provider = MagicMock(spec=InputProvider)
     provider.supports_durable_elicitation = True

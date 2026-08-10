@@ -46,7 +46,7 @@ related_rfcs:
 
 ### 1.1 Summary
 
-This RFC proposes a fundamental redesign of the BackgroundTask system, migrating it from the xeno-agent business layer into agentpool as a first-class core infrastructure, while preserving xeno-agent-specific provider customizations. The redesign replaces the legacy string-based task ID API with a structured `TaskHandle` object pattern aligned with MCP SEP-1686, introduces configurable session-end lifecycle policies, and hard-cuts over from the old API without a compatibility layer.
+This RFC proposes a fundamental redesign of the BackgroundTask system, migrating it from the xeno-agent business layer into wolfharness as a first-class core infrastructure, while preserving xeno-agent-specific provider customizations. The redesign replaces the legacy string-based task ID API with a structured `TaskHandle` object pattern aligned with MCP SEP-1686, introduces configurable session-end lifecycle policies, and hard-cuts over from the old API without a compatibility layer.
 
 ### 1.2 Why This Matters Now
 
@@ -55,14 +55,14 @@ The current BackgroundTask implementation lives entirely in `xeno-agent` and suf
 1. **Fire-and-forget bug**: The `_notify_parent` callback uses `asyncio.create_task()` without `cancel_and_drain`, causing exceptions to be silently discarded when the parent session has ended.
 2. **`parent_session_id` empty string bug**: Prevents auto-resume of background task completion notifications.
 3. **String ID API**: The legacy API returns raw strings (`task_id`) with no structured handle, making it impossible to chain operations or attach metadata.
-4. **No upstream standard**: Each downstream project reinvents background task patterns; agentpool lacks a unified abstraction.
+4. **No upstream standard**: Each downstream project reinvents background task patterns; wolfharness lacks a unified abstraction.
 
 These issues block reliable multi-agent delegation workflows and create support burden.
 
 ### 1.3 Expected Outcome
 
 After implementation:
-- **Unified infrastructure**: `BackgroundTaskManager` and `TaskHandle` are core agentpool primitives.
+- **Unified infrastructure**: `BackgroundTaskManager` and `TaskHandle` are core wolfharness primitives.
 - **Structured API**: All background task operations return `TaskHandle` objects with typed methods (`status`, `result()`, `cancel()`).
 - **Session lifecycle integration**: Configurable `session_end_policy` controls what happens to background tasks when their parent session ends.
 - **SEP-1686 alignment**: API surface is compatible with MCP task semantics, enabling future protocol-native task support.
@@ -80,7 +80,7 @@ The BackgroundTask system currently consists of three layers:
 |-------|----------|---------------|
 | **Core types** | `xeno_agent/task/types.py` | `BackgroundTask` dataclass, `TaskHandle` dataclass, `TaskStatus` literal |
 | **Lifecycle manager** | `xeno_agent/task/manager.py` | `BackgroundTaskManager` — semaphore, timeout, cancellation, cleanup |
-| **Provider integration** | `xeno_agent/agentpool/resource_providers/background_task_provider.py` | Tool definitions (`task`, `background_output`, `background_cancel`) |
+| **Provider integration** | `xeno_agent/wolfharness/resource_providers/background_task_provider.py` | Tool definitions (`task`, `background_output`, `background_cancel`) |
 
 The existing `BackgroundTaskProvider` exposes three tools:
 
@@ -106,7 +106,7 @@ Key problems with this design:
 
 ### 2.2 Historical Context
 
-The BackgroundTask system was initially designed as a xeno-agent-specific augmentation to agentpool's `subagent_tools.py`. The original RFC (RFC-0001-v2) explicitly stated: "xeno-agent layer优先：先在业务层验证，成熟后考虑 upstream 到 agentpool." After 3 months of production validation with 130+ tests, the pattern has proven stable enough to upstream.
+The BackgroundTask system was initially designed as a xeno-agent-specific augmentation to wolfharness's `subagent_tools.py`. The original RFC (RFC-0001-v2) explicitly stated: "xeno-agent layer优先：先在业务层验证，成熟后考虑 upstream 到 wolfharness." After 3 months of production validation with 130+ tests, the pattern has proven stable enough to upstream.
 
 ### 2.3 Glossary
 
@@ -115,7 +115,7 @@ The BackgroundTask system was initially designed as a xeno-agent-specific augmen
 | **BackgroundTask** | Serializable dataclass representing a task's metadata and lifecycle state |
 | **TaskHandle** | Runtime object wrapping an `asyncio.Task` with structured query/cancel methods |
 | **TaskStatus** | Literal union: `pending`, `running`, `cancelling`, `completed`, `error`, `cancelled`, `timed_out` |
-| **SessionPool** | agentpool's session orchestration layer (`SessionPool` + `SessionController`) |
+| **SessionPool** | wolfharness's session orchestration layer (`SessionPool` + `SessionController`) |
 | **session_end_policy** | Configuration controlling background task behavior on parent session end |
 | **SEP-1686** | MCP Specification Enhancement Proposal for asynchronous task tools |
 | **fire-and-forget** | Pattern of spawning async work without awaiting or cleanup; explicitly avoided |
@@ -125,7 +125,7 @@ The BackgroundTask system was initially designed as a xeno-agent-specific augmen
 
 - **RFC-0021**: Introduced `AgentRunContext` for per-call state isolation; BackgroundTask redesign must respect per-run context boundaries.
 - **RFC-0026**: Per-session agent isolation ensures background tasks do not share `MessageHistory` across concurrent subagents.
-- **RFC-0001 (agentpool)**: Workers and Teams session management establishes `SpawnSessionStart` patterns that background tasks must emit consistently.
+- **RFC-0001 (wolfharness)**: Workers and Teams session management establishes `SpawnSessionStart` patterns that background tasks must emit consistently.
 
 ### 2.5 Cross-System Comparison: opencode
 
@@ -180,7 +180,7 @@ opencode's "no status query" design works for its use case (short research tasks
 
 3. **Empty `parent_session_id`**: Line 379 of `background_task_provider.py` falls back to `getattr(ctx.node, 'session_id', '')` — an empty string prevents `SessionPool.inject_prompt()` from routing the notification correctly.
 
-4. **No upstream abstraction**: Every downstream project that wants background tasks must copy xeno-agent's implementation. There is no agentpool-native primitive.
+4. **No upstream abstraction**: Every downstream project that wants background tasks must copy xeno-agent's implementation. There is no wolfharness-native primitive.
 
 5. **String-based API**: Returning raw string IDs makes it impossible for the LLM to introspect task state without making another tool call.
 
@@ -210,7 +210,7 @@ opencode's "no status query" design works for its use case (short research tasks
 
 ### 4.1 Goals (In Scope)
 
-1. **Upstream core infrastructure**: `BackgroundTaskManager`, `TaskHandle`, and `TaskStatus` become agentpool core primitives.
+1. **Upstream core infrastructure**: `BackgroundTaskManager`, `TaskHandle`, and `TaskStatus` become wolfharness core primitives.
 2. **Structured API**: Replace string-ID returns with `TaskHandle` objects exposing `.status`, `.result()`, `.cancel()`.
 3. **Session lifecycle integration**: Introduce `session_end_policy` with `cancel`, `keep`, and `notify` strategies.
 4. **SEP-1686 alignment**: API signatures and semantics match MCP task tool patterns.
@@ -225,16 +225,16 @@ opencode's "no status query" design works for its use case (short research tasks
 
 1. **Not**: Implementing MCP server-side task support (SEP-1686 server changes are a separate effort).
 2. **Not**: Persistent task storage across process restarts.
-3. **Not**: Distributed task execution across multiple agentpool instances.
+3. **Not**: Distributed task execution across multiple wolfharness instances.
 4. **Not**: Changing the underlying LLM provider concurrency model.
 5. **Not**: Adding new event types beyond what already exists (`SpawnSessionStart`, `SubAgentEvent`, `StreamCompleteEvent`).
 
 ### 4.3 Success Criteria
 
-- [ ] `TaskHandle` is importable from `agentpool.tasks`.
-- [ ] `BackgroundTaskManager` is importable from `agentpool.tasks`.
+- [ ] `TaskHandle` is importable from `wolfharness.tasks`.
+- [ ] `BackgroundTaskManager` is importable from `wolfharness.tasks`.
 - [ ] `session_end_policy` is configurable per `AgentPool` or per session.
-- [ ] xeno-agent's `BackgroundTaskProvider` delegates to agentpool core.
+- [ ] xeno-agent's `BackgroundTaskProvider` delegates to wolfharness core.
 - [ ] All 124 xeno-agent background task tests pass with new API.
 - [ ] No `asyncio.create_task()` without matching `cancel_and_drain` pattern.
 - [ ] Pydantic-AI `cancel_and_drain` is used in all cleanup paths.
@@ -260,15 +260,15 @@ This section documents the four confirmed design decisions that govern the archi
 
 ### Q1: Where does the BackgroundTask infrastructure live?
 
-**Decision: C — Hybrid approach: agentpool core infrastructure + xeno-agent specific Provider**
+**Decision: C — Hybrid approach: wolfharness core infrastructure + xeno-agent specific Provider**
 
 **Rationale**:
 
-The core lifecycle manager (`BackgroundTaskManager`), types (`TaskHandle`, `BackgroundTask`), and session integration belong in agentpool so all downstream projects benefit. However, the specific tool schemas, prompt formatting, and xeno-agent-specific behaviors (e.g., `load_skills` injection, XML prompt formatting) remain in xeno-agent's `BackgroundTaskProvider`.
+The core lifecycle manager (`BackgroundTaskManager`), types (`TaskHandle`, `BackgroundTask`), and session integration belong in wolfharness so all downstream projects benefit. However, the specific tool schemas, prompt formatting, and xeno-agent-specific behaviors (e.g., `load_skills` injection, XML prompt formatting) remain in xeno-agent's `BackgroundTaskProvider`.
 
 **Scope split**:
 
-| Component | agentpool (core) | xeno-agent (provider) |
+| Component | wolfharness (core) | xeno-agent (provider) |
 |-----------|-----------------|----------------------|
 | `TaskHandle` | ✅ | ❌ |
 | `BackgroundTask` dataclass | ✅ | ❌ |
@@ -284,8 +284,8 @@ The core lifecycle manager (`BackgroundTaskManager`), types (`TaskHandle`, `Back
 
 **Trade-offs**:
 - **Pro**: Downstream projects (xeno-rag, xeno-serve) can reuse core infrastructure.
-- **Pro**: agentpool can integrate background tasks with `SessionPool` natively.
-- **Con**: Slightly more complex import graph; xeno-agent depends on agentpool tasks.
+- **Pro**: wolfharness can integrate background tasks with `SessionPool` natively.
+- **Con**: Slightly more complex import graph; xeno-agent depends on wolfharness tasks.
 - **Con**: Core changes require coordinated releases.
 
 ### Q2: What is the API pattern for task handles?
@@ -306,7 +306,7 @@ status = await background_output(task_id="bg_abc123", block=False)
 **New API** (SEP-1686 style):
 
 ```python
-from agentpool.tasks import TaskHandle
+from wolfharness.tasks import TaskHandle
 
 # Returns a structured handle
 handle: TaskHandle = await run_background_task(agent_mode="expert", prompt="analyze")
@@ -343,7 +343,7 @@ await handle.cancel()
 
 **Rationale**:
 
-A single hardcoded behavior cannot satisfy all use cases. Industrial diagnostics (`xeno-agent`) often needs `notify` so the fault expert receives completion prompts. Batch processing jobs need `keep`. Default agentpool behavior should be `cancel` for safety.
+A single hardcoded behavior cannot satisfy all use cases. Industrial diagnostics (`xeno-agent`) often needs `notify` so the fault expert receives completion prompts. Batch processing jobs need `keep`. Default wolfharness behavior should be `cancel` for safety.
 
 **Implementation hook**:
 
@@ -378,7 +378,7 @@ for task in task_manager.get_tasks_by_session(session_id):
 
 **Migration scope**:
 - `xeno-agent` tests: 124 test cases updated.
-- `xeno-agent` provider: `BackgroundTaskProvider` rewritten to delegate to agentpool core.
+- `xeno-agent` provider: `BackgroundTaskProvider` rewritten to delegate to wolfharness core.
 - `diag-agent.yaml`: Tool schema references updated.
 
 **Trade-offs**:
@@ -455,10 +455,10 @@ Three options were considered:
 
 ### 7.2 Component Design
 
-#### 7.2.1 `agentpool.tasks` Module (New)
+#### 7.2.1 `wolfharness.tasks` Module (New)
 
 ```python
-# agentpool/tasks/__init__.py
+# wolfharness/tasks/__init__.py
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -537,10 +537,10 @@ class TaskHandle:
         ...
 ```
 
-#### 7.2.2 `BackgroundTaskManager` (agentpool core)
+#### 7.2.2 `BackgroundTaskManager` (wolfharness core)
 
 ```python
-# agentpool/tasks/manager.py
+# wolfharness/tasks/manager.py
 from __future__ import annotations
 
 import asyncio
@@ -555,7 +555,7 @@ from .types import BackgroundTask, TaskHandle, TaskStatus, TERMINAL_STATES
 class BackgroundTaskManager:
     """Manages background task lifecycle, concurrency, timeout, and cleanup.
 
-    This is the agentpool-core equivalent of xeno-agent's
+    This is the wolfharness-core equivalent of xeno-agent's
     ``BackgroundTaskManager``, with these key differences:
 
     1. Uses ``cancel_and_drain`` from pydantic-ai for all cleanup paths.
@@ -788,10 +788,10 @@ No single layer is sufficient. Together, they create a gradient from "the LLM kn
 
 ## 8. API Design
 
-### 8.1 agentpool Core API
+### 8.1 wolfharness Core API
 
 ```python
-# agentpool/tasks/__init__.py
+# wolfharness/tasks/__init__.py
 
 from dataclasses import dataclass
 from datetime import datetime
@@ -856,7 +856,7 @@ class BackgroundTaskManager:
 ### 8.2 xeno-agent Provider API (New Tools)
 
 ```python
-# xeno_agent/agentpool/resource_providers/background_task_provider.py
+# xeno_agent/wolfharness/resource_providers/background_task_provider.py
 
 async def run_background_task(
     ctx: AgentContext,
@@ -952,7 +952,7 @@ agents:
     session_end_policy: notify  # cancel | keep | notify
     tools:
       - type: custom
-        import_path: xeno_agent.agentpool.resource_providers.background_task_provider.XenoBackgroundTaskProvider
+        import_path: xeno_agent.wolfharness.resource_providers.background_task_provider.XenoBackgroundTaskProvider
         enabled_tools:
           - run_background_task
           - task_status
@@ -969,9 +969,9 @@ agents:
 The `SessionController.close_session()` method is the hook point for policy enforcement:
 
 ```python
-# agentpool/sessions/controller.py
+# wolfharness/sessions/controller.py
 
-from agentpool.tasks import BackgroundTaskManager
+from wolfharness.tasks import BackgroundTaskManager
 
 class SessionController:
     def __init__(self, ..., task_manager: BackgroundTaskManager):
@@ -1107,9 +1107,9 @@ status = handle.status            # Query current status
 await handle.cancel()             # Request cancellation
 ```
 
-### 11.2 agentpool-to-SEP-1686 Mapping
+### 11.2 wolfharness-to-SEP-1686 Mapping
 
-| SEP-1686 Concept | agentpool Equivalent | Notes |
+| SEP-1686 Concept | wolfharness Equivalent | Notes |
 |-----------------|----------------------|-------|
 | `@tool(task=True)` | `run_background_task()` tool | Explicit tool, not decorator |
 | `TaskHandle.result()` | `TaskHandle.result()` | Direct equivalent |
@@ -1119,11 +1119,11 @@ await handle.cancel()             # Request cancellation
 
 ### 11.3 Future MCP Server Integration
 
-When agentpool implements an MCP server with SEP-1686 support:
+When wolfharness implements an MCP server with SEP-1686 support:
 
 ```python
-# Future: agentpool MCP server
-from agentpool.tasks import BackgroundTaskManager
+# Future: wolfharness MCP server
+from wolfharness.tasks import BackgroundTaskManager
 
 class AgentPoolMCPServer:
     def __init__(self, task_manager: BackgroundTaskManager):
@@ -1161,8 +1161,8 @@ The following test files in `xeno-agent` must be updated:
 
 ### 12.2 Migration Checklist
 
-- [ ] **Phase 0**: Create agentpool `tasks` module with `TaskHandle`, `BackgroundTask`, `BackgroundTaskManager`.
-- [ ] **Phase 0**: Port `BackgroundTaskManager` from xeno-agent to agentpool, adding `cancel_and_drain` compliance.
+- [ ] **Phase 0**: Create wolfharness `tasks` module with `TaskHandle`, `BackgroundTask`, `BackgroundTaskManager`.
+- [ ] **Phase 0**: Port `BackgroundTaskManager` from xeno-agent to wolfharness, adding `cancel_and_drain` compliance.
 - [ ] **Phase 1**: Add `session_end_policy` to `SessionConfig` and enforcement in `SessionController`.
 - [ ] **Phase 2**: Rewrite xeno-agent `BackgroundTaskProvider`:
   - [ ] Replace `task()` with `run_background_task()` returning `TaskHandle`.
@@ -1194,20 +1194,20 @@ The following test files in `xeno-agent` must be updated:
 
 ## 13. Implementation Plan
 
-### Phase 0: agentpool Core (Week 1)
+### Phase 0: wolfharness Core (Week 1)
 
 **Deliverables**:
-- `agentpool/tasks/types.py` — `TaskStatus`, `BackgroundTask`, `TaskHandle`
-- `agentpool/tasks/manager.py` — `BackgroundTaskManager` with `cancel_and_drain`
-- `agentpool/tasks/__init__.py` — Public exports
+- `wolfharness/tasks/types.py` — `TaskStatus`, `BackgroundTask`, `TaskHandle`
+- `wolfharness/tasks/manager.py` — `BackgroundTaskManager` with `cancel_and_drain`
+- `wolfharness/tasks/__init__.py` — Public exports
 - Unit tests for core manager (semaphore, timeout, cancellation, cleanup)
 
 **Files Modified**:
-- `src/agentpool/tasks/` (new directory)
-- `src/agentpool/sessions/controller.py` (session_end_policy hook)
-- `src/agentpool/sessions/config.py` (session_end_policy field)
+- `src/wolfharness/tasks/` (new directory)
+- `src/wolfharness/sessions/controller.py` (session_end_policy hook)
+- `src/wolfharness/sessions/config.py` (session_end_policy field)
 
-**Rollback**: Delete `src/agentpool/tasks/` directory.
+**Rollback**: Delete `src/wolfharness/tasks/` directory.
 
 ### Phase 1: Session Integration (Week 1-2)
 
@@ -1217,9 +1217,9 @@ The following test files in `xeno-agent` must be updated:
 - `BackgroundTaskManager` session association methods
 
 **Files Modified**:
-- `src/agentpool/sessions/config.py`
-- `src/agentpool/sessions/controller.py`
-- `src/agentpool/tasks/manager.py`
+- `src/wolfharness/sessions/config.py`
+- `src/wolfharness/sessions/controller.py`
+- `src/wolfharness/tasks/manager.py`
 
 **Rollback**: Revert session controller changes.
 
@@ -1231,7 +1231,7 @@ The following test files in `xeno-agent` must be updated:
 - Empty string `parent_session_id` fix
 
 **Files Modified**:
-- `src/xeno_agent/agentpool/resource_providers/background_task_provider.py`
+- `src/xeno_agent/wolfharness/resource_providers/background_task_provider.py`
 
 **Rollback**: Restore from git.
 
@@ -1243,14 +1243,14 @@ The following test files in `xeno-agent` must be updated:
 - New tests for `TaskHandle` methods
 
 **Files Modified**:
-- `tests/agentpool/resource_providers/test_background_task_*.py`
+- `tests/wolfharness/resource_providers/test_background_task_*.py`
 
 **Rollback**: Restore from git.
 
 ### Dependencies
 
-- agentpool Phase 0 must complete before xeno-agent Phase 2.
-- agentpool Phase 1 must complete before xeno-agent test additions for `session_end_policy`.
+- wolfharness Phase 0 must complete before xeno-agent Phase 2.
+- wolfharness Phase 1 must complete before xeno-agent test additions for `session_end_policy`.
 
 ---
 
@@ -1276,7 +1276,7 @@ The following test files in `xeno-agent` must be updated:
    - Owner: Performance
    - Status: Open
 
-5. **Should agentpool expose a `@background_task` decorator for tool functions?**
+5. **Should wolfharness expose a `@background_task` decorator for tool functions?**
    - Context: Would allow declarative background task registration.
    - Owner: API design
    - Status: Open
@@ -1291,7 +1291,7 @@ The following test files in `xeno-agent` must be updated:
    - Owner: xeno-agent
    - Status: Open
 
-8. **Should `list_tasks()` be a core agentpool tool or a xeno-agent provider tool?**
+8. **Should `list_tasks()` be a core wolfharness tool or a xeno-agent provider tool?**
    - Context: Task listing is useful for any downstream project, but the markdown table format is presentation-level.
    - Owner: API design
    - Status: Open
@@ -1323,7 +1323,7 @@ The following test files in `xeno-agent` must be updated:
 
 ### Key Discussion Points
 
-1. **Why not Option A (all in agentpool)?** Would force xeno-agent's XML formatting and skill-loading into core, creating inappropriate coupling.
+1. **Why not Option A (all in wolfharness)?** Would force xeno-agent's XML formatting and skill-loading into core, creating inappropriate coupling.
 2. **Why not Option B (all in xeno-agent)?** Defeats the purpose of upstreaming proven infrastructure.
 3. **Why not keep string IDs?** String parsing is error-prone and incompatible with MCP SEP-1686.
 4. **Why not a compatibility layer?** Doubles maintenance burden for a single-consumer API.
@@ -1331,11 +1331,11 @@ The following test files in `xeno-agent` must be updated:
 ### Conditions on Approval
 
 - [ ] At least 2 code reviewers approve
-- [ ] agentpool core tests demonstrate 100% manager coverage
+- [ ] wolfharness core tests demonstrate 100% manager coverage
 - [ ] All 124 xeno-agent tests pass with new API
 - [ ] Session-end policy tests cover all 3 variants
 - [ ] No `asyncio.create_task()` without matching cleanup in changed code
-- [ ] Documentation updated (agentpool tasks module, xeno-agent migration guide)
+- [ ] Documentation updated (wolfharness tasks module, xeno-agent migration guide)
 
 ---
 
@@ -1346,11 +1346,11 @@ The following test files in `xeno-agent` must be updated:
 1. **RFC-0001-v2 (xeno-agent)** — Original background task RFC
    Location: `packages/xeno-agent/docs/rfcs/RFC-0001-async-task-background-task-v2.md`
 
-2. **RFC-0021 (agentpool)** — Agent Concurrent Execution Safety
-   Location: `packages/agentpool/docs/rfcs/implemented/RFC-0021-agent-concurrent-execution-safety.md`
+2. **RFC-0021 (wolfharness)** — Agent Concurrent Execution Safety
+   Location: `packages/wolfharness/docs/rfcs/implemented/RFC-0021-agent-concurrent-execution-safety.md`
 
 3. **BackgroundTaskProvider Implementation**
-   Location: `packages/xeno-agent/src/xeno_agent/agentpool/resource_providers/background_task_provider.py`
+   Location: `packages/xeno-agent/src/xeno_agent/wolfharness/resource_providers/background_task_provider.py`
 
 4. **Research Findings**
    Location: `.omo/notepads/background-task-provider/learnings.md`
@@ -1370,10 +1370,10 @@ The following test files in `xeno-agent` must be updated:
 |-----------|------|
 | xeno-agent BackgroundTaskManager | `packages/xeno-agent/src/xeno_agent/task/manager.py` |
 | xeno-agent BackgroundTask types | `packages/xeno-agent/src/xeno_agent/task/types.py` |
-| xeno-agent BackgroundTaskProvider | `packages/xeno-agent/src/xeno_agent/agentpool/resource_providers/background_task_provider.py` |
+| xeno-agent BackgroundTaskProvider | `packages/xeno-agent/src/xeno_agent/wolfharness/resource_providers/background_task_provider.py` |
 | Pydantic-AI cancel_and_drain | `packages/pydantic-ai/pydantic_ai_slim/pydantic_ai/_utils.py:223-240` |
-| AgentPool SessionController | `packages/agentpool/src/agentpool/sessions/controller.py` |
-| AgentPool SessionConfig | `packages/agentpool/src/agentpool/sessions/config.py` |
+| AgentPool SessionController | `packages/wolfharness/src/wolfharness/sessions/controller.py` |
+| AgentPool SessionConfig | `packages/wolfharness/src/wolfharness/sessions/config.py` |
 
 ---
 

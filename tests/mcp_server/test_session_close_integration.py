@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool.mcp_server.config_snapshot import McpConfigSnapshot
-from agentpool.mcp_server.manager import MCPManager
+from wolfharness.mcp_server.config_snapshot import McpConfigSnapshot
+from wolfharness.mcp_server.manager import MCPManager
 
 
 @pytest.mark.integration

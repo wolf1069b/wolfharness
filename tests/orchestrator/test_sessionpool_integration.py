@@ -51,22 +51,22 @@ from pydantic_ai.messages import PartStartEvent, ThinkingPart
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool import Agent, AgentPool, AgentsManifest, NativeAgentConfig
-from agentpool.agents.context import AgentRunContext
-from agentpool.agents.events import SpawnSessionStart, StreamCompleteEvent
-from agentpool.capabilities.function_toolset import FunctionToolsetCapability
-from agentpool.hooks import AgentHooks, CallableHook, HookResult
-from agentpool.lifecycle.types import DeliveryMode
-from agentpool.messaging import ChatMessage
-from agentpool.orchestrator.core import EventBus, SessionState
-from agentpool.orchestrator.run import RunHandle
-from agentpool.tools.base import Tool
-from agentpool_server.opencode_server.models.parts import (
+from wolfharness import Agent, AgentPool, AgentsManifest, NativeAgentConfig
+from wolfharness.agents.context import AgentRunContext
+from wolfharness.agents.events import SpawnSessionStart, StreamCompleteEvent
+from wolfharness.capabilities.function_toolset import FunctionToolsetCapability
+from wolfharness.hooks import AgentHooks, CallableHook, HookResult
+from wolfharness.lifecycle.types import DeliveryMode
+from wolfharness.messaging import ChatMessage
+from wolfharness.orchestrator.core import EventBus, SessionState
+from wolfharness.orchestrator.run import RunHandle
+from wolfharness.tools.base import Tool
+from wolfharness_server.opencode_server.models.parts import (
     ToolPart,
     ToolStateCompleted,
     ToolStateRunning,
 )
-from agentpool_server.opencode_server.session_pool_integration import (
+from wolfharness_server.opencode_server.session_pool_integration import (
     OpenCodeSessionPoolIntegration,
 )
 
@@ -74,7 +74,7 @@ from agentpool_server.opencode_server.session_pool_integration import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from agentpool.skills.skill import Skill
+    from wolfharness.skills.skill import Skill
 
 
 class MockServerState:
@@ -96,7 +96,7 @@ class MockServerState:
         self.events.append(event)
 
     def resolve_default_model_info(self) -> tuple[str, str]:
-        return "default", "agentpool"
+        return "default", "wolfharness"
 
 
 class MockMCPCapability(FunctionToolsetCapability):
@@ -216,7 +216,7 @@ async def test_agent_level_mcp_not_inherited_by_child() -> None:
     # We test at the config level — we don't need to actually connect.
     # The key assertion is that the parent's MCPManager is dedicated
     # (not pool.mcp), and the child's IS pool.mcp.
-    from agentpool_config.mcp_server import StdioMCPServerConfig
+    from wolfharness_config.mcp_server import StdioMCPServerConfig
 
     parent_config = NativeAgentConfig(
         name="parent_agent",
@@ -458,7 +458,7 @@ async def test_toolset_cache_exists_on_mcp_manager() -> None:
     so repeated calls reuse the same underlying connection. The ``MCP``
     wrapper instances remain distinct.
     """
-    from agentpool.mcp_server.manager import MCPManager
+    from wolfharness.mcp_server.manager import MCPManager
 
     manager = MCPManager(name="test")
     assert hasattr(manager, "_toolset_cache")
@@ -474,8 +474,8 @@ async def test_get_capabilities_caches_toolset_by_client_id() -> None:
     with the same underlying ``MCPToolset`` instance (cached by
     ``client_id``). The MCP wrappers themselves are distinct.
     """
-    from agentpool.mcp_server.manager import MCPManager
-    from agentpool_config.mcp_server import StdioMCPServerConfig
+    from wolfharness.mcp_server.manager import MCPManager
+    from wolfharness_config.mcp_server import StdioMCPServerConfig
 
     manager = MCPManager(
         servers=[
@@ -730,7 +730,7 @@ async def test_e2e_reasoning_events_through_sessionpool() -> None:
         )
         event_types = [type(e).__name__ for e in server_state.events]
         print(f"Broadcast events: {event_types}")
-        from agentpool_server.opencode_server.models import PartUpdatedEvent
+        from wolfharness_server.opencode_server.models import PartUpdatedEvent
 
         part_events = [e for e in server_state.events if isinstance(e, PartUpdatedEvent)]
         assert len(part_events) > 0, (
@@ -796,7 +796,7 @@ class MockSessions:
 
     async def get_or_create_session(self, session_id, agent_name=None, **metadata):
         if session_id not in self._sessions:
-            from agentpool.orchestrator.core import SessionState
+            from wolfharness.orchestrator.core import SessionState
 
             state = SessionState(session_id=session_id, agent_name=agent_name or "default")
             self._sessions[session_id] = state
@@ -1095,7 +1095,7 @@ def _make_recorder(event: str) -> CallableHook:
 
 def _make_run_handle(agent: Agent[Any, Any], run_ctx: AgentRunContext) -> RunHandle:
     """Create a RunHandle wired for the SessionPool path."""
-    from agentpool.lifecycle import DirectChannel, MemoryJournal
+    from wolfharness.lifecycle import DirectChannel, MemoryJournal
 
     event_bus = EventBus()
     session = SessionState(session_id="test-session", agent_name="test-agent")
@@ -1177,7 +1177,7 @@ async def test_hooks_fired_cleared_between_turns() -> None:
         await consumer_task
     pre_turn_count = sum((1 for name, _ in hook_calls if name == "pre_turn"))
     assert pre_turn_count == 1, "pre_turn must fire in turn 1"
-    from agentpool.agents.native_agent.turn import NativeTurn
+    from wolfharness.agents.native_agent.turn import NativeTurn
 
     turn = NativeTurn(
         agent=agent, prompts=["second prompt"], run_ctx=run_ctx, message_history=[], hooks=hooks

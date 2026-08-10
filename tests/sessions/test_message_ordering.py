@@ -13,12 +13,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from agentpool.messaging import ChatMessage
-from agentpool_storage.memory_provider import MemoryStorageProvider
+from wolfharness.messaging import ChatMessage
+from wolfharness_storage.memory_provider import MemoryStorageProvider
 
 
 if TYPE_CHECKING:
-    from agentpool_storage.sql_provider import SQLModelProvider
+    from wolfharness_storage.sql_provider import SQLModelProvider
 
 
 # ---------------------------------------------------------------------------
@@ -291,7 +291,7 @@ def test_parse_iso_timestamp_naive_string_returns_aware() -> None:
     When: parsed via parse_iso_timestamp
     Then: the result has tzinfo=UTC (not None)
     """
-    from agentpool.utils.time_utils import parse_iso_timestamp
+    from wolfharness.utils.time_utils import parse_iso_timestamp
 
     result = parse_iso_timestamp("2025-01-01T12:00:00")
     assert result.tzinfo is not None
@@ -308,7 +308,7 @@ def test_parse_iso_timestamp_aware_string_preserves_timezone() -> None:
     """
     from datetime import timedelta
 
-    from agentpool.utils.time_utils import parse_iso_timestamp
+    from wolfharness.utils.time_utils import parse_iso_timestamp
 
     result = parse_iso_timestamp("2025-01-01T12:00:00+05:00")
     assert result.tzinfo is not None
@@ -323,7 +323,7 @@ def test_parse_iso_timestamp_z_suffix_returns_utc() -> None:
     When: parsed via parse_iso_timestamp
     Then: the result has tzinfo=UTC
     """
-    from agentpool.utils.time_utils import parse_iso_timestamp
+    from wolfharness.utils.time_utils import parse_iso_timestamp
 
     result = parse_iso_timestamp("2025-01-01T12:00:00Z")
     assert result.tzinfo is not None

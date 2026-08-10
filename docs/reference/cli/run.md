@@ -6,10 +6,10 @@ icon: material/play
 
 # run
 
-Run a node with prompts using the `agentpool run` command.
+Run a node with prompts using the `wolfharness run` command.
 
 ```bash
-agentpool run <agent_name> "prompt text"
+wolfharness run <agent_name> "prompt text"
 ```
 
 The `run` command executes a single prompt against a configured agent.
@@ -18,17 +18,17 @@ The `run` command executes a single prompt against a configured agent.
 
 ```bash
 # Simple run
-agentpool run assistant "Hello!"
+wolfharness run assistant "Hello!"
 
 # With streaming output
-agentpool run assistant "Tell me a story" --stream
+wolfharness run assistant "Tell me a story" --stream
 
 # With explicit config file
-agentpool run assistant "Hello!" --config my-agents.yml
+wolfharness run assistant "Hello!" --config my-agents.yml
 ```
 
 For a full list of options, run:
 
 ```bash
-agentpool run --help
+wolfharness run --help
 ```

@@ -66,6 +66,9 @@ test_configs/
 # Prometheus / OpenCode workspace files
 .omo/
 
+# Codegraph local index cache
+.codegraph/
+
 # Git worktrees
 .worktrees/
 

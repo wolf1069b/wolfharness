@@ -37,6 +37,6 @@ AgentPool installs optional features via extras. Some commonly used ones:
 For a full dependency tree, run:
 
 ```bash
-pip show agentpool
-pipdeptree -p agentpool
+pip show wolfharness
+pipdeptree -p wolfharness
 ```

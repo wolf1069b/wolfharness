@@ -28,16 +28,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from pydantic_ai import RunContext
 import pytest
 
-from agentpool import ChatMessage
-from agentpool.agents.base_agent import BaseAgent
-from agentpool.agents.context import AgentContext
-from agentpool.agents.events import StreamCompleteEvent
-from agentpool.capabilities.background_task.capability import (
+from wolfharness import ChatMessage
+from wolfharness.agents.base_agent import BaseAgent
+from wolfharness.agents.context import AgentContext
+from wolfharness.agents.events import StreamCompleteEvent
+from wolfharness.capabilities.background_task.capability import (
     BackgroundTaskCapability,
 )
-from agentpool.capabilities.background_task.manager import BackgroundTaskManager
-from agentpool.capabilities.background_task.types import BackgroundTask, TaskHandle
-from agentpool.delegation import AgentPool
+from wolfharness.capabilities.background_task.manager import BackgroundTaskManager
+from wolfharness.capabilities.background_task.types import BackgroundTask, TaskHandle
+from wolfharness.delegation import AgentPool
 
 
 pytestmark = pytest.mark.anyio
@@ -212,7 +212,7 @@ async def test_no_inject_when_blocking_waiter_present():
     )
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_a1b2c3d4",
     ):
         result_text = await capability._task(
@@ -271,7 +271,7 @@ async def test_inject_when_no_blocking_waiter():
     )
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_noblock99",
     ):
         await capability._task(
@@ -321,7 +321,7 @@ async def test_nonblocking_output_does_not_suppress_inject():
     )
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_nonblock1",
     ):
         await capability._task(
@@ -377,7 +377,7 @@ async def test_waiter_unregistered_after_blocking_returns():
     )
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_unreg001",
     ):
         await capability._task(
@@ -433,7 +433,7 @@ async def test_inject_prompt_queues_and_triggers_auto_resume():
     )
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_autoresume01",
     ):
         await capability._task(
@@ -502,7 +502,7 @@ async def test_auto_resume_triggered_when_inject_prompt_returns_false():
     )
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_autoresume02",
     ):
         await capability._task(
@@ -566,7 +566,7 @@ async def test_inject_prompt_safe_when_no_run_context():
     )
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_noctx001",
     ):
         await capability._task(
@@ -658,7 +658,7 @@ async def test_debounce_window_no_notification_before_timeout():
     )
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_debounce01",
     ):
         await capability._task(
@@ -723,7 +723,7 @@ async def test_multiple_tasks_batched_in_debounce_window():
     task_ids = []
     with (
         patch(
-            "agentpool.capabilities.background_task.capability._generate_task_id",
+            "wolfharness.capabilities.background_task.capability._generate_task_id",
             side_effect=["bg_batch01", "bg_batch02"],
         ),
     ):

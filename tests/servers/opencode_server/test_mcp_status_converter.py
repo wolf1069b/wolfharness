@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool.common_types import MCPServerStatus
-from agentpool_server.opencode_server.converters import to_mcp_status
+from wolfharness.common_types import MCPServerStatus
+from wolfharness_server.opencode_server.converters import to_mcp_status
 
 
 pytestmark = pytest.mark.unit

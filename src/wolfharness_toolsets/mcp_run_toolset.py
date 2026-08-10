@@ -1,0 +1,133 @@
+"""McpRun based toolset implementation."""
+
+from __future__ import annotations
+
+import os
+from typing import TYPE_CHECKING, Any, Literal, Self, cast
+
+from schemez import OpenAIFunctionDefinition
+
+from wolfharness.capabilities.function_toolset import FunctionToolsetCapability
+from wolfharness.log import get_logger
+
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from contextlib import AbstractAsyncContextManager
+    from types import TracebackType
+
+    from mcp import ClientSession
+    from mcp.types import CallToolResult
+
+    from wolfharness.tools.base import Tool
+
+logger = get_logger(__name__)
+
+
+class McpRunTools(FunctionToolsetCapability):
+    """Provider for MCP.run tools.
+
+    Maintains a persistent SSE connection to MCP.run to receive tool change
+    notifications. Use as an async context manager to ensure proper cleanup.
+
+    Example:
+        async with McpRunTools("default") as provider:
+            tools = await provider.get_tools()
+    """
+
+    kind: Literal["mcp_run"] = "mcp_run"
+
+    def __init__(self, entity_id: str, session_id: str | None = None) -> None:
+        from mcp_run import Client, ClientConfig
+
+        super().__init__(name=entity_id)
+        id_ = session_id or os.environ.get("MCP_RUN_SESSION_ID")
+        config = ClientConfig()
+        self.client = Client(session_id=id_, config=config)
+        self._session: ClientSession | None = None
+        # Context manager for persistent connection
+        self._mcp_client_ctx: AbstractAsyncContextManager[ClientSession] | None = None
+
+    async def __aenter__(self) -> Self:
+        """Start persistent SSE connection."""
+        mcp_client = self.client.mcp_sse()
+        self._mcp_client_ctx = mcp_client.connect()
+        self._session = await self._mcp_client_ctx.__aenter__()
+        # Set up notification handler for tool changes
+        # The MCP ClientSession dispatches notifications via _received_notification
+        # We monkey-patch it to intercept ToolListChangedNotification
+        original_handler = self._session._received_notification
+
+        async def notification_handler(notification: Any) -> None:
+            from mcp.types import ToolListChangedNotification
+
+            if isinstance(notification.root, ToolListChangedNotification):
+                logger.info("MCP.run tool list changed notification received")
+                await self._on_tools_changed()
+            await original_handler(notification)
+
+        self._session._received_notification = notification_handler  # type: ignore[method-assign]
+
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        """Close persistent SSE connection."""
+        if self._mcp_client_ctx:
+            await self._mcp_client_ctx.__aexit__(exc_type, exc_val, exc_tb)
+            self._mcp_client_ctx = None
+            self._session = None
+
+    async def _on_tools_changed(self) -> None:
+        """Handle tool list change notification."""
+        logger.info("MCP.run tools changed, refreshing cache")
+        self._tools = []
+
+    async def get_tools(self) -> Sequence[Tool]:
+        """Get tools from MCP.run."""
+        # Return cached tools if available
+        if self._tools:
+            return self._tools
+
+        self._tools = []
+        for name, tool in self.client.tools.items():
+            session = self._session  # Capture session for use in tool calls
+
+            async def run(
+                tool_name: str = name,
+                _session: ClientSession | None = session,
+                **input_dict: Any,
+            ) -> CallToolResult:
+                if _session is not None:
+                    # Use persistent session if available
+                    return await _session.call_tool(tool_name, arguments=input_dict)
+                # Fallback to creating a new connection (when not using context manager)
+                async with self.client.mcp_sse().connect() as new_session:
+                    return await new_session.call_tool(tool_name, arguments=input_dict)  # type: ignore[no-any-return]
+
+            run.__name__ = name
+            schema = cast(OpenAIFunctionDefinition, tool.input_schema)
+            wrapped_tool = self.create_tool(run, schema_override=schema)
+            self._tools.append(wrapped_tool)
+        return self._tools
+
+    async def refresh_tools(self) -> None:
+        """Manually refresh tools from MCP.run and emit change event."""
+        logger.info("Manually refreshing MCP.run tools")
+        self._tools = []
+        await self.get_tools()
+
+
+if __name__ == "__main__":
+    import anyio
+
+    async def main() -> None:
+        tools = McpRunTools("default")
+        fns = await tools.get_tools()
+        print(fns)
+
+    anyio.run(main)

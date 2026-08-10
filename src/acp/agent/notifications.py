@@ -35,7 +35,7 @@ from acp.schema import (
 from acp.schema.tool_call import ToolCallLocation
 from acp.tool_call_reporter import ToolCallReporter
 from acp.utils import generate_tool_title, infer_tool_kind, to_acp_content_blocks
-from agentpool.utils.pydantic_ai_helpers import safe_args_as_dict
+from wolfharness.utils.pydantic_ai_helpers import safe_args_as_dict
 
 
 if TYPE_CHECKING:

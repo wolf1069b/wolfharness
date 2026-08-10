@@ -11,9 +11,9 @@ import inspect
 import pytest
 
 from acp.schema.session_state import SessionInfo
-from agentpool.sessions.models import PendingDeferredCall, SessionData
-from agentpool_server.acp_server.converters import to_session_info
-from agentpool_server.acp_server.event_converter import ACPEventConverter
+from wolfharness.sessions.models import PendingDeferredCall, SessionData
+from wolfharness_server.acp_server.converters import to_session_info
+from wolfharness_server.acp_server.event_converter import ACPEventConverter
 
 
 pytestmark = pytest.mark.integration
@@ -135,7 +135,7 @@ class TestSessionCloseCheckpointAware:
         pending deferred calls, the session should be marked as 'checkpointed'
         and NOT deleted from storage.
         """
-        from agentpool_storage.memory_provider.provider import MemoryStorageProvider
+        from wolfharness_storage.memory_provider.provider import MemoryStorageProvider
 
         store = MemoryStorageProvider()
 
@@ -154,7 +154,7 @@ class TestSessionCloseCheckpointAware:
 
         Normal close (no deferred calls) should delete the session from storage.
         """
-        from agentpool_storage.memory_provider.provider import MemoryStorageProvider
+        from wolfharness_storage.memory_provider.provider import MemoryStorageProvider
 
         store = MemoryStorageProvider()
 

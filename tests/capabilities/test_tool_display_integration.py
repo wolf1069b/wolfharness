@@ -15,14 +15,14 @@ from pydantic_ai.models.test import TestModel
 from pydantic_ai.toolsets.renamed import RenamedToolset
 import pytest
 
-from agentpool.capabilities.tool_display_capability import ToolDisplayCapability
-from agentpool.capabilities.viking import VikingCapability
-from agentpool.capabilities.viking.identity import VikingIdentity
-from agentpool_config.capabilities import VikingCapabilityConfig, build_capability
+from wolfharness.capabilities.tool_display_capability import ToolDisplayCapability
+from wolfharness.capabilities.viking import VikingCapability
+from wolfharness.capabilities.viking.identity import VikingIdentity
+from wolfharness_config.capabilities import VikingCapabilityConfig, build_capability
 
 
 if TYPE_CHECKING:
-    from agentpool.agents.events import DiffContentItem
+    from wolfharness.agents.events import DiffContentItem
 
 
 pytestmark = pytest.mark.integration

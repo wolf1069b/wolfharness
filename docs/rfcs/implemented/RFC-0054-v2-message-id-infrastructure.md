@@ -835,7 +835,7 @@ All open questions have been resolved:
 - OpenSpec Change: v2-message-id-infrastructure
 - [RFC-0050: AgentWolf v1 Foundation Architecture](../draft/RFC-0050-agentwolf-v1-foundation-architecture.md)
 - [RFC-0042: Unified Lifecycle Architecture](../draft/RFC-0042-unified-lifecycle-architecture.md)
-- [GitHub Issue #154: Extend Feedback type with messageId](https://github.com/Leoyzen/agentpool/issues/154)
+- [GitHub Issue #154: Extend Feedback type with messageId](https://github.com/Leoyzen/wolfharness/issues/154)
 
 ### External Resources
 
@@ -862,6 +862,6 @@ All open questions have been resolved:
 | `orchestrator/session_pool.py` | Public API pass-through | Low — optional parameter |
 | `agents/native_agent/turn.py` | message_id propagation | Low — set field on events |
 | `agents/acp_agent/acp_converters.py` | Preserve incoming message_id | Low — conditional fallback |
-| `agentpool_server/acp_server/event_converter.py` | Read from events | Low — mechanical |
-| `agentpool_server/opencode_server/` | Read from events | Low — audit + update |
+| `wolfharness_server/acp_server/event_converter.py` | Read from events | Low — mechanical |
+| `wolfharness_server/opencode_server/` | Read from events | Low — audit + update |
 | `agui_server/` + `openai_api_server/` | Audit | Low — audit + update if needed |

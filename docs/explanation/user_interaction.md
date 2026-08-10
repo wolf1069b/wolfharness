@@ -34,27 +34,27 @@ AgentPool uses **InputProvider** to handle user interactions across different ex
 ## Providers
 
 ### StdlibInputProvider
-**Location**: `agentpool/ui/stdlib_provider.py`  
+**Location**: `wolfharness/ui/stdlib_provider.py`  
 **Usage**: CLI, fallback  
 **Mechanism**: Blocking `input()` calls  
 **Limitations**: No async, no rich UI, no multi-select
 
 ### ACPInputProvider  
-**Location**: `agentpool_server/acp_server/input_provider.py`  
+**Location**: `wolfharness_server/acp_server/input_provider.py`  
 **Usage**: ACP clients (Goose, Codex)  
 **Mechanism**: Maps elicitation → `request_permission()` **[HACK]**  
 **Why hacky**: ACP lacks native elicitation, shoehorns questions into permission system  
 **Limitations**: Max 4 options, no multi-select, wrong semantics
 
 ### OpenCodeInputProvider
-**Location**: `agentpool_server/opencode_server/input_provider.py`  
+**Location**: `wolfharness_server/opencode_server/input_provider.py`  
 **Usage**: OpenCode TUI/Desktop  
 **Mechanism**: SSE events + HTTP response endpoints  
 **Flow**: Create question → broadcast event → await HTTP reply → resolve future  
 **Advantages**: Native questions, multi-select, unlimited options, rich descriptions
 
 ### MockInputProvider
-**Location**: `agentpool/ui/mock_provider.py`  
+**Location**: `wolfharness/ui/mock_provider.py`  
 **Usage**: Tests  
 **Mechanism**: Pre-programmed responses
 

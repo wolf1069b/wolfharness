@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 pytestmark = [
     pytest.mark.e2e,
-    pytest.mark.skipif(SKIP_NO_BINARY, reason="agentpool binary not on PATH"),
+    pytest.mark.skipif(SKIP_NO_BINARY, reason="wolfharness binary not on PATH"),
     pytest.mark.skipif(SKIP_WINDOWS, reason="Windows subprocess issues"),
 ]
 
@@ -217,7 +217,7 @@ def _extract_text_part_text(msg: dict[str, Any]) -> str:
 
 
 def _id_timestamp_ms(msg_id: str) -> int | None:
-    """Extract millisecond timestamp from an agentpool ascending ID.
+    """Extract millisecond timestamp from an wolfharness ascending ID.
 
     AgentPool ID format: ``{prefix}_{16 hex chars}{14 base62 chars}``
     where the 16 hex chars encode 8 bytes (64 bits) of

@@ -18,17 +18,17 @@ from dirty_equals import IsStr
 from pydantic_ai.messages import TextPart, ThinkingPart
 import pytest
 
-from agentpool.agents.events import (
+from tests.vcr.conftest import cassette_exists
+from wolfharness.agents.events import (
     PartDeltaEvent,
     PartStartEvent,
     RunStartedEvent,
     StreamCompleteEvent,
 )
-from tests.vcr.conftest import cassette_exists
 
 
 if TYPE_CHECKING:
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
 pytestmark = pytest.mark.vcr
 

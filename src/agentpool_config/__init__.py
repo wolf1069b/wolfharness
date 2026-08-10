@@ -1,137 +1,56 @@
-"""Core data models for AgentPool."""
+"""agentpool_config — backward-compatible shim for wolfharness_config.
+
+This package has been renamed to ``wolfharness_config``. Importing ``agentpool_config``
+is deprecated and will be removed in a future release.
+
+Submodule imports are forwarded to the corresponding ``wolfharness_config`` submodule.
+"""
 
 from __future__ import annotations
 
+import importlib
+import sys
+import warnings
+from importlib import abc, machinery
 
-from typing import Annotated
-from pydantic import Field
+from wolfharness_config import *  # noqa: F403
 
-from agentpool_config.tools import ImportToolConfig, BaseToolConfig
-from agentpool_config.agentpool_tools import AgentpoolToolConfig
-from agentpool_config.builtin_tools import BuiltinToolConfig
-
-from agentpool_config.capabilities import CapabilityConfig
-from agentpool_config.forward_targets import ForwardingTarget
-from agentpool_config.session import SessionQuery
-from agentpool_config.session_pool import ACPConfig, OpenCodeConfig, SessionPoolConfig
-from agentpool_config.teams import TeamConfig, TeamMemberConfig
-from agentpool_config.durable import CheckpointConfig, DeferredToolConfig
-from agentpool_config.mcp_server import (
-    BaseMCPServerConfig,
-    StdioMCPServerConfig,
-    StreamableHTTPMCPServerConfig,
-    MCPServerConfig,
-    SSEMCPServerConfig,
-)
-from agentpool_config.event_handlers import (
-    BaseEventHandlerConfig,
-    StdoutEventHandlerConfig,
-    CallbackEventHandlerConfig,
-    EventHandlerConfig,
-    resolve_handler_configs,
-)
-from agentpool_config.hooks import (
-    BaseHookConfig,
-    CallableHookConfig,
-    CommandHookConfig,
-    HookConfig,
-    HooksConfig,
-    PromptHookConfig,
-)
-from agentpool_config.graph_config import (
-    GraphConfig,
-    GraphEdgeConfig,
-    GraphJoinConfig,
-    GraphStepConfig,
-)
-from agentpool_config.graph_translation import (
-    build_steps_from_agents,
-    translate_config_to_graph,
-    translate_connections_to_edges,
-    translate_team_to_graph,
-    translate_teams_to_graphs,
-)
-from agentpool_config.toolsets import ToolsetConfig
-from agentpool_config.skills import SkillsConfig, DEFAULT_SKILLS_PATHS
-from agentpool_config.skill_commands import SkillSlashConfig, SkillCommandConfig
-from agentpool_config.resolution import (
-    ConfigLayer,
-    ConfigSource,
-    ResolvedConfig,
-    find_project_config,
-    get_global_config_dir,
-    get_global_config_path,
-    resolve_config,
-    resolve_config_for_server,
+warnings.warn(
+    "``agentpool_config`` has been renamed to ``wolfharness_config``. "
+    "Update your imports: `from wolfharness_config import ...`",
+    DeprecationWarning,
+    stacklevel=2,
 )
 
 
-ToolConfig = Annotated[
-    ImportToolConfig | AgentpoolToolConfig,
-    Field(discriminator="type"),
-]
+def __getattr__(name: str) -> object:
+    """Forward top-level attribute access to wolfharness_config."""
+    import wolfharness_config
 
-NativeAgentToolConfig = Annotated[
-    ToolConfig | BuiltinToolConfig,
-    Field(discriminator="type"),
-]
+    return getattr(wolfharness_config, name)
 
-# Unified type for all tool configurations (single tools + toolsets)
-AnyToolConfig = Annotated[
-    NativeAgentToolConfig | ToolsetConfig,
-    Field(discriminator="type"),
-]
-__all__ = [
-    "DEFAULT_SKILLS_PATHS",
-    "ACPConfig",
-    "AnyToolConfig",
-    "BaseEventHandlerConfig",
-    "BaseHookConfig",
-    "BaseMCPServerConfig",
-    "BaseToolConfig",
-    "CallableHookConfig",
-    "CallbackEventHandlerConfig",
-    "CapabilityConfig",
-    "CheckpointConfig",
-    "CommandHookConfig",
-    "ConfigLayer",
-    "ConfigSource",
-    "DeferredToolConfig",
-    "EventHandlerConfig",
-    "ForwardingTarget",
-    "GraphConfig",
-    "GraphEdgeConfig",
-    "GraphJoinConfig",
-    "GraphStepConfig",
-    "HookConfig",
-    "HooksConfig",
-    "MCPServerConfig",
-    "NativeAgentToolConfig",
-    "OpenCodeConfig",
-    "PromptHookConfig",
-    "ResolvedConfig",
-    "SSEMCPServerConfig",
-    "SessionPoolConfig",
-    "SessionQuery",
-    "SkillCommandConfig",
-    "SkillSlashConfig",
-    "SkillsConfig",
-    "StdioMCPServerConfig",
-    "StdoutEventHandlerConfig",
-    "StreamableHTTPMCPServerConfig",
-    "TeamConfig",
-    "TeamMemberConfig",
-    "ToolConfig",
-    "ToolsetConfig",
-    "build_steps_from_agents",
-    "find_project_config",
-    "get_global_config_dir",
-    "get_global_config_path",
-    "resolve_config",
-    "resolve_config_for_server",
-    "resolve_handler_configs",
-    "translate_config_to_graph",
-    "translate_connections_to_edges",
-    "translate_team_to_graph",
-    "translate_teams_to_graphs",
-]
+
+class _ShimFinder(abc.MetaPathFinder):
+    """Redirect agentpool_config.X submodule imports to wolfharness_config.X."""
+
+    _prefix = "agentpool_config."
+    _target = "wolfharness_config"
+
+    def find_spec(
+        self, fullname: str, path: object = None, target: object = None
+    ) -> machinery.ModuleSpec | None:
+        if not fullname.startswith(self._prefix):
+            return None
+
+        wolf_name = self._target + fullname[len(self._prefix) - 1 :]
+        try:
+            wolf_mod = importlib.import_module(wolf_name)
+        except ModuleNotFoundError:
+            return None
+
+        sys.modules[fullname] = wolf_mod
+        return machinery.ModuleSpec(fullname, loader=None)
+
+
+if not any(isinstance(f, _ShimFinder) for f in sys.meta_path):
+    sys.meta_path.insert(0, _ShimFinder())

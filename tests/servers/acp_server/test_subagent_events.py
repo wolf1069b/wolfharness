@@ -16,17 +16,17 @@ import pytest
 
 from acp.schema import ClientCapabilities
 from acp.schema.notifications import SessionNotification
-from agentpool.agents.events.events import (
+from wolfharness.agents.events.events import (
     PartDeltaEvent,
     RunErrorEvent,
     SpawnSessionStart,
     StreamCompleteEvent,
     ToolCallStartEvent,
 )
-from agentpool.messaging import ChatMessage
-from agentpool.orchestrator.core import EventBus, EventEnvelope
-from agentpool_server.acp_server.event_converter import ACPEventConverter
-from agentpool_server.acp_server.handler import ACPProtocolHandler
+from wolfharness.messaging import ChatMessage
+from wolfharness.orchestrator.core import EventBus, EventEnvelope
+from wolfharness_server.acp_server.event_converter import ACPEventConverter
+from wolfharness_server.acp_server.handler import ACPProtocolHandler
 
 
 pytestmark = [pytest.mark.unit, pytest.mark.anyio]
@@ -239,13 +239,13 @@ async def test_notify_completed_called_when_done_event_set(
     Then: _notify_completed sends a ToolCallProgress completion notification.
     """
     # Set up parent converter in zed mode so build_subagent_completed yields
-    from agentpool_server.acp_server.event_converter import ACPEventConverter
+    from wolfharness_server.acp_server.event_converter import ACPEventConverter
 
     zed_converter = ACPEventConverter(subagent_display_mode="zed")
     zed_converter._current_message_id = "test-msg"
     acp_handler._converters["parent-ses"] = zed_converter
     # Seed the converter's _subagent_tool_call_ids map
-    from agentpool.agents.events import SpawnSessionStart
+    from wolfharness.agents.events import SpawnSessionStart
 
     spawn = SpawnSessionStart(
         child_session_id="child-ses",
@@ -296,12 +296,12 @@ async def test_done_event_none_race_immediate_notification(
     When: _on_spawn_session_start processes a SpawnSessionStart.
     Then: _notify_completed is called immediately (no closure spawned).
     """
-    from agentpool_server.acp_server.event_converter import ACPEventConverter
+    from wolfharness_server.acp_server.event_converter import ACPEventConverter
 
     zed_converter = ACPEventConverter(subagent_display_mode="zed")
     zed_converter._current_message_id = "test-msg"
     acp_handler._converters["parent-ses"] = zed_converter
-    from agentpool.agents.events import SpawnSessionStart
+    from wolfharness.agents.events import SpawnSessionStart
 
     spawn = SpawnSessionStart(
         child_session_id="child-race",
@@ -321,7 +321,7 @@ async def test_done_event_none_race_immediate_notification(
     # Restore the real _on_spawn_session_start (fixture overrides it with AsyncMock)
     import types
 
-    from agentpool_server.acp_server.handler import ACPProtocolHandler as _HandlerCls
+    from wolfharness_server.acp_server.handler import ACPProtocolHandler as _HandlerCls
 
     acp_handler._on_spawn_session_start = types.MethodType(  # type: ignore[assignment]
         _HandlerCls._on_spawn_session_start, acp_handler
@@ -358,12 +358,12 @@ async def test_concurrent_children_each_get_completion_notification(
     When: Both done_events are set.
     Then: _notify_completed is called for each child with the correct tool_call_id.
     """
-    from agentpool_server.acp_server.event_converter import ACPEventConverter
+    from wolfharness_server.acp_server.event_converter import ACPEventConverter
 
     zed_converter = ACPEventConverter(subagent_display_mode="zed")
     zed_converter._current_message_id = "test-msg"
     acp_handler._converters["parent-ses"] = zed_converter
-    from agentpool.agents.events import SpawnSessionStart
+    from wolfharness.agents.events import SpawnSessionStart
 
     # Seed converter with two spawn events
     for i, child_sid in enumerate(["child-a", "child-b"]):
@@ -420,12 +420,12 @@ async def test_closure_error_logged_not_swallowed(
     When: _await_child_and_notify completes (done_event set).
     Then: The closure does NOT re-raise the ValueError (caught by generic except).
     """
-    from agentpool_server.acp_server.event_converter import ACPEventConverter
+    from wolfharness_server.acp_server.event_converter import ACPEventConverter
 
     zed_converter = ACPEventConverter(subagent_display_mode="zed")
     zed_converter._current_message_id = "test-msg"
     acp_handler._converters["parent-ses"] = zed_converter
-    from agentpool.agents.events import SpawnSessionStart
+    from wolfharness.agents.events import SpawnSessionStart
 
     spawn = SpawnSessionStart(
         child_session_id="child-err",
@@ -471,12 +471,12 @@ async def test_consumer_task_refs_cleanup_after_closure(
     When: The closure task completes (done_event set).
     Then: The task is removed from _consumer_task_refs.
     """
-    from agentpool_server.acp_server.event_converter import ACPEventConverter
+    from wolfharness_server.acp_server.event_converter import ACPEventConverter
 
     zed_converter = ACPEventConverter(subagent_display_mode="zed")
     zed_converter._current_message_id = "test-msg"
     acp_handler._converters["parent-ses"] = zed_converter
-    from agentpool.agents.events import SpawnSessionStart
+    from wolfharness.agents.events import SpawnSessionStart
 
     spawn = SpawnSessionStart(
         child_session_id="child-ref",
@@ -522,12 +522,12 @@ async def test_parent_of_cleanup_on_child_exit(
     When: _await_child_and_notify's done_event is set (simulating child exit).
     Then: _parent_of[child_sid] is removed.
     """
-    from agentpool_server.acp_server.event_converter import ACPEventConverter
+    from wolfharness_server.acp_server.event_converter import ACPEventConverter
 
     zed_converter = ACPEventConverter(subagent_display_mode="zed")
     zed_converter._current_message_id = "test-msg"
     acp_handler._converters["parent-ses"] = zed_converter
-    from agentpool.agents.events import SpawnSessionStart
+    from wolfharness.agents.events import SpawnSessionStart
 
     spawn = SpawnSessionStart(
         child_session_id="child-cleanup",
@@ -761,7 +761,7 @@ async def test_on_spawn_creates_child_converter_with_subagent_context(
     """
     import types
 
-    from agentpool_server.acp_server.handler import ACPProtocolHandler as _HandlerCls
+    from wolfharness_server.acp_server.handler import ACPProtocolHandler as _HandlerCls
 
     # Restore real method (fixture overrides it with AsyncMock)
     acp_handler._on_spawn_session_start = types.MethodType(  # type: ignore[assignment]
@@ -824,7 +824,7 @@ async def test_handle_event_stamps_field_meta_on_child_notification(
     When: A PartDeltaEvent is handled for that child session.
     Then: The resulting SessionNotification has the correct field_meta dict.
     """
-    from agentpool_server.acp_server.event_converter import SubagentContext
+    from wolfharness_server.acp_server.event_converter import SubagentContext
 
     child_converter = ACPEventConverter(
         subagent_context=SubagentContext(parent_tool_call_id="tc-123", subagent_type="coder"),
@@ -877,7 +877,7 @@ async def test_nested_subagents_each_have_own_context(
     When: Inspecting their subagent_context values.
     Then: Each converter has its own context pointing to its parent_tool_call_id.
     """
-    from agentpool_server.acp_server.event_converter import SubagentContext
+    from wolfharness_server.acp_server.event_converter import SubagentContext
 
     child_converter = ACPEventConverter(
         subagent_context=SubagentContext(

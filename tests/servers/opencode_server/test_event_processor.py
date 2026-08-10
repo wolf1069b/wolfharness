@@ -16,11 +16,11 @@ from pydantic_ai.messages import (
 )
 import pytest
 
-from agentpool_server.opencode_server.event_processor import EventProcessor
-from agentpool_server.opencode_server.event_processor_context import (
+from wolfharness_server.opencode_server.event_processor import EventProcessor
+from wolfharness_server.opencode_server.event_processor_context import (
     EventProcessorContext,
 )
-from agentpool_server.opencode_server.models import (
+from wolfharness_server.opencode_server.models import (
     MessagePath,
     MessageTime,
     MessageWithParts,
@@ -35,7 +35,7 @@ pytestmark = pytest.mark.integration
 
 
 if TYPE_CHECKING:
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness_server.opencode_server.state import ServerState
 
 
 # =============================================================================
@@ -61,7 +61,7 @@ async def test_process_text_start_creates_text_part(server_state: ServerState) -
         agent_name="test-agent",
         model_id="test-model",
         parent_id="parent-1",
-        provider_id="agentpool",
+        provider_id="wolfharness",
         path=MessagePath(cwd="/tmp", root="/tmp"),
     )
     ctx = EventProcessorContext(
@@ -112,7 +112,7 @@ async def test_process_text_delta_accumulates_text(server_state: ServerState) ->
         agent_name="test-agent",
         model_id="test-model",
         parent_id="parent-1",
-        provider_id="agentpool",
+        provider_id="wolfharness",
         path=MessagePath(cwd="/tmp", root="/tmp"),
     )
     ctx = EventProcessorContext(
@@ -165,7 +165,7 @@ async def test_process_text_delta_without_start(server_state: ServerState) -> No
         agent_name="test-agent",
         model_id="test-model",
         parent_id="parent-1",
-        provider_id="agentpool",
+        provider_id="wolfharness",
         path=MessagePath(cwd="/tmp", root="/tmp"),
     )
     ctx = EventProcessorContext(
@@ -209,7 +209,7 @@ def _make_stream_complete_context(server_state: ServerState) -> EventProcessorCo
         agent_name="test-agent",
         model_id="test-model",
         parent_id="parent-1",
-        provider_id="agentpool",
+        provider_id="wolfharness",
         path=MessagePath(cwd="/tmp", root="/tmp"),
     )
     return EventProcessorContext(
@@ -224,8 +224,8 @@ def _make_stream_complete_context(server_state: ServerState) -> EventProcessorCo
 @pytest.mark.asyncio
 async def test_stream_complete_emits_idle_status(server_state: ServerState) -> None:
     """Test that a completed StreamCompleteEvent emits SessionStatusEvent(idle)."""
-    from agentpool.agents.events import StreamCompleteEvent
-    from agentpool.messaging import ChatMessage
+    from wolfharness.agents.events import StreamCompleteEvent
+    from wolfharness.messaging import ChatMessage
 
     processor = EventProcessor()
     ctx = _make_stream_complete_context(server_state)
@@ -243,8 +243,8 @@ async def test_stream_complete_emits_idle_status(server_state: ServerState) -> N
 @pytest.mark.asyncio
 async def test_stream_complete_emits_cancelled_status(server_state: ServerState) -> None:
     """Test that a cancelled StreamCompleteEvent emits SessionStatusEvent(cancelled)."""
-    from agentpool.agents.events import StreamCompleteEvent
-    from agentpool.messaging import ChatMessage
+    from wolfharness.agents.events import StreamCompleteEvent
+    from wolfharness.messaging import ChatMessage
 
     processor = EventProcessor()
     ctx = _make_stream_complete_context(server_state)
@@ -266,7 +266,7 @@ async def test_stream_complete_emits_cancelled_status(server_state: ServerState)
 
 def test_create_mcp_tools_changed_event() -> None:
     """EventProcessor.create_mcp_tools_changed_event creates correct event."""
-    from agentpool_server.opencode_server.models.events import McpToolsChangedEvent
+    from wolfharness_server.opencode_server.models.events import McpToolsChangedEvent
 
     processor = EventProcessor()
     event = processor.create_mcp_tools_changed_event(server="my_mcp_server")
@@ -284,8 +284,8 @@ async def test_mcp_tools_changed_event_from_change_event() -> None:
     1. McpServerCap.on_change() yields ChangeEvent(kind="tools_changed")
     2. EventProcessor.create_mcp_tools_changed_event() converts to McpToolsChangedEvent
     """
-    from agentpool.capabilities.change_event import ChangeEvent
-    from agentpool_server.opencode_server.models.events import McpToolsChangedEvent
+    from wolfharness.capabilities.change_event import ChangeEvent
+    from wolfharness_server.opencode_server.models.events import McpToolsChangedEvent
 
     processor = EventProcessor()
 

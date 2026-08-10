@@ -11,7 +11,7 @@ Covers:
 - ACP event converter with real EventBus subscription
 - handle_elicitation raises CallDeferred with real AgentContext
 
-Refs: https://github.com/Leoyzen/agentpool/issues/107
+Refs: https://github.com/Leoyzen/wolfharness/issues/107
 """
 
 from __future__ import annotations
@@ -26,15 +26,15 @@ from pydantic_ai.models.test import TestModel
 from pydantic_ai.tools import DeferredToolRequests, RunContext
 import pytest
 
-from agentpool.agents.context import AgentContext, AgentRunContext
-from agentpool.agents.events.events import ElicitationDeferredEvent
-from agentpool.agents.native_agent.elicitation_bridge import (
+from wolfharness.agents.context import AgentContext, AgentRunContext
+from wolfharness.agents.events.events import ElicitationDeferredEvent
+from wolfharness.agents.native_agent.elicitation_bridge import (
     ElicitationFutureRegistry,
     create_elicitation_bridge_capability,
 )
-from agentpool.orchestrator.core import EventBus, SessionController
-from agentpool.tools import CallDeferred
-from agentpool.ui.base import InputProvider
+from wolfharness.orchestrator.core import EventBus, SessionController
+from wolfharness.tools import CallDeferred
+from wolfharness.ui.base import InputProvider
 
 
 # ============================================================================
@@ -50,7 +50,7 @@ async def test_deferred_tool_requests_in_output_type_with_capabilities() -> None
     DeferredToolRequests to the pydantic-ai agent's output_type so
     deferred tool calls can be returned as agent output.
     """
-    from agentpool import Agent
+    from wolfharness import Agent
 
     model = TestModel(custom_output_text="test response")
 
@@ -131,7 +131,7 @@ async def test_session_state_checkpoint_enabled_with_store() -> None:
     When SessionController is constructed with a non-None store,
     create_session() must set SessionState.checkpoint_enabled=True.
     """
-    from agentpool_storage.memory_provider.provider import MemoryStorageProvider
+    from wolfharness_storage.memory_provider.provider import MemoryStorageProvider
 
     store = MemoryStorageProvider()
     pool = _FakePool()
@@ -183,8 +183,8 @@ async def test_acp_session_proxy_checkpoint_enabled_propagates() -> None:
     """
     from acp.agent.acp_requests import ACPRequests
     from acp.schema.capabilities import ClientCapabilities
-    from agentpool_server.acp_server.handler import _ACPSessionProxy
-    from agentpool_server.acp_server.input_provider import ACPInputProvider
+    from wolfharness_server.acp_server.handler import _ACPSessionProxy
+    from wolfharness_server.acp_server.input_provider import ACPInputProvider
 
     # Create a mock client for ACPRequests — we won't actually call it.
     mock_client = MagicMock()
@@ -208,8 +208,8 @@ async def test_acp_session_proxy_checkpoint_disabled_propagates() -> None:
     """
     from acp.agent.acp_requests import ACPRequests
     from acp.schema.capabilities import ClientCapabilities
-    from agentpool_server.acp_server.handler import _ACPSessionProxy
-    from agentpool_server.acp_server.input_provider import ACPInputProvider
+    from wolfharness_server.acp_server.handler import _ACPSessionProxy
+    from wolfharness_server.acp_server.input_provider import ACPInputProvider
 
     mock_client = MagicMock()
     requests = ACPRequests(client=mock_client, session_id="test-session")
@@ -372,7 +372,7 @@ async def test_acp_event_converter_with_real_event_bus() -> None:
     and verifies the ACPEventConverter yields a ToolCallStart with elicitation
     params in field_meta.
     """
-    from agentpool_server.acp_server.event_converter import ACPEventConverter
+    from wolfharness_server.acp_server.event_converter import ACPEventConverter
 
     event_bus = EventBus()
     session_id = "test-converter-session"

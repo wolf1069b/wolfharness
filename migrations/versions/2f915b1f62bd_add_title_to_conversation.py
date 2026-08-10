@@ -14,7 +14,7 @@ from alembic import op
 import sqlalchemy as sa
 import sqlmodel.sql.sqltypes
 
-from agentpool_storage.sql_provider.models import UTCDateTime
+from wolfharness_storage.sql_provider.models import UTCDateTime
 
 
 if TYPE_CHECKING:

@@ -9,8 +9,8 @@ from pydantic_ai.capabilities import AbstractCapability
 from pydantic_ai.toolsets import FunctionToolset
 import pytest
 
-from agentpool.capabilities.code_mode_capability import CodeModeCapability
-from agentpool.tools.base import FunctionTool
+from wolfharness.capabilities.code_mode_capability import CodeModeCapability
+from wolfharness.tools.base import FunctionTool
 
 
 pytestmark = pytest.mark.unit

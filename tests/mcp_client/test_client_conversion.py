@@ -17,8 +17,8 @@ from pydantic_ai.models.test import TestModel
 from pydantic_ai.usage import RunUsage
 import pytest
 
-from agentpool.mcp_server import MCPClient
-from agentpool_config.mcp_server import StdioMCPServerConfig
+from wolfharness.mcp_server import MCPClient
+from wolfharness_config.mcp_server import StdioMCPServerConfig
 
 
 pytestmark = pytest.mark.unit

@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic_ai import TextPart, TextPartDelta
 import pytest
 
-from agentpool.agents.events.events import (
+from wolfharness.agents.events.events import (
     PartDeltaEvent,
     PartStartEvent,
     RunStartedEvent,
@@ -30,26 +30,26 @@ from agentpool.agents.events.events import (
     ToolCallStartEvent,
     UserMessageInsertedEvent,
 )
-from agentpool.messaging import ChatMessage
-from agentpool.orchestrator.event_bus import EventEnvelope
-from agentpool.utils import identifiers as identifier
-from agentpool_server.opencode_server.models import (
+from wolfharness.messaging import ChatMessage
+from wolfharness.orchestrator.event_bus import EventEnvelope
+from wolfharness.utils import identifiers as identifier
+from wolfharness_server.opencode_server.models import (
     AssistantMessage,
     MessageWithParts,
     TimeCreated,
     UserMessage,
 )
-from agentpool_server.opencode_server.opencode_event_bridge import (
+from wolfharness_server.opencode_server.opencode_event_bridge import (
     OpenCodeEventBridgeMixin,
 )
 
 
 if TYPE_CHECKING:
-    from agentpool_server.opencode_server.event_adapter import OpenCodeEventAdapter
-    from agentpool_server.opencode_server.event_processor_context import (
+    from wolfharness_server.opencode_server.event_adapter import OpenCodeEventAdapter
+    from wolfharness_server.opencode_server.event_processor_context import (
         EventProcessorContext,
     )
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness_server.opencode_server.state import ServerState
 
 
 def _part_start(index: int, session_id: str, content: str = "") -> PartStartEvent:
@@ -462,7 +462,7 @@ async def test_split_preserves_tool_parts_in_a1(
     # The EventProcessor creates ToolPart entries in ctx.tool_parts and
     # appends them to assistant_msg.parts. After split, ctx.tool_parts is
     # cleared, but A1's parts list already has them.
-    from agentpool_server.opencode_server.models import ToolPart
+    from wolfharness_server.opencode_server.models import ToolPart
 
     a1_tool_parts = [p for p in a1.parts if isinstance(p, ToolPart)]
     assert len(a1_tool_parts) >= 1, "A1 should contain tool parts from the tool call before split"

@@ -97,7 +97,7 @@ During recovery, events since the last snapshot are replayed through the CommCha
 
 ## Session State Machine Mapping
 
-`SessionData.status` (persisted, survives crashes) and `RunState` (transient, in-memory) are separate state machines with a formal mapping defined in `SessionStateMapper` (`src/agentpool/sessions/state_mapper.py`).
+`SessionData.status` (persisted, survives crashes) and `RunState` (transient, in-memory) are separate state machines with a formal mapping defined in `SessionStateMapper` (`src/wolfharness/sessions/state_mapper.py`).
 
 | Scenario | SessionData.status | RunState | Valid? |
 |---|---|---|---|

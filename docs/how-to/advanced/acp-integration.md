@@ -33,7 +33,7 @@ The key difference is that ACP agents run as **separate processes** communicatin
 Using uvx for one-off usage:
 
 ```bash
-uvx --python 3.13 agentpool@latest serve-acp --help
+uvx --python 3.13 wolfharness@latest serve-acp --help
 ```
 
 ## CLI Usage
@@ -43,7 +43,7 @@ uvx --python 3.13 agentpool@latest serve-acp --help
 Start an ACP server from a configuration file:
 
 ```bash
-agentpool serve-acp agents.yml
+wolfharness serve-acp agents.yml
 ```
 
 ### Available Options
@@ -65,9 +65,9 @@ Add this configuration to your Zed `settings.json`:
       "args": [
         "--python",
         "3.13",
-        "agentpool[coding]@latest",
+        "wolfharness[coding]@latest",
         "serve-acp",
-        "https://raw.githubusercontent.com/Million-mo/agentpool/refs/heads/main/docs/examples/create_docs/config.yml"
+        "https://raw.githubusercontent.com/Million-mo/wolfharness/refs/heads/main/docs/examples/create_docs/config.yml"
       ],
       "env": {
         "OPENAI_API_KEY": "your-api-key-here"
@@ -88,7 +88,7 @@ This configuration:
 
 For IDEs that support ACP, the general pattern is:
 
-1. Set the command to `agentpool` (or `uvx agentpool@latest`)
+1. Set the command to `wolfharness` (or `uvx wolfharness@latest`)
 2. Add `serve-acp` as the first argument
 3. Specify your configuration file path
 4. Add any desired CLI options
@@ -102,11 +102,11 @@ Understanding AgentPool's ACP integration requires grasping a key architectural 
 
 #### As an ACP Server (IDE Integration)
 
-When you run `agentpool serve-acp`, it becomes an **ACP server** that IDEs can connect to:
+When you run `wolfharness serve-acp`, it becomes an **ACP server** that IDEs can connect to:
 
 ```mermaid
 graph LR
-    A["IDE (Zed)<br/>ACP Client"] <-->|ACP Protocol| B["agentpool<br/>ACP Server<br/>(serve-acp command)"]
+    A["IDE (Zed)<br/>ACP Client"] <-->|ACP Protocol| B["wolfharness<br/>ACP Server<br/>(serve-acp command)"]
 ```
 
 In this mode, AgentPool:
@@ -123,7 +123,7 @@ At the same time, AgentPool can act as an **ACP client** to integrate external A
 
 ```mermaid
 graph LR
-    A["agentpool<br/>ACP Client<br/>(external agent)"] <-->|ACP Protocol| B["Claude Code<br/>ACP Server<br/>(subprocess)"]
+    A["wolfharness<br/>ACP Client<br/>(external agent)"] <-->|ACP Protocol| B["Claude Code<br/>ACP Server<br/>(subprocess)"]
 ```
 
 In this mode, AgentPool:
@@ -141,7 +141,7 @@ The real power comes when **both roles work together**:
 ```mermaid
 graph TB
     IDE["IDE (Zed)<br/>ACP Client"]
-    LLM["agentpool<br/>Server ↔ Pool ↔ Client"]
+    LLM["wolfharness<br/>Server ↔ Pool ↔ Client"]
     Claude["Claude Code<br/>ACP Server"]
     Pool["Agent Pool<br/>• Internal Agents<br/>• Teams<br/>• Resources<br/>• Tools"]
     
@@ -282,7 +282,7 @@ These agents use ACP protocol but don't support MCP toolset bridging:
 Once configured, external ACP agents are automatically available in the agent pool:
 
 ```python
-from agentpool.delegation import AgentPool
+from wolfharness.delegation import AgentPool
 
 async def main():
     async with AgentPool("agents.yml") as pool:
@@ -472,7 +472,7 @@ Permissions are enforced at multiple levels:
 
 ### Overview
 
-For MCP-capable ACP agents (Claude, Gemini, Auggie, Kimi), agentpool can automatically expose internal toolsets via an in-process MCP server bridge. This allows external agents to use powerful internal capabilities like subagent delegation, agent management, and custom tools.
+For MCP-capable ACP agents (Claude, Gemini, Auggie, Kimi), wolfharness can automatically expose internal toolsets via an in-process MCP server bridge. This allows external agents to use powerful internal capabilities like subagent delegation, agent management, and custom tools.
 
 ### How It Works
 
@@ -644,7 +644,7 @@ Best practices:
 You can reference remote configuration files directly:
 
 ```bash
-agentpool serve-acp https://example.com/config.yml
+wolfharness serve-acp https://example.com/config.yml
 ```
 
 ### Model Provider Selection

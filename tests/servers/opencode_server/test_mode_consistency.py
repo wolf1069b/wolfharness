@@ -8,7 +8,7 @@ The TUI uses Agent.mode to filter agents (exclude "subagent" from switcher).
 The TUI uses AssistantMessage.agent (name) to resolve the agent for display.
 
 These tests verify:
-1. /agent endpoint returns mode="primary" for all agentpool agents (correct)
+1. /agent endpoint returns mode="primary" for all wolfharness agents (correct)
 2. Assistant messages created by _before_consumer_loop have mode=agent_name
 3. chat_message_to_opencode preserves mode from ChatMessage.name
 4. Subagent assistant messages have mode and agent matching the child agent
@@ -20,8 +20,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from agentpool.messaging import ChatMessage
-from agentpool_server.opencode_server.converters import chat_message_to_opencode
+from wolfharness.messaging import ChatMessage
+from wolfharness_server.opencode_server.converters import chat_message_to_opencode
 
 
 pytestmark = pytest.mark.unit
@@ -34,13 +34,13 @@ pytestmark = pytest.mark.unit
 
 @pytest.mark.unit
 async def test_agent_endpoint_mode_is_primary_for_all_agents() -> None:
-    """GET /agent should return mode='primary' for all agentpool agents.
+    """GET /agent should return mode='primary' for all wolfharness agents.
 
-    AgentMode is Literal['subagent', 'primary', 'all']. All agentpool agents
+    AgentMode is Literal['subagent', 'primary', 'all']. All wolfharness agents
     are primary (visible in switcher). This is correct — mode is a category,
     not an agent identifier.
     """
-    from agentpool_server.opencode_server.routes.agent_routes import list_agents
+    from wolfharness_server.opencode_server.routes.agent_routes import list_agents
 
     agent1 = MagicMock()
     agent1.description = "Agent 1"
@@ -76,7 +76,7 @@ async def test_before_consumer_loop_sets_mode_to_agent_name() -> None:
     The TUI uses the message's mode and agent fields to identify which agent
     produced the message. Both should be the agent's name.
     """
-    from agentpool_server.opencode_server.opencode_event_bridge import (
+    from wolfharness_server.opencode_server.opencode_event_bridge import (
         OpenCodeEventBridgeMixin,
     )
 
@@ -89,7 +89,7 @@ async def test_before_consumer_loop_sets_mode_to_agent_name() -> None:
 
     server_state = MagicMock()
     server_state.working_dir = "/tmp"
-    server_state.resolve_default_model_info = MagicMock(return_value=("default", "agentpool"))
+    server_state.resolve_default_model_info = MagicMock(return_value=("default", "wolfharness"))
 
     bridge = OpenCodeEventBridgeMixin.__new__(OpenCodeEventBridgeMixin)
     bridge.session_pool = session_pool
@@ -179,7 +179,7 @@ async def test_subagent_assistant_mode_matches_child_agent_name() -> None:
     When a subagent session is created, the child session's assistant message
     should have mode=child_agent_name so the TUI can display the correct agent.
     """
-    from agentpool_server.opencode_server.opencode_event_bridge import (
+    from wolfharness_server.opencode_server.opencode_event_bridge import (
         OpenCodeEventBridgeMixin,
     )
 
@@ -192,7 +192,7 @@ async def test_subagent_assistant_mode_matches_child_agent_name() -> None:
 
     server_state = MagicMock()
     server_state.working_dir = "/tmp"
-    server_state.resolve_default_model_info = MagicMock(return_value=("default", "agentpool"))
+    server_state.resolve_default_model_info = MagicMock(return_value=("default", "wolfharness"))
 
     bridge = OpenCodeEventBridgeMixin.__new__(OpenCodeEventBridgeMixin)
     bridge.session_pool = session_pool

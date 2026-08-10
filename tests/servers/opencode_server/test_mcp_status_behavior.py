@@ -24,15 +24,15 @@ from mcp.types import Tool
 import pytest
 import yamling
 
-from agentpool import AgentPool, AgentsManifest
-from agentpool.capabilities.mcp_server_cap import McpServerCap
-from agentpool_server.opencode_server.dependencies import get_state
-from agentpool_server.opencode_server.routes import agent_router
-from agentpool_server.opencode_server.state import ServerState
+from wolfharness import AgentPool, AgentsManifest
+from wolfharness.capabilities.mcp_server_cap import McpServerCap
+from wolfharness_server.opencode_server.dependencies import get_state
+from wolfharness_server.opencode_server.routes import agent_router
+from wolfharness_server.opencode_server.state import ServerState
 
 
 if TYPE_CHECKING:
-    from agentpool_config.mcp_server import MCPServerConfig
+    from wolfharness_config.mcp_server import MCPServerConfig
 
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]

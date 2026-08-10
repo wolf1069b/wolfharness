@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from agentpool_server.opencode_server.models import MessageRequest, TextPartInput
+from wolfharness_server.opencode_server.models import MessageRequest, TextPartInput
 
 
 pytestmark = pytest.mark.integration
@@ -121,7 +121,7 @@ class TestPromptAsync:
         response = await async_client.post("/session", json={"title": "Async Message"})
         session_id = response.json()["id"]
 
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             get_messages_for_session,
         )
 

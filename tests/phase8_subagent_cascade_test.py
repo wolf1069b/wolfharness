@@ -9,7 +9,7 @@ from __future__ import annotations
 import anyio
 import pytest
 
-from agentpool import AgentPool, AgentsManifest, NativeAgentConfig
+from wolfharness import AgentPool, AgentsManifest, NativeAgentConfig
 
 
 @pytest.mark.asyncio

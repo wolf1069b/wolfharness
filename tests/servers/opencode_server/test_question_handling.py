@@ -15,12 +15,16 @@ from unittest.mock import AsyncMock, Mock
 from mcp import types
 import pytest
 
-from agentpool.orchestrator.core import SessionController, SessionState
-from agentpool.tasks.exceptions import RunAbortedError
-from agentpool.utils import identifiers as identifier
-from agentpool.utils.time_utils import now_ms
-from agentpool_server.opencode_server.input_provider import OpenCodeInputProvider, PendingPermission
-from agentpool_server.opencode_server.models import (
+from tests.servers.opencode_server.conftest import run_message_phases
+from wolfharness.orchestrator.core import SessionController, SessionState
+from wolfharness.tasks.exceptions import RunAbortedError
+from wolfharness.utils import identifiers as identifier
+from wolfharness.utils.time_utils import now_ms
+from wolfharness_server.opencode_server.input_provider import (
+    OpenCodeInputProvider,
+    PendingPermission,
+)
+from wolfharness_server.opencode_server.models import (
     AssistantMessage,
     MessageRequest,
     PermissionRequestEvent,
@@ -30,22 +34,21 @@ from agentpool_server.opencode_server.models import (
     TimeCreated,
     UserMessage,
 )
-from agentpool_server.opencode_server.models.message import (
+from wolfharness_server.opencode_server.models.message import (
     MessageAbortedError,
     MessageWithParts,
 )
-from agentpool_server.opencode_server.routes.question_routes import (
+from wolfharness_server.opencode_server.routes.question_routes import (
     list_questions,
     reject_question,
     reply_to_question,
 )
-from agentpool_server.opencode_server.session_pool_integration import (
+from wolfharness_server.opencode_server.session_pool_integration import (
     append_message_to_session,
     get_messages_for_session,
     get_session_status,
 )
-from agentpool_server.opencode_server.state import PendingQuestion, ServerState
-from tests.servers.opencode_server.conftest import run_message_phases
+from wolfharness_server.opencode_server.state import PendingQuestion, ServerState
 
 
 pytestmark = pytest.mark.integration
@@ -78,7 +81,7 @@ class RunAbortedAgentMock:
         self._input_provider = None
         self.model_name = "test-model"
         self.session_id: str | None = None
-        from agentpool.messaging.message_history import MessageHistory
+        from wolfharness.messaging.message_history import MessageHistory
 
         self.conversation = MessageHistory()
 
@@ -125,7 +128,7 @@ class BlockingOnQuestionAgentMock:
         self.model_name = "test-model"
         self.session_id: str | None = None
         self.block_forever_event: asyncio.Event = asyncio.Event()
-        from agentpool.messaging.message_history import MessageHistory
+        from wolfharness.messaging.message_history import MessageHistory
 
         self.conversation = MessageHistory()
 
@@ -176,7 +179,7 @@ class BlockingOnRealQuestionAgentMock:
         self.model_name = "test-model"
         self.session_id: str | None = None
         self._state = state
-        from agentpool.messaging.message_history import MessageHistory
+        from wolfharness.messaging.message_history import MessageHistory
 
         self.conversation = MessageHistory()
 
@@ -299,7 +302,7 @@ def _make_pool_mock(agent: Any) -> Mock:  # noqa: PLR0915
         message_id: str | None = None,
         **kwargs: Any,
     ) -> str | None:
-        from agentpool.lifecycle import RunOutcome, RunState
+        from wolfharness.lifecycle import RunOutcome, RunState
 
         complete_event = asyncio.Event()
         _completion_events[session_id] = complete_event
@@ -318,7 +321,7 @@ def _make_pool_mock(agent: Any) -> Mock:  # noqa: PLR0915
                 run_handle._run_state = RunState.DONE
                 run_handle.outcome = RunOutcome.FAILED
                 # Publish RunFailedEvent so the message_routes error path fires
-                from agentpool.agents.events import RunFailedEvent
+                from wolfharness.agents.events import RunFailedEvent
 
                 await session_pool.event_bus.publish(
                     session_id,
@@ -411,7 +414,7 @@ def blocking_real_question_state(tmp_project_dir):
     placeholder_agent.storage = placeholder_agent.agent_pool.storage
     state = ServerState(working_dir=str(tmp_project_dir), agent=placeholder_agent)
     # Set up a mock session_controller for the BlockingOnRealQuestionAgentMock
-    from agentpool.orchestrator.core import SessionState as SPSessionState
+    from wolfharness.orchestrator.core import SessionState as SPSessionState
 
     sp_session = SPSessionState(session_id="test-session", agent_name="test-agent")
     controller = Mock()
@@ -457,8 +460,8 @@ def sample_message_request():
 
 def _setup_session(state: ServerState, session_id: str) -> None:
     """Set up session state manually."""
-    from agentpool_server.opencode_server.models import Session
-    from agentpool_server.opencode_server.models.common import TimeCreatedUpdated
+    from wolfharness_server.opencode_server.models import Session
+    from wolfharness_server.opencode_server.models.common import TimeCreatedUpdated
 
     now = now_ms()
     session = Session(
@@ -665,7 +668,7 @@ class TestRunAbortedErrorCorruptsConversation:
         _original_broadcast = state.broadcast_event
 
         async def _capturing_broadcast(event: Any) -> None:
-            from agentpool_server.opencode_server.models import SessionStatusEvent
+            from wolfharness_server.opencode_server.models import SessionStatusEvent
 
             if isinstance(event, SessionStatusEvent):
                 _session_statuses[event.properties.session_id] = event.properties.status
@@ -691,7 +694,7 @@ class TestRunAbortedErrorCorruptsConversation:
             session_id, sample_message_request, state, user_msg_id, user_msg_with_parts
         )
         # Phase 3: mark session idle (not included in run_message_phases)
-        from agentpool_server.opencode_server.routes.message_routes import (
+        from wolfharness_server.opencode_server.routes.message_routes import (
             _mark_session_idle_safe,
         )
 
@@ -852,7 +855,7 @@ class TestAgentLockDeadlockOnUnresolvedQuestion:
 
         # This MUST NOT deadlock — per-session agents resolve the issue
         try:
-            from agentpool_server.opencode_server.routes.session_routes import get_or_load_session
+            from wolfharness_server.opencode_server.routes.session_routes import get_or_load_session
 
             await asyncio.wait_for(get_or_load_session(state, new_session_id), timeout=1.0)
             # Either gets the session or None — both are fine, no deadlock
@@ -1044,7 +1047,7 @@ class TestSSEDisconnectReleasesAgentLock:
         _setup_session(state, new_session_id)
 
         # This MUST NOT deadlock — per-session agents resolve the issue
-        from agentpool_server.opencode_server.routes.session_routes import get_or_load_session
+        from wolfharness_server.opencode_server.routes.session_routes import get_or_load_session
 
         try:
             await asyncio.wait_for(get_or_load_session(state, new_session_id), timeout=2.0)
@@ -1084,7 +1087,7 @@ class CancelBeforeAgentAssignmentMock:
         self._input_provider = None
         self.model_name = "test-model"
         self.session_id: str | None = None
-        from agentpool.messaging.message_history import MessageHistory
+        from wolfharness.messaging.message_history import MessageHistory
 
         self.conversation = MessageHistory()
 
@@ -1201,7 +1204,7 @@ pytestmark = pytest.mark.integration
 
 def _make_mock_session_controller(session_id: str) -> Mock:
     """Create a mock SessionController with a SessionState for the given session."""
-    from agentpool.orchestrator.core import SessionState
+    from wolfharness.orchestrator.core import SessionState
 
     session = SessionState(session_id=session_id, agent_name="test-agent")
     controller = Mock()
@@ -1699,8 +1702,8 @@ async def test_multi_question_rfc0010_backward_compat():
 
 async def test_multi_question_event_structure():
     """Test that SSE QuestionAskedEvent has correct structure for multi-questions."""
-    from agentpool_server.opencode_server.models.events import QuestionAskedEvent
-    from agentpool_server.opencode_server.models.question import QuestionInfo, QuestionOption
+    from wolfharness_server.opencode_server.models.events import QuestionAskedEvent
+    from wolfharness_server.opencode_server.models.question import QuestionInfo, QuestionOption
 
     # Create a QuestionsAskedEvent with multiple questions
     questions = [
@@ -1834,7 +1837,7 @@ def _make_pending_question(
     future: asyncio.Future[list[list[str]]] | None = None,
 ) -> PendingQuestion:
     """Create a PendingQuestion for testing."""
-    from agentpool_server.opencode_server.models.question import QuestionInfo, QuestionOption
+    from wolfharness_server.opencode_server.models.question import QuestionInfo, QuestionOption
 
     if future is None:
         future = asyncio.get_event_loop().create_future()

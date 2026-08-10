@@ -11,14 +11,14 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from agentpool.agents.events import SpawnSessionStart, StreamCompleteEvent
-from agentpool.messaging import ChatMessage
-from agentpool_server.opencode_server.models import (
+from wolfharness.agents.events import SpawnSessionStart, StreamCompleteEvent
+from wolfharness.messaging import ChatMessage
+from wolfharness_server.opencode_server.models import (
     MessagePath,
     MessageTime,
     MessageWithParts,
 )
-from agentpool_server.opencode_server.models.parts import (
+from wolfharness_server.opencode_server.models.parts import (
     TimeStart,
     ToolPart,
     ToolStateCompleted,
@@ -37,7 +37,7 @@ def _make_assistant_msg(session_id: str = "parent-test") -> MessageWithParts:
         agent_name="lead-agent",
         model_id="test-model",
         parent_id="parent-user-1",
-        provider_id="agentpool",
+        provider_id="wolfharness",
         path=MessagePath(cwd="/tmp", root="/tmp"),
     )
 
@@ -52,7 +52,7 @@ async def test_update_parent_toolpart_via_session_pool_integration(
     This test verifies the fix for the bug where _update_parent_toolpart
     checked part.metadata instead of part.state.metadata.
     """
-    from agentpool_server.opencode_server.session_pool_integration import (
+    from wolfharness_server.opencode_server.session_pool_integration import (
         OpenCodeSessionPoolIntegration,
     )
 

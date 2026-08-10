@@ -19,9 +19,9 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 
-from agentpool.sessions.models import SessionData
-from agentpool_server.opencode_server.models import Session
-from agentpool_server.opencode_server.models.events import (
+from wolfharness.sessions.models import SessionData
+from wolfharness_server.opencode_server.models import Session
+from wolfharness_server.opencode_server.models.events import (
     SessionCreatedEvent,
     SessionIdleEvent,
     SessionStatusEvent,
@@ -31,8 +31,8 @@ from agentpool_server.opencode_server.models.events import (
 if TYPE_CHECKING:
     from httpx import AsyncClient
 
-    from agentpool_server.opencode_server.state import ServerState
     from tests.servers.opencode_server.conftest import EventCapture
+    from wolfharness_server.opencode_server.state import ServerState
 
 
 class TestSessionCreatedEvent:
@@ -304,8 +304,8 @@ class TestSessionCRUD:
         """list_sessions delegates to SessionController when session_controller is set."""
         from unittest.mock import Mock
 
-        from agentpool_server.opencode_server.models.common import TimeCreatedUpdated
-        from agentpool_server.opencode_server.models.session_info import SessionInfo
+        from wolfharness_server.opencode_server.models.common import TimeCreatedUpdated
+        from wolfharness_server.opencode_server.models.session_info import SessionInfo
 
         # Pre-populate the session cache so the route does not need storage
         server_state.sessions["ses_ctrl_001"] = Session(
@@ -424,7 +424,7 @@ class TestSessionStatus:
         abort handler must NOT call session_pool.cancel_run() again.
         A double cancel() kills the start() generator (issue #182).
         """
-        from agentpool.orchestrator.core import SessionState
+        from wolfharness.orchestrator.core import SessionState
 
         response = await async_client.post("/session", json={"title": "Native Agent Session"})
         session_id = response.json()["id"]
@@ -466,7 +466,7 @@ class TestSessionStatus:
         server_state: ServerState,
     ):
         """Aborting a non-native shared agent should cancel run but NOT interrupt shared agent."""
-        from agentpool.orchestrator.core import SessionState
+        from wolfharness.orchestrator.core import SessionState
 
         response = await async_client.post("/session", json={"title": "Shared Agent Session"})
         session_id = response.json()["id"]

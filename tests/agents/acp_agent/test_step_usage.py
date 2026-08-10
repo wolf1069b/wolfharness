@@ -24,10 +24,10 @@ from acp.schema import (
     ToolCallStart,
     UsageUpdate,
 )
-from agentpool.agents.acp_agent.acp_converters import acp_to_native_event
-from agentpool.agents.acp_agent.turn import ACPTurn
-from agentpool.agents.context import AgentRunContext
-from agentpool.agents.events import StepUsageEvent
+from wolfharness.agents.acp_agent.acp_converters import acp_to_native_event
+from wolfharness.agents.acp_agent.turn import ACPTurn
+from wolfharness.agents.context import AgentRunContext
+from wolfharness.agents.events import StepUsageEvent
 
 
 if TYPE_CHECKING:
@@ -168,7 +168,7 @@ def test_mixed_stream_with_step_index_progression() -> None:
 class _MockACPClient:
     """Mock ACP client that yields a predetermined sequence of session updates.
 
-    Implements the :class:`~agentpool.agents.acp_agent.turn.ACPClientProtocol`
+    Implements the :class:`~wolfharness.agents.acp_agent.turn.ACPClientProtocol`
     with a fixed list of ``SessionUpdate`` objects for ``stream_events()`` and
     an empty list for ``get_messages()``.
     """

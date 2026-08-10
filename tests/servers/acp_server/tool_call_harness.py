@@ -32,19 +32,19 @@ from exxec import MockExecutionEnvironment
 from acp import ClientCapabilities
 from acp.client.implementations import HeadlessACPClient
 from acp.schema import TextContentBlock
-from agentpool import AgentsManifest
-from agentpool.delegation import AgentPool
-from agentpool.models.agents import NativeAgentConfig
-from agentpool.models.model_configs import TestModelConfig
-from agentpool_server.acp_server.session import ACPSession
+from wolfharness import AgentsManifest
+from wolfharness.delegation import AgentPool
+from wolfharness.models.agents import NativeAgentConfig
+from wolfharness.models.model_configs import TestModelConfig
+from wolfharness_server.acp_server.session import ACPSession
 
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from acp.schema import SessionNotification
-    from agentpool_config import AnyToolConfig
-    from agentpool_config.mcp_server import MCPServerConfig
+    from wolfharness_config import AnyToolConfig
+    from wolfharness_config.mcp_server import MCPServerConfig
 
 
 class RecordingACPClient(HeadlessACPClient):

@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING
 import pytest
 import yamling
 
-from agentpool import AgentPool, AgentsManifest
-from agentpool_config.nodes import BaseAgentConfig, ResourceConfig
+from wolfharness import AgentPool, AgentsManifest
+from wolfharness_config.nodes import BaseAgentConfig, ResourceConfig
 
 
 if TYPE_CHECKING:
@@ -124,8 +124,8 @@ async def test_resource_capability_registered_after_enter(minimal_pool):
     but it should NOT appear in ``get_resource_access()`` results because
     it is a tool wrapper, not a ``ResourceAccess`` data provider.
     """
-    from agentpool.capabilities.extension_registry import Scope, ScopeLevel
-    from agentpool.capabilities.resource_capability import ResourceCapability
+    from wolfharness.capabilities.extension_registry import Scope, ScopeLevel
+    from wolfharness.capabilities.resource_capability import ResourceCapability
 
     pool = minimal_pool
     assert pool.resource_capability is not None

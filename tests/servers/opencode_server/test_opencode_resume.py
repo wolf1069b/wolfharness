@@ -12,24 +12,24 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from agentpool.orchestrator.core import SessionPool
-from agentpool_server.opencode_server.event_processor_context import (
+from wolfharness.orchestrator.core import SessionPool
+from wolfharness_server.opencode_server.event_processor_context import (
     EventProcessorContext,
 )
-from agentpool_server.opencode_server.models import (
+from wolfharness_server.opencode_server.models import (
     MessagePath,
     MessageTime,
     MessageWithParts,
 )
-from agentpool_server.opencode_server.models.parts import (
+from wolfharness_server.opencode_server.models.parts import (
     TextPart,
     ToolPart,
     ToolStateRunning,
 )
-from agentpool_server.opencode_server.session_pool_integration import (
+from wolfharness_server.opencode_server.session_pool_integration import (
     OpenCodeSessionPoolIntegration,
 )
-from agentpool_server.opencode_server.state import ServerState
+from wolfharness_server.opencode_server.state import ServerState
 
 
 pytestmark = pytest.mark.integration
@@ -85,7 +85,7 @@ def server_state(tmp_path: Any) -> ServerState:
 
 def _make_assistant_msg(session_id: str, working_dir: str) -> MessageWithParts:
     """Create a fresh assistant MessageWithParts for testing."""
-    from agentpool.utils.time_utils import now_ms
+    from wolfharness.utils.time_utils import now_ms
 
     return MessageWithParts.assistant(
         message_id="msg-test-001",
@@ -94,7 +94,7 @@ def _make_assistant_msg(session_id: str, working_dir: str) -> MessageWithParts:
         agent_name="test-agent",
         model_id="test-model",
         parent_id=session_id,
-        provider_id="agentpool",
+        provider_id="wolfharness",
         path=MessagePath(cwd=working_dir, root=working_dir),
     )
 
@@ -184,7 +184,7 @@ class TestEventProcessorContextSerialization:
         )
 
         # Add a tool part
-        from agentpool_server.opencode_server.models.parts import (
+        from wolfharness_server.opencode_server.models.parts import (
             TimeStart,
         )
 
@@ -354,7 +354,7 @@ class TestBeforeConsumerLoopResume:
         )
 
         # Add a tool part to the context and assistant message
-        from agentpool_server.opencode_server.models.parts import (
+        from wolfharness_server.opencode_server.models.parts import (
             TimeStart,
         )
 
@@ -455,7 +455,7 @@ class TestBeforeConsumerLoopResume:
             working_dir=server_state.working_dir,
         )
         # Simulate an already-completed part
-        from agentpool_server.opencode_server.models.parts import (
+        from wolfharness_server.opencode_server.models.parts import (
             TimeStart,
         )
 
@@ -650,7 +650,7 @@ class TestResumeEdgeCases:
             working_dir=server_state.working_dir,
         )
 
-        from agentpool_server.opencode_server.models.parts import (
+        from wolfharness_server.opencode_server.models.parts import (
             TimeStart,
         )
 

@@ -6,7 +6,7 @@ from mcp import types
 import pytest
 
 from acp import RequestPermissionResponse
-from agentpool_server.acp_server.input_provider import (
+from wolfharness_server.acp_server.input_provider import (
     _create_array_enum_elicitation_options,
     _create_oneof_elicitation_options,
     _handle_array_enum_elicitation_response,

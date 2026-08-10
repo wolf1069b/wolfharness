@@ -25,14 +25,14 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from slashed import Command as SlashedCommand, CommandContext
 
-from agentpool_server.opencode_server.event_processor import (
+from wolfharness_server.opencode_server.event_processor import (
     OpenCodeUserMessageMeta,
 )
-from agentpool_server.opencode_server.models import (
+from wolfharness_server.opencode_server.models import (
     TextPart,
     UserMessage,
 )
-from agentpool_server.opencode_server.routes.session_routes import (
+from wolfharness_server.opencode_server.routes.session_routes import (
     _CommandOutputCapture,
     _DiscardOutputWriter,
 )
@@ -41,7 +41,7 @@ from agentpool_server.opencode_server.routes.session_routes import (
 if TYPE_CHECKING:
     from httpx import AsyncClient as HttpxAsyncClient
 
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness_server.opencode_server.state import ServerState
 
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]

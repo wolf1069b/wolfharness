@@ -32,11 +32,11 @@ from mcp.types import (
 import pytest
 
 from acp.schema.mcp import AcpMcpServer
-from agentpool.mcp_server.config_snapshot import McpConfigEntry, McpConfigSnapshot
-from agentpool.mcp_server.manager import MCPManager
-from agentpool_config.mcp_server import AcpMCPServerConfig
-from agentpool_server.acp_server.acp_mcp_manager import AcpMcpConnectionManager
-from agentpool_server.acp_server.acp_mcp_transport import AcpMcpTransport
+from wolfharness.mcp_server.config_snapshot import McpConfigEntry, McpConfigSnapshot
+from wolfharness.mcp_server.manager import MCPManager
+from wolfharness_config.mcp_server import AcpMCPServerConfig
+from wolfharness_server.acp_server.acp_mcp_manager import AcpMcpConnectionManager
+from wolfharness_server.acp_server.acp_mcp_transport import AcpMcpTransport
 
 
 # ---------------------------------------------------------------------------
@@ -244,11 +244,11 @@ async def test_initialize_mcp_servers_full_chain() -> None:
     - Snapshot with ACP config entry allows ``get_capabilities()`` to find
       the transport.
     """
-    from agentpool import Agent
-    from agentpool.delegation import AgentPool
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.manifest import AgentsManifest
-    from agentpool_server.acp_server.acp_agent import AgentPoolACPAgent
+    from wolfharness import Agent
+    from wolfharness.delegation import AgentPool
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.manifest import AgentsManifest
+    from wolfharness_server.acp_server.acp_agent import AgentPoolACPAgent
 
     mcp_manager, acp_manager = _make_wired_managers()
     session_id = "g3-session"
@@ -351,11 +351,11 @@ async def test_tool_execution_through_get_capabilities_and_acp_transport() -> No
 
     If ``_forward_to_client`` is broken, ``initialize()`` hangs forever.
     """
-    from agentpool import Agent
-    from agentpool.delegation import AgentPool
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.manifest import AgentsManifest
-    from agentpool_server.acp_server.acp_agent import AgentPoolACPAgent
+    from wolfharness import Agent
+    from wolfharness.delegation import AgentPool
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.manifest import AgentsManifest
+    from wolfharness_server.acp_server.acp_agent import AgentPoolACPAgent
 
     mcp_manager, acp_manager = _make_wired_managers()
     session_id = "g4-session"

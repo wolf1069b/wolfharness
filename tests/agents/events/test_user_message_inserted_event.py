@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from agentpool.agents.events.events import UserMessageInsertedEvent
+from wolfharness.agents.events.events import UserMessageInsertedEvent
 
 
 pytestmark = [pytest.mark.unit]

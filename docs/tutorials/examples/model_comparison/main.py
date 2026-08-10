@@ -1,5 +1,5 @@
 # /// script
-# dependencies = ["agentpool"]
+# dependencies = ["wolfharness"]
 # ///
 
 
@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import os
 
-from agentpool import AgentPool, AgentsManifest
-from agentpool.docs.utils import get_config_path, is_pyodide, run
+from wolfharness import AgentPool, AgentsManifest
+from wolfharness.docs.utils import get_config_path, is_pyodide, run
 
 
 # set your OpenAI API key here

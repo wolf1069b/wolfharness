@@ -22,18 +22,18 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 import pytest
 
-from agentpool_server.opencode_server.dependencies import get_state
-from agentpool_server.opencode_server.models import SessionStatusEvent
-from agentpool_server.opencode_server.routes import app_router, global_router
-from agentpool_server.opencode_server.routes.global_routes import GlobalEventFactory
-from agentpool_storage.opencode_provider.helpers import compute_project_id
+from wolfharness_server.opencode_server.dependencies import get_state
+from wolfharness_server.opencode_server.models import SessionStatusEvent
+from wolfharness_server.opencode_server.routes import app_router, global_router
+from wolfharness_server.opencode_server.routes.global_routes import GlobalEventFactory
+from wolfharness_storage.opencode_provider.helpers import compute_project_id
 
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
     from pathlib import Path
 
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness_server.opencode_server.state import ServerState
 
 
 @pytest.fixture

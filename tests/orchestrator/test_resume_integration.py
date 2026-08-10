@@ -12,13 +12,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentpool.agents.events.events import SessionResumeEvent
-from agentpool.orchestrator.core import SessionBusyError, SessionPool
-from agentpool.sessions.models import PendingDeferredCall, SessionData
+from wolfharness.agents.events.events import SessionResumeEvent
+from wolfharness.orchestrator.core import SessionBusyError, SessionPool
+from wolfharness.sessions.models import PendingDeferredCall, SessionData
 
 
 if TYPE_CHECKING:
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
 
 def _stream_empty(queue: asyncio.Queue[Any]) -> bool:
@@ -125,7 +125,7 @@ class _FakeDeferredResults:
 @pytest.fixture
 async def session_pool(minimal_pool: AgentPool) -> SessionPool:
     """Return a SessionPool backed by a real AgentPool with MemoryStorageProvider."""
-    from agentpool_storage.memory_provider.provider import MemoryStorageProvider
+    from wolfharness_storage.memory_provider.provider import MemoryStorageProvider
 
     store = MemoryStorageProvider()
     return SessionPool(pool=minimal_pool, store=store)
@@ -141,7 +141,7 @@ async def test_resume_session_raises_session_not_found_error(
     session_pool: SessionPool,
 ) -> None:
     """resume_session raises SessionNotFoundError for non-existent session."""
-    from agentpool.orchestrator.core import SessionNotFoundError
+    from wolfharness.orchestrator.core import SessionNotFoundError
 
     results = make_deferred_tool_results(["call-1"])
     with pytest.raises(SessionNotFoundError, match="sess-nonexistent"):
@@ -158,7 +158,7 @@ async def test_resume_session_raises_busy_error_when_active_run(
     session_pool: SessionPool,
 ) -> None:
     """resume_session raises SessionBusyError when the session has an active run."""
-    from agentpool.orchestrator.core import SessionBusyError
+    from wolfharness.orchestrator.core import SessionBusyError
 
     # Create session and fake an active run
     state, _ = await session_pool.sessions.get_or_create_session("sess-1", agent_name="test-agent")
@@ -179,7 +179,7 @@ async def test_resume_session_raises_mismatch_error_missing_results(
     session_pool: SessionPool,
 ) -> None:
     """resume_session raises CheckpointMismatchError when results don't cover all pending calls."""
-    from agentpool.orchestrator.core import CheckpointMismatchError
+    from wolfharness.orchestrator.core import CheckpointMismatchError
 
     store = session_pool.sessions.store
     assert store is not None
@@ -202,7 +202,7 @@ async def test_resume_session_raises_mismatch_error_extra_results(
     session_pool: SessionPool,
 ) -> None:
     """resume_session raises CheckpointMismatchError when results include unknown call IDs."""
-    from agentpool.orchestrator.core import CheckpointMismatchError
+    from wolfharness.orchestrator.core import CheckpointMismatchError
 
     store = session_pool.sessions.store
     assert store is not None
@@ -275,7 +275,7 @@ async def test_resume_native_agent_loads_checkpoint_and_runs(
     )
 
     # Create a fake checkpoint
-    from agentpool.agents.native_agent.checkpoint import CheckpointData
+    from wolfharness.agents.native_agent.checkpoint import CheckpointData
 
     checkpoint_data = CheckpointData(
         message_history=[],
@@ -341,7 +341,7 @@ async def test_resume_native_agent_clears_pending_after_success(
         )
     )
 
-    from agentpool.agents.native_agent.checkpoint import CheckpointData
+    from wolfharness.agents.native_agent.checkpoint import CheckpointData
 
     checkpoint_data = CheckpointData(
         message_history=[],
@@ -388,7 +388,7 @@ async def test_resume_native_agent_does_not_clear_pending_on_failure(
         )
     )
 
-    from agentpool.agents.native_agent.checkpoint import CheckpointData
+    from wolfharness.agents.native_agent.checkpoint import CheckpointData
 
     checkpoint_data = CheckpointData(
         message_history=[],
@@ -442,7 +442,7 @@ async def test_resume_session_emits_resume_event(
         )
     )
 
-    from agentpool.agents.native_agent.checkpoint import CheckpointData
+    from wolfharness.agents.native_agent.checkpoint import CheckpointData
 
     checkpoint_data = CheckpointData(
         message_history=[],
@@ -511,7 +511,7 @@ async def test_resume_session_transitions_status_to_active(
         )
     )
 
-    from agentpool.agents.native_agent.checkpoint import CheckpointData
+    from wolfharness.agents.native_agent.checkpoint import CheckpointData
 
     checkpoint_data = CheckpointData(
         message_history=[],
@@ -562,7 +562,7 @@ async def test_resume_session_keeps_checkpointed_status_on_failure(
         )
     )
 
-    from agentpool.agents.native_agent.checkpoint import CheckpointData
+    from wolfharness.agents.native_agent.checkpoint import CheckpointData
 
     checkpoint_data = CheckpointData(
         message_history=[],
@@ -621,7 +621,7 @@ async def test_resume_acp_agent_reopens_subprocess(
     mock_acp.run = AsyncMock(return_value=MagicMock())
     mock_acp._resume_session = AsyncMock(return_value=None)
 
-    from agentpool.agents.native_agent.checkpoint import CheckpointData
+    from wolfharness.agents.native_agent.checkpoint import CheckpointData
 
     checkpoint_data = CheckpointData(
         message_history=[],
@@ -666,7 +666,7 @@ async def test_resume_session_with_empty_pending_calls(
         )
     )
 
-    from agentpool.agents.native_agent.checkpoint import CheckpointData
+    from wolfharness.agents.native_agent.checkpoint import CheckpointData
 
     checkpoint_data = CheckpointData(
         message_history=[],
@@ -717,7 +717,7 @@ async def _fail_gen_rc(*args: Any, **kwargs: Any) -> Any:
 @pytest.fixture
 async def session_pool_rc(minimal_pool: AgentPool) -> SessionPool:
     """Return a SessionPool backed by a real AgentPool with MemoryStorageProvider."""
-    from agentpool_storage.memory_provider.provider import MemoryStorageProvider
+    from wolfharness_storage.memory_provider.provider import MemoryStorageProvider
 
     store = MemoryStorageProvider()
     return SessionPool(pool=minimal_pool, store=store)
@@ -801,7 +801,7 @@ async def test_resume_session_concurrent_calls_serialize(session_pool_rc: Sessio
             metadata={"agent_type": "native"},
         )
     )
-    from agentpool.agents.native_agent.checkpoint import CheckpointData
+    from wolfharness.agents.native_agent.checkpoint import CheckpointData
 
     checkpoint_data = CheckpointData(
         message_history=[], pending_calls=[make_pending_call("call-1")]
@@ -855,7 +855,7 @@ async def test_resume_session_rejects_second_after_success(session_pool_rc: Sess
             metadata={"agent_type": "native"},
         )
     )
-    from agentpool.agents.native_agent.checkpoint import CheckpointData
+    from wolfharness.agents.native_agent.checkpoint import CheckpointData
 
     checkpoint_data = CheckpointData(
         message_history=[], pending_calls=[make_pending_call("call-1")]
@@ -898,7 +898,7 @@ async def test_resume_session_does_not_clear_pending_on_failure(
             metadata={"agent_type": "native"},
         )
     )
-    from agentpool.agents.native_agent.checkpoint import CheckpointData
+    from wolfharness.agents.native_agent.checkpoint import CheckpointData
 
     checkpoint_data = CheckpointData(
         message_history=[], pending_calls=[make_pending_call("call-1")]
@@ -944,7 +944,7 @@ async def test_resume_session_allows_retry_after_failure(session_pool_rc: Sessio
             metadata={"agent_type": "native"},
         )
     )
-    from agentpool.agents.native_agent.checkpoint import CheckpointData
+    from wolfharness.agents.native_agent.checkpoint import CheckpointData
 
     checkpoint_data = CheckpointData(
         message_history=[], pending_calls=[make_pending_call("call-1")]
@@ -1002,7 +1002,7 @@ async def test_resume_session_status_transitions_checkpointed_to_resuming_to_act
             metadata={"agent_type": "native"},
         )
     )
-    from agentpool.agents.native_agent.checkpoint import CheckpointData
+    from wolfharness.agents.native_agent.checkpoint import CheckpointData
 
     checkpoint_data = CheckpointData(
         message_history=[], pending_calls=[make_pending_call("call-1")]
@@ -1051,7 +1051,7 @@ async def test_resume_session_status_reverts_to_checkpointed_on_failure(
             metadata={"agent_type": "native"},
         )
     )
-    from agentpool.agents.native_agent.checkpoint import CheckpointData
+    from wolfharness.agents.native_agent.checkpoint import CheckpointData
 
     checkpoint_data = CheckpointData(
         message_history=[], pending_calls=[make_pending_call("call-1")]

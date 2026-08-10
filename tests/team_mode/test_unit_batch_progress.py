@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from agentpool.capabilities.file_team_state import (
+from wolfharness.capabilities.file_team_state import (
     FileTeamState,
     TaskRecord,
     format_owner_summary,
@@ -180,7 +180,7 @@ def test_batch_exceeding_max_tasks_atomic_failure(
     When: create_tasks_batch would exceed _MAX_TASKS.
     Then: ValueError raised with max tasks message.
     """
-    from agentpool.capabilities.file_team_state import _MAX_TASKS
+    from wolfharness.capabilities.file_team_state import _MAX_TASKS
 
     for i in range(_MAX_TASKS - 1):
         initialized_team.create_task("team-1", {"subject": f"Filler {i}"})

@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/phil65/agentpool/refs/heads/main/schema/config-schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/phil65/wolfharness/refs/heads/main/schema/config-schema.json
 storage:
   # List of storage providers (can use multiple)
   providers:
@@ -23,7 +23,7 @@ agents:
       3. Never stop believing in your team! 🎉
     tools:
       - type: agent_cli # Need to know who to cheer for!
-      - agentpool_docs/examples.download_agents.main.cheer
+      - wolfharness_docs/examples.download_agents.main.cheer
 
   file_getter_1:
     type: native

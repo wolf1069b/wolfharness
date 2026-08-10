@@ -12,8 +12,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from agentpool.sessions.models import SessionData
-from agentpool_server.opencode_server.routes.session_routes import get_or_load_session
+from wolfharness.sessions.models import SessionData
+from wolfharness_server.opencode_server.routes.session_routes import get_or_load_session
 
 
 pytestmark = pytest.mark.integration
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
     from httpx import AsyncClient
 
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness_server.opencode_server.state import ServerState
 
 
 class TestSessionHistoryLoading:
@@ -133,11 +133,11 @@ class TestSessionHistoryLoading:
         response_b.json()["id"]
 
         # Add session A to cache
-        from agentpool_server.opencode_server.models import (
+        from wolfharness_server.opencode_server.models import (
             Session,
             TimeCreatedUpdated,
         )
-        from agentpool_storage.opencode_provider import helpers
+        from wolfharness_storage.opencode_provider import helpers
 
         now = int(datetime.now(UTC).timestamp() * 1000)
         session_a = Session(

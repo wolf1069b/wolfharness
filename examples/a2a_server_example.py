@@ -12,8 +12,8 @@ import asyncio
 
 import anyio
 
-from agentpool import Agent, AgentPool
-from agentpool_server.a2a_server import A2AServer
+from wolfharness import Agent, AgentPool
+from wolfharness_server.a2a_server import A2AServer
 
 
 async def main() -> None:

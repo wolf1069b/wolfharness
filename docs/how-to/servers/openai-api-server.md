@@ -22,10 +22,10 @@ POST /v1/responses           -> Responses API
 
 ```bash
 # Run with default settings
-agentpool serve-api config.yml
+wolfharness serve-api config.yml
 
 # Custom host and port
-agentpool serve-api config.yml --host 0.0.0.0 --port 8000
+wolfharness serve-api config.yml --host 0.0.0.0 --port 8000
 ```
 
 See [`serve-api`](../../reference/cli/serve-api.md) for all CLI options.
@@ -34,8 +34,8 @@ See [`serve-api`](../../reference/cli/serve-api.md) for all CLI options.
 
 ```python
 import anyio
-from agentpool import AgentPool
-from agentpool_server.openai_api_server import OpenAIAPIServer
+from wolfharness import AgentPool
+from wolfharness_server.openai_api_server import OpenAIAPIServer
 
 
 async def main():
@@ -76,13 +76,13 @@ Returns available agents as OpenAI-compatible models:
       "id": "assistant",
       "object": "model",
       "created": 0,
-      "owned_by": "agentpool"
+      "owned_by": "wolfharness"
     },
     {
       "id": "coder",
       "object": "model",
       "created": 0,
-      "owned_by": "agentpool"
+      "owned_by": "wolfharness"
     }
   ]
 }

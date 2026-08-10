@@ -1,0 +1,223 @@
+"""Content conversion utilities for ACP (Agent Client Protocol) integration.
+
+This module handles conversion between pydantic-ai message formats and ACP protocol
+content blocks, session updates, and other data structures using the external acp library.
+"""
+
+from __future__ import annotations
+
+import base64
+from typing import TYPE_CHECKING, Any, assert_never, overload
+
+from pydantic import HttpUrl
+from pydantic_ai import BinaryContent, BinaryImage
+
+from acp.schema import (
+    AudioContentBlock,
+    BlobResourceContents,
+    EmbeddedResourceContentBlock,
+    HttpMcpServer,
+    ImageContentBlock,
+    ResourceContentBlock,
+    SessionConfigSelectOption,
+    SessionInfo,
+    SessionMode,
+    SseMcpServer,
+    StdioMcpServer,
+    TextContentBlock,
+    TextResourceContents,
+)
+from acp.schema.mcp import AcpMcpServer
+from wolfharness.log import get_logger
+from wolfharness.utils.pydantic_ai_helpers import (
+    format_uri_as_link,
+    get_file_url_obj,
+    uri_to_path_reference,
+)
+from wolfharness_config.mcp_server import (
+    AcpMCPServerConfig,
+    SSEMCPServerConfig,
+    StdioMCPServerConfig,
+    StreamableHTTPMCPServerConfig,
+)
+
+
+if TYPE_CHECKING:
+    from fsspec.asyn import AsyncFileSystem
+    from pydantic_ai import UserContent
+
+    from acp.schema import ContentBlock, McpServer, SessionConfigOption
+    from acp.schema.content_blocks import ResourceContents
+    from wolfharness.agents.modes import ModeCategory, ModeInfo
+    from wolfharness.common_types import PathReference
+    from wolfharness.messaging import MessageNode
+    from wolfharness.sessions import SessionData
+    from wolfharness_config.mcp_server import MCPServerConfig
+
+logger = get_logger(__name__)
+
+_DOCUMENT_FORMATS: dict[str, str] = {
+    "application/pdf": "pdf",
+    "text/plain": "txt",
+    "text/csv": "csv",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+    "text/html": "html",
+    "text/markdown": "md",
+    "application/msword": "doc",
+    "application/vnd.ms-excel": "xls",
+}
+
+
+@overload
+def convert_acp_mcp_server_to_config(
+    acp_server: HttpMcpServer,
+) -> StreamableHTTPMCPServerConfig: ...
+
+
+@overload
+def convert_acp_mcp_server_to_config(
+    acp_server: SseMcpServer,
+) -> SSEMCPServerConfig: ...
+
+
+@overload
+def convert_acp_mcp_server_to_config(
+    acp_server: StdioMcpServer,
+) -> StdioMCPServerConfig: ...
+
+
+@overload
+def convert_acp_mcp_server_to_config(
+    acp_server: AcpMcpServer,
+) -> AcpMCPServerConfig: ...
+
+
+@overload
+def convert_acp_mcp_server_to_config(acp_server: McpServer) -> MCPServerConfig: ...
+
+
+def convert_acp_mcp_server_to_config(acp_server: McpServer) -> MCPServerConfig:
+    """Convert ACP McpServer to native MCPServerConfig.
+
+    Args:
+        acp_server: ACP McpServer object from session/new request
+
+    Returns:
+        MCPServerConfig instance
+    """
+    match acp_server:
+        case StdioMcpServer(name=name, command=cmd, args=args):
+            env = acp_server.get_env_dict()
+            return StdioMCPServerConfig(name=name, command=cmd, args=list(args), env=env)
+        case SseMcpServer(name=name, url=url):
+            h = acp_server.get_headers_dict()
+            return SSEMCPServerConfig(name=name, url=HttpUrl(url), headers=h)
+        case HttpMcpServer(name=name, url=url):
+            h = acp_server.get_headers_dict()
+            return StreamableHTTPMCPServerConfig(name=name, url=HttpUrl(url), headers=h)
+        case AcpMcpServer(name=name, id=acp_id):
+            return AcpMCPServerConfig(name=name, acp_id=acp_id)
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
+def from_acp_content(  # noqa: PLR0911
+    block: ContentBlock,
+    fs: AsyncFileSystem | None = None,
+) -> UserContent | PathReference:
+    """Convert ACP content blocks to UserContent or PathReference objects.
+
+    File/directory references are converted to PathReference objects, deferring
+    context resolution to the prompt conversion layer (convert_prompts).
+
+    Args:
+        block: ACP ContentBlock
+        fs: Optional filesystem for file references
+
+    Returns:
+        UserContent or PathReference objects
+    """
+    logger.info("Processing block", block_type=type(block).__name__)
+    match block:
+        case TextContentBlock(text=text):
+            return text
+
+        case ImageContentBlock(data=data, mime_type=mime_type):
+            binary_data = base64.b64decode(data)
+            return BinaryImage(data=binary_data, media_type=mime_type)
+
+        case AudioContentBlock(data=data, mime_type=mime_type):
+            binary_data = base64.b64decode(data)
+            return BinaryContent(data=binary_data, media_type=mime_type)
+
+        case ResourceContentBlock(uri=uri, mime_type=mime_type):
+            if mime_type:
+                if obj := get_file_url_obj(uri, mime_type):
+                    return obj
+                # Try to create a PathReference for file:// URIs
+                if ref := uri_to_path_reference(uri, mime_type, fs):
+                    return ref
+                return format_uri_as_link(uri)
+            # No MIME type - try to create PathReference for file:// URIs
+            if ref := uri_to_path_reference(uri, mime_type, fs):
+                return ref
+            return format_uri_as_link(uri)
+
+        case EmbeddedResourceContentBlock(resource=resource):
+            return resource_to_content(resource)
+
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
+def resource_to_content(resource: ResourceContents) -> str | BinaryImage | BinaryContent:
+    match resource:
+        case TextResourceContents(uri=uri, text=text):
+            return format_uri_as_link(uri) + f'\n<context ref="{uri}">\n{text}\n</context>'
+        case BlobResourceContents(blob=blob, mime_type=mime_type):
+            binary_data = base64.b64decode(blob)
+            if mime_type and mime_type.startswith("image/"):
+                return BinaryImage(data=binary_data, media_type=mime_type)
+            if (mime_type and mime_type.startswith("audio/")) or mime_type in _DOCUMENT_FORMATS:
+                return BinaryContent(data=binary_data, media_type=mime_type)
+            formatted_uri = format_uri_as_link(resource.uri)
+            return f"Binary Resource: {formatted_uri}"
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
+def to_session_select_option(mode: ModeInfo) -> SessionConfigSelectOption:
+    return SessionConfigSelectOption(value=mode.id, name=mode.name, description=mode.description)
+
+
+def to_session_config_option(category: ModeCategory) -> SessionConfigOption:
+    from acp.schema import SessionConfigOption
+
+    return SessionConfigOption(
+        id=category.id,
+        name=category.name,
+        description=None,
+        category=category.category,
+        current_value=category.current_mode_id,
+        options=[to_session_select_option(mode) for mode in category.available_modes],
+    )
+
+
+def to_session_info(session_data: SessionData) -> SessionInfo:
+    meta: dict[str, object] | None = None
+    if session_data.status == "checkpointed":
+        meta = {"state": "idle"}
+    return SessionInfo(
+        session_id=session_data.session_id,
+        cwd=session_data.cwd or "",
+        title=session_data.title,
+        updated_at=session_data.updated_at,
+        meta=meta,
+    )
+
+
+def agent_to_mode(agent: MessageNode[Any, Any]) -> SessionMode:
+    """Convert agent to a session mode."""
+    desc = agent.description or f"Switch to {agent.name} agent"
+    return SessionMode(id=agent.name, name=agent.display_name, description=desc)

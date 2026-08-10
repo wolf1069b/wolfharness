@@ -732,7 +732,7 @@ Without storage, simulation runs but no trajectory is recorded.
 **Step 1: SimulationInputProvider**
 
 ```python
-# File: src/agentpool/simulation/input_provider.py
+# File: src/wolfharness/simulation/input_provider.py
 class SimulationInputProvider(InputProvider):
     """Step 1 implementation - core blocking mechanism."""
     
@@ -766,9 +766,9 @@ class SimulationInputProvider(InputProvider):
 **Step 2: ElicitationRequestEvent**
 
 ```python
-# File: src/agentpool/simulation/events.py
+# File: src/wolfharness/simulation/events.py
 from dataclasses import dataclass
-from agentpool.models import CustomEvent
+from wolfharness.models import CustomEvent
 
 @dataclass(frozen=True)
 class ElicitationRequestEvent(CustomEvent):
@@ -783,7 +783,7 @@ class ElicitationRequestEvent(CustomEvent):
 **Step 3: SimulationToolProvider**
 
 ```python
-# File: src/agentpool/simulation/tool_provider.py
+# File: src/wolfharness/simulation/tool_provider.py
 class SimulationToolProvider(ResourceProvider):
     """Basic tools for Sim Agent."""
     
@@ -864,7 +864,7 @@ async def demo_simulation():
    - Timeout/deep parameters in YAML
 
 2. **CLI Commands**
-   - `agentpool simulate --sim-agent X --target Y`
+   - `wolfharness simulate --sim-agent X --target Y`
    - Batch simulation runner
    - Trajectory export
 
@@ -1022,13 +1022,13 @@ async def cooperative_simulation(sim_agent, target_agent):
 
 ```bash
 # Run single simulation
-agentpool simulate \
+wolfharness simulate \
   --sim-agent engineer_sim \
   --target diagnosis \
   --scenario scenarios/motor_failure.yml
 
 # Batch execution
-agentpool simulate-batch \
+wolfharness simulate-batch \
   --sim-agent engineer_sim \
   --target diagnosis \
   --scenarios-dir scenarios/ \
@@ -1036,9 +1036,9 @@ agentpool simulate-batch \
   --parallel 4
 
 # View trajectories
-agentpool history view --agent diagnosis --session <session_id>
+wolfharness history view --agent diagnosis --session <session_id>
 
 # Evaluate results
-agentpool simulate-eval results/ --criteria criteria.yml
+wolfharness simulate-eval results/ --criteria criteria.yml
 ```
 

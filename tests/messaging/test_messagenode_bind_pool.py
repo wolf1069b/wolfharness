@@ -6,12 +6,12 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from agentpool.messaging import ChatMessage
-from agentpool.messaging.messagenode import MessageNode
+from wolfharness.messaging import ChatMessage
+from wolfharness.messaging.messagenode import MessageNode
 
 
 if TYPE_CHECKING:
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
 
 class ConcreteMessageNode(MessageNode[Any, Any]):
@@ -66,7 +66,7 @@ def test_bind_pool_does_not_emit_deprecation_warning(minimal_pool: AgentPool) ->
 @pytest.mark.unit
 def test_host_context_returns_non_none_after_bind_pool() -> None:
     """After _bind_pool(), host_context returns a non-None HostContext."""
-    from agentpool.delegation.pool import AgentPool
+    from wolfharness.delegation.pool import AgentPool
 
     pool = AgentPool()  # type: ignore[type-arg]
     node = ConcreteMessageNode(name="test_node")

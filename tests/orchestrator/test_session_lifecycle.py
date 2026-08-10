@@ -16,23 +16,23 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agentpool.agents.events import RunStartedEvent
-from agentpool.orchestrator.core import (
+from wolfharness.agents.events import RunStartedEvent
+from wolfharness.orchestrator.core import (
     EventBus,
     SessionController,
     SessionLifecyclePolicy,
     SessionPool,
     SessionState,
 )
-from agentpool.orchestrator.run import RunHandle
-from agentpool.sessions.models import PendingDeferredCall, SessionData
+from wolfharness.orchestrator.run import RunHandle
+from wolfharness.sessions.models import PendingDeferredCall, SessionData
 
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-    from agentpool import AgentPool
-    from agentpool.agents.context import AgentRunContext
+    from wolfharness import AgentPool
+    from wolfharness.agents.context import AgentRunContext
 
 
 pytestmark = pytest.mark.unit
@@ -303,7 +303,7 @@ async def test_close_session_acquires_request_lock(
 
 
 if TYPE_CHECKING:
-    from agentpool.agents.context import AgentRunContext
+    from wolfharness.agents.context import AgentRunContext
 
 
 @pytest.fixture
@@ -380,7 +380,7 @@ async def test_close_session_releases_lock_on_cancelled(minimal_pool: AgentPool)
     Without try/finally, CancelledError during complete_event.wait()
     skips the lock release, leaving the session permanently locked.
     """
-    from agentpool.orchestrator.core import SessionController
+    from wolfharness.orchestrator.core import SessionController
 
     controller_cs = SessionController(pool=minimal_pool)
     controller_cs._event_bus = EventBus()
@@ -435,9 +435,9 @@ async def test_close_session_after_cancel(minimal_pool: AgentPool) -> None:
     _turn_complete_event, and the turn completes — releasing turn_lock.
     close_session() should acquire turn_lock quickly and return.
     """
-    from agentpool.agents.events import StreamCompleteEvent
-    from agentpool.messaging import ChatMessage
-    from agentpool.orchestrator.turn import Turn
+    from wolfharness.agents.events import StreamCompleteEvent
+    from wolfharness.messaging import ChatMessage
+    from wolfharness.orchestrator.turn import Turn
 
     class _BlockingTurn(Turn):
         """Turn that blocks until run_ctx.cancelled, then returns."""

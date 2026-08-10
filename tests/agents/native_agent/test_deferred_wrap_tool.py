@@ -14,8 +14,8 @@ from pydantic_ai.messages import ToolReturn
 from pydantic_ai.tools import RunContext
 import pytest
 
-from agentpool.agents.context import AgentContext, AgentRunContext
-from agentpool.tools import ApprovalRequired, CallDeferred, Tool
+from wolfharness.agents.context import AgentContext, AgentRunContext
+from wolfharness.tools import ApprovalRequired, CallDeferred, Tool
 
 
 if TYPE_CHECKING:
@@ -88,7 +88,7 @@ def _create_deferred_tool(
 @pytest.mark.unit
 async def test_non_deferred_tool_normal_return(agent_ctx: AgentContext) -> None:
     """deferred=False tool returns normally — identical to current behavior."""
-    from agentpool.agents.native_agent.tool_wrapping import wrap_tool
+    from wolfharness.agents.native_agent.tool_wrapping import wrap_tool
 
     def normal_tool(text: str) -> str:
         return f"result: {text}"
@@ -105,7 +105,7 @@ async def test_non_deferred_tool_with_context(
     agent_ctx: AgentContext, run_ctx: RunContext[Any]
 ) -> None:
     """deferred=False tool with RunContext returns normally."""
-    from agentpool.agents.native_agent.tool_wrapping import wrap_tool
+    from wolfharness.agents.native_agent.tool_wrapping import wrap_tool
 
     def ctx_tool(ctx: RunContext[Any], text: str) -> str:
         assert ctx.deps is not None
@@ -121,8 +121,8 @@ async def test_non_deferred_tool_with_context(
 @pytest.mark.unit
 async def test_non_deferred_tool_tool_result_conversion(agent_ctx: AgentContext) -> None:
     """deferred=False tool that returns ToolResult converts to ToolReturn."""
-    from agentpool.agents.native_agent.tool_wrapping import wrap_tool
-    from agentpool.tools.base import ToolResult
+    from wolfharness.agents.native_agent.tool_wrapping import wrap_tool
+    from wolfharness.tools.base import ToolResult
 
     def result_tool(text: str) -> ToolResult:
         return ToolResult(content=f"content: {text}", metadata={"key": "val"})
@@ -146,7 +146,7 @@ async def test_deferred_tool_catches_call_deferred_on_resume(
     agent_ctx: AgentContext,
 ) -> None:
     """Tool body raises CallDeferred → wrap_tool() catches and routes to bridge."""
-    from agentpool.agents.native_agent import tool_wrapping as tw_mod
+    from wolfharness.agents.native_agent import tool_wrapping as tw_mod
 
     def deferred_body(text: str) -> str:
         raise CallDeferred(metadata={"call_id": "tc-1"})
@@ -173,7 +173,7 @@ async def test_deferred_tool_catches_call_deferred_with_context(
     run_ctx: RunContext[Any],
 ) -> None:
     """Tool body with RunContext raises CallDeferred → caught properly."""
-    from agentpool.agents.native_agent import tool_wrapping as tw_mod
+    from wolfharness.agents.native_agent import tool_wrapping as tw_mod
 
     def deferred_ctx_body(ctx: RunContext[Any], text: str) -> str:
         raise CallDeferred(metadata={"from": "ctx_tool"})
@@ -196,7 +196,7 @@ async def test_deferred_tool_catches_approval_required_on_resume(
     agent_ctx: AgentContext,
 ) -> None:
     """Tool body raises ApprovalRequired → wrap_tool() catches and routes to bridge."""
-    from agentpool.agents.native_agent import tool_wrapping as tw_mod
+    from wolfharness.agents.native_agent import tool_wrapping as tw_mod
 
     def approval_body(text: str) -> str:
         raise ApprovalRequired(metadata={"needs": "human"})
@@ -226,7 +226,7 @@ async def test_deferred_tool_normal_return_on_resume_passes_through(
     agent_ctx: AgentContext,
 ) -> None:
     """Tool body returns normally on resume — no deferred lifecycle triggered."""
-    from agentpool.agents.native_agent.tool_wrapping import wrap_tool
+    from wolfharness.agents.native_agent.tool_wrapping import wrap_tool
 
     def normal_body(text: str) -> str:
         return f"done: {text}"
@@ -243,8 +243,8 @@ async def test_deferred_tool_normal_return_with_tool_result_passes_through(
     agent_ctx: AgentContext,
 ) -> None:
     """Tool body returns ToolResult on resume — converts to ToolReturn normally."""
-    from agentpool.agents.native_agent.tool_wrapping import wrap_tool
-    from agentpool.tools.base import ToolResult
+    from wolfharness.agents.native_agent.tool_wrapping import wrap_tool
+    from wolfharness.tools.base import ToolResult
 
     def result_body(text: str) -> ToolResult:
         return ToolResult(content=f"content: {text}")
@@ -267,7 +267,7 @@ async def test_handle_deferred_exception_re_raises_call_deferred(
     agent_ctx: AgentContext,
 ) -> None:
     """_handle_deferred_exception re-raises CallDeferred (bridge not yet integrated)."""
-    from agentpool.agents.native_agent.tool_wrapping import _handle_deferred_exception
+    from wolfharness.agents.native_agent.tool_wrapping import _handle_deferred_exception
 
     exc = CallDeferred(metadata={"key": "value"})
     tool = _create_deferred_tool(lambda: "unused", deferred=True)
@@ -283,7 +283,7 @@ async def test_handle_deferred_exception_re_raises_approval_required(
     agent_ctx: AgentContext,
 ) -> None:
     """_handle_deferred_exception re-raises ApprovalRequired (bridge not yet integrated)."""
-    from agentpool.agents.native_agent.tool_wrapping import _handle_deferred_exception
+    from wolfharness.agents.native_agent.tool_wrapping import _handle_deferred_exception
 
     exc = ApprovalRequired(metadata={"reason": "confirm"})
     tool = _create_deferred_tool(
@@ -304,7 +304,7 @@ async def test_non_deferred_tool_does_not_catch_call_deferred(
     agent_ctx: AgentContext,
 ) -> None:
     """deferred=False tool: CallDeferred propagates as normal exception."""
-    from agentpool.agents.native_agent.tool_wrapping import wrap_tool
+    from wolfharness.agents.native_agent.tool_wrapping import wrap_tool
 
     def raises_deferred(text: str) -> str:
         raise CallDeferred(metadata={"bad": "not deferred"})
@@ -321,7 +321,7 @@ async def test_non_deferred_tool_does_not_catch_approval_required(
     agent_ctx: AgentContext,
 ) -> None:
     """deferred=False tool: ApprovalRequired propagates as normal exception."""
-    from agentpool.agents.native_agent.tool_wrapping import wrap_tool
+    from wolfharness.agents.native_agent.tool_wrapping import wrap_tool
 
     def raises_approval(text: str) -> str:
         raise ApprovalRequired(metadata={"bad": "not deferred"})
@@ -343,7 +343,7 @@ async def test_deferred_no_context_function_catches_call_deferred(
     agent_ctx: AgentContext,
 ) -> None:
     """Tool without RunContext/AgentContext raising CallDeferred → caught."""
-    from agentpool.agents.native_agent import tool_wrapping as tw_mod
+    from wolfharness.agents.native_agent import tool_wrapping as tw_mod
 
     def no_ctx_body(text: str) -> str:
         raise CallDeferred(metadata={"no_context": True})

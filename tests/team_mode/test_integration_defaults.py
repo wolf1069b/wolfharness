@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agentpool.capabilities.team_comm_capability import TeamCommCapability
-from agentpool_config.team_mode import MemberSpec, TeamDefaultsConfig, TeamModeConfig
+from wolfharness.capabilities.team_comm_capability import TeamCommCapability
+from wolfharness_config.team_mode import MemberSpec, TeamDefaultsConfig, TeamModeConfig
 
 
 def _make_defaults_config(base_dir: str) -> TeamModeConfig:
@@ -42,7 +42,7 @@ def _make_run_context(
     session_id: str = "lead_session_001",
 ) -> MagicMock:
     """Create a mock RunContext with AgentContextDeps deps for integration tests."""
-    from agentpool.capabilities.agent_context import AgentContextDeps
+    from wolfharness.capabilities.agent_context import AgentContextDeps
 
     agent_ctx = MagicMock(spec=AgentContextDeps)
     agent_ctx.session.metadata = metadata
@@ -64,7 +64,7 @@ async def test_team_create_with_config_default_members(tmp_path: Any) -> None:
     When: team_create is called with empty members.
     Then: uses defaults.members to create the team with child sessions.
     """
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     config = _make_defaults_config(str(tmp_path))
 
@@ -214,7 +214,7 @@ async def test_team_create_defaults_member_skills_injected(tmp_path: Any) -> Non
     from unittest.mock import patch
 
     with patch(
-        "agentpool_toolsets.builtin.skills.load_skill_for_node",
+        "wolfharness_toolsets.builtin.skills.load_skill_for_node",
         new=AsyncMock(return_value="Skill docs"),
     ) as mock_load:
         result = await cap.team_create(ctx, "my_team", [])
@@ -291,7 +291,7 @@ async def test_team_create_defaults_member_instructions_propagated(tmp_path: Any
     from unittest.mock import patch
 
     with patch(
-        "agentpool_toolsets.builtin.skills.load_skill_for_node",
+        "wolfharness_toolsets.builtin.skills.load_skill_for_node",
         new=AsyncMock(return_value="Skill docs"),
     ):
         result = await cap.team_create(ctx, "my_team", [])
@@ -312,7 +312,7 @@ async def test_team_create_config_default_members_then_delete(tmp_path: Any) -> 
     When: team_delete is called afterwards.
     Then: team is successfully deleted.
     """
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     config = _make_defaults_config(str(tmp_path))
 

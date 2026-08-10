@@ -9,9 +9,9 @@ from unittest.mock import MagicMock
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool.agents.base_agent import BaseAgent, _current_run_ctx_var
-from agentpool.agents.context import AgentRunContext
-from agentpool.orchestrator.core import SessionState
+from wolfharness.agents.base_agent import BaseAgent, _current_run_ctx_var
+from wolfharness.agents.context import AgentRunContext
+from wolfharness.orchestrator.core import SessionState
 
 
 pytestmark = pytest.mark.integration
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
     from pydantic_ai.messages import ModelMessage
 
-    from agentpool.orchestrator.turn import Turn
+    from wolfharness.orchestrator.turn import Turn
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +113,7 @@ def agent() -> _TestAgent:
 
 def _mock_session_pool(agent: _TestAgent, run_ctx: AgentRunContext) -> None:
     """Mock agent_pool.session_pool so _get_session_run_ctx() returns run_ctx."""
-    from agentpool.orchestrator.run import RunHandle
+    from wolfharness.orchestrator.run import RunHandle
 
     session_state = SessionState(session_id="test-session", agent_name="test")
     session_state.current_run_id = run_ctx.run_id
@@ -275,7 +275,7 @@ async def test_is_turn_active_true_with_current_run_ctx(agent: _TestAgent) -> No
 
 def test_is_turn_active_false_after_clearing_session_run_ctx(agent: _TestAgent) -> None:
     """After clearing session.current_run_id, is_turn_active() returns False."""
-    from agentpool.orchestrator.run import RunHandle
+    from wolfharness.orchestrator.run import RunHandle
 
     run_ctx = AgentRunContext()
     session_state = SessionState(session_id="test-session", agent_name="test")
@@ -340,8 +340,8 @@ async def test_is_turn_active_during_run_stream() -> None:
 
     We verify this by providing a tool that inspects the agent state mid-turn.
     """
-    from agentpool import Agent
-    from agentpool.agents.events import StreamCompleteEvent
+    from wolfharness import Agent
+    from wolfharness.agents.events import StreamCompleteEvent
 
     turn_active_values: list[bool] = []
 
@@ -363,8 +363,8 @@ async def test_is_turn_active_during_run_stream() -> None:
 @pytest.mark.asyncio
 async def test_get_active_run_context_during_run_stream() -> None:
     """get_active_run_context() returns a non-None context while inside run_stream."""
-    from agentpool import Agent
-    from agentpool.agents.events import StreamCompleteEvent
+    from wolfharness import Agent
+    from wolfharness.agents.events import StreamCompleteEvent
 
     contexts: list[AgentRunContext | None] = []
 

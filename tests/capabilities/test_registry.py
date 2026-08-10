@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agentpool.capabilities.registry import (
+from wolfharness.capabilities.registry import (
     CapabilityNotFoundError,
     discover_entry_point_capabilities,
     resolve_capability_type,
@@ -28,7 +28,7 @@ pytestmark = pytest.mark.unit
 if TYPE_CHECKING:
     from pydantic_ai.capabilities import AbstractCapability
 
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
 
 # ---- Helpers ----
@@ -61,14 +61,14 @@ def _make_fake_entry_points(
 
 def test_discover_returns_mapping_from_entry_points() -> None:
     """discover_entry_point_capabilities returns a name→class mapping."""
-    from agentpool.capabilities.function_toolset import FunctionToolsetCapability
-    from agentpool.capabilities.subagent_capability import SubagentCapability
+    from wolfharness.capabilities.function_toolset import FunctionToolsetCapability
+    from wolfharness.capabilities.subagent_capability import SubagentCapability
 
     fake_eps = _make_fake_entry_points(
         {"function_tools": FunctionToolsetCapability, "subagent": SubagentCapability},
     )
     with patch(
-        "agentpool.capabilities.registry.entry_points",
+        "wolfharness.capabilities.registry.entry_points",
         return_value=fake_eps,
     ):
         result = discover_entry_point_capabilities()
@@ -78,7 +78,7 @@ def test_discover_returns_mapping_from_entry_points() -> None:
 def test_discover_returns_empty_when_no_entry_points() -> None:
     """discover_entry_point_capabilities returns empty dict when no entry points."""
     with patch(
-        "agentpool.capabilities.registry.entry_points",
+        "wolfharness.capabilities.registry.entry_points",
         return_value=[],
     ):
         result = discover_entry_point_capabilities()
@@ -87,15 +87,15 @@ def test_discover_returns_empty_when_no_entry_points() -> None:
 
 def test_discover_first_wins_on_duplicate_names() -> None:
     """discover_entry_point_capabilities keeps the first entry on duplicate names."""
-    from agentpool.capabilities.function_toolset import FunctionToolsetCapability
-    from agentpool.capabilities.subagent_capability import SubagentCapability
+    from wolfharness.capabilities.function_toolset import FunctionToolsetCapability
+    from wolfharness.capabilities.subagent_capability import SubagentCapability
 
     fake_eps = [
         _FakeEntryPoint("dup", FunctionToolsetCapability),
         _FakeEntryPoint("dup", SubagentCapability),
     ]
     with patch(
-        "agentpool.capabilities.registry.entry_points",
+        "wolfharness.capabilities.registry.entry_points",
         return_value=fake_eps,
     ):
         result = discover_entry_point_capabilities()
@@ -133,7 +133,7 @@ def test_capability_not_found_error_with_empty_available() -> None:
 
 def test_resolve_capability_type_found() -> None:
     """resolve_capability_type returns the class when type is registered."""
-    from agentpool.capabilities.function_toolset import FunctionToolsetCapability
+    from wolfharness.capabilities.function_toolset import FunctionToolsetCapability
 
     registry: dict[str, type[AbstractCapability[object]]] = {
         "function_tools": FunctionToolsetCapability,
@@ -158,8 +158,8 @@ def test_resolve_capability_type_not_found_raises() -> None:
 
 def test_factory_compile_discovers_entry_point_capabilities(minimal_pool: AgentPool) -> None:
     """AgentFactory.compile() populates entry_point_capabilities from discovery."""
-    from agentpool.capabilities.function_toolset import FunctionToolsetCapability
-    from agentpool.host.factory import AgentFactory
+    from wolfharness.capabilities.function_toolset import FunctionToolsetCapability
+    from wolfharness.host.factory import AgentFactory
 
     fake_eps = _make_fake_entry_points({"function_tools": FunctionToolsetCapability})
 
@@ -167,10 +167,10 @@ def test_factory_compile_discovers_entry_point_capabilities(minimal_pool: AgentP
 
     with (
         patch(
-            "agentpool.capabilities.registry.entry_points",
+            "wolfharness.capabilities.registry.entry_points",
             return_value=fake_eps,
         ),
-        patch("agentpool.host.registry.AgentRegistry"),
+        patch("wolfharness.host.registry.AgentRegistry"),
     ):
         # compile() iterates manifest.agents — use empty manifest.
         mock_manifest = MagicMock()
@@ -183,9 +183,9 @@ def test_factory_compile_discovers_entry_point_capabilities(minimal_pool: AgentP
 
 def test_factory_resolve_capability_type_known(minimal_pool: AgentPool) -> None:
     """AgentFactory.resolve_capability_type resolves a known type."""
-    from agentpool.capabilities.function_toolset import FunctionToolsetCapability
-    from agentpool.capabilities.subagent_capability import SubagentCapability
-    from agentpool.host.factory import AgentFactory
+    from wolfharness.capabilities.function_toolset import FunctionToolsetCapability
+    from wolfharness.capabilities.subagent_capability import SubagentCapability
+    from wolfharness.host.factory import AgentFactory
 
     fake_eps = _make_fake_entry_points(
         {"function_tools": FunctionToolsetCapability, "subagent": SubagentCapability},
@@ -194,10 +194,10 @@ def test_factory_resolve_capability_type_known(minimal_pool: AgentPool) -> None:
 
     with (
         patch(
-            "agentpool.capabilities.registry.entry_points",
+            "wolfharness.capabilities.registry.entry_points",
             return_value=fake_eps,
         ),
-        patch("agentpool.host.registry.AgentRegistry"),
+        patch("wolfharness.host.registry.AgentRegistry"),
     ):
         mock_manifest = MagicMock()
         mock_manifest.agents = {}
@@ -210,18 +210,18 @@ def test_factory_resolve_capability_type_known(minimal_pool: AgentPool) -> None:
 
 def test_factory_resolve_capability_type_unknown_raises(minimal_pool: AgentPool) -> None:
     """AgentFactory.resolve_capability_type raises for unknown type."""
-    from agentpool.capabilities.function_toolset import FunctionToolsetCapability
-    from agentpool.host.factory import AgentFactory
+    from wolfharness.capabilities.function_toolset import FunctionToolsetCapability
+    from wolfharness.host.factory import AgentFactory
 
     fake_eps = _make_fake_entry_points({"function_tools": FunctionToolsetCapability})
     factory = AgentFactory(minimal_pool)
 
     with (
         patch(
-            "agentpool.capabilities.registry.entry_points",
+            "wolfharness.capabilities.registry.entry_points",
             return_value=fake_eps,
         ),
-        patch("agentpool.host.registry.AgentRegistry"),
+        patch("wolfharness.host.registry.AgentRegistry"),
     ):
         mock_manifest = MagicMock()
         mock_manifest.agents = {}

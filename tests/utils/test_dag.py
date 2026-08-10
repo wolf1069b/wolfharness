@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool.utils.dag import DAGNode, dag_iterator, dag_to_list
+from wolfharness.utils.dag import DAGNode, dag_iterator, dag_to_list
 
 
 pytestmark = pytest.mark.unit

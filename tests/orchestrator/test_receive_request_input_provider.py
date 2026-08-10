@@ -17,13 +17,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agentpool.orchestrator.core import EventBus, SessionController
 from tests._controller_helpers import send_via_controller
+from wolfharness.orchestrator.core import EventBus, SessionController
 
 
 if TYPE_CHECKING:
-    from agentpool import AgentPool
-    from agentpool.orchestrator.run import RunHandle
+    from wolfharness import AgentPool
+    from wolfharness.orchestrator.run import RunHandle
 
 
 pytestmark = pytest.mark.unit

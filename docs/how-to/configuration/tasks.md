@@ -129,7 +129,7 @@ All tasks are available through the agent pool:
 job = pool.get_job("analyze_code")
 
 # Register new task 
-from agentpool_config.task import Job
+from wolfharness_config.task import Job
 job = Job(
     name="new_task",
     description="A new task",

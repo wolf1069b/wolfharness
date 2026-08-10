@@ -18,14 +18,14 @@ from pydantic_ai.messages import PartDeltaEvent as PyAIPartDeltaEvent
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool import AgentPool, AgentsManifest, NativeAgentConfig
-from agentpool.agents.base_agent import _in_turn_context
-from agentpool.agents.events import (
+from wolfharness import AgentPool, AgentsManifest, NativeAgentConfig
+from wolfharness.agents.base_agent import _in_turn_context
+from wolfharness.agents.events import (
     StreamCompleteEvent,
     ToolCallCompleteEvent,
     ToolCallStartEvent,
 )
-from agentpool.tools import Tool
+from wolfharness.tools import Tool
 
 
 if TYPE_CHECKING:
@@ -105,7 +105,7 @@ async def test_tool_call_only_response_has_no_text_deltas() -> None:
 
     # Categorise events for analysis
     event_types = [type(e).__name__ for e in events]
-    # Native agent emits pydantic-ai PartDeltaEvent directly (not agentpool's subclass)
+    # Native agent emits pydantic-ai PartDeltaEvent directly (not wolfharness's subclass)
     text_deltas = [e for e in events if isinstance(e, PyAIPartDeltaEvent)]
     tool_call_starts = [e for e in events if isinstance(e, ToolCallStartEvent)]
     tool_call_completes = [e for e in events if isinstance(e, ToolCallCompleteEvent)]
@@ -232,7 +232,7 @@ async def test_text_response_yields_deltas() -> None:
     event_types = [type(e).__name__ for e in events]
     print(f"\nEvents with text response: {event_types}")
 
-    # Native agent emits pydantic-ai PartDeltaEvent directly (not agentpool's subclass)
+    # Native agent emits pydantic-ai PartDeltaEvent directly (not wolfharness's subclass)
     text_deltas = [e for e in events if isinstance(e, PyAIPartDeltaEvent)]
     stream_completes = [e for e in events if isinstance(e, StreamCompleteEvent)]
 

@@ -25,9 +25,9 @@ from unittest.mock import MagicMock
 from pydantic_ai.models.test import TestModel, TestStreamedResponse
 import pytest
 
-from agentpool import Agent
-from agentpool.agents.events import StreamCompleteEvent
-from agentpool.orchestrator.core import SessionState
+from wolfharness import Agent
+from wolfharness.agents.events import StreamCompleteEvent
+from wolfharness.orchestrator.core import SessionState
 
 
 if TYPE_CHECKING:
@@ -107,7 +107,7 @@ async def fast_agent() -> Agent[None]:
 
 def _mock_session_pool(agent: Agent, run_ctx: Any) -> None:
     """Mock agent_pool.session_pool so _get_session_run_ctx() returns run_ctx."""
-    from agentpool.orchestrator.run import RunHandle
+    from wolfharness.orchestrator.run import RunHandle
 
     session_state = SessionState(session_id="test-session", agent_name="test")
     session_state.current_run_id = run_ctx.run_id
@@ -153,7 +153,7 @@ async def test_interrupt_without_run_ctx_sets_cancelled_flag(slow_agent: Agent[N
 
     After removing _active_run_ctx, cross-task access requires SessionPool fallback.
     """
-    from agentpool.agents.base_agent import _current_run_ctx_var
+    from wolfharness.agents.base_agent import _current_run_ctx_var
 
     stream_started = asyncio.Event()
     captured_run_ctx: list[Any] = []
@@ -208,7 +208,7 @@ async def test_interrupt_without_run_ctx_cancels_stream_task(slow_agent: Agent[N
     The stream loop checks run_ctx.cancelled and breaks, so the task completes
     normally (not via CancelledError).
     """
-    from agentpool.agents.base_agent import _current_run_ctx_var
+    from wolfharness.agents.base_agent import _current_run_ctx_var
 
     stream_started = asyncio.Event()
     captured_run_ctx: list[Any] = []
@@ -268,7 +268,7 @@ async def test_interrupt_with_run_ctx_still_works(fast_agent: Agent[None]) -> No
 
     The fix must not break the existing code path where run_ctx is provided.
     """
-    from agentpool.agents.base_agent import _current_run_ctx_var
+    from wolfharness.agents.base_agent import _current_run_ctx_var
 
     stream_started = asyncio.Event()
     captured_run_ctx = None
@@ -312,7 +312,7 @@ async def test_interrupt_cancels_iteration_task(slow_agent: Agent[None]) -> None
     After the fix: iteration_task is stored as self._iteration_task and
     directly cancelled by _interrupt().
     """
-    from agentpool.agents.base_agent import _current_run_ctx_var
+    from wolfharness.agents.base_agent import _current_run_ctx_var
 
     stream_started = asyncio.Event()
     interrupt_done = asyncio.Event()
@@ -424,7 +424,7 @@ async def test_opencode_abort_flow_stops_agent(slow_agent: Agent[None]) -> None:
 
     Cross-task access requires SessionPool fallback (since _active_run_ctx was removed).
     """
-    from agentpool.agents.base_agent import _current_run_ctx_var
+    from wolfharness.agents.base_agent import _current_run_ctx_var
 
     stream_started = asyncio.Event()
     events_received: list[Any] = []

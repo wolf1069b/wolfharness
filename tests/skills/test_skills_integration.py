@@ -12,7 +12,7 @@ import pytest
 from upathtools import UPath
 import yaml
 
-from agentpool.delegation.pool import AgentPool
+from wolfharness.delegation.pool import AgentPool
 
 
 pytestmark = pytest.mark.integration
@@ -117,7 +117,7 @@ async def test_skills_disable_defaults(monkeypatch: pytest.MonkeyPatch):
 
     Assert that default paths are NOT searched.
     """
-    from agentpool_config import skills
+    from wolfharness_config import skills
 
     # Mock default paths to something we can control
     with tempfile.TemporaryDirectory() as temp_dir:

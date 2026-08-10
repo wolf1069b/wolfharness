@@ -13,12 +13,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from agentpool.sessions.models import PendingDeferredCall, SessionData
-from agentpool_storage.protocols import CheckpointStore, SessionPersistence
+from wolfharness.sessions.models import PendingDeferredCall, SessionData
+from wolfharness_storage.protocols import CheckpointStore, SessionPersistence
 
 
 if TYPE_CHECKING:
-    from agentpool_storage.sql_provider import SQLModelProvider
+    from wolfharness_storage.sql_provider import SQLModelProvider
 
 
 pytestmark = pytest.mark.unit

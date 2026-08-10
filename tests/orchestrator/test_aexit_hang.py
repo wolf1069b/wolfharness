@@ -159,7 +159,7 @@ async def test_mcp_cleanup_session_has_timeout() -> None:
     If MCP cleanup hangs (due to proxy), cleanup_session should not
     hang forever. It should timeout and allow the session to close.
     """
-    from agentpool.mcp_server.manager import MCPManager, McpSessionContext
+    from wolfharness.mcp_server.manager import MCPManager, McpSessionContext
 
     manager = MCPManager()
 
@@ -171,7 +171,7 @@ async def test_mcp_cleanup_session_has_timeout() -> None:
     manager._session_contexts["test-session-hang"] = mock_ctx
 
     # Patch the cleanup timeout to 0.5s so the test doesn't wait 30s
-    import agentpool.mcp_server.manager as mgr_mod
+    import wolfharness.mcp_server.manager as mgr_mod
 
     original_timeout = mgr_mod._MCP_CLEANUP_TIMEOUT
     mgr_mod._MCP_CLEANUP_TIMEOUT = 0.5
@@ -207,7 +207,7 @@ async def test_wait_for_completion_does_not_hang_forever() -> None:
 
     wait_for_completion should have a default timeout to break this chain.
     """
-    from agentpool.orchestrator.session_controller_runs import SessionControllerRunsMixin
+    from wolfharness.orchestrator.session_controller_runs import SessionControllerRunsMixin
 
     # Create a minimal mock that exercises wait_for_completion
     mock_controller = type("MockController", (), {})()
@@ -267,7 +267,7 @@ async def test_close_session_mcp_step_has_timeout() -> None:
     # Read the source of _close_session_unlocked and check for timeout
     import inspect
 
-    from agentpool.orchestrator.session_controller_close import SessionControllerCloseMixin
+    from wolfharness.orchestrator.session_controller_close import SessionControllerCloseMixin
 
     source = inspect.getsource(SessionControllerCloseMixin._close_session_unlocked)
 
@@ -332,7 +332,7 @@ async def test_cancel_can_break_through_aexit_hang() -> None:
     """
     import inspect
 
-    from agentpool.orchestrator.run import RunHandle
+    from wolfharness.orchestrator.run import RunHandle
 
     source = inspect.getsource(RunHandle.cancel)
 

@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
 pytestmark = [
     pytest.mark.e2e,
-    pytest.mark.skipif(SKIP_NO_BINARY, reason="agentpool binary not on PATH"),
+    pytest.mark.skipif(SKIP_NO_BINARY, reason="wolfharness binary not on PATH"),
     pytest.mark.skipif(SKIP_WINDOWS, reason="Windows subprocess issues"),
 ]
 

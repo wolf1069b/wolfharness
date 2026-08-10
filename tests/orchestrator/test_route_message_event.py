@@ -12,12 +12,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agentpool.agents.events import UserMessageInsertedEvent
-from agentpool.orchestrator.core import EventBus, SessionController, SessionState
+from wolfharness.agents.events import UserMessageInsertedEvent
+from wolfharness.orchestrator.core import EventBus, SessionController, SessionState
 
 
 if TYPE_CHECKING:
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
 
 pytestmark = pytest.mark.unit

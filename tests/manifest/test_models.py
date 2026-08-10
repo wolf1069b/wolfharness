@@ -7,7 +7,7 @@ import pytest
 from schemez import InlineSchemaDef
 import yamling
 
-from agentpool import AgentsManifest
+from wolfharness import AgentsManifest
 
 
 pytestmark = pytest.mark.unit

@@ -16,8 +16,8 @@ import warnings
 
 import pytest
 
-from agentpool.capabilities.background_task.notification import NotificationBatcher
-from agentpool.capabilities.background_task.types import BackgroundTask
+from wolfharness.capabilities.background_task.notification import NotificationBatcher
+from wolfharness.capabilities.background_task.types import BackgroundTask
 
 
 # Flush delivery runs via anyio TimerHandle callbacks, so tests must run under

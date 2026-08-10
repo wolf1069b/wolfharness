@@ -2,7 +2,7 @@
 
 The codebase is organized into focused packages under `src/`:
 
-## agentpool/ — Core Agent Framework
+## wolfharness/ — Core Agent Framework
 
 - `agents/` - Agent implementations (native, ACP)
 - `capabilities/` - Native pydantic-ai capability implementations (MCPCapability, FunctionToolsetCapability, CombinedToolsetCapability, SubagentCapability, CodeModeCapability, FilteredToolsetCapability, AgentContext, DelegationService, ResourceSource, entry-point registry)
@@ -20,11 +20,11 @@ The codebase is organized into focused packages under `src/`:
 - `hooks/` - Event hooks system
 - `observability/` - Logging and telemetry (Logfire)
 
-## agentpool_config/ — Configuration Models
+## wolfharness_config/ — Configuration Models
 
 Separated for clean imports. Contains YAML schema definitions for agents, teams, tools, MCP servers.
 
-## agentpool_server/ — Protocol Servers
+## wolfharness_server/ — Protocol Servers
 
 - `acp_server/` - Agent Communication Protocol server
 - `opencode_server/` - OpenCode TUI/Desktop server
@@ -32,13 +32,13 @@ Separated for clean imports. Contains YAML schema definitions for agents, teams,
 - `openai_api_server/` - OpenAI-compatible API server
 - `mcp_server/` - Model Context Protocol server
 
-## agentpool_toolsets/ — Reusable Toolset Implementations
+## wolfharness_toolsets/ — Reusable Toolset Implementations
 
 - `builtin/` - Built-in toolsets (code, debug, subagent, file_edit, workers)
 - `mcp_discovery/` - MCP server discovery with semantic search
 - Specialized toolsets (composio, search, streaming, etc.)
 
-## agentpool_storage/ — Storage Providers
+## wolfharness_storage/ — Storage Providers
 
 - `sql_provider/` - SQLAlchemy-based storage
 - `zed_provider/` - Zed IDE storage integration
@@ -47,9 +47,9 @@ Separated for clean imports. Contains YAML schema definitions for agents, teams,
 
 ## Other Packages
 
-- `agentpool_cli/` - Command-line interface
-- `agentpool_commands/` - Command implementations
-- `agentpool_prompts/` - Prompt templates
+- `wolfharness_cli/` - Command-line interface
+- `wolfharness_commands/` - Command implementations
+- `wolfharness_prompts/` - Prompt templates
 - `acp/` - Agent Communication Protocol implementation
   - `client/` - ACP client implementations
   - `agent/` - Agent-side protocol implementation

@@ -7,7 +7,7 @@ Usage:
 
     # WebSocket bridge
     uv run -m acp.bridge --transport websocket <command> [args...]
-    uv run -m acp.bridge -t ws --port 8765 -- uv run agentpool serve-acp
+    uv run -m acp.bridge -t ws --port 8765 -- uv run wolfharness serve-acp
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ def main() -> None:
             "  acp-bridge --port 8080 -- your-agent --config config.yml\n"
             "\n"
             "  # WebSocket bridge\n"
-            "  acp-bridge -t ws -- uv run agentpool serve-acp\n"
+            "  acp-bridge -t ws -- uv run wolfharness serve-acp\n"
             "  acp-bridge --transport websocket --port 8765 -- uv run my-agent\n"
         ),
         formatter_class=argparse.RawTextHelpFormatter,

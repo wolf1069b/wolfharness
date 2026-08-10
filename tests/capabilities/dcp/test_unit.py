@@ -23,22 +23,22 @@ from pydantic_ai.messages import (
 )
 import pytest
 
-from agentpool.capabilities.dcp.block_store import CompressionBlockStore
-from agentpool.capabilities.dcp.config import DCPConfig
-from agentpool.capabilities.dcp.nudge import build_nudge_text
-from agentpool.capabilities.dcp.prunable_list import (
+from wolfharness.capabilities.dcp.block_store import CompressionBlockStore
+from wolfharness.capabilities.dcp.config import DCPConfig
+from wolfharness.capabilities.dcp.nudge import build_nudge_text
+from wolfharness.capabilities.dcp.prunable_list import (
     META_TOOL_NAMES,
     build_prunable_list,
     inject_prunable_list,
 )
-from agentpool.capabilities.dcp.state import (
+from wolfharness.capabilities.dcp.state import (
     CompressionBlock,
     DCPState,
     DistillTarget,
     PruneAction,
     WatermarkLevel,
 )
-from agentpool.capabilities.dcp.strategies import (
+from wolfharness.capabilities.dcp.strategies import (
     PrunableState,
     _dedup_exact,
     _is_pruned,
@@ -46,17 +46,17 @@ from agentpool.capabilities.dcp.strategies import (
     _strip_thinking_content,
     purge_failed_tool_inputs,
 )
-from agentpool.capabilities.dcp.token_utils import (
+from wolfharness.capabilities.dcp.token_utils import (
     calculate_context_pressure,
     estimate_tokens,
 )
-from agentpool.capabilities.dcp.tools import (
+from wolfharness.capabilities.dcp.tools import (
     decompress_tool,
     distill_tool,
     prune_tool,
 )
-from agentpool.capabilities.dcp.watermark import WatermarkStateMachine
-from agentpool.sessions.models import SessionData
+from wolfharness.capabilities.dcp.watermark import WatermarkStateMachine
+from wolfharness.sessions.models import SessionData
 
 
 pytestmark = pytest.mark.unit

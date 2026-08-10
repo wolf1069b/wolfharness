@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import ValidationError
 import pytest
 
-from agentpool_config.team_mode import (
+from wolfharness_config.team_mode import (
     BlackboardConfig,
     MemberSpec,
     TeamBounds,

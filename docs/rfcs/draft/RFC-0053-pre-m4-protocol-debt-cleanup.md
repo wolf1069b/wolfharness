@@ -112,8 +112,8 @@ graph TD
 ```
 
 - `grep -rn 'hooks_fired' src/` → 21 results across 4 files
-- `grep -rn '# type: ignore' src/agentpool/orchestrator/run.py` → 8 results
-- `grep -rn 'state\.pool\.' src/agentpool_server/opencode_server/` → 68 results
+- `grep -rn '# type: ignore' src/wolfharness/orchestrator/run.py` → 8 results
+- `grep -rn 'state\.pool\.' src/wolfharness_server/opencode_server/` → 68 results
 - `grep -rn '_mcp_snapshot\|_session_connection_pool' src/` → results in agent.py + session.py
 - `RunHandle.start()` → ~373 SLOC with `# noqa: PLR0915`
 
@@ -147,7 +147,7 @@ graph TD
 
 ### Non-Goals (Out of Scope — Deferred)
 
-6. AgentWolf rename (`agentpool` → `agentwolf`) — deferred to final phase
+6. AgentWolf rename (`wolfharness` → `agentwolf`) — deferred to final phase
 7. M4 implementation itself (ConfigRegistry, HostRegistry, RunScope routing)
 8. ACP protocol version switch or proxy chain refactor
 9. `session_pool_integration.py` file split (1,453 LOC) — optional, can defer
@@ -156,11 +156,11 @@ graph TD
 ### Success Criteria
 
 - [ ] `grep -rn 'hooks_fired' src/` returns 0
-- [ ] `grep -rn 'type: ignore\[attr-defined\]' src/agentpool/orchestrator/run.py` returns 0
+- [ ] `grep -rn 'type: ignore\[attr-defined\]' src/wolfharness/orchestrator/run.py` returns 0
 - [ ] `grep -rn '_mcp_snapshot\|_session_connection_pool' src/` returns 0
 - [ ] `grep -rn 'RunStatus' src/` returns 0
 - [ ] `grep -rn 'host_context.pool' src/` returns 0
-- [ ] `grep -rn '_replaying' src/agentpool/orchestrator/run.py` returns 0
+- [ ] `grep -rn '_replaying' src/wolfharness/orchestrator/run.py` returns 0
 - [ ] `uv run pytest` — all tests pass
 - [ ] `uv run ruff check src/` — no new lint errors
 - [ ] `uv run --no-group docs mypy src/` — no new type errors
@@ -869,7 +869,7 @@ TBD
 
 ### External Resources
 
-- [PR #144: refactor/agentwolf v1](https://github.com/Leoyzen/agentpool/pull/144)
+- [PR #144: refactor/agentwolf v1](https://github.com/Leoyzen/wolfharness/pull/144)
 
 ### Appendix
 

@@ -10,8 +10,8 @@ from __future__ import annotations
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool import Agent
-from agentpool.agents.events import StreamCompleteEvent
+from wolfharness import Agent
+from wolfharness.agents.events import StreamCompleteEvent
 
 
 TEST_RESPONSE = "I am a test response"

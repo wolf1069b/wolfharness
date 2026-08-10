@@ -194,7 +194,7 @@ For 1000 active sessions: ~200 MB total (acceptable for most deployments).
 ## Configuration
 
 ```python
-# agentpool_config/session_pool.py
+# wolfharness_config/session_pool.py
 @dataclass
 class OpenCodeConfig:
     use_session_pool: bool = True

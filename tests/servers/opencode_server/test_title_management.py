@@ -23,22 +23,26 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from agentpool.storage.manager import SessionMetadata, SessionMetadataGeneratedEvent, StorageManager
-from agentpool.utils.time_utils import now_ms
-from agentpool_server.opencode_server.models import (
+from tests.servers.opencode_server.conftest import run_message_phases
+from wolfharness.storage.manager import (
+    SessionMetadata,
+    SessionMetadataGeneratedEvent,
+    StorageManager,
+)
+from wolfharness.utils.time_utils import now_ms
+from wolfharness_server.opencode_server.models import (
     MessageWithParts,
     Session,
     TextPartInput,
     TimeCreatedUpdated,
     UserMessage,
 )
-from agentpool_server.opencode_server.models.message import MessageRequest, TimeCreated
-from agentpool_server.opencode_server.routes.message_routes import (
+from wolfharness_server.opencode_server.models.message import MessageRequest, TimeCreated
+from wolfharness_server.opencode_server.routes.message_routes import (
     _maybe_generate_title,
 )
-from agentpool_server.opencode_server.session_pool_integration import get_messages_for_session
-from agentpool_server.opencode_server.state import ServerState
-from tests.servers.opencode_server.conftest import run_message_phases
+from wolfharness_server.opencode_server.session_pool_integration import get_messages_for_session
+from wolfharness_server.opencode_server.state import ServerState
 
 
 pytestmark = pytest.mark.integration
@@ -51,7 +55,7 @@ pytestmark = pytest.mark.integration
 
 def _make_state(tmp_path: Any) -> ServerState:
     """Build a minimal ServerState with mocked heavy components."""
-    from agentpool_config.storage import MemoryStorageConfig, StorageConfig
+    from wolfharness_config.storage import MemoryStorageConfig, StorageConfig
 
     agent = Mock()
     agent.name = "test-agent"
@@ -192,15 +196,15 @@ class TestTitleGenerationDoesNotBlockAgent:
 
         with (
             patch(
-                "agentpool_server.opencode_server.routes.message_routes._maybe_generate_title",
+                "wolfharness_server.opencode_server.routes.message_routes._maybe_generate_title",
                 slow_maybe_generate_title,
             ),
             patch(
-                "agentpool_server.opencode_server.routes.message_routes.extract_user_prompt_from_parts",
+                "wolfharness_server.opencode_server.routes.message_routes.extract_user_prompt_from_parts",
                 new=AsyncMock(return_value=["hello"]),
             ),
             patch(
-                "agentpool_server.opencode_server.routes.message_routes.OpenCodeStreamAdapter"
+                "wolfharness_server.opencode_server.routes.message_routes.OpenCodeStreamAdapter"
             ) as mock_adapter_class,
         ):
             mock_adapter_instance = mock_adapter_class.return_value
@@ -257,11 +261,11 @@ class TestTitleGenerationDoesNotBlockAgent:
         with (
             patch.dict(os.environ, {}, clear=False),
             patch(
-                "agentpool_server.opencode_server.routes.message_routes.extract_user_prompt_from_parts",
+                "wolfharness_server.opencode_server.routes.message_routes.extract_user_prompt_from_parts",
                 new=AsyncMock(return_value=["hello"]),
             ),
             patch(
-                "agentpool_server.opencode_server.routes.message_routes.OpenCodeStreamAdapter"
+                "wolfharness_server.opencode_server.routes.message_routes.OpenCodeStreamAdapter"
             ) as mock_adapter_class,
         ):
             os.environ.pop("PYTEST_CURRENT_TEST", None)

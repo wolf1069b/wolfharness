@@ -10,8 +10,8 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from agentpool.orchestrator.core import SessionController
-from agentpool.sessions.models import PendingDeferredCall, SessionData
+from wolfharness.orchestrator.core import SessionController
+from wolfharness.sessions.models import PendingDeferredCall, SessionData
 
 
 pytestmark = pytest.mark.unit

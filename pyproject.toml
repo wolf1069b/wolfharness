@@ -1,8 +1,8 @@
 #:tombi schema.strict = false
 
 [project]
-name = "agentpool"
-version = "2.9.5"
+name = "wolfharness"
+version = "4.0.0"
 description = "Pydantic-AI based Multi-Agent Framework with YAML-based Agents, Teams, Workflows & Extended ACP / AGUI integration"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
@@ -85,36 +85,37 @@ dependencies = [
 ]
 
 [project.urls]
-"Code coverage" = "https://app.codecov.io/gh/phil65/agentpool"
-Discussions = "https://github.com/phil65/agentpool/discussions"
-Documentation = "https://phil65.github.io/agentpool/"
-Issues = "https://github.com/phil65/agentpool/issues"
-Source = "https://github.com/phil65/agentpool"
+"Code coverage" = "https://app.codecov.io/gh/Leoyzen/wolfharness"
+Discussions = "https://github.com/Leoyzen/wolfharness/discussions"
+Documentation = "https://leoyzen.github.io/wolfharness/"
+Issues = "https://github.com/Leoyzen/wolfharness/issues"
+Source = "https://github.com/Leoyzen/wolfharness"
 
 [project.scripts]
 acp-bridge = "acp.bridge.__main__:main"
-agentpool = "agentpool_cli.__main__:cli"
-agentpool-db = "agentpool_storage.sql_provider.cli:main"
-
-[project.entry-points."agentpool.capabilities"]
-mcp = "agentpool.capabilities.mcp_server_cap:McpServerCap"
-function_tools = "agentpool.capabilities.function_toolset:FunctionToolsetCapability"
-subagent = "agentpool.capabilities.subagent_capability:SubagentCapability"
-skill = "agentpool.capabilities.skill_manager_cap:SkillManagerCap"
-combined = "agentpool.capabilities.combined_toolset:CombinedToolsetCapability"
-code_mode = "agentpool.capabilities.code_mode_capability:CodeModeCapability"
-tool_display = "agentpool.capabilities.tool_display_capability:ToolDisplayCapability"
-question = "agentpool.capabilities.question:QuestionCapability"
-background_task = "agentpool.capabilities.background_task:BackgroundTaskCapability"
+agentpool = "wolfharness_cli.__main__:cli"
+wolfharness = "wolfharness_cli.__main__:cli"
+wolfharness-db = "wolfharness_storage.sql_provider.cli:main"
 
 [project.entry-points."fsspec.specs"]
 acp = "acp.filesystem:ACPFileSystem"
 
 [project.entry-points."jinjarope.environment"]
-agentpool = "agentpool.utils:setup_env"
+wolfharness = "wolfharness.utils:setup_env"
 
 [project.entry-points."universal_pathlib.implementations"]
 acp = "acp.filesystem:ACPPath"
+
+[project.entry-points."wolfharness.capabilities"]
+mcp = "wolfharness.capabilities.mcp_server_cap:McpServerCap"
+function_tools = "wolfharness.capabilities.function_toolset:FunctionToolsetCapability"
+subagent = "wolfharness.capabilities.subagent_capability:SubagentCapability"
+skill = "wolfharness.capabilities.skill_manager_cap:SkillManagerCap"
+combined = "wolfharness.capabilities.combined_toolset:CombinedToolsetCapability"
+code_mode = "wolfharness.capabilities.code_mode_capability:CodeModeCapability"
+tool_display = "wolfharness.capabilities.tool_display_capability:ToolDisplayCapability"
+question = "wolfharness.capabilities.question:QuestionCapability"
+background_task = "wolfharness.capabilities.background_task:BackgroundTaskCapability"
 
 [project.optional-dependencies]
 a2a = ["fasta2a", "starlette"]  # A2A Server
@@ -161,7 +162,9 @@ tiktoken = ["tiktoken"]  # Exact token counting
 tts = [
   "anyvoice[tts-edge,openai]>=0.0.2"
 ]  # Text-to-Speech using AnyVoice (disabled: cffi doesn't support free-threaded 3.13)
-viking = ["openviking-sdk>=0.1.0"]  # Viking storage & retrieval capability
+viking = [
+  "openviking-sdk>=0.1.6"
+]  # Viking storage & retrieval capability (download_bytes for image vision)
 watchdog = ["watchdog>=4.0.0"]  # Filesystem watcher for skill hot-reload
 zed = ["zstandard>=0.23.0"]  # Zed IDE storage provider
 
@@ -231,35 +234,35 @@ skip_covered = true
 
 [tool.importlinter]
 root_packages = [
-  "agentpool",
-  "agentpool_config",
-  "agentpool_server",
-  "agentpool_toolsets",
-  "agentpool_storage",
-  "agentpool_cli",
-  "agentpool_commands",
-  "agentpool_prompts",
+  "wolfharness",
+  "wolfharness_config",
+  "wolfharness_server",
+  "wolfharness_toolsets",
+  "wolfharness_storage",
+  "wolfharness_cli",
+  "wolfharness_commands",
+  "wolfharness_prompts",
   "acp",
 ]
 
 [[tool.importlinter.contracts]]
 name = "Server must not import from core app logic"
 type = "forbidden"
-source_modules = ["agentpool_server"]
-forbidden_modules = ["agentpool_commands", "agentpool_cli"]
+source_modules = ["wolfharness_server"]
+forbidden_modules = ["wolfharness_commands", "wolfharness_cli"]
 allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
 name = "Config must not import from core"
 type = "forbidden"
-source_modules = ["agentpool_config"]
+source_modules = ["wolfharness_config"]
 forbidden_modules = [
-  "agentpool",
-  "agentpool_server",
-  "agentpool_toolsets",
-  "agentpool_storage",
-  "agentpool_commands",
-  "agentpool_cli"
+  "wolfharness",
+  "wolfharness_server",
+  "wolfharness_toolsets",
+  "wolfharness_storage",
+  "wolfharness_commands",
+  "wolfharness_cli"
 ]
 # Pre-existing direct violations are listed in ignore_imports; remove entries
 # as imports are fixed during Phase 7 refactoring. Indirect violations are
@@ -267,91 +270,95 @@ forbidden_modules = [
 # are untangled (see OpenSpec thin-wrapper-refactor Phase 7 tasks).
 allow_indirect_imports = true
 ignore_imports = [
-  "agentpool_config.agentpool_tools -> agentpool.prompts.conversion_manager",
-  "agentpool_config.agentpool_tools -> agentpool.tool_impls.agent_cli",
-  "agentpool_config.agentpool_tools -> agentpool.tool_impls.bash",
-  "agentpool_config.agentpool_tools -> agentpool.tool_impls.delete_path",
-  "agentpool_config.agentpool_tools -> agentpool.tool_impls.download_file",
-  "agentpool_config.agentpool_tools -> agentpool.tool_impls.execute_code",
-  "agentpool_config.agentpool_tools -> agentpool.tool_impls.grep",
-  "agentpool_config.agentpool_tools -> agentpool.tool_impls.list_directory",
-  "agentpool_config.agentpool_tools -> agentpool.tool_impls.question",
-  "agentpool_config.agentpool_tools -> agentpool.tool_impls.read",
-  "agentpool_config.agentpool_tools -> agentpool.tools.base",
-  "agentpool_config.compaction -> agentpool.messaging.compaction",
-  "agentpool_config.conditions -> agentpool.talk.registry",
-  "agentpool_config.conditions -> agentpool.utils.inspection",
-  "agentpool_config.conditions -> agentpool.utils.time_utils",
-  "agentpool_config.durable -> agentpool.utils.parse_time",
-  "agentpool_config.event_handlers -> agentpool.agents.events",
-  "agentpool_config.event_handlers -> agentpool.agents.events.builtin_handlers",
-  "agentpool_config.event_handlers -> agentpool.agents.events.tts_handlers",
-  "agentpool_config.event_handlers -> agentpool.common_types",
-  "agentpool_config.event_handlers -> agentpool.utils.importing",
-  "agentpool_config.events -> agentpool.messaging.events",
-  "agentpool_config.forward_targets -> agentpool",
-  "agentpool_config.forward_targets -> agentpool.messaging",
-  "agentpool_config.forward_targets -> agentpool.utils.inspection",
-  "agentpool_config.forward_targets -> agentpool.utils.model_helpers",
-  "agentpool_config.forward_targets -> agentpool.utils.time_utils",
-  "agentpool_config.hooks -> agentpool.hooks",
-  "agentpool_config.hooks -> agentpool.hooks.base",
-  "agentpool_config.knowledge -> agentpool.prompts.prompts",
-  "agentpool_config.loaders -> agentpool.common_types",
-  "agentpool_config.loaders -> agentpool.mime_utils",
-  "agentpool_config.loaders -> agentpool.utils.importing",
-  "agentpool_config.nodes -> agentpool.common_types",
-  "agentpool_config.prompt_hubs -> agentpool_prompts.braintrust_hub",
-  "agentpool_config.prompt_hubs -> agentpool_prompts.fabric",
-  "agentpool_config.prompt_hubs -> agentpool_prompts.langfuse_hub",
-  "agentpool_config.prompt_hubs -> agentpool_prompts.promptlayer_provider",
-  "agentpool_config.prompts -> agentpool.log",
-  "agentpool_config.session -> agentpool.utils.parse_time",
-  "agentpool_config.session -> agentpool.utils.time_utils",
-  "agentpool_config.storage -> agentpool_storage.acp_provider",
-  "agentpool_config.storage -> agentpool_storage.base",
-  "agentpool_config.storage -> agentpool_storage.file_provider",
-  "agentpool_config.storage -> agentpool_storage.memory_provider",
-  "agentpool_config.storage -> agentpool_storage.opencode_provider",
-  "agentpool_config.storage -> agentpool_storage.sql_provider",
-  "agentpool_config.storage -> agentpool_storage.zed_provider",
-  "agentpool_config.task -> agentpool.agents",
-  "agentpool_config.task -> agentpool.prompts.prompts",
-  "agentpool_config.task -> agentpool.tools.base",
-  "agentpool_config.task -> agentpool.utils.model_capabilities",
-  "agentpool_config.tools -> agentpool.tools.base",
-  "agentpool_config.tools -> agentpool.utils.parse_time",
-  "agentpool_config.toolsets -> agentpool.prompts.conversion_manager",
-  "agentpool_config.toolsets -> agentpool.capabilities.combined_toolset",
-  "agentpool_config.toolsets -> agentpool.capabilities.filtered_toolset",
-  "agentpool_config.toolsets -> agentpool.capabilities.function_toolset",
-  "agentpool_config.toolsets -> agentpool.models.model_configs",
-  "agentpool_config.toolsets -> agentpool.utils.importing",
-  "agentpool_config.toolsets -> agentpool_toolsets.builtin",
-  "agentpool_config.toolsets -> agentpool_toolsets.builtin.code",
-  "agentpool_config.toolsets -> agentpool_toolsets.builtin.debug",
-  "agentpool_config.toolsets -> agentpool_toolsets.builtin.subagent_tools",
-  "agentpool_config.toolsets -> agentpool_toolsets.builtin.workers",
-  "agentpool_config.toolsets -> agentpool_toolsets.composio_toolset",
-  "agentpool_config.toolsets -> agentpool_toolsets.config_creation",
-  "agentpool_config.toolsets -> agentpool_toolsets.cron",
-  "agentpool_config.toolsets -> agentpool_toolsets.entry_points",
-  "agentpool_config.toolsets -> agentpool_toolsets.fsspec_toolset",
-  "agentpool_config.toolsets -> agentpool_toolsets.mcp_discovery.toolset",
-  "agentpool_config.toolsets -> agentpool_toolsets.notifications",
-  "agentpool_config.toolsets -> agentpool_toolsets.openapi",
-  "agentpool_config.toolsets -> agentpool_toolsets.search_toolset",
-  "agentpool_config.toolsets -> agentpool_toolsets.vfs_toolset",
+  "wolfharness_config.wolfharness_tools -> wolfharness.prompts.conversion_manager",
+  "wolfharness_config.wolfharness_tools -> wolfharness.tool_impls.agent_cli",
+  "wolfharness_config.wolfharness_tools -> wolfharness.tool_impls.bash",
+  "wolfharness_config.wolfharness_tools -> wolfharness.tool_impls.delete_path",
+  "wolfharness_config.wolfharness_tools -> wolfharness.tool_impls.download_file",
+  "wolfharness_config.wolfharness_tools -> wolfharness.tool_impls.execute_code",
+  "wolfharness_config.wolfharness_tools -> wolfharness.tool_impls.grep",
+  "wolfharness_config.wolfharness_tools -> wolfharness.tool_impls.list_directory",
+  "wolfharness_config.wolfharness_tools -> wolfharness.tool_impls.question",
+  "wolfharness_config.wolfharness_tools -> wolfharness.tool_impls.read",
+  "wolfharness_config.wolfharness_tools -> wolfharness.tools.base",
+  "wolfharness_config.compaction -> wolfharness.messaging.compaction",
+  "wolfharness_config.conditions -> wolfharness.talk.registry",
+  "wolfharness_config.conditions -> wolfharness.utils.inspection",
+  "wolfharness_config.conditions -> wolfharness.utils.time_utils",
+  "wolfharness_config.durable -> wolfharness.utils.parse_time",
+  "wolfharness_config.event_handlers -> wolfharness.agents.events",
+  "wolfharness_config.event_handlers -> wolfharness.agents.events.builtin_handlers",
+  "wolfharness_config.event_handlers -> wolfharness.agents.events.tts_handlers",
+  "wolfharness_config.event_handlers -> wolfharness.common_types",
+  "wolfharness_config.event_handlers -> wolfharness.utils.importing",
+  "wolfharness_config.events -> wolfharness.messaging.events",
+  "wolfharness_config.forward_targets -> wolfharness",
+  "wolfharness_config.forward_targets -> wolfharness.messaging",
+  "wolfharness_config.forward_targets -> wolfharness.utils.inspection",
+  "wolfharness_config.forward_targets -> wolfharness.utils.model_helpers",
+  "wolfharness_config.forward_targets -> wolfharness.utils.time_utils",
+  "wolfharness_config.hooks -> wolfharness.hooks",
+  "wolfharness_config.hooks -> wolfharness.hooks.base",
+  "wolfharness_config.knowledge -> wolfharness.prompts.prompts",
+  "wolfharness_config.loaders -> wolfharness.common_types",
+  "wolfharness_config.loaders -> wolfharness.mime_utils",
+  "wolfharness_config.loaders -> wolfharness.utils.importing",
+  "wolfharness_config.nodes -> wolfharness.common_types",
+  "wolfharness_config.prompt_hubs -> wolfharness_prompts.braintrust_hub",
+  "wolfharness_config.prompt_hubs -> wolfharness_prompts.fabric",
+  "wolfharness_config.prompt_hubs -> wolfharness_prompts.langfuse_hub",
+  "wolfharness_config.prompt_hubs -> wolfharness_prompts.promptlayer_provider",
+  "wolfharness_config.prompts -> wolfharness.log",
+  "wolfharness_config.session -> wolfharness.utils.parse_time",
+  "wolfharness_config.session -> wolfharness.utils.time_utils",
+  "wolfharness_config.storage -> wolfharness_storage.acp_provider",
+  "wolfharness_config.storage -> wolfharness_storage.base",
+  "wolfharness_config.storage -> wolfharness_storage.file_provider",
+  "wolfharness_config.storage -> wolfharness_storage.memory_provider",
+  "wolfharness_config.storage -> wolfharness_storage.opencode_provider",
+  "wolfharness_config.storage -> wolfharness_storage.sql_provider",
+  "wolfharness_config.storage -> wolfharness_storage.zed_provider",
+  "wolfharness_config.task -> wolfharness.agents",
+  "wolfharness_config.task -> wolfharness.prompts.prompts",
+  "wolfharness_config.task -> wolfharness.tools.base",
+  "wolfharness_config.task -> wolfharness.utils.model_capabilities",
+  "wolfharness_config.tools -> wolfharness.tools.base",
+  "wolfharness_config.tools -> wolfharness.utils.parse_time",
+  "wolfharness_config.toolsets -> wolfharness.prompts.conversion_manager",
+  "wolfharness_config.toolsets -> wolfharness.capabilities.combined_toolset",
+  "wolfharness_config.toolsets -> wolfharness.capabilities.filtered_toolset",
+  "wolfharness_config.toolsets -> wolfharness.capabilities.function_toolset",
+  "wolfharness_config.toolsets -> wolfharness.models.model_configs",
+  "wolfharness_config.toolsets -> wolfharness.utils.importing",
+  "wolfharness_config.toolsets -> wolfharness_toolsets.builtin",
+  "wolfharness_config.toolsets -> wolfharness_toolsets.builtin.code",
+  "wolfharness_config.toolsets -> wolfharness_toolsets.builtin.debug",
+  "wolfharness_config.toolsets -> wolfharness_toolsets.builtin.subagent_tools",
+  "wolfharness_config.toolsets -> wolfharness_toolsets.builtin.workers",
+  "wolfharness_config.toolsets -> wolfharness_toolsets.composio_toolset",
+  "wolfharness_config.toolsets -> wolfharness_toolsets.config_creation",
+  "wolfharness_config.toolsets -> wolfharness_toolsets.cron",
+  "wolfharness_config.toolsets -> wolfharness_toolsets.entry_points",
+  "wolfharness_config.toolsets -> wolfharness_toolsets.fsspec_toolset",
+  "wolfharness_config.toolsets -> wolfharness_toolsets.mcp_discovery.toolset",
+  "wolfharness_config.toolsets -> wolfharness_toolsets.notifications",
+  "wolfharness_config.toolsets -> wolfharness_toolsets.openapi",
+  "wolfharness_config.toolsets -> wolfharness_toolsets.search_toolset",
+  "wolfharness_config.toolsets -> wolfharness_toolsets.vfs_toolset",
 ]
 
 [[tool.importlinter.contracts]]
 name = "ACP package must not import from server"
 type = "forbidden"
 source_modules = ["acp"]
-forbidden_modules = ["agentpool_server", "agentpool_commands", "agentpool_cli"]
-# No direct violations exist; all violations are indirect (acp -> agentpool.utils
+forbidden_modules = [
+  "wolfharness_server",
+  "wolfharness_commands",
+  "wolfharness_cli"
+]
+# No direct violations exist; all violations are indirect (acp -> wolfharness.utils
 # -> ... -> server). Indirect checks are disabled via allow_indirect_imports
-# until the downstream agentpool.common_types -> agentpool_server chain is fixed
+# until the downstream wolfharness.common_types -> wolfharness_server chain is fixed
 # (see OpenSpec thin-wrapper-refactor Phase 7 tasks).
 allow_indirect_imports = true
 
@@ -442,11 +449,11 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = [
-  "agentpool_bot.channels.telegram",
-  "agentpool_bot.channels.slack",
-  "agentpool_toolsets.composio_toolset",
-  "agentpool_prompts.langfuse_hub",
-  "agentpool_prompts.braintrust_hub",
+  "wolfharness_bot.channels.telegram",
+  "wolfharness_bot.channels.slack",
+  "wolfharness_toolsets.composio_toolset",
+  "wolfharness_prompts.langfuse_hub",
+  "wolfharness_prompts.braintrust_hub",
 ]
 disable_error_code = [
   "type-arg",
@@ -518,16 +525,53 @@ asyncio_mode = "auto"
 default-groups = ["dev", "lint", "docs"]
 constraint-dependencies = ["extism-sys<1.13.0"]
 
+# Override mknodes metadata: it declares a dependency on the legacy `agentpool`
+# PyPI package, which pulls in outdated code that conflicts with the renamed
+# `wolfharness` project. Redirect that dependency to `wolfharness` so uv resolves
+# the local workspace instead of downloading the stale PyPI release.
+[[tool.uv.dependency-metadata]]
+name = "mknodes"
+version = "2.2.14"
+requires-dist = [
+  "wolfharness",
+  "anybadge",
+  "anyenv[httpx]",
+  "clinspector",
+  "coloraide",
+  "epregistry",
+  "fieldz",
+  "fsspec",
+  "git-changelog",
+  "githarbor",
+  "gitpython",
+  "griffelib",
+  "jinja2",
+  "jinjarope[icons]",
+  "mkdocstrings[python]",
+  "natsort",
+  "pipdeptree",
+  "pydantic",
+  "pytest-asyncio",
+  "python-dotenv",
+  "setuptools",
+  "tomli-w",
+  "typer",
+  "universal-pathlib",
+  "upathtools[httpx]",
+  "yamling",
+  "zensical",
+]
+
 [tool.uv.build-backend]
 module-name = [
-  "agentpool",
-  "agentpool_config",
-  "agentpool_cli",
-  "agentpool_commands",
-  "agentpool_storage",
-  "agentpool_prompts",
-  "agentpool_server",
-  "agentpool_toolsets",
+  "wolfharness",
+  "wolfharness_config",
+  "wolfharness_cli",
+  "wolfharness_commands",
+  "wolfharness_storage",
+  "wolfharness_prompts",
+  "wolfharness_server",
+  "wolfharness_toolsets",
   "acp",
 ]
 wheel-exclude = [

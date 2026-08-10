@@ -143,24 +143,30 @@ max-complexity = 15
   "TC001",
 ]  # Examples don't need TYPE_CHECKING imports
 # Team comm tools: ctx parameter is pydantic-ai internal, not described in docstrings
-"src/agentpool/capabilities/team_comm_capability.py" = ["D417"]
+"src/wolfharness/capabilities/team_comm_capability.py" = ["D417"]
 # Viking tools: ctx is pydantic-ai internal, BLE001 is intentional for tool error handling
-"src/agentpool/capabilities/viking/tools.py" = [
+"src/wolfharness/capabilities/viking/tools.py" = [
   "D417",
   "BLE001",
   "TRY300",
   "PLR0915"
 ]
 # Viking capability: BLE001 for safe SkillResource defaults, TRY300 for early-return pattern
-"src/agentpool/capabilities/viking/__init__.py" = ["BLE001", "TRY300"]
+"src/wolfharness/capabilities/viking/__init__.py" = ["BLE001", "TRY300"]
 # Viking instructions: E501 for markdown table lines
-"src/agentpool/capabilities/viking/instructions.py" = ["E501"]
+"src/wolfharness/capabilities/viking/instructions.py" = ["E501"]
 # Resource resolver/capability: PLR0911 for multi-return routing logic, TRY300 for early-return pattern
-"src/agentpool/capabilities/resource_resolver.py" = ["PLR0911"]
-"src/agentpool/capabilities/resource_capability.py" = ["PLR0911", "TRY300"]
+"src/wolfharness/capabilities/resource_resolver.py" = ["PLR0911"]
+"src/wolfharness/capabilities/resource_capability.py" = ["PLR0911", "TRY300"]
 # Background task capability: PLR0915/PLR0911 for complex lifecycle/tool methods, TRY301 for re-raise pattern
-"src/agentpool/capabilities/background_task/capability.py" = ["PLR0915", "TRY301"]
-"src/agentpool/capabilities/background_task/manager.py" = ["PLR0915", "PLR0911"]
+"src/wolfharness/capabilities/background_task/capability.py" = [
+  "PLR0915",
+  "TRY301"
+]
+"src/wolfharness/capabilities/background_task/manager.py" = [
+  "PLR0915",
+  "PLR0911"
+]
 # Question tool tests: RUF001 — fullwidth CJK punctuation is intentional test data
 # for verifying CJK text parsing in the question_for_user XML
 "tests/tool_impls/question/test_question_for_user.py" = ["RUF001"]

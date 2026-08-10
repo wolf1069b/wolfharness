@@ -2,7 +2,7 @@
 sync:
   agent: doc_sync_agent
   dependencies:
-    - src/agentpool/models/codex_agents.py
+    - src/wolfharness/models/codex_agents.py
 title: Codex Agents
 description: Codex app-server integration
 icon: material/code-braces
@@ -147,7 +147,7 @@ agents:
 Then use structured output programmatically:
 
 ```python
-from agentpool import AgentPool
+from wolfharness import AgentPool
 from pydantic import BaseModel
 
 class BugReport(BaseModel):
@@ -199,7 +199,7 @@ Codex supports three reasoning effort levels that can be changed at runtime:
 Example runtime mode switching:
 
 ```python
-from agentpool import AgentPool
+from wolfharness import AgentPool
 
 async with AgentPool("config.yml") as pool:
     agent = pool.get_agents()["my_codex"]
@@ -233,7 +233,7 @@ await agent.set_mode("always", category_id="approval_policy")
 Codex provides access to various models. The agent can dynamically fetch available models:
 
 ```python
-from agentpool import AgentPool
+from wolfharness import AgentPool
 
 async with AgentPool("config.yml") as pool:
     agent = pool.get_agents()["my_codex"]

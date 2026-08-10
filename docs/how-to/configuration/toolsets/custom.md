@@ -21,7 +21,7 @@ agents:
 ## Creating a Custom Toolset
 
 ```python
-from agentpool.resource_providers import ResourceProvider
+from wolfharness.resource_providers import ResourceProvider
 
 class MyCustomToolset(ResourceProvider):
     async def get_tools(self):
@@ -37,5 +37,5 @@ class MyCustomToolset(ResourceProvider):
 ## Configuration Reference
 
 /// mknodes
-{{ "agentpool_config.toolsets.CustomToolsetConfig" | schema_to_markdown(display_mode="yaml", header_style="pymdownx", wrapped_in="toolsets", header_level=3) }}
+{{ "wolfharness_config.toolsets.CustomToolsetConfig" | schema_to_markdown(display_mode="yaml", header_style="pymdownx", wrapped_in="toolsets", header_level=3) }}
 ///

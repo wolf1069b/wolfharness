@@ -14,22 +14,22 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 
-from agentpool.agents.events.events import (
+from wolfharness.agents.events.events import (
     RunFailedEvent,
     StreamCompleteEvent,
 )
-from agentpool.messaging import ChatMessage
-from agentpool.orchestrator.core import EventEnvelope
-from agentpool_server.opencode_server.event_adapter import OpenCodeEventAdapter
-from agentpool_server.opencode_server.event_processor_context import (
+from wolfharness.messaging import ChatMessage
+from wolfharness.orchestrator.core import EventEnvelope
+from wolfharness_server.opencode_server.event_adapter import OpenCodeEventAdapter
+from wolfharness_server.opencode_server.event_processor_context import (
     EventProcessorContext,
 )
-from agentpool_server.opencode_server.models import (
+from wolfharness_server.opencode_server.models import (
     MessagePath,
     MessageTime,
     MessageWithParts,
 )
-from agentpool_server.opencode_server.opencode_event_bridge import (
+from wolfharness_server.opencode_server.opencode_event_bridge import (
     OpenCodeEventBridgeMixin,
 )
 
@@ -156,11 +156,11 @@ async def test_context_serialized_after_stream_complete() -> None:
 
     with (
         __import__("unittest.mock").mock.patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.set_session_status",
+            "wolfharness_server.opencode_server.opencode_event_bridge.set_session_status",
             new_callable=AsyncMock,
         ),
         __import__("unittest.mock").mock.patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.append_message_to_session",
+            "wolfharness_server.opencode_server.opencode_event_bridge.append_message_to_session",
             new_callable=AsyncMock,
         ),
     ):
@@ -225,7 +225,7 @@ async def test_serialization_failure_falls_back_to_fresh_context() -> None:
     Then: An error is logged, the turn does NOT crash, and no resume
         data is stored.
     """
-    import agentpool_server.opencode_server.opencode_event_bridge as bridge_module
+    import wolfharness_server.opencode_server.opencode_event_bridge as bridge_module
 
     session_id = "sess-p3-fail"
     bridge, ctx, _broadcast_calls = _setup_bridge_for_handle(
@@ -244,11 +244,11 @@ async def test_serialization_failure_falls_back_to_fresh_context() -> None:
 
     with (
         __import__("unittest.mock").mock.patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.set_session_status",
+            "wolfharness_server.opencode_server.opencode_event_bridge.set_session_status",
             new_callable=AsyncMock,
         ),
         __import__("unittest.mock").mock.patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.append_message_to_session",
+            "wolfharness_server.opencode_server.opencode_event_bridge.append_message_to_session",
             new_callable=AsyncMock,
         ),
         __import__("unittest.mock").mock.patch.object(
@@ -298,11 +298,11 @@ async def test_context_serialized_after_run_failed() -> None:
 
     with (
         __import__("unittest.mock").mock.patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.set_session_status",
+            "wolfharness_server.opencode_server.opencode_event_bridge.set_session_status",
             new_callable=AsyncMock,
         ),
         __import__("unittest.mock").mock.patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.append_message_to_session",
+            "wolfharness_server.opencode_server.opencode_event_bridge.append_message_to_session",
             new_callable=AsyncMock,
         ),
     ):

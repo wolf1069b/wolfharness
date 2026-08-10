@@ -9,11 +9,11 @@ icon: material/format-list-bulleted
 Show available agents from the configuration.
 
 ```bash
-agentpool list
+wolfharness list
 ```
 
 For a full list of options, run:
 
 ```bash
-agentpool list --help
+wolfharness list --help
 ```

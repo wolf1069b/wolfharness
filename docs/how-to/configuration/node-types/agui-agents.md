@@ -2,7 +2,7 @@
 sync:
   agent: doc_sync_agent
   dependencies:
-    - src/agentpool/models/agui_agents.py
+    - src/wolfharness/models/agui_agents.py
 title: AG-UI Agents
 description: AG-UI protocol agent integration
 icon: material/monitor

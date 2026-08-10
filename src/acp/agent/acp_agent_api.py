@@ -65,7 +65,7 @@ class ACPAgentAPI:
     Avoids manual instantiation of request/notification objects.
 
     When optional ``state`` and ``update_event`` are provided, the instance
-    also satisfies the :class:`~agentpool.agents.acp_agent.turn.ACPClientProtocol`
+    also satisfies the :class:`~wolfharness.agents.acp_agent.turn.ACPClientProtocol`
     protocol by implementing :meth:`stream_events` and :meth:`get_messages`.
     """
 

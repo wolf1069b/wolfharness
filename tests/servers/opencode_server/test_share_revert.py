@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from agentpool.utils.time_utils import now_ms
-from agentpool_server.opencode_server.models import (
+from wolfharness.utils.time_utils import now_ms
+from wolfharness_server.opencode_server.models import (
     AssistantMessage,
     MessagePath,
     MessageTime,
@@ -21,7 +21,7 @@ from agentpool_server.opencode_server.models import (
     TimeCreated,
     UserMessage,
 )
-from agentpool_server.opencode_server.session_pool_integration import (
+from wolfharness_server.opencode_server.session_pool_integration import (
     append_message_to_session,
 )
 
@@ -32,7 +32,7 @@ pytestmark = pytest.mark.unit
 if TYPE_CHECKING:
     from httpx import AsyncClient
 
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness_server.opencode_server.state import ServerState
 
 
 # =============================================================================
@@ -138,7 +138,7 @@ class TestShareSession:
         mock_sharer.share_conversation = AsyncMock(return_value=mock_result)
 
         with patch(
-            "agentpool_server.opencode_server.routes.session_routes.OpenCodeSharer",
+            "wolfharness_server.opencode_server.routes.session_routes.OpenCodeSharer",
             return_value=mock_sharer,
         ):
             share_response = await async_client.post(f"/session/{session_id}/share")
@@ -172,7 +172,7 @@ class TestShareSession:
         mock_sharer.share_conversation = AsyncMock(return_value=mock_result)
 
         with patch(
-            "agentpool_server.opencode_server.routes.session_routes.OpenCodeSharer",
+            "wolfharness_server.opencode_server.routes.session_routes.OpenCodeSharer",
             return_value=mock_sharer,
         ):
             share_response = await async_client.post(f"/session/{session_id}/share?num_messages=3")
@@ -226,7 +226,7 @@ class TestShareSession:
         mock_sharer.share_conversation = AsyncMock(return_value=mock_result)
 
         with patch(
-            "agentpool_server.opencode_server.routes.session_routes.OpenCodeSharer",
+            "wolfharness_server.opencode_server.routes.session_routes.OpenCodeSharer",
             return_value=mock_sharer,
         ):
             share_response = await async_client.post(f"/session/{session_id}/share")
@@ -516,7 +516,7 @@ class TestShareRevertEdgeCases:
 
         # Debug: check what get_messages_for_session returns
         with patch(
-            "agentpool_server.opencode_server.routes.session_routes.OpenCodeSharer",
+            "wolfharness_server.opencode_server.routes.session_routes.OpenCodeSharer",
             return_value=mock_sharer,
         ):
             share_response = await async_client.post(f"/session/{session_id}/share")

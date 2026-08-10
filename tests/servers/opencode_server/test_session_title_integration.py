@@ -16,13 +16,13 @@ from unittest.mock import patch
 import anyio
 import pytest
 
-from agentpool.sessions.models import SessionData
-from agentpool_server.opencode_server.converters import (
+from wolfharness.sessions.models import SessionData
+from wolfharness_server.opencode_server.converters import (
     opencode_to_session_data,
     session_data_to_opencode,
 )
-from agentpool_server.opencode_server.models import Session
-from agentpool_server.opencode_server.models.common import TimeCreatedUpdated
+from wolfharness_server.opencode_server.models import Session
+from wolfharness_server.opencode_server.models.common import TimeCreatedUpdated
 
 
 pytestmark = pytest.mark.integration
@@ -31,7 +31,7 @@ pytestmark = pytest.mark.integration
 if TYPE_CHECKING:
     from httpx import AsyncClient
 
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness_server.opencode_server.state import ServerState
 
 
 class TestSessionTitlePersistence:
@@ -226,7 +226,7 @@ class TestSessionTitleGeneration:
 
         Note: This test mocks the LLM call to avoid external dependencies.
         """
-        from agentpool.storage.manager import SessionMetadata, StorageManager
+        from wolfharness.storage.manager import SessionMetadata, StorageManager
 
         session_id = "test_title_gen_123"
 

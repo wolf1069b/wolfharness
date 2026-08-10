@@ -16,12 +16,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from agentpool.agents.events import UserMessageInsertedEvent
-from agentpool_server.opencode_server.event_processor import EventProcessor
-from agentpool_server.opencode_server.event_processor_context import (
+from wolfharness.agents.events import UserMessageInsertedEvent
+from wolfharness_server.opencode_server.event_processor import EventProcessor
+from wolfharness_server.opencode_server.event_processor_context import (
     EventProcessorContext,
 )
-from agentpool_server.opencode_server.models import (
+from wolfharness_server.opencode_server.models import (
     MessagePath,
     MessageTime,
     MessageUpdatedEvent,
@@ -35,7 +35,7 @@ pytestmark = pytest.mark.unit
 
 
 if TYPE_CHECKING:
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness_server.opencode_server.state import ServerState
 
 
 def _make_ctx(server_state: ServerState) -> EventProcessorContext:
@@ -47,7 +47,7 @@ def _make_ctx(server_state: ServerState) -> EventProcessorContext:
         agent_name="test-agent",
         model_id="test-model",
         parent_id="parent-1",
-        provider_id="agentpool",
+        provider_id="wolfharness",
         path=MessagePath(cwd="/tmp", root="/tmp"),
     )
     return EventProcessorContext(

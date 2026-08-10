@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic_ai import FunctionToolCallEvent
 import pytest
 
-from agentpool import Agent
+from wolfharness import Agent
 
 
 pytestmark = pytest.mark.unit

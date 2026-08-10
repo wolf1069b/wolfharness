@@ -19,7 +19,7 @@ pytestmark = pytest.mark.unit
 
 def _make_handler() -> Any:
     """Create a minimal ACPProtocolHandler-like object with the elicitation task dict."""
-    from agentpool_server.acp_server.handler import ACPProtocolHandler
+    from wolfharness_server.acp_server.handler import ACPProtocolHandler
 
     host_context = MagicMock()
     host_context.session_pool = MagicMock()

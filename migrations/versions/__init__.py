@@ -1,1 +1,1 @@
-"""Migration versions for agentpool database schema."""
+"""Migration versions for wolfharness database schema."""

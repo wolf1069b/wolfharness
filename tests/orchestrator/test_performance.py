@@ -15,11 +15,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from agentpool.agents.events import RunStartedEvent, StreamCompleteEvent
-from agentpool.lifecycle import DirectChannel, MemoryJournal
-from agentpool.messaging import ChatMessage
-from agentpool.orchestrator.core import EventBus, SessionPool
-from agentpool.orchestrator.metrics import MetricsCollector
+from wolfharness.agents.events import RunStartedEvent, StreamCompleteEvent
+from wolfharness.lifecycle import DirectChannel, MemoryJournal
+from wolfharness.messaging import ChatMessage
+from wolfharness.orchestrator.core import EventBus, SessionPool
+from wolfharness.orchestrator.metrics import MetricsCollector
 
 
 pytestmark = pytest.mark.integration
@@ -28,7 +28,7 @@ pytestmark = pytest.mark.integration
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
 
 # ============================================================================

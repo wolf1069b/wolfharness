@@ -8,14 +8,14 @@ icon: material/rocket-launch
 
 ## ACP Integration (Recommended)
 
-The fastest way to get started is through the **Agent Client Protocol (ACP)**, which integrates agentpool directly into your IDE.
+The fastest way to get started is through the **Agent Client Protocol (ACP)**, which integrates wolfharness directly into your IDE.
 
 ### One-Line Setup
 
 No installation needed - run directly with uvx:
 
 ```bash
-uvx --python 3.13 agentpool@latest serve-acp agents.yml
+uvx --python 3.13 wolfharness@latest serve-acp agents.yml
 ```
 
 ### IDE Configuration (Zed)
@@ -29,7 +29,7 @@ Add to your Zed `settings.json`:
       "command": "uvx",
       "args": [
         "--python", "3.13",
-        "agentpool@latest",
+        "wolfharness@latest",
         "serve-acp",
         "path/to/your/agents.yml"
       ],
@@ -65,13 +65,13 @@ Initialize and manage configurations:
 
 ```bash
 # Create starter configuration
-agentpool init agents.yml
+wolfharness init agents.yml
 
 # Add to your configurations
-agentpool add agents.yml
+wolfharness add agents.yml
 
 # Start chatting
-agentpool chat assistant
+wolfharness chat assistant
 ```
 
 ## Configured Agents
@@ -92,7 +92,7 @@ agents:
 Use it in code:
 
 ```python
-from agentpool import AgentPool
+from wolfharness import AgentPool
 
 async def main():
     async with AgentPool("agents.yml") as pool:
@@ -110,7 +110,7 @@ if __name__ == "__main__":
 Quick model interactions without configuration:
 
 ```python
-from agentpool import run_with_model, run_with_model_sync
+from wolfharness import run_with_model, run_with_model_sync
 
 # Async usage
 async def main():

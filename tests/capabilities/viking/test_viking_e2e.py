@@ -35,8 +35,8 @@ import uuid
 from pydantic_ai.messages import ToolReturn
 import pytest
 
-from agentpool.capabilities.viking import VikingCapability
-from agentpool.capabilities.viking.tools import build_tools
+from wolfharness.capabilities.viking import VikingCapability
+from wolfharness.capabilities.viking.tools import build_tools
 
 
 if TYPE_CHECKING:
@@ -300,16 +300,36 @@ async def test_mkdir(
     assert any(sub_dir.rstrip("/").split("/")[-1] in str(n) for n in names)
 
 
-async def test_remember(viking_tools: dict[str, Any], mock_ctx: Any) -> None:
-    """Test viking_remember stores conversation messages in Viking memory."""
-    messages = [
-        {"role": "user", "content": f"Hello from E2E test {_random_name()}"},
-        {"role": "assistant", "content": "Hi! I received your message."},
-    ]
-    result = await viking_tools["viking_remember"](mock_ctx, messages=messages)
+async def test_remember(viking_cap: VikingCapability, mock_ctx: Any) -> None:
+    """Test viking_remember schedules a deferred capture, then drains it."""
+    from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
+    from pydantic_ai.models import ModelRequestContext
+    from pydantic_ai.models.test import TestModel
+
+    tools = {t.__name__: t for t in build_tools(viking_cap)}
+
+    # 1. Tool call only schedules — no session work at call time.
+    result = await tools["viking_remember"](mock_ctx, reason=f"e2e remember {_random_name()}")
     assert "error" not in result.return_value.lower()
-    assert "Remembered" in result.return_value
-    assert "2" in result.return_value
+    assert "Capture scheduled" in result.return_value
+    assert viking_cap._remember_pending != []
+
+    # 2. Drain at the next boundary ingests the real conversation.
+    request_context = ModelRequestContext(
+        model=TestModel(),
+        messages=[
+            ModelRequest(parts=[UserPromptPart(content=f"Hello from E2E test {_random_name()}")]),
+            ModelResponse(parts=[TextPart(content="Hi! I received your message.")]),
+        ],
+        model_settings=None,
+        model_request_parameters=None,  # type: ignore[arg-type]
+    )
+    await viking_cap._handle_remember_drain(mock_ctx, request_context)
+
+    assert viking_cap._last_ingested_idx == 2, (
+        f"Expected _last_ingested_idx=2, got {viking_cap._last_ingested_idx}"
+    )
+    assert viking_cap._remember_pending == []
 
 
 async def test_add_resource(viking_tools: dict[str, Any], mock_ctx: Any) -> None:
@@ -448,7 +468,7 @@ async def test_resource_access_workflow(
     viking_cap.resources_uri = test_dir
     viking_cap.resource_read_level = "read"
     try:
-        from agentpool.capabilities.resource_protocols import TextResourceContent
+        from wolfharness.capabilities.resource_protocols import TextResourceContent
 
         # read_resource
         result = await viking_cap.read_resource(resource_uri)
@@ -488,7 +508,7 @@ async def test_multimodal_bridge(
     from pydantic_ai.models import ModelRequestContext
     from pydantic_ai.models.test import TestModel
 
-    from agentpool_config.model_capabilities import ModelCapabilities
+    from wolfharness_config.model_capabilities import ModelCapabilities
 
     cap = VikingCapability(
         mode="all",
@@ -714,10 +734,6 @@ async def test_auto_ingest_e2e(
     assert cap._last_ingested_idx == 3, (
         f"Expected _last_ingested_idx=3, got {cap._last_ingested_idx}"
     )
-
-    # Verify pending conversation was stored
-    assert cap._pending_conversation is not None
-    assert len(cap._pending_conversation) >= 1
 
 
 # ---------------------------------------------------------------------------

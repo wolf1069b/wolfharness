@@ -40,7 +40,7 @@ async def diagnose(config_path: str | None = None) -> None:  # noqa: PLR0915
     # ============================================================
     print_header("Stage 1: Filesystem Discovery")
 
-    from agentpool_config.skills import DEFAULT_SKILLS_PATHS
+    from wolfharness_config.skills import DEFAULT_SKILLS_PATHS
 
     # Check default skill directories
     for dp in DEFAULT_SKILLS_PATHS:
@@ -90,7 +90,7 @@ async def diagnose(config_path: str | None = None) -> None:  # noqa: PLR0915
                                         else "MISSING",
                                     )
                                     # Check for unknown keys
-                                    from agentpool.skills.skill import SkillMetadata
+                                    from wolfharness.skills.skill import SkillMetadata
 
                                     try:
                                         SkillMetadata.model_validate(frontmatter)
@@ -124,7 +124,7 @@ async def diagnose(config_path: str | None = None) -> None:  # noqa: PLR0915
     if config_path:
         print("\n  --- Custom paths from config ---")
         try:
-            from agentpool.models.manifest import AgentsManifest
+            from wolfharness.models.manifest import AgentsManifest
 
             manifest = AgentsManifest.from_file(config_path)
             if manifest.skills:
@@ -152,15 +152,15 @@ async def diagnose(config_path: str | None = None) -> None:  # noqa: PLR0915
     # Stage 2: SkillsManager / SkillsRegistry
     print_header("Stage 2: SkillsManager / SkillsRegistry")
 
-    from agentpool.skills.manager import SkillsManager
+    from wolfharness.skills.manager import SkillsManager
 
     try:
         config_file_path = to_upath(config_path) if config_path else None
-        from agentpool_config.skills import SkillsConfig
+        from wolfharness_config.skills import SkillsConfig
 
         skills_config: SkillsConfig | None = None
         if config_path:
-            from agentpool.models.manifest import AgentsManifest
+            from wolfharness.models.manifest import AgentsManifest
 
             manifest = AgentsManifest.from_file(config_path)
             skills_config = manifest.skills
@@ -190,7 +190,7 @@ async def diagnose(config_path: str | None = None) -> None:  # noqa: PLR0915
         print_header("Stage 3: AgentPool Initialization")
 
         try:
-            from agentpool.delegation import AgentPool
+            from wolfharness.delegation import AgentPool
 
             async with AgentPool(config_path) as pool:
                 # Check skill_provider
@@ -237,11 +237,11 @@ async def diagnose(config_path: str | None = None) -> None:  # noqa: PLR0915
 
     if config_path:
         try:
-            from agentpool.delegation import AgentPool
+            from wolfharness.delegation import AgentPool
 
             async with AgentPool(config_path) as pool:
                 # Simulate what server.py does
-                from agentpool_server.opencode_server.skill_bridge import OpenCodeSkillBridge
+                from wolfharness_server.opencode_server.skill_bridge import OpenCodeSkillBridge
 
                 bridge = OpenCodeSkillBridge(skill_provider=pool.skill_provider)
 
@@ -320,7 +320,7 @@ Common fixes for skills not showing in TUI:
 4. Relative paths resolve against the CONFIG FILE location, not CWD.
 
 5. Check server logs with:
-   OBSERVABILITY_ENABLED=true agentpool serve-opencode config.yml
+   OBSERVABILITY_ENABLED=true wolfharness serve-opencode config.yml
 
 6. If pool.skill_provider is None, the OpenCode bridge won't have commands.
 """)

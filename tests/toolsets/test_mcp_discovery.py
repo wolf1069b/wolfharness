@@ -11,10 +11,10 @@ from mcp.types import ElicitResult
 from pydantic_ai import RunContext
 import pytest
 
-from agentpool.agents.context import AgentContext
-from agentpool.mcp_server.client import MCPClient
-from agentpool_config.mcp_server import StdioMCPServerConfig
-from agentpool_toolsets.mcp_discovery.toolset import MCPDiscoveryToolset
+from wolfharness.agents.context import AgentContext
+from wolfharness.mcp_server.client import MCPClient
+from wolfharness_config.mcp_server import StdioMCPServerConfig
+from wolfharness_toolsets.mcp_discovery.toolset import MCPDiscoveryToolset
 
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.unit]
@@ -69,7 +69,7 @@ async def test_connection_uses_sampling_callback():
 
     with (
         patch.object(toolset, "_get_server_config", return_value=mock_config),
-        patch("agentpool_toolsets.mcp_discovery.toolset.MCPClient") as mock_client_cls,
+        patch("wolfharness_toolsets.mcp_discovery.toolset.MCPClient") as mock_client_cls,
     ):
         mock_client_cls.return_value = mock_client
 

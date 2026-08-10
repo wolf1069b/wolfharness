@@ -13,8 +13,8 @@ from unittest.mock import MagicMock
 import pytest
 from upathtools import UPath
 
-from agentpool.skills.manager import SkillsManager
-from agentpool_config.skills import SkillsConfig
+from wolfharness.skills.manager import SkillsManager
+from wolfharness_config.skills import SkillsConfig
 
 
 pytestmark = pytest.mark.unit
@@ -54,12 +54,12 @@ class TestSkillsIncludeDefault:
         assert UPath("./custom-skills/") in paths, "Custom path missing"
         assert len(paths) > 1, "Default paths not included when include_default=true"
 
-    def test_agentpool_acp_agent_load_skills_defaults_to_none(self) -> None:
+    def test_wolfharness_acp_agent_load_skills_defaults_to_none(self) -> None:
         """AgentPoolACPAgent.load_skills defaults to None.
 
         None means "use manifest's include_default setting".
         """
-        from agentpool_server.acp_server.acp_agent import AgentPoolACPAgent
+        from wolfharness_server.acp_server.acp_agent import AgentPoolACPAgent
 
         assert AgentPoolACPAgent.load_skills is None, (
             "AgentPoolACPAgent.load_skills should default to None, "
@@ -73,9 +73,9 @@ class TestSkillsIncludeDefault:
         use manifest.skills.include_default as the default.
         """
         # Create a manifest with include_default=False
-        from agentpool.models.manifest import AgentsManifest
-        from agentpool_config.skills import SkillsConfig
-        from agentpool_server.acp_server.server import ACPServer
+        from wolfharness.models.manifest import AgentsManifest
+        from wolfharness_config.skills import SkillsConfig
+        from wolfharness_server.acp_server.server import ACPServer
 
         manifest = AgentsManifest(
             skills=SkillsConfig(
@@ -97,9 +97,9 @@ class TestSkillsIncludeDefault:
 
     def test_acp_server_from_config_explicit_load_skills_overrides_manifest(self) -> None:
         """Explicit load_skills argument must override manifest's include_default."""
-        from agentpool.models.manifest import AgentsManifest
-        from agentpool_config.skills import SkillsConfig
-        from agentpool_server.acp_server.server import ACPServer
+        from wolfharness.models.manifest import AgentsManifest
+        from wolfharness_config.skills import SkillsConfig
+        from wolfharness_server.acp_server.server import ACPServer
 
         manifest = AgentsManifest(
             skills=SkillsConfig(
@@ -133,8 +133,8 @@ class TestSkillsIncludeDefault:
         # Create a real AgentPool with include_default=False
         import yamling
 
-        from agentpool import AgentPool, AgentsManifest
-        from agentpool_server.acp_server.acp_agent import AgentPoolACPAgent
+        from wolfharness import AgentPool, AgentsManifest
+        from wolfharness_server.acp_server.acp_agent import AgentPoolACPAgent
 
         config = """\
 agents:
@@ -175,7 +175,7 @@ skills:
         """
         import inspect
 
-        from agentpool_cli.serve_acp import acp_command
+        from wolfharness_cli.serve_acp import acp_command
 
         sig = inspect.signature(acp_command)
         load_skills_param = sig.parameters.get("load_skills")
@@ -191,8 +191,8 @@ skills:
         When skills.include_default=false in manifest and no explicit CLI override,
         ACP server should NOT load .claude/skills/.
         """
-        from agentpool.models.manifest import AgentsManifest
-        from agentpool_config.skills import SkillsConfig
+        from wolfharness.models.manifest import AgentsManifest
+        from wolfharness_config.skills import SkillsConfig
 
         manifest = AgentsManifest(
             skills=SkillsConfig(
@@ -202,7 +202,7 @@ skills:
         )
 
         # Without explicit override, load_skills should follow manifest
-        from agentpool_server.acp_server.server import ACPServer
+        from wolfharness_server.acp_server.server import ACPServer
 
         server = ACPServer.from_config(manifest)
         assert server.load_skills is False, (
@@ -212,9 +212,9 @@ skills:
 
     def test_manifest_include_default_true_loads_skills(self) -> None:
         """Manifest's include_default=True must enable ACP skill loading."""
-        from agentpool.models.manifest import AgentsManifest
-        from agentpool_config.skills import SkillsConfig
-        from agentpool_server.acp_server.server import ACPServer
+        from wolfharness.models.manifest import AgentsManifest
+        from wolfharness_config.skills import SkillsConfig
+        from wolfharness_server.acp_server.server import ACPServer
 
         manifest = AgentsManifest(
             skills=SkillsConfig(
@@ -238,10 +238,10 @@ skills:
         """
         import logging
 
-        from agentpool_config.skills import SkillsConfig
+        from wolfharness_config.skills import SkillsConfig
 
         # Enable debug logging
-        logging.getLogger("agentpool.skills").setLevel(logging.DEBUG)
+        logging.getLogger("wolfharness.skills").setLevel(logging.DEBUG)
 
         # Create a custom skill directory with one skill
         custom_skills_dir = tmp_path / "custom-skills"

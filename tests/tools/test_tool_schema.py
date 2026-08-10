@@ -20,15 +20,15 @@ from pydantic_ai.tools import ToolDefinition  # noqa: TC002
 import pytest
 from schemez import OpenAIFunctionDefinition
 
-from agentpool.log import configure_logging
-from agentpool.tools.base import FunctionTool, Tool
+from wolfharness.log import configure_logging
+from wolfharness.tools.base import FunctionTool, Tool
 
 
 pytestmark = pytest.mark.unit
 
 
 if TYPE_CHECKING:
-    from agentpool.agents.context import AgentContext
+    from wolfharness.agents.context import AgentContext
 
 
 @pytest.fixture(autouse=True)
@@ -976,7 +976,7 @@ def test_get_json_schema_no_toolresult_return_warning_with_schema_override() -> 
     """Dataclass ToolResult return + schema_override must not emit return-schema UserWarnings."""
     import warnings
 
-    from agentpool.tools.base import FunctionTool, ToolResult
+    from wolfharness.tools.base import FunctionTool, ToolResult
 
     def returns_tool_result(x: int) -> ToolResult:
         return ToolResult(content=str(x))

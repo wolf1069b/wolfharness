@@ -13,9 +13,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool import Agent
-from agentpool.agents.context import AgentRunContext
-from agentpool.orchestrator.core import EventBus
+from wolfharness import Agent
+from wolfharness.agents.context import AgentRunContext
+from wolfharness.orchestrator.core import EventBus
 
 
 pytestmark = pytest.mark.unit
@@ -111,7 +111,7 @@ async def test_get_agentlet_collects_tool_provider_capabilities(
         mock_provider_no_capability,
     ]
 
-    with patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
+    with patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
         mock_pydantic_agent.return_value = MagicMock()
         await mock_agent.get_agentlet(None, None, None)
 
@@ -137,9 +137,9 @@ async def test_get_agentlet_creates_hooks_capability(
     hooks_cap = MagicMock()
 
     with (
-        patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent,
+        patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent,
         patch(
-            "agentpool.agents.native_agent.tool_intercept.ToolInterceptCapability",
+            "wolfharness.agents.native_agent.tool_intercept.ToolInterceptCapability",
             return_value=hooks_cap,
         ) as mock_ti_class,
     ):
@@ -177,9 +177,9 @@ async def test_get_agentlet_uses_hook_manager_capability_directly(
     run_ctx = AgentRunContext(session_id="test-session", event_bus=event_bus)
 
     with (
-        patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent,
+        patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent,
         patch(
-            "agentpool.agents.native_agent.tool_intercept.ToolInterceptCapability",
+            "wolfharness.agents.native_agent.tool_intercept.ToolInterceptCapability",
             return_value=hooks_cap,
         ) as mock_ti_class,
     ):
@@ -210,7 +210,7 @@ async def test_get_agentlet_collects_mcp_capabilities(
     """MCP capabilities collected from mcp.get_capabilities()."""
     mock_agent.mcp = mock_mcp_manager
 
-    with patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
+    with patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
         mock_pydantic_agent.return_value = MagicMock()
         await mock_agent.get_agentlet(None, None, None)
 
@@ -245,7 +245,7 @@ async def test_get_agentlet_wraps_history_processors(
             "_resolve_history_processors",
             return_value=[mock_history_processor],
         ),
-        patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent,
+        patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent,
     ):
         mock_pydantic_agent.return_value = MagicMock()
         await mock_agent.get_agentlet(None, None, None)
@@ -275,7 +275,7 @@ async def test_get_agentlet_wraps_builtin_tools(
     builtin_tool_2 = MagicMock()
     mock_agent._builtin_tools = [builtin_tool_1, builtin_tool_2]
 
-    with patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
+    with patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
         mock_pydantic_agent.return_value = MagicMock()
         await mock_agent.get_agentlet(None, None, None)
 
@@ -316,9 +316,9 @@ async def test_get_agentlet_passes_capabilities_to_pydantic_agent(
             "_resolve_history_processors",
             return_value=[mock_history_processor],
         ),
-        patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent,
+        patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent,
         patch(
-            "agentpool.agents.native_agent.tool_intercept.ToolInterceptCapability",
+            "wolfharness.agents.native_agent.tool_intercept.ToolInterceptCapability",
             return_value=hooks_cap,
         ),
     ):
@@ -360,7 +360,7 @@ async def test_get_agentlet_collects_instructions(
             "to_pydantic_ai_instructions",
             new=AsyncMock(return_value=[system_instruction]),
         ),
-        patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent,
+        patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent,
     ):
         mock_pydantic_agent.return_value = MagicMock()
         await mock_agent.get_agentlet(None, None, None)
@@ -391,7 +391,7 @@ async def test_get_agentlet_no_duplicate_history_resolution(
             "_resolve_history_processors",
             return_value=[],
         ) as mock_resolve,
-        patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent,
+        patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent,
     ):
         mock_pydantic_agent.return_value = MagicMock()
         await mock_agent.get_agentlet(None, None, None)
@@ -409,7 +409,7 @@ async def test_get_agentlet_no_wrap_tool_usage(
     mock_agent: Agent[Any],
 ) -> None:
     """No manual tool wrapping via wrap_tool."""
-    with patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
+    with patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
         mock_pydantic_agent.return_value = MagicMock()
 
         # Also patch wrap_tool if it were imported - but it's not
@@ -445,7 +445,7 @@ async def test_get_agentlet_default_providers_contribute_capabilities(
             "_resolve_history_processors",
             return_value=[],
         ),
-        patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent,
+        patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent,
     ):
         mock_pydantic_agent.return_value = MagicMock()
         await mock_agent.get_agentlet(None, None, None)
@@ -482,7 +482,7 @@ async def test_get_agentlet_handles_failing_provider_instructions(
             "to_pydantic_ai_instructions",
             new=AsyncMock(return_value=["system prompt"]),
         ),
-        patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent,
+        patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent,
     ):
         mock_pydantic_agent.return_value = MagicMock()
         # Should not raise despite provider failing
@@ -514,7 +514,7 @@ async def test_get_agentlet_resolves_string_model(
             "_resolve_model_string",
             return_value=(mock_model, None),
         ),
-        patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent,
+        patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent,
     ):
         mock_pydantic_agent.return_value = MagicMock()
         await mock_agent.get_agentlet("custom:model", None, None)
@@ -537,7 +537,7 @@ async def test_python_api_capability_passthrough(mock_agent: Agent[Any]) -> None
     mock_agent.config = MagicMock()
     mock_agent.config.capabilities = [cap]
 
-    with patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
+    with patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
         mock_pydantic_agent.return_value = MagicMock()
         await mock_agent.get_agentlet(None, None, None)
 
@@ -554,7 +554,7 @@ async def test_python_api_capability_passthrough(mock_agent: Agent[Any]) -> None
 @pytest.mark.anyio
 async def test_yaml_config_capability_passthrough(mock_agent: Agent[Any]) -> None:
     """YAML-loaded GenericCapabilityConfig is built and included in capabilities."""
-    from agentpool_config.capabilities import GenericCapabilityConfig
+    from wolfharness_config.capabilities import GenericCapabilityConfig
 
     cap_config = GenericCapabilityConfig(
         type="pydantic_ai.capabilities.Instrumentation",
@@ -563,7 +563,7 @@ async def test_yaml_config_capability_passthrough(mock_agent: Agent[Any]) -> Non
     mock_agent.config = MagicMock()
     mock_agent.config.capabilities = [cap_config]
 
-    with patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
+    with patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
         mock_pydantic_agent.return_value = MagicMock()
         await mock_agent.get_agentlet(None, None, None)
 
@@ -587,7 +587,7 @@ async def test_user_capability_takes_precedence(mock_agent: Agent[Any]) -> None:
     mock_agent.config = MagicMock()
     mock_agent.config.capabilities = [user_cap]
 
-    with patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
+    with patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
         mock_pydantic_agent.return_value = MagicMock()
         await mock_agent.get_agentlet(None, None, None)
 
@@ -604,7 +604,7 @@ async def test_user_capability_takes_precedence(mock_agent: Agent[Any]) -> None:
 @pytest.mark.anyio
 async def test_capability_config_build_called(mock_agent: Agent[Any]) -> None:
     """GenericCapabilityConfig.build() is called during get_agentlet()."""
-    from agentpool_config.capabilities import GenericCapabilityConfig
+    from wolfharness_config.capabilities import GenericCapabilityConfig
 
     cap_config = GenericCapabilityConfig(
         type="pydantic_ai.capabilities.Instrumentation",
@@ -615,7 +615,7 @@ async def test_capability_config_build_called(mock_agent: Agent[Any]) -> None:
 
     with patch.object(GenericCapabilityConfig, "build") as mock_build:
         mock_build.return_value = MagicMock()
-        with patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
+        with patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
             mock_pydantic_agent.return_value = MagicMock()
             await mock_agent.get_agentlet(None, None, None)
 
@@ -642,9 +642,9 @@ async def test_from_config_capabilities_not_duplicated() -> None:
     """
     from pydantic_ai.capabilities import Instrumentation
 
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.model_configs import TestModelConfig
-    from agentpool_config.capabilities import GenericCapabilityConfig
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.model_configs import TestModelConfig
+    from wolfharness_config.capabilities import GenericCapabilityConfig
 
     cap_config = GenericCapabilityConfig(
         type="pydantic_ai.capabilities.Instrumentation",
@@ -659,7 +659,7 @@ async def test_from_config_capabilities_not_duplicated() -> None:
 
     agent = Agent.from_config(config)
 
-    with patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
+    with patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
         mock_pydantic_agent.return_value = MagicMock()
         await agent.get_agentlet(None, None, None)
 
@@ -693,9 +693,9 @@ async def test_config_capabilities_visible_before_get_agentlet() -> None:
     """
     from pydantic_ai.capabilities import Instrumentation
 
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.model_configs import TestModelConfig
-    from agentpool_config.capabilities import GenericCapabilityConfig
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.model_configs import TestModelConfig
+    from wolfharness_config.capabilities import GenericCapabilityConfig
 
     cap_config = GenericCapabilityConfig(
         type="pydantic_ai.capabilities.Instrumentation",
@@ -732,9 +732,9 @@ async def test_no_duplicate_external_capabilities_after_get_agentlet() -> None:
     """
     from pydantic_ai.capabilities import Instrumentation
 
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.model_configs import TestModelConfig
-    from agentpool_config.capabilities import GenericCapabilityConfig
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.model_configs import TestModelConfig
+    from wolfharness_config.capabilities import GenericCapabilityConfig
 
     cap_config = GenericCapabilityConfig(
         type="pydantic_ai.capabilities.Instrumentation",
@@ -756,7 +756,7 @@ async def test_no_duplicate_external_capabilities_after_get_agentlet() -> None:
         f"found {count_before}."
     )
 
-    with patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
+    with patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
         mock_pydantic_agent.return_value = MagicMock()
         await agent.get_agentlet(None, None, None)
 
@@ -779,9 +779,9 @@ async def test_no_external_capability_growth_across_multiple_get_agentlet_calls(
     """
     from pydantic_ai.capabilities import Instrumentation
 
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.model_configs import TestModelConfig
-    from agentpool_config.capabilities import GenericCapabilityConfig
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.model_configs import TestModelConfig
+    from wolfharness_config.capabilities import GenericCapabilityConfig
 
     cap_config = GenericCapabilityConfig(
         type="pydantic_ai.capabilities.Instrumentation",
@@ -796,7 +796,7 @@ async def test_no_external_capability_growth_across_multiple_get_agentlet_calls(
 
     agent = Agent.from_config(config)
 
-    with patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
+    with patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
         mock_pydantic_agent.return_value = MagicMock()
 
         # Call get_agentlet() three times (simulating three turns)
@@ -816,12 +816,12 @@ async def test_no_external_capability_growth_across_multiple_get_agentlet_calls(
     # Also verify the overall _external_capabilities list didn't grow
     # (it should contain the config capability + any session/worker providers)
     # The key invariant: len after N calls == len after 1 call
-    with patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
+    with patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
         mock_pydantic_agent.return_value = MagicMock()
         await agent.get_agentlet(None, None, None)
     len_after_4th = len(agent._external_capabilities)
 
-    with patch("agentpool.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
+    with patch("wolfharness.agents.native_agent.agent.PydanticAgent") as mock_pydantic_agent:
         mock_pydantic_agent.return_value = MagicMock()
         await agent.get_agentlet(None, None, None)
     len_after_5th = len(agent._external_capabilities)

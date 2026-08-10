@@ -25,10 +25,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from pydantic_ai import RunContext
 import pytest
 
-from agentpool.agents.base_agent import BaseAgent
-from agentpool.agents.context import AgentContext
-from agentpool.agents.events import RunErrorEvent
-from agentpool.capabilities.background_task.capability import (
+from wolfharness.agents.base_agent import BaseAgent
+from wolfharness.agents.context import AgentContext
+from wolfharness.agents.events import RunErrorEvent
+from wolfharness.capabilities.background_task.capability import (
     BackgroundTaskCapability,
     _generate_task_id,
 )
@@ -193,7 +193,7 @@ async def test_run_and_stream_swallows_exception_and_marks_completed():
     pool.session_pool.send_message = AsyncMock(side_effect=ValueError("connection lost"))
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_err001",
     ):
         await capability._task(
@@ -247,7 +247,7 @@ async def test_run_and_stream_end_of_stream_no_terminal_event():
     pool.session_pool.send_message = AsyncMock(return_value=MagicMock())
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_eos001",
     ):
         await capability._task(
@@ -299,11 +299,11 @@ async def test_run_and_stream_send_message_returns_none():
 
     with (
         patch(
-            "agentpool.capabilities.background_task.capability._generate_task_id",
+            "wolfharness.capabilities.background_task.capability._generate_task_id",
             return_value="bg_none01",
         ),
         patch(
-            "agentpool.capabilities.background_task.capability.logger",
+            "wolfharness.capabilities.background_task.capability.logger",
         ) as mock_logger,
     ):
         await capability._task(
@@ -361,7 +361,7 @@ async def test_run_and_stream_writes_error_on_run_error_event():
     pool.session_pool.send_message = AsyncMock(return_value=MagicMock())
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_reer01",
     ):
         await capability._task(
@@ -413,7 +413,7 @@ async def test_run_and_stream_writes_cancelled_on_cancelled_error():
     pool.session_pool.send_message = AsyncMock(return_value=MagicMock())
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_cancel01",
     ):
         await capability._task(

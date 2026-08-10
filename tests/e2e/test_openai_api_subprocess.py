@@ -1,4 +1,4 @@
-"""L4 subprocess E2E tests for the OpenAI-compatible API server (agentpool serve-api).
+"""L4 subprocess E2E tests for the OpenAI-compatible API server (wolfharness serve-api).
 
 L4a smoke tests (@pytest.mark.e2e, NOT slow):
     - test_server_startup: spawn serve-api, verify HTTP health
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
 pytestmark = [
     pytest.mark.e2e,
-    pytest.mark.skipif(SKIP_NO_BINARY, reason="agentpool binary not on PATH"),
+    pytest.mark.skipif(SKIP_NO_BINARY, reason="wolfharness binary not on PATH"),
     pytest.mark.skipif(SKIP_WINDOWS, reason="Windows subprocess issues"),
 ]
 

@@ -34,7 +34,7 @@ The dead code path in `acp_agent.py` (lines 656-698) that calls `session.process
 - **THEN** `_acp_sessions` SHALL be iterated for `ACPSession` cleanup, while lifecycle clearing SHALL be delegated to `SessionController`
 
 ### Requirement: RunFailedEvent SHALL have a single type definition
-There SHALL be exactly one `RunFailedEvent` type, defined in `agentpool/agents/events/events.py` and published via `RunHandle.fail()` to the EventBus. The signal-based `BaseAgent.RunFailedEvent` inner class SHALL be removed.
+There SHALL be exactly one `RunFailedEvent` type, defined in `wolfharness/agents/events/events.py` and published via `RunHandle.fail()` to the EventBus. The signal-based `BaseAgent.RunFailedEvent` inner class SHALL be removed.
 
 #### Scenario: Run failure reporting
 - **WHEN** a run fails during execution

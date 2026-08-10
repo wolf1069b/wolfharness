@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from agentpool_storage.memory_provider.provider import MemoryStorageProvider
+from wolfharness_storage.memory_provider.provider import MemoryStorageProvider
 
 
 @pytest.fixture
@@ -59,7 +59,7 @@ class TestMemoryCheckpoint:
     @pytest.mark.unit
     async def test_session_delete_cleans_checkpoint(self, store: MemoryStorageProvider) -> None:
         """Deleting a session also cleans up its checkpoint data."""
-        from agentpool.sessions import SessionData
+        from wolfharness.sessions import SessionData
 
         session_id = "s1"
         data = SessionData(session_id=session_id, agent_name="test_agent")

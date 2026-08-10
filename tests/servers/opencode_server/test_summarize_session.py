@@ -11,7 +11,7 @@ import pytest
 if TYPE_CHECKING:
     from httpx import AsyncClient
 
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness_server.opencode_server.state import ServerState
 
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
@@ -26,9 +26,9 @@ async def test_summarize_uses_session_pool(
     """Summarize always uses SessionPool.run_stream (no feature flag branching)."""
     from pydantic_ai import RequestUsage, TextPart, TextPartDelta
 
-    from agentpool.agents.events import PartDeltaEvent, PartStartEvent, StreamCompleteEvent
-    from agentpool.messaging.messages import ChatMessage
-    from agentpool_server.opencode_server.models import (
+    from wolfharness.agents.events import PartDeltaEvent, PartStartEvent, StreamCompleteEvent
+    from wolfharness.messaging.messages import ChatMessage
+    from wolfharness_server.opencode_server.models import (
         AssistantMessage,
         MessagePath,
         MessageTime,
@@ -47,7 +47,7 @@ async def test_summarize_uses_session_pool(
         session_id=session_id,
         parent_id="",
         model_id="default",
-        provider_id="agentpool",
+        provider_id="wolfharness",
         mode="ask",
         agent="test-agent",
         path=MessagePath(cwd=server_state.working_dir, root=server_state.working_dir),
@@ -81,11 +81,11 @@ async def test_summarize_uses_session_pool(
     # Mock compact_conversation and get_messages_for_session
     with (
         patch(
-            "agentpool.messaging.compaction.compact_conversation",
+            "wolfharness.messaging.compaction.compact_conversation",
             new=AsyncMock(),
         ),
         patch(
-            "agentpool_server.opencode_server.routes.session_routes.get_messages_for_session",
+            "wolfharness_server.opencode_server.routes.session_routes.get_messages_for_session",
             return_value=existing_messages,
         ),
     ):
@@ -107,9 +107,9 @@ async def test_summarize_routes_through_session_pool(
     """SessionPool is the default execution path for summarization."""
     from pydantic_ai import RequestUsage, TextPart, TextPartDelta
 
-    from agentpool.agents.events import PartDeltaEvent, PartStartEvent, StreamCompleteEvent
-    from agentpool.messaging.messages import ChatMessage
-    from agentpool_server.opencode_server.models import (
+    from wolfharness.agents.events import PartDeltaEvent, PartStartEvent, StreamCompleteEvent
+    from wolfharness.messaging.messages import ChatMessage
+    from wolfharness_server.opencode_server.models import (
         AssistantMessage,
         MessagePath,
         MessageTime,
@@ -128,7 +128,7 @@ async def test_summarize_routes_through_session_pool(
         session_id=session_id,
         parent_id="",
         model_id="default",
-        provider_id="agentpool",
+        provider_id="wolfharness",
         mode="ask",
         agent="test-agent",
         path=MessagePath(cwd=server_state.working_dir, root=server_state.working_dir),
@@ -159,11 +159,11 @@ async def test_summarize_routes_through_session_pool(
     # Mock compact_conversation and get_messages_for_session
     with (
         patch(
-            "agentpool.messaging.compaction.compact_conversation",
+            "wolfharness.messaging.compaction.compact_conversation",
             new=AsyncMock(),
         ),
         patch(
-            "agentpool_server.opencode_server.routes.session_routes.get_messages_for_session",
+            "wolfharness_server.opencode_server.routes.session_routes.get_messages_for_session",
             return_value=existing_messages,
         ),
     ):

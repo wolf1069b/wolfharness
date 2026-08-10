@@ -15,10 +15,10 @@ from pydantic_ai.messages import (
 )
 import pytest
 
-from agentpool.agents.events import (
+from wolfharness.agents.events import (
     RunStartedEvent,
 )
-from agentpool.orchestrator.core import EventBus
+from wolfharness.orchestrator.core import EventBus
 
 
 pytestmark = pytest.mark.unit
@@ -149,7 +149,7 @@ async def test_eventbus_with_subagent_wrapping():
 
     reasoning events that can be extracted.
     """
-    from agentpool.agents.events import SubAgentEvent
+    from wolfharness.agents.events import SubAgentEvent
 
     event_bus = EventBus()
     parent_session = "parent"

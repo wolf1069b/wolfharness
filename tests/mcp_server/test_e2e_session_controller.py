@@ -19,10 +19,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agentpool.mcp_server.config_snapshot import McpConfigSnapshot
-from agentpool.mcp_server.manager import MCPManager
-from agentpool.orchestrator.session_controller import SessionController, SessionState
-from agentpool.sessions import SessionData
+from wolfharness.mcp_server.config_snapshot import McpConfigSnapshot
+from wolfharness.mcp_server.manager import MCPManager
+from wolfharness.orchestrator.session_controller import SessionController, SessionState
+from wolfharness.sessions import SessionData
 
 
 # ============================================================================
@@ -38,8 +38,8 @@ def _make_mock_pool() -> MagicMock:
     so that SessionController.get_or_create_session_agent() can resolve
     a NativeAgentConfig and call cfg.get_agent().
     """
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.manifest import AgentsManifest
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.manifest import AgentsManifest
 
     mock_pool: MagicMock = MagicMock()
     mock_pool.manifest = AgentsManifest(
@@ -71,9 +71,9 @@ async def test_full_create_session_chain_populates_mcp_session_context() -> None
     calls agent.mcp.get_or_create_session() and agent.mcp.update_session_snapshot()
     so that the agent's MCPManager has a McpSessionContext with a non-None snapshot.
     """
-    from agentpool.agents.native_agent import Agent
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.manifest import AgentsManifest
+    from wolfharness.agents.native_agent import Agent
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.manifest import AgentsManifest
 
     # Build a real manifest with a NativeAgentConfig
     manifest = AgentsManifest(
@@ -157,7 +157,7 @@ async def test_session_controller_close_session_with_real_agent_and_mcp_resource
     close_session() and verifies the session context is cleaned and the
     agent context is exited.
     """
-    from agentpool.agents.native_agent import Agent
+    from wolfharness.agents.native_agent import Agent
 
     def simple_callback(message: str) -> str:
         return f"Test: {message}"
@@ -226,12 +226,12 @@ async def test_resume_session_with_real_acpsession_not_patched() -> None:
     then calls resume_session(). The real ACPSession.__post_init__ must run
     and wire agent.mcp._acp_mcp_manager to acp_agent._mcp_manager.
     """
-    from agentpool import Agent
-    from agentpool.delegation import AgentPool
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.manifest import AgentsManifest
-    from agentpool_server.acp_server.acp_agent import AgentPoolACPAgent
-    from agentpool_server.acp_server.session_manager import ACPSessionManager
+    from wolfharness import Agent
+    from wolfharness.delegation import AgentPool
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.manifest import AgentsManifest
+    from wolfharness_server.acp_server.acp_agent import AgentPoolACPAgent
+    from wolfharness_server.acp_server.session_manager import ACPSessionManager
 
     def simple_callback(message: str) -> str:
         return f"Test: {message}"
@@ -296,7 +296,7 @@ async def test_resume_session_with_real_acpsession_not_patched() -> None:
         )
 
         # Assert: result is a real ACPSession (not a mock)
-        from agentpool_server.acp_server.session import ACPSession
+        from wolfharness_server.acp_server.session import ACPSession
 
         assert isinstance(result, ACPSession), (
             "resume_session() must return a real ACPSession, not a mock"

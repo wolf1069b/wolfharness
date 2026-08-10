@@ -12,8 +12,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from agentpool.models.model_configs import BaseModelConfig, StringModelConfig
-from agentpool_config.model_capabilities import ModelCapabilities
+from wolfharness.models.model_configs import BaseModelConfig, StringModelConfig
+from wolfharness_config.model_capabilities import ModelCapabilities
 
 
 pytestmark = pytest.mark.unit

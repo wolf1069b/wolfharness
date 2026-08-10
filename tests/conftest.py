@@ -11,10 +11,9 @@ from pydantic_ai.models.test import TestModel
 import pytest
 import yamling
 
-from agentpool import Agent, AgentPool, AgentsManifest, NativeAgentConfig
-
 # Import minimal_pool fixture so it's available to all tests without explicit import.
 from tests.fixtures.minimal_pool import minimal_pool  # noqa: F401
+from wolfharness import Agent, AgentPool, AgentsManifest, NativeAgentConfig
 
 
 if TYPE_CHECKING:
@@ -255,7 +254,7 @@ def remap_hardcoded_test_models():
     """
     from unittest.mock import patch
 
-    from agentpool.utils import model_helpers
+    from wolfharness.utils import model_helpers
 
     original = model_helpers.infer_model
 

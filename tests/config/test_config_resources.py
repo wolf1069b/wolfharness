@@ -6,8 +6,8 @@ import pathlib
 
 import pytest
 
-from agentpool import config_resources
-from agentpool.models.manifest import AgentsManifest
+from wolfharness import config_resources
+from wolfharness.models.manifest import AgentsManifest
 
 
 pytestmark = pytest.mark.unit

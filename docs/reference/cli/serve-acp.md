@@ -9,21 +9,21 @@ icon: material/server
 Start the Agent Communication Protocol (ACP) server to expose agents to ACP-compatible clients.
 
 ```bash
-agentpool serve-acp config.yml
+wolfharness serve-acp config.yml
 ```
 
 For basic usage:
 
 ```bash
 # Start with default config
-agentpool serve-acp agents.yml
+wolfharness serve-acp agents.yml
 
 # Listen on specific host and port
-agentpool serve-acp agents.yml --host 0.0.0.0 --port 8321
+wolfharness serve-acp agents.yml --host 0.0.0.0 --port 8321
 ```
 
 For a full list of options, run:
 
 ```bash
-agentpool serve-acp --help
+wolfharness serve-acp --help
 ```

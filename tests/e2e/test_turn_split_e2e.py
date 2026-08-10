@@ -12,7 +12,7 @@ The test verifies via both:
     - Messages REST endpoint (``GET /session/{id}/message``)
 
 Strategy:
-    1. Start a real ``agentpool serve-opencode`` subprocess with a TestModel
+    1. Start a real ``wolfharness serve-opencode`` subprocess with a TestModel
        configured to call the ``bash`` tool (``sleep 2``) on the first
        request.  This gives a 2-second window during tool execution for
        the steer to arrive mid-turn.
@@ -49,7 +49,7 @@ if TYPE_CHECKING:
 
 pytestmark = [
     pytest.mark.e2e,
-    pytest.mark.skipif(SKIP_NO_BINARY, reason="agentpool binary not on PATH"),
+    pytest.mark.skipif(SKIP_NO_BINARY, reason="wolfharness binary not on PATH"),
     pytest.mark.skipif(SKIP_WINDOWS, reason="Windows subprocess issues"),
 ]
 

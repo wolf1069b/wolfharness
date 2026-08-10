@@ -7,8 +7,8 @@ from typing import Any
 from pydantic_ai import Agent as PydanticAgent
 import pytest
 
-from agentpool.agents.native_agent import Agent
-from agentpool.capabilities.function_toolset import FunctionToolsetCapability
+from wolfharness.agents.native_agent import Agent
+from wolfharness.capabilities.function_toolset import FunctionToolsetCapability
 
 
 pytestmark = pytest.mark.unit
@@ -175,7 +175,7 @@ class TestNativeAgentInstructions:
 
     async def test_from_config_with_provider_instruction_ref(self):
         """Test from_config with ProviderInstructionConfig using ref."""
-        from agentpool.models.agents import NativeAgentConfig
+        from wolfharness.models.agents import NativeAgentConfig
 
         class SimpleRefProvider(FunctionToolsetCapability):
             def __init__(self) -> None:

@@ -18,24 +18,24 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from agentpool.capabilities.extension_registry import (
+from wolfharness.capabilities.extension_registry import (
     ExtensionRegistry,
     Scope,
     ScopeLevel,
 )
-from agentpool.capabilities.resource_protocols import (
+from wolfharness.capabilities.resource_protocols import (
     SkillEntry,
     SkillResource,
 )
-from agentpool.capabilities.skill_manager_cap import SkillManagerCap
-from agentpool.skills.skill import Skill
-from agentpool.skills.skill_tool_manager import SkillToolManager
-from agentpool.skills.uri_resolver import SkillURIResolver
-from agentpool_config.skills import SkillToolConfig
+from wolfharness.capabilities.skill_manager_cap import SkillManagerCap
+from wolfharness.skills.skill import Skill
+from wolfharness.skills.skill_tool_manager import SkillToolManager
+from wolfharness.skills.uri_resolver import SkillURIResolver
+from wolfharness_config.skills import SkillToolConfig
 
 
 if TYPE_CHECKING:
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
 
 pytestmark = pytest.mark.unit
@@ -160,7 +160,7 @@ async def test_skill_uri_resolution_nonexistent_skill() -> None:
     Given a SkillURIResolver with ExtensionRegistry, When resolving
     a nonexistent skill URI, Then SkillNotFoundError is raised.
     """
-    from agentpool.skills.exceptions import SkillNotFoundError
+    from wolfharness.skills.exceptions import SkillNotFoundError
 
     skill = make_skill(name="existing-skill", instructions="Content.")
     cap = SkillManagerCap(local_skills={"existing-skill": skill})
@@ -214,7 +214,7 @@ def test_load_skill_available_in_standalone_agent(minimal_pool: AgentPool) -> No
     owned by SkillManagerCap (registered at pool scope). _inject_pool_providers
     no longer injects skills_tools_provider.
     """
-    from agentpool.host.factory import _inject_pool_providers
+    from wolfharness.host.factory import _inject_pool_providers
 
     class FakeAgent:
         def __init__(self) -> None:
@@ -247,7 +247,7 @@ def test_load_skill_available_in_child_session_agent(minimal_pool: AgentPool) ->
     the agent's _external_capabilities is checked, Then only the MCP
     aggregating provider is injected (skills come from SkillManagerCap).
     """
-    from agentpool.host.factory import _inject_pool_providers
+    from wolfharness.host.factory import _inject_pool_providers
 
     class FakeAgent:
         def __init__(self) -> None:
@@ -348,7 +348,7 @@ async def test_load_skill_return_includes_tool_status() -> None:
     display tool import status. We verify that the tool import
     succeeds and the MCP server config is accessible.
     """
-    from agentpool_config.skills import SkillMcpServerConfig
+    from wolfharness_config.skills import SkillMcpServerConfig
 
     skill = make_skill(
         name="status-skill",

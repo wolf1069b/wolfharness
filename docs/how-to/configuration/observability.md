@@ -2,7 +2,7 @@
 sync:
   agent: doc_sync_agent
   dependencies:
-    - src/agentpool_config/observability.py
+    - src/wolfharness_config/observability.py
 title: Observability
 description: Monitoring and tracing configuration
 icon: material/chart-line
@@ -25,7 +25,7 @@ These integrations provide automatic instrumentation of agent operations, captur
 ## Configuration Reference
 
 /// mknodes
-{{ "agentpool_config.observability.ObservabilityProviderConfig" | union_to_markdown(display_mode="yaml", header_style="pymdownx") }}
+{{ "wolfharness_config.observability.ObservabilityProviderConfig" | union_to_markdown(display_mode="yaml", header_style="pymdownx") }}
 ///
 
 ## Key Features

@@ -35,14 +35,14 @@ from pydantic_ai.toolsets import (
 )
 import pytest
 
-from agentpool.capabilities.resource_protocols import (
+from wolfharness.capabilities.resource_protocols import (
     SkillEntry,
     SkillResource,
 )
-from agentpool.capabilities.skill_manager_cap import SkillManagerCap
-from agentpool.skills.skill import Skill
-from agentpool.skills.skill_tool_manager import SkillToolManager
-from agentpool_config.skills import SkillMcpServerConfig, SkillToolConfig
+from wolfharness.capabilities.skill_manager_cap import SkillManagerCap
+from wolfharness.skills.skill import Skill
+from wolfharness.skills.skill_tool_manager import SkillToolManager
+from wolfharness_config.skills import SkillMcpServerConfig, SkillToolConfig
 
 
 pytestmark = pytest.mark.unit
@@ -480,7 +480,7 @@ def test_invalid_import_path_graceful_error() -> None:
     )
     manager = SkillToolManager()
 
-    with patch("agentpool.capabilities.skill_manager_cap.logger"):
+    with patch("wolfharness.capabilities.skill_manager_cap.logger"):
         cap = SkillManagerCap(
             local_skills={"bad-skill": bad_skill, "good-skill": good_skill},
             tool_manager=manager,
@@ -518,7 +518,7 @@ def test_mcp_creation_failure_other_skills_unaffected() -> None:
     )
     manager = SkillToolManager()
 
-    with patch("agentpool.capabilities.skill_manager_cap.logger"):
+    with patch("wolfharness.capabilities.skill_manager_cap.logger"):
         cap = SkillManagerCap(
             local_skills={
                 "bad-mcp-skill": bad_mcp_skill,

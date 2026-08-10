@@ -9,9 +9,9 @@ from pydantic import BaseModel
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool import Agent, AgentPool, AgentsManifest
-from agentpool.agents.events import RunErrorEvent, SpawnSessionStart, StreamCompleteEvent
-from agentpool.agents.exceptions import MAX_DELEGATION_DEPTH, DelegationDepthError
+from wolfharness import Agent, AgentPool, AgentsManifest
+from wolfharness.agents.events import RunErrorEvent, SpawnSessionStart, StreamCompleteEvent
+from wolfharness.agents.exceptions import MAX_DELEGATION_DEPTH, DelegationDepthError
 
 
 pytestmark = pytest.mark.integration
@@ -21,8 +21,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
     from pathlib import Path
 
-    from agentpool.agents.base_agent import BaseAgent
-    from agentpool.orchestrator.core import SessionPool
+    from wolfharness.agents.base_agent import BaseAgent
+    from wolfharness.orchestrator.core import SessionPool
 
 
 class StructuredResponse(BaseModel):
@@ -189,7 +189,7 @@ async def _run_and_collect_events(
     This helper subscribes to the EventBus BEFORE starting the run,
     so all events — including spawn events — are received.
     """
-    from agentpool.orchestrator.core import drain_and_merge
+    from wolfharness.orchestrator.core import drain_and_merge
 
     stream = await session_pool.event_bus.subscribe(session_id, scope=scope)
 

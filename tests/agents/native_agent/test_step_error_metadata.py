@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool.agents.events.events import RunErrorEvent, StepErrorMetadata
+from wolfharness.agents.events.events import RunErrorEvent, StepErrorMetadata
 
 
 @pytest.mark.unit

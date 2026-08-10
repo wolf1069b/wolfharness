@@ -13,7 +13,7 @@ from upathtools.filesystems.base import BaseAsyncFileSystem, BaseUPath, FileInfo
 
 from acp.agent.acp_requests import ACPRequests
 from acp.agent.notifications import ACPNotifications
-from agentpool.mime_utils import guess_type, is_text_mime
+from wolfharness.mime_utils import guess_type, is_text_mime
 
 
 if TYPE_CHECKING:

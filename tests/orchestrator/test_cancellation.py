@@ -25,22 +25,22 @@ from unittest.mock import MagicMock
 from pydantic_ai.messages import ModelResponse, TextPart
 import pytest
 
-from agentpool.agents.events import (
+from wolfharness.agents.events import (
     RunErrorEvent,
     RunFailedEvent,
     RunStartedEvent,
     StreamCompleteEvent,
     ToolCallStartEvent,
 )
-from agentpool.lifecycle.types import DeliveryMode
-from agentpool.messaging import ChatMessage
-from agentpool.orchestrator.core import EventEnvelope, SessionPool
-from agentpool.orchestrator.turn import Turn
+from wolfharness.lifecycle.types import DeliveryMode
+from wolfharness.messaging import ChatMessage
+from wolfharness.orchestrator.core import EventEnvelope, SessionPool
+from wolfharness.orchestrator.turn import Turn
 
 
 if TYPE_CHECKING:
-    from agentpool import AgentPool
-    from agentpool.agents.context import AgentRunContext
+    from wolfharness import AgentPool
+    from wolfharness.agents.context import AgentRunContext
 
 # Reusable ModelMessage for tests that need .messages populated on ChatMessage.
 _ModelResponse = ModelResponse(parts=[TextPart(content="response")])
@@ -1524,7 +1524,7 @@ async def test_drain_prompt_queue_skips_closing_session() -> None:
     Unit test: directly call _drain_prompt_queue with is_closing=True
     and verify no task is created.
     """
-    from agentpool.orchestrator.core import SessionController, SessionState
+    from wolfharness.orchestrator.core import SessionController, SessionState
 
     controller = SessionController.__new__(SessionController)
     controller._background_tasks = set()
@@ -1559,7 +1559,7 @@ async def test_drain_prompt_queue_agent_none_preserves_message() -> None:
     The fix puts the message back into prompt_queue when agent is None,
     instead of silently dropping it.
     """
-    from agentpool.orchestrator.core import SessionController, SessionState
+    from wolfharness.orchestrator.core import SessionController, SessionState
 
     controller = SessionController.__new__(SessionController)
     controller._background_tasks = set()

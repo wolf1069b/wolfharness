@@ -55,10 +55,10 @@ single review comment. You do NOT edit files or run commands.
 ## When to Invoke review-docs
 
 Always invoke `@review-docs` when the PR:
-- Adds or removes files under `src/agentpool/`
+- Adds or removes files under `src/wolfharness/`
 - Modifies any `AGENTS.md`
 - Modifies anything under `docs/`
-- Adds a new directory under `src/agentpool/` (potential new subsystem)
+- Adds a new directory under `src/wolfharness/` (potential new subsystem)
 - Changes code style conventions, testing rules, or telemetry rules
 - Adds or removes lifecycle dimensions, capabilities, protocols, or tools
 

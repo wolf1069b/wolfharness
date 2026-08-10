@@ -33,7 +33,7 @@ def _make_agent() -> MagicMock:
 
 async def _call_prompt(agent: MagicMock, meta: dict | None) -> None:
     """Call agent.prompt() with a PromptRequest carrying the given _meta."""
-    from agentpool_server.acp_server.acp_agent import AgentPoolACPAgent
+    from wolfharness_server.acp_server.acp_agent import AgentPoolACPAgent
 
     request = PromptRequest(
         session_id="test-session",

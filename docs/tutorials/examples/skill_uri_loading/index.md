@@ -101,16 +101,16 @@ Available skills:
 
 ```bash
 # List available skills
-agentpool run skill_uri_loading/skill_lister "List all available skills"
+wolfharness run skill_uri_loading/skill_lister "List all available skills"
 
 # Load a skill by short name
-agentpool run skill_uri_loading/skill_loader "Load the greeting skill"
+wolfharness run skill_uri_loading/skill_loader "Load the greeting skill"
 
 # Load with arguments
-agentpool run skill_uri_loading/skill_loader 'Load greeting with "Alice Company formal"'
+wolfharness run skill_uri_loading/skill_loader 'Load greeting with "Alice Company formal"'
 
 # Load by full URI
-agentpool run skill_uri_loading/skill_loader "Load skill://local/greeting"
+wolfharness run skill_uri_loading/skill_loader "Load skill://local/greeting"
 ```
 
 ## URI Format Reference
@@ -127,7 +127,7 @@ See [Skill URI Usage](../../../how-to/configuration/skill-uri-usage.md) for comp
 ### `config.yml`
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/Million-mo/agentpool/refs/heads/main/schema/config-schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Million-mo/wolfharness/refs/heads/main/schema/config-schema.json
 # Example: Loading Skills by URI
 #
 # This example demonstrates how to load skills using the skill:// URI scheme.

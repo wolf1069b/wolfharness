@@ -12,7 +12,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agentpool.capabilities.team_comm_capability import TeamCommCapability
 from tests.team_mode.conftest import (
     init_team,
     make_enabled_config,
@@ -21,6 +20,7 @@ from tests.team_mode.conftest import (
     make_mock_pool,
     make_run_context,
 )
+from wolfharness.capabilities.team_comm_capability import TeamCommCapability
 
 
 if TYPE_CHECKING:
@@ -686,7 +686,7 @@ async def test_send_message_with_persist_to_blackboard(tmp_path: Path) -> None:
     assert "Message sent to reviewer_agent" in result.return_value
     assert "Persisted to blackboard key 'findings'" in result.return_value
     # Verify blackboard was written.
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     team_state = FileTeamState(str(tmp_path))
     bb = team_state.read_blackboard("team_123", "findings")
@@ -1322,7 +1322,7 @@ async def test_task_create_batch_exceeding_max_tasks(tmp_path: Path) -> None:
     cap = TeamCommCapability(config, "coordinator", make_lead_metadata())
 
     # Create tasks to near the limit (100 max).
-    from agentpool.capabilities.file_team_state import _MAX_TASKS, FileTeamState
+    from wolfharness.capabilities.file_team_state import _MAX_TASKS, FileTeamState
 
     team_state = FileTeamState(str(tmp_path))
     for i in range(_MAX_TASKS - 1):
@@ -1361,7 +1361,7 @@ async def test_task_create_batch_with_progress_total(tmp_path: Path) -> None:
     task_id = task_id_line.split("-> ")[1].strip()
 
     # Verify progress_total was stored.
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     state = FileTeamState(str(tmp_path))
     task = state.get_task("team_123", task_id)
@@ -1438,7 +1438,7 @@ async def test_shutdown_request_success(tmp_path: Path) -> None:
     mock_pool.close_session.assert_awaited_once()
 
     # Verify member removed from team state.
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     team_state = FileTeamState(str(tmp_path))
     state_path = team_state._state_path("team_123")
@@ -1513,7 +1513,7 @@ async def test_delete_blackboard_success(tmp_path: Path) -> None:
     await cap.write_blackboard(ctx, "test_key", "test_value")
 
     # Verify it exists.
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     team_state = FileTeamState(str(tmp_path))
     assert team_state.read_blackboard("team_123", "test_key") is not None
@@ -1577,7 +1577,7 @@ async def test_team_create_exceeds_max_members(tmp_path: Path) -> None:
     When: team_create is called with 3 members.
     Then: error returned about exceeding max_members.
     """
-    from agentpool_config.team_mode import TeamBounds
+    from wolfharness_config.team_mode import TeamBounds
 
     config = make_enabled_config(base_dir=str(tmp_path))
     config = config.model_copy(update={"bounds": TeamBounds(max_members=2)})
@@ -1614,7 +1614,7 @@ async def test_team_add_member_exceeds_max_members(tmp_path: Path) -> None:
     When: team_add_member is called to add a 3rd member.
     Then: error returned about exceeding max_members.
     """
-    from agentpool_config.team_mode import TeamBounds
+    from wolfharness_config.team_mode import TeamBounds
 
     config = make_enabled_config(
         member_eligible=["worker", "reviewer", "editor"],

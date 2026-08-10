@@ -21,7 +21,7 @@ class TestOtelLogProcessor:
 
     def test_calls_logfire_log_without_creating_span(self):
         """_otel_log_processor calls logfire.log() but does not create a span."""
-        from agentpool.log import _otel_log_processor
+        from wolfharness.log import _otel_log_processor
 
         event_dict: dict[str, object] = {
             "event": "test message",
@@ -29,7 +29,7 @@ class TestOtelLogProcessor:
             "session_id": "s123",
         }
 
-        with patch("agentpool.log.logfire") as mock_logfire:
+        with patch("wolfharness.log.logfire") as mock_logfire:
             _otel_log_processor(None, "info", event_dict)
 
             mock_logfire.log.assert_called_once()
@@ -43,14 +43,14 @@ class TestOtelLogProcessor:
 
     def test_returns_event_dict_unchanged(self):
         """_otel_log_processor returns event_dict unchanged for downstream renderers."""
-        from agentpool.log import _otel_log_processor
+        from wolfharness.log import _otel_log_processor
 
         event_dict: dict[str, object] = {
             "event": "test message",
             "level": "info",
         }
 
-        with patch("agentpool.log.logfire"):
+        with patch("wolfharness.log.logfire"):
             result = _otel_log_processor(None, "info", event_dict)
 
         # event_dict must still have "event" key for renderer
@@ -60,11 +60,11 @@ class TestOtelLogProcessor:
 
     def test_handles_missing_event_key(self):
         """_otel_log_processor handles missing 'event' key gracefully."""
-        from agentpool.log import _otel_log_processor
+        from wolfharness.log import _otel_log_processor
 
         event_dict: dict[str, object] = {"level": "debug"}
 
-        with patch("agentpool.log.logfire") as mock_logfire:
+        with patch("wolfharness.log.logfire") as mock_logfire:
             _otel_log_processor(None, "debug", event_dict)
 
             # Should fall back to method_name as msg
@@ -73,11 +73,11 @@ class TestOtelLogProcessor:
 
     def test_does_not_raise_on_logfire_error(self):
         """_otel_log_processor swallows logfire errors to never break logging."""
-        from agentpool.log import _otel_log_processor
+        from wolfharness.log import _otel_log_processor
 
         event_dict: dict[str, object] = {"event": "test", "level": "info"}
 
-        with patch("agentpool.log.logfire") as mock_logfire:
+        with patch("wolfharness.log.logfire") as mock_logfire:
             mock_logfire.log.side_effect = RuntimeError("OTel not configured")
             # Should not raise
             result = _otel_log_processor(None, "info", event_dict)
@@ -91,7 +91,7 @@ class TestObservabilityConfig:
 
     def test_new_fields_exist_with_correct_defaults(self):
         """BaseObservabilityConfig has instrument_* fields with correct defaults."""
-        from agentpool_config.observability import CustomObservabilityConfig
+        from wolfharness_config.observability import CustomObservabilityConfig
 
         config = CustomObservabilityConfig(type="custom", endpoint="http://localhost:4318")
         assert config.instrument_pydantic_ai is False
@@ -100,7 +100,7 @@ class TestObservabilityConfig:
 
     def test_fields_can_be_overridden(self):
         """instrument_* fields can be overridden via config."""
-        from agentpool_config.observability import CustomObservabilityConfig
+        from wolfharness_config.observability import CustomObservabilityConfig
 
         config = CustomObservabilityConfig(
             type="custom",
@@ -120,7 +120,7 @@ class TestObservabilityRegistry:
 
     def test_is_configured_returns_false_before_configuration(self):
         """is_configured() returns False before configure_observability() is called."""
-        from agentpool.observability.observability_registry import (
+        from wolfharness.observability.observability_registry import (
             ObservabilityRegistry,
         )
 
@@ -129,7 +129,7 @@ class TestObservabilityRegistry:
 
     def test_config_returns_none_before_configuration(self):
         """Config property returns None before configuration."""
-        from agentpool.observability.observability_registry import (
+        from wolfharness.observability.observability_registry import (
             ObservabilityRegistry,
         )
 
@@ -138,10 +138,10 @@ class TestObservabilityRegistry:
 
     def test_conditional_instrumentation(self):
         """configure_observability respects instrument_* config fields."""
-        from agentpool.observability.observability_registry import (
+        from wolfharness.observability.observability_registry import (
             ObservabilityRegistry,
         )
-        from agentpool_config.observability import (
+        from wolfharness_config.observability import (
             CustomObservabilityConfig,
             ObservabilityConfig,
         )
@@ -156,8 +156,8 @@ class TestObservabilityRegistry:
 
         registry = ObservabilityRegistry()
         with (
-            patch("agentpool.observability.observability_registry.logfire") as mock_lf,
-            patch("agentpool.observability.observability_registry._setup_otel_environment"),
+            patch("wolfharness.observability.observability_registry.logfire") as mock_lf,
+            patch("wolfharness.observability.observability_registry._setup_otel_environment"),
         ):
             registry.configure_observability(config)
 
@@ -172,10 +172,10 @@ class TestObservabilityRegistry:
 
     def test_conditional_instrumentation_enabled(self):
         """configure_observability calls instrumentation when enabled."""
-        from agentpool.observability.observability_registry import (
+        from wolfharness.observability.observability_registry import (
             ObservabilityRegistry,
         )
-        from agentpool_config.observability import (
+        from wolfharness_config.observability import (
             CustomObservabilityConfig,
             ObservabilityConfig,
         )
@@ -190,8 +190,8 @@ class TestObservabilityRegistry:
 
         registry = ObservabilityRegistry()
         with (
-            patch("agentpool.observability.observability_registry.logfire") as mock_lf,
-            patch("agentpool.observability.observability_registry._setup_otel_environment"),
+            patch("wolfharness.observability.observability_registry.logfire") as mock_lf,
+            patch("wolfharness.observability.observability_registry._setup_otel_environment"),
         ):
             registry.configure_observability(config)
 
@@ -210,7 +210,7 @@ class TestPerRunTrace:
 
     def test_run_handle_has_run_span_fields(self):
         """RunHandle has _run_span and _run_context fields (default None)."""
-        from agentpool.orchestrator.run import RunHandle
+        from wolfharness.orchestrator.run import RunHandle
 
         handle = RunHandle(run_id="test", session_id="s1", agent_type="native")
         assert handle._run_span is None
@@ -218,14 +218,14 @@ class TestPerRunTrace:
 
     def test_session_state_no_longer_has_trace_context(self):
         """SessionState no longer has trace_context field (removed in per-run design)."""
-        from agentpool.orchestrator.session_controller import SessionState
+        from wolfharness.orchestrator.session_controller import SessionState
 
         state = SessionState(session_id="test", agent_name="test")
         assert not hasattr(state, "trace_context")
 
     def test_session_controller_no_longer_has_get_trace_context(self):
         """SessionController no longer has get_trace_context method."""
-        from agentpool.orchestrator.session_controller import SessionController
+        from wolfharness.orchestrator.session_controller import SessionController
 
         assert not hasattr(SessionController, "get_trace_context")
 

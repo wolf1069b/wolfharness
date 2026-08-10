@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, Mock
 from pydantic_ai import RunContext
 import pytest
 
-from agentpool.agents.context import AgentContext
+from wolfharness.agents.context import AgentContext
 
 
 pytestmark = pytest.mark.unit
@@ -39,7 +39,7 @@ class TestWrapInstruction:
         def simple() -> str:
             return "Be helpful"
 
-        from agentpool.utils.context_wrapping import wrap_instruction
+        from wolfharness.utils.context_wrapping import wrap_instruction
 
         wrapped = wrap_instruction(simple)
         run_ctx = self._create_mock_run_context()
@@ -52,7 +52,7 @@ class TestWrapInstruction:
         async def simple_async() -> str:
             return "Be helpful and async"
 
-        from agentpool.utils.context_wrapping import wrap_instruction
+        from wolfharness.utils.context_wrapping import wrap_instruction
 
         wrapped = wrap_instruction(simple_async)
         run_ctx = self._create_mock_run_context()
@@ -65,7 +65,7 @@ class TestWrapInstruction:
         def with_agent(ctx: AgentContext) -> str:
             return f"Tool: {ctx.tool_name or 'none'}"
 
-        from agentpool.utils.context_wrapping import wrap_instruction
+        from wolfharness.utils.context_wrapping import wrap_instruction
 
         wrapped = wrap_instruction(with_agent)
 
@@ -83,7 +83,7 @@ class TestWrapInstruction:
         async def with_agent_async(ctx: AgentContext) -> str:
             return f"Tool (async): {ctx.tool_name or 'none'}"
 
-        from agentpool.utils.context_wrapping import wrap_instruction
+        from wolfharness.utils.context_wrapping import wrap_instruction
 
         wrapped = wrap_instruction(with_agent_async)
 
@@ -101,7 +101,7 @@ class TestWrapInstruction:
         def with_run(ctx: RunContext) -> str:
             return f"RunContext: {ctx.deps or 'none'}"
 
-        from agentpool.utils.context_wrapping import wrap_instruction
+        from wolfharness.utils.context_wrapping import wrap_instruction
 
         wrapped = wrap_instruction(with_run)
         run_ctx = self._create_mock_run_context()
@@ -114,7 +114,7 @@ class TestWrapInstruction:
         def with_both(agent_ctx: AgentContext, run_ctx: RunContext) -> str:
             return f"Agent: {agent_ctx.tool_name or 'none'}, Run: {run_ctx.deps or 'none'}"
 
-        from agentpool.utils.context_wrapping import wrap_instruction
+        from wolfharness.utils.context_wrapping import wrap_instruction
 
         wrapped = wrap_instruction(with_both)
 
@@ -135,7 +135,7 @@ class TestWrapInstruction:
         def error_func() -> str:
             raise ValueError("This should be caught")
 
-        from agentpool.utils.context_wrapping import wrap_instruction
+        from wolfharness.utils.context_wrapping import wrap_instruction
 
         wrapped = wrap_instruction(error_func, fallback="Fallback text")
         run_ctx = self._create_mock_run_context()
@@ -148,7 +148,7 @@ class TestWrapInstruction:
         def error_func() -> str:
             raise ValueError("Error")
 
-        from agentpool.utils.context_wrapping import wrap_instruction
+        from wolfharness.utils.context_wrapping import wrap_instruction
 
         wrapped = wrap_instruction(error_func)  # No fallback specified
         run_ctx = self._create_mock_run_context()
@@ -161,7 +161,7 @@ class TestWrapInstruction:
         def named_function() -> str:
             return "test"
 
-        from agentpool.utils.context_wrapping import wrap_instruction
+        from wolfharness.utils.context_wrapping import wrap_instruction
 
         wrapped = wrap_instruction(named_function)
 
@@ -183,7 +183,7 @@ class TestWrapInstruction:
         def with_both(agent_ctx: AgentContext, run_ctx: RunContext) -> str:
             return "both"
 
-        from agentpool.utils.context_wrapping import wrap_instruction
+        from wolfharness.utils.context_wrapping import wrap_instruction
 
         # All should be accepted as InstructionFunc
         for func in [simple, with_agent, with_run, with_both]:

@@ -7,10 +7,10 @@ import inspect
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool.agents.base_agent import BaseAgent
-from agentpool.agents.context import AgentRunContext
-from agentpool.agents.native_agent.agent import Agent
-from agentpool.agents.native_agent.turn import NativeTurn
+from wolfharness.agents.base_agent import BaseAgent
+from wolfharness.agents.context import AgentRunContext
+from wolfharness.agents.native_agent.agent import Agent
+from wolfharness.agents.native_agent.turn import NativeTurn
 
 
 @pytest.mark.unit
@@ -73,14 +73,14 @@ def test_acp_adapter_satisfies_protocol() -> None:
     import inspect
 
     from acp.agent.acp_agent_api import ACPAgentAPI
-    from agentpool.agents.acp_agent.turn import ACPClientProtocol
+    from wolfharness.agents.acp_agent.turn import ACPClientProtocol
 
     # ACPAgentAPI must have stream_events and get_messages methods
     assert hasattr(ACPAgentAPI, "stream_events"), "ACPAgentAPI must have stream_events()"
     assert hasattr(ACPAgentAPI, "get_messages"), "ACPAgentAPI must have get_messages()"
 
     # create_turn must not contain cast or TODO
-    import agentpool.agents.acp_agent.acp_agent as acp_module
+    import wolfharness.agents.acp_agent.acp_agent as acp_module
 
     source = inspect.getsource(acp_module.ACPAgent.create_turn)
     assert "cast" not in source, "create_turn must not use cast — adapter is complete"
@@ -89,8 +89,8 @@ def test_acp_adapter_satisfies_protocol() -> None:
     # ACPAgentAPI must satisfy ACPClientProtocol at runtime
     from unittest.mock import MagicMock
 
-    from agentpool.agents.acp_agent.client_handler import TimeoutableEvent
-    from agentpool.agents.acp_agent.session_state import ACPSessionState
+    from wolfharness.agents.acp_agent.client_handler import TimeoutableEvent
+    from wolfharness.agents.acp_agent.session_state import ACPSessionState
 
     api = ACPAgentAPI(
         MagicMock(),
@@ -104,7 +104,7 @@ def test_acp_adapter_satisfies_protocol() -> None:
 
 def test_acp_turn_uses_run_ctx_run_id() -> None:
     """ACPTurn.execute() must use self._run_ctx.run_id, not generate uuid4."""
-    import agentpool.agents.acp_agent.turn as turn_module
+    import wolfharness.agents.acp_agent.turn as turn_module
 
     source = inspect.getsource(turn_module.ACPTurn.execute)
     assert "self._run_ctx.run_id" in source, (
@@ -121,7 +121,7 @@ def test_acp_turn_no_redundant_run_started_event() -> None:
     RunHandle.start() already publishes RunStartedEvent before calling
     turn.execute(). Yielding it again causes duplicate events.
     """
-    import agentpool.agents.acp_agent.turn as turn_module
+    import wolfharness.agents.acp_agent.turn as turn_module
 
     source = inspect.getsource(turn_module.ACPTurn.execute)
     # Check that RunStartedEvent is not yielded in the execute method body
@@ -136,7 +136,7 @@ def test_acp_turn_no_redundant_run_started_event() -> None:
 
 def test_acp_turn_no_unused_initial_message_history() -> None:
     """ACPTurn must not store _initial_message_history (dead code)."""
-    import agentpool.agents.acp_agent.turn as turn_module
+    import wolfharness.agents.acp_agent.turn as turn_module
 
     source = inspect.getsource(turn_module.ACPTurn.__init__)
     assert "_initial_message_history" not in source, (
@@ -151,7 +151,7 @@ def test_acp_turn_no_unused_initial_message_history() -> None:
 
 def test_acp_turn_accepts_agent_name() -> None:
     """ACPTurn.__init__ must accept and store agent_name parameter."""
-    import agentpool.agents.acp_agent.turn as turn_module
+    import wolfharness.agents.acp_agent.turn as turn_module
 
     source = inspect.getsource(turn_module.ACPTurn.__init__)
     assert "agent_name" in source, (
@@ -162,7 +162,7 @@ def test_acp_turn_accepts_agent_name() -> None:
 
 def test_acp_turn_run_error_event_includes_agent_name() -> None:
     """ACPTurn.execute() must pass agent_name to RunErrorEvent yields."""
-    import agentpool.agents.acp_agent.turn as turn_module
+    import wolfharness.agents.acp_agent.turn as turn_module
 
     source = inspect.getsource(turn_module.ACPTurn.execute)
     assert "agent_name=self._agent_name" in source, (

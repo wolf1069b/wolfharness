@@ -1,80 +1,56 @@
-"""AgentPool: main package.
+"""agentpool — backward-compatible shim for wolfharness.
 
-Pydantic-AI based Multi-Agent Framework with YAML-based Agents, Teams, Workflows &
-Extended ACP / AGUI integration.
+This package has been renamed to ``wolfharness``. Importing ``agentpool``
+is deprecated and will be removed in a future release.
+
+Submodule imports are forwarded to the corresponding ``wolfharness`` submodule.
 """
 
 from __future__ import annotations
 
-from importlib.metadata import version
-from upathtools import register_http_filesystems
+import importlib
+import sys
+import warnings
+from importlib import abc, machinery
 
-from agentpool.models.agents import NativeAgentConfig
-from agentpool.models.manifest import AgentsManifest
+from wolfharness import *  # noqa: F403
 
-# Builtin toolsets imports removed to avoid circular dependency
-# Import them directly from agentpool_toolsets.builtin when needed
-from agentpool.agents import Agent, AgentContext, ACPAgent
-from agentpool.delegation import AgentPool, BaseTeam
-from dotenv import load_dotenv
-from agentpool.messaging.messages import ChatMessage
-from agentpool.tools import Tool, ToolCallInfo
-from agentpool.messaging.messagenode import MessageNode
-from agentpool.testing import acp_test_session
-from pydantic_ai import (
-    AudioUrl,
-    BinaryContent,
-    BinaryImage,
-    DocumentUrl,
-    ImageUrl,
-    VideoUrl,
+warnings.warn(
+    "``agentpool`` has been renamed to ``wolfharness``. "
+    "Update your imports: `from wolfharness import ...`",
+    DeprecationWarning,
+    stacklevel=2,
 )
 
-__version__ = version("agentpool")
-__title__ = "AgentPool"
-__author__ = "Philipp Temminghoff"
-__author_email__ = "philipptemminghoff@googlemail.com"
-__copyright__ = "Copyright (c) 2025 Philipp Temminghoff"
-__license__ = "MIT"
-__url__ = "https://github.com/phil65/agentpool"
 
-load_dotenv()
-register_http_filesystems()
+def __getattr__(name: str) -> object:
+    """Forward top-level attribute access to wolfharness."""
+    import wolfharness
 
-# Rebuild models with forward references that couldn't be resolved during
-# module initialization due to circular import avoidance.
-# PromptType and BasePrompt are imported under TYPE_CHECKING in
-# agentpool_config.knowledge and agentpool_config.task to break a circular
-# import chain. By this point, agentpool.prompts.prompts is fully loaded,
-# so we can resolve the forward references.
-from agentpool.prompts.prompts import BasePrompt, PromptType
-from agentpool_config.knowledge import Knowledge
-from agentpool_config.task import Job
+    return getattr(wolfharness, name)
 
-_ns = {"PromptType": PromptType, "BasePrompt": BasePrompt}
-Knowledge.model_rebuild(_types_namespace=_ns)
-Job.model_rebuild(_types_namespace=_ns)
-NativeAgentConfig.model_rebuild(_types_namespace=_ns)
-AgentsManifest.model_rebuild(_types_namespace=_ns)
 
-__all__ = [
-    "ACPAgent",
-    "Agent",
-    "AgentContext",
-    "AgentPool",
-    "AgentsManifest",
-    "AudioUrl",
-    "BaseTeam",
-    "BinaryContent",
-    "BinaryImage",
-    "ChatMessage",
-    "DocumentUrl",
-    "ImageUrl",
-    "MessageNode",
-    "NativeAgentConfig",
-    "Tool",
-    "ToolCallInfo",
-    "VideoUrl",
-    "__version__",
-    "acp_test_session",
-]
+class _ShimFinder(abc.MetaPathFinder):
+    """Redirect agentpool.X submodule imports to wolfharness.X."""
+
+    _prefix = "agentpool."
+    _target = "wolfharness"
+
+    def find_spec(
+        self, fullname: str, path: object = None, target: object = None
+    ) -> machinery.ModuleSpec | None:
+        if not fullname.startswith(self._prefix):
+            return None
+
+        wolf_name = self._target + fullname[len(self._prefix) - 1 :]
+        try:
+            wolf_mod = importlib.import_module(wolf_name)
+        except ModuleNotFoundError:
+            return None
+
+        sys.modules[fullname] = wolf_mod
+        return machinery.ModuleSpec(fullname, loader=None)
+
+
+if not any(isinstance(f, _ShimFinder) for f in sys.meta_path):
+    sys.meta_path.insert(0, _ShimFinder())

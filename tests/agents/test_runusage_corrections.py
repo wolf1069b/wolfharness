@@ -19,7 +19,7 @@ sys.path.insert(0, str(sys_path))
 
 from pydantic_ai.usage import RequestUsage, RunUsage  # noqa: E402
 
-from agentpool.messaging.messages import TokenCost  # noqa: E402
+from wolfharness.messaging.messages import TokenCost  # noqa: E402
 
 
 pytestmark = pytest.mark.unit

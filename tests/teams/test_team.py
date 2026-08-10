@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from agentpool import Agent, ChatMessage
-from agentpool.delegation.base_team import BaseTeam
+from wolfharness import Agent, ChatMessage
+from wolfharness.delegation.base_team import BaseTeam
 
 
 pytestmark = pytest.mark.unit

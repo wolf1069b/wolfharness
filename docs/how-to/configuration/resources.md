@@ -2,7 +2,7 @@
 sync:
   agent: doc_sync_agent
   dependencies:
-    - src/agentpool_config/loaders.py
+    - src/wolfharness_config/loaders.py
 title: Resources
 description: Resource loader configuration
 icon: material/file-multiple
@@ -25,7 +25,7 @@ Resources are loaded on-demand when agents request them, supporting parameteriza
 
 ## Configuration Reference
 
-For the full resource type reference, see the `agentpool_config.loaders.Resource` schema documentation.
+For the full resource type reference, see the `wolfharness_config.loaders.Resource` schema documentation.
 
 ## Key Features
 
@@ -62,9 +62,9 @@ ResourceProviders can now provide dynamic instructions that are re-evaluated on 
 ResourceProviders can implement the `get_instructions()` method to return instruction functions:
 
 ```python
-from agentpool.resource_providers import ResourceProvider
-from agentpool.prompts.instructions import InstructionFunc
-from agentpool.agents.context import AgentContext
+from wolfharness.resource_providers import ResourceProvider
+from wolfharness.prompts.instructions import InstructionFunc
+from wolfharness.agents.context import AgentContext
 
 class MyProvider(ResourceProvider):
     async def get_instructions(self) -> list[InstructionFunc]:

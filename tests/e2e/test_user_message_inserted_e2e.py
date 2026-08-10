@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 pytestmark = [
     pytest.mark.e2e,
-    pytest.mark.skipif(SKIP_NO_BINARY, reason="agentpool binary not on PATH"),
+    pytest.mark.skipif(SKIP_NO_BINARY, reason="wolfharness binary not on PATH"),
     pytest.mark.skipif(SKIP_WINDOWS, reason="Windows stdio subprocess issues"),
 ]
 
@@ -45,7 +45,7 @@ async def _spawn_acp_server(
     *,
     agent: str = "test_agent",
 ) -> AsyncIterator[tuple[ClientSideConnection, Any, DefaultACPClient]]:
-    """Spawn ``agentpool serve-acp`` and return (conn, process, client).
+    """Spawn ``wolfharness serve-acp`` and return (conn, process, client).
 
     Args:
         config_path: Path to the YAML config file.
@@ -60,7 +60,7 @@ async def _spawn_acp_server(
     client = DefaultACPClient(allow_file_operations=False)
     async with spawn_agent_process(
         lambda _conn: client,
-        "agentpool",
+        "wolfharness",
         "serve-acp",
         str(config_path),
         "--agent",
@@ -76,7 +76,7 @@ async def test_acp_server_steer_user_message_chunk_position(
 ) -> None:
     """L4a: Verify ``UserMessageChunk`` appears for a steer-marked prompt.
 
-    Spawns a real ``agentpool serve-acp`` subprocess, connects an ACP client,
+    Spawns a real ``wolfharness serve-acp`` subprocess, connects an ACP client,
     sends an initial prompt, then sends a second prompt with
     ``_meta.delivery="steer"``. The ACP server's ``_emit_user_message_chunks``
     emits ``UserMessageChunk`` session updates for the user's input before

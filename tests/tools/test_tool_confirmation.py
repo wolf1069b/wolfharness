@@ -3,8 +3,8 @@ from __future__ import annotations
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool import Agent, Tool
-from agentpool.ui.mock_provider import MockInputProvider
+from wolfharness import Agent, Tool
+from wolfharness.ui.mock_provider import MockInputProvider
 
 
 pytestmark = pytest.mark.unit

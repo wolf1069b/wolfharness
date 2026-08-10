@@ -264,7 +264,7 @@ MCP-over-ACP 的测试覆盖存在系统性缺口。当前测试主要覆盖：
 **Description**
 
 启动完整的 AgentPool ACP server 和 mock ACP client 进程，通过真实 ACP 协议通信：
-- 使用 `agentpool serve-acp` 启动 server
+- 使用 `wolfharness serve-acp` 启动 server
 - 使用 Python subprocess 启动 mock client（通过 stdio 或 WebSocket 连接）
 - 发送真实的 JSON-RPC 请求，验证响应
 
@@ -693,13 +693,13 @@ class MockACPClientWithoutSendRequest:
 
 | 文件 | 说明 |
 |------|------|
-| `tests/agentpool_server/acp_server/test_acp_mcp_manager.py` | 现有 manager 测试 |
-| `tests/agentpool_server/acp_server/test_acp_mcp_transport.py` | 现有 transport 测试 |
+| `tests/wolfharness_server/acp_server/test_acp_mcp_manager.py` | 现有 manager 测试 |
+| `tests/wolfharness_server/acp_server/test_acp_mcp_transport.py` | 现有 transport 测试 |
 | `tests/servers/acp_server/test_mcp_integration.py` | 现有 MCP 集成测试 |
-| `src/agentpool_server/acp_server/acp_mcp_transport.py` | Transport 实现 |
-| `src/agentpool_server/acp_server/acp_mcp_manager.py` | Manager 实现 |
-| `src/agentpool/mcp_server/client.py` | MCPClient |
-| `src/agentpool/resource_providers/mcp_provider.py` | MCPResourceProvider |
+| `src/wolfharness_server/acp_server/acp_mcp_transport.py` | Transport 实现 |
+| `src/wolfharness_server/acp_server/acp_mcp_manager.py` | Manager 实现 |
+| `src/wolfharness/mcp_server/client.py` | MCPClient |
+| `src/wolfharness/resource_providers/mcp_provider.py` | MCPResourceProvider |
 
 ### External Resources
 

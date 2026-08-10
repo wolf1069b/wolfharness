@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from agentpool.capabilities.function_toolset import FunctionToolsetCapability
+from wolfharness.capabilities.function_toolset import FunctionToolsetCapability
 
 
 pytestmark = pytest.mark.integration
@@ -42,7 +42,7 @@ class TestBuildToolsetLogsWarning:
         # in the except block that catches get_tools() failures
         import inspect
 
-        from agentpool.agents.native_agent.agent import Agent
+        from wolfharness.agents.native_agent.agent import Agent
 
         source = inspect.getsource(Agent.get_agentlet)
         assert "logger.warning" in source or "logger.exception" in source, (

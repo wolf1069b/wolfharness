@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool.models.model_configs import (
+from wolfharness.models.model_configs import (
     AnthropicModelConfig,
     BaseModelConfig,
     FallbackModelConfig,
@@ -16,7 +16,7 @@ from agentpool.models.model_configs import (
     StringModelConfig,
     TestModelConfig,
 )
-from agentpool_config.model_capabilities import ModelCapabilities
+from wolfharness_config.model_capabilities import ModelCapabilities
 
 
 pytestmark = pytest.mark.unit

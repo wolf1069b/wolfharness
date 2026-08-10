@@ -16,14 +16,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agentpool.lifecycle.types import DeliveryMode
-from agentpool.orchestrator.core import EventBus, SessionController
-from agentpool.orchestrator.run import RunHandle
 from tests._controller_helpers import send_via_controller
+from wolfharness.lifecycle.types import DeliveryMode
+from wolfharness.orchestrator.core import EventBus, SessionController
+from wolfharness.orchestrator.run import RunHandle
 
 
 if TYPE_CHECKING:
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
 
 pytestmark = pytest.mark.unit
@@ -295,7 +295,7 @@ async def test_receive_request_uses_get_or_create_session_agent(minimal_pool: Ag
     When agent is not yet cached (new top-level sessions), .get()
     returns None and receive_request silently does nothing.
     """
-    from agentpool.orchestrator.core import SessionController
+    from wolfharness.orchestrator.core import SessionController
 
     controller = SessionController(pool=minimal_pool)
     event_bus = EventBus()
@@ -434,7 +434,7 @@ async def test_wait_for_completion_session_not_found_raises(
     controller: SessionController,
 ) -> None:
     """wait_for_completion() raises SessionNotFoundError for unknown session."""
-    from agentpool.orchestrator.session_controller import SessionNotFoundError
+    from wolfharness.orchestrator.session_controller import SessionNotFoundError
 
     with pytest.raises(SessionNotFoundError, match="Session not found"):
         await controller.wait_for_completion("nonexistent", timeout=1.0)

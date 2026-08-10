@@ -1,1 +1,1 @@
-window.mkdocs_run_deps = ["agentpool"];
+window.mkdocs_run_deps = ["wolfharness"];

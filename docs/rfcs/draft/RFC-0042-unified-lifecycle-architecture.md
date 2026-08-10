@@ -204,7 +204,7 @@ AgentPool has 5 different entry points for agent execution, each with its own li
 | `agent.run_stream()` | `agents/base_agent.py` | Same, but yields events |
 | `SessionController.receive_request()` | `orchestrator/session_controller.py` | `RunHandle` (RFC-0041) |
 | `BackgroundTaskProvider` | `tool_impls/workers/` | Manual task management |
-| `WatchCommand` | `agentpool_commands/` | CLI-managed loop |
+| `WatchCommand` | `wolfharness_commands/` | CLI-managed loop |
 
 No shared abstraction connects them. Adding a new execution mode (e.g., channel gateway) requires building an entirely new entry point.
 
@@ -492,8 +492,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from agentpool.orchestrator.turn import Turn
-    from agentpool.agents.events import RichAgentStreamEvent
+    from wolfharness.orchestrator.turn import Turn
+    from wolfharness.agents.events import RichAgentStreamEvent
 
 class RunLoop:
     """Core execution loop. Built on RFC-0041's restructured RunHandle.
@@ -1622,14 +1622,14 @@ class MessageQueueTransport(EventTransport):
         type: message_queue
         backend: redis_streams  # or nats_jetstream, kafka
         url: "redis://localhost:6379"
-        topic_prefix: "agentpool"
+        topic_prefix: "wolfharness"
     """
 
     def __init__(
         self,
         backend: str,  # "redis_streams" | "nats_jetstream" | "kafka"
         url: str,
-        topic_prefix: str = "agentpool",
+        topic_prefix: str = "wolfharness",
     ) -> None:
         self._backend = self._create_backend(backend, url)
         ...

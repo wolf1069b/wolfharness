@@ -8,7 +8,7 @@ The test verifies via both:
     - Messages REST endpoint (``GET /session/{id}/message``)
 
 Strategy:
-    1. Start a real ``agentpool serve-opencode`` subprocess with a TestModel.
+    1. Start a real ``wolfharness serve-opencode`` subprocess with a TestModel.
     2. Open the SSE event stream (``GET /event``).
     3. Send ONE prompt via ``POST /prompt_async``.
     4. Collect SSE events until the session goes idle.
@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
 pytestmark = [
     pytest.mark.e2e,
-    pytest.mark.skipif(SKIP_NO_BINARY, reason="agentpool binary not on PATH"),
+    pytest.mark.skipif(SKIP_NO_BINARY, reason="wolfharness binary not on PATH"),
     pytest.mark.skipif(SKIP_WINDOWS, reason="Windows subprocess issues"),
 ]
 

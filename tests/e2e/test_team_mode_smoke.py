@@ -1,6 +1,6 @@
-"""L4a smoke E2E test for dynamic team mode via ``agentpool serve-opencode``.
+"""L4a smoke E2E test for dynamic team mode via ``wolfharness serve-opencode``.
 
-Spawns a real ``agentpool serve-opencode`` subprocess with a YAML config
+Spawns a real ``wolfharness serve-opencode`` subprocess with a YAML config
 that enables ``team_mode`` and uses ``model: test`` (pydantic-ai
 TestModel — no API key needed). Verifies the server starts, accepts
 connections, and emits the SSE handshake event.
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
 pytestmark = [
     pytest.mark.e2e,
-    pytest.mark.skipif(SKIP_NO_BINARY, reason="agentpool binary not on PATH"),
+    pytest.mark.skipif(SKIP_NO_BINARY, reason="wolfharness binary not on PATH"),
     pytest.mark.skipif(SKIP_WINDOWS, reason="Windows subprocess issues"),
 ]
 
@@ -135,7 +135,7 @@ async def test_team_mode_server_starts(
 
     Given: a YAML config with ``team_mode`` enabled and ``model: test``.
 
-    When: ``agentpool serve-opencode`` is spawned as a subprocess.
+    When: ``wolfharness serve-opencode`` is spawned as a subprocess.
 
     Then:
     - The server starts and responds to HTTP health checks.

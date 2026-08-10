@@ -24,7 +24,7 @@ AgentPool uses a 4-layer conceptual taxonomy (L1-L4) for discussing test types. 
 | **L1** | Unit | `@pytest.mark.unit` | `TestModel`, `FunctionModel`, mocks | Fast (<100ms) | None | ✅ Always | Logic branches, boundary conditions, data transforms |
 | **L2** | Integration | `@pytest.mark.integration` | Real `AgentPool` + `TestModel`, FastAPI `TestClient` | Fast (<500ms) | None | ✅ Always | Component wiring, capability registration, event conversion, protocol handlers (mocked deps) |
 | **L3** | VCR | `@pytest.mark.vcr` | `pytest-recording` + `vcrpy` + cassettes | Fast-Medium (<5s) | None (replay) | ✅ Always | Real model API response format, streaming event sequences, tool call structures, protocol transport |
-| **L4** | Subprocess E2E | `@pytest.mark.e2e` | Real `agentpool serve-*` process + protocol client | Slow (5-30s) | Optional | L4a: ✅ PR smoke, L4b: ❌ Nightly | Server startup, stdio transport, process lifecycle, real I/O timing |
+| **L4** | Subprocess E2E | `@pytest.mark.e2e` | Real `wolfharness serve-*` process + protocol client | Slow (5-30s) | Optional | L4a: ✅ PR smoke, L4b: ❌ Nightly | Server startup, stdio transport, process lifecycle, real I/O timing |
 
 Tests carry exactly ONE primary layer marker. L3 VCR tests that also exercise protocol integration MAY additionally carry `@pytest.mark.integration` as a secondary marker for filtering. The primary marker determines CI stage assignment.
 
@@ -99,7 +99,7 @@ a skipped test is never executed. The test intent MUST be documented in the docs
 so the test clearly communicates what behavior is expected once the feature is implemented.
 
 ```python
-@pytest.mark.skip(reason="mcp/connect client-side not implemented in agentpool ACP server yet")
+@pytest.mark.skip(reason="mcp/connect client-side not implemented in wolfharness ACP server yet")
 async def test_mcp_connect_client_side(...):
     """Send mcp/connect request with a valid MCP server config.
     Expect result.connected = true and result.server_info containing
@@ -434,14 +434,14 @@ Never. Fix the test or fix the code. If a test is legitimately obsolete, mark it
 | `vcr_config` | module | VCR configuration (header filtering, body decoding) |
 | `acp_client` | function | ACP client connected to in-process ACP server |
 | `opencode_client` | function | FastAPI `TestClient` for OpenCode server |
-| `subprocess_server` | function | Spawned `agentpool serve-*` process (cached by serve_command; use `--no-server-cache` to bypass) |
+| `subprocess_server` | function | Spawned `wolfharness serve-*` process (cached by serve_command; use `--no-server-cache` to bypass) |
 | `minimal_config` | session | Minimal YAML config with single test agent |
 | `session_e2e_config` | session | Session-scoped e2e config with in-memory storage (for cached servers) |
 | `session_e2e_config_with_tool` | session | Session-scoped e2e config with bash tool + in-memory storage |
 
 ## Subprocess Server Cache
 
-The `subprocess_server` fixture uses a **session-scoped cache** to reuse `agentpool serve-*` processes across tests with the same `serve_command`. This reduces ~100+ subprocess spawns to ~4-5, cutting L4a e2e time from ~14min to ~4-5min.
+The `subprocess_server` fixture uses a **session-scoped cache** to reuse `wolfharness serve-*` processes across tests with the same `serve_command`. This reduces ~100+ subprocess spawns to ~4-5, cutting L4a e2e time from ~14min to ~4-5min.
 
 ### How It Works
 

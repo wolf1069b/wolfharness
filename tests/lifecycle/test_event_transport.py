@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from agentpool.lifecycle import EventEnvelope, EventTransport, InProcessTransport
+from wolfharness.lifecycle import EventEnvelope, EventTransport, InProcessTransport
 
 
 if TYPE_CHECKING:

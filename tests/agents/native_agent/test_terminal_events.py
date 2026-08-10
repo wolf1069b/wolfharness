@@ -19,14 +19,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool import Agent
-from agentpool.agents.context import AgentRunContext
-from agentpool.agents.events.events import (
+from wolfharness import Agent
+from wolfharness.agents.context import AgentRunContext
+from wolfharness.agents.events.events import (
     RunErrorEvent,
     StepErrorMetadata,
     StreamCompleteEvent,
 )
-from agentpool.agents.native_agent.turn import NativeTurn
+from wolfharness.agents.native_agent.turn import NativeTurn
 
 
 def _make_mock_agentlet_raising(exc: BaseException) -> MagicMock:

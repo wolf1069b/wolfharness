@@ -6,11 +6,11 @@ from pydantic_ai import RunContext
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool import Agent, AgentContext
-from agentpool.delegation import AgentPool
-from agentpool.models.agents import NativeAgentConfig
-from agentpool.models.manifest import AgentsManifest
-from agentpool_config.toolsets import SubagentToolsetConfig
+from wolfharness import Agent, AgentContext
+from wolfharness.delegation import AgentPool
+from wolfharness.models.agents import NativeAgentConfig
+from wolfharness.models.manifest import AgentsManifest
+from wolfharness_config.toolsets import SubagentToolsetConfig
 
 
 async def run_ctx_tool(ctx: RunContext) -> str:

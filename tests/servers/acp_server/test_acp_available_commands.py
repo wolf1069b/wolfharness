@@ -13,15 +13,15 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from acp.schema import AvailableCommand
-from agentpool import Agent, AgentPool
-from agentpool_server.acp_server.acp_agent import AgentPoolACPAgent
-from agentpool_server.acp_server.session import ACPSession
+from wolfharness import Agent, AgentPool
+from wolfharness_server.acp_server.acp_agent import AgentPoolACPAgent
+from wolfharness_server.acp_server.session import ACPSession
 
 
 def _make_pool_and_agent() -> tuple[AgentPool, Agent]:
     """Create a simple pool with one agent."""
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.manifest import AgentsManifest
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.manifest import AgentsManifest
 
     manifest = AgentsManifest(agents={"test_agent": NativeAgentConfig(model="test")})
 

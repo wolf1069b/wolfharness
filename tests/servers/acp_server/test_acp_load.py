@@ -21,13 +21,13 @@ from pydantic_ai import (
 import pytest
 
 from acp.schema import LoadSessionRequest, LoadSessionResponse
-from agentpool import Agent
-from agentpool.delegation import AgentPool
-from agentpool.sessions.models import PendingDeferredCall
-from agentpool.storage.manager import StorageManager
-from agentpool.storage.serialization import serialize_messages
-from agentpool_config.storage import MemoryStorageConfig, StorageConfig
-from agentpool_server.acp_server.acp_agent import AgentPoolACPAgent
+from wolfharness import Agent
+from wolfharness.delegation import AgentPool
+from wolfharness.sessions.models import PendingDeferredCall
+from wolfharness.storage.manager import StorageManager
+from wolfharness.storage.serialization import serialize_messages
+from wolfharness_config.storage import MemoryStorageConfig, StorageConfig
+from wolfharness_server.acp_server.acp_agent import AgentPoolACPAgent
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────
@@ -90,7 +90,7 @@ def _make_chat_messages_from_model_messages(
     Returns objects compatible with what ACPSession expects
     after agent.load_session() populates conversation.chat_messages.
     """
-    from agentpool.messaging import ChatMessage
+    from wolfharness.messaging import ChatMessage
 
     return [
         ChatMessage[Any](
@@ -119,8 +119,8 @@ def mock_agent_pool_with_agent() -> tuple[AgentPool, Agent]:
     def simple_callback(message: str) -> str:
         return f"Test response: {message}"
 
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.manifest import AgentsManifest
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.manifest import AgentsManifest
 
     manifest = AgentsManifest(agents={"test_agent": NativeAgentConfig(model="test")})
 

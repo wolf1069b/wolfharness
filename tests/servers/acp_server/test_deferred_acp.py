@@ -16,8 +16,8 @@ from acp.agent.notifications import ACPNotifications
 from acp.schema import ToolCallStart
 from acp.tool_call_reporter import ToolCallReporter
 from acp.tool_call_state import ToolCallState
-from agentpool.agents.events.events import ToolCallDeferredEvent
-from agentpool_server.acp_server.event_converter import ACPEventConverter
+from wolfharness.agents.events.events import ToolCallDeferredEvent
+from wolfharness_server.acp_server.event_converter import ACPEventConverter
 
 
 pytestmark = pytest.mark.integration

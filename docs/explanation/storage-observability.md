@@ -5,7 +5,7 @@
 Track all agent interactions:
 - SQL-based with SQLModel/SQLAlchemy
 - Per-agent or shared database
-- Analytics via CLI: `agentpool history stats`
+- Analytics via CLI: `wolfharness history stats`
 
 ## Observability
 

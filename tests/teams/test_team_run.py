@@ -6,9 +6,9 @@ from typing import Any
 import anyio
 import pytest
 
-from agentpool import Agent, ChatMessage
-from agentpool.utils.model_helpers import function_to_model
-from agentpool.utils.time_utils import get_now
+from wolfharness import Agent, ChatMessage
+from wolfharness.utils.model_helpers import function_to_model
+from wolfharness.utils.time_utils import get_now
 
 
 pytestmark = pytest.mark.integration

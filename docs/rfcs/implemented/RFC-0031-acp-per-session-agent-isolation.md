@@ -86,7 +86,7 @@ The ACP server must adapt this pattern to its different architecture (ACP protoc
 
 ### The Problem
 
-When multiple ACP clients connect to the same `agentpool serve-acp` server, all sessions share a single `BaseAgent` instance. This causes:
+When multiple ACP clients connect to the same `wolfharness serve-acp` server, all sessions share a single `BaseAgent` instance. This causes:
 
 1. **Conversation contamination**: Session A's messages appear in Session B's context window because `agent.conversation` is shared
 2. **Input provider conflicts**: `ACPSession.__post_init__` sets `agent._input_provider = self.input_provider` for **all** agents in the pool (lines 220-221 of `session.py`), overwriting the previous session's input provider
@@ -113,7 +113,7 @@ When multiple ACP clients connect to the same `agentpool serve-acp` server, all 
 - **Risk**: Teams cannot share an ACP server (e.g., via WebSocket transport). Each concurrent session corrupts others' conversations.
 - **Risk**: Session resumption (`load_session`, `resume_session`) loads the wrong conversation history because the shared agent only has one `conversation` object.
 - **Risk**: Permission requests and user elicitations route to the wrong session because `agent._input_provider` is overwritten.
-- **Cost**: Users must run separate `agentpool serve-acp` processes per client, defeating the purpose of the WebSocket/multi-client transport.
+- **Cost**: Users must run separate `wolfharness serve-acp` processes per client, defeating the purpose of the WebSocket/multi-client transport.
 
 ---
 
@@ -366,7 +366,7 @@ class AgentPoolACPAgent:
     def __post_init__(self) -> None:
         # ... existing init ...
         # NEW: Cache agent config for per-session creation
-        from agentpool.models.agents import NativeAgentConfig
+        from wolfharness.models.agents import NativeAgentConfig
         if self.agent_pool.main_agent and self.agent_pool.main_agent.name in self.agent_pool.manifest.agents:
             cfg = self.agent_pool.manifest.agents[self.agent_pool.main_agent.name]
             if isinstance(cfg, NativeAgentConfig):
@@ -449,7 +449,7 @@ class AgentPoolACPAgent:
                 agent_config = next(iter(self.agent_pool.manifest.agents.values()))
         
         if agent_config is not None:
-            from agentpool_config.context import ConfigContextManager
+            from wolfharness_config.context import ConfigContextManager
             
             with ConfigContextManager(agent_config.config_file_path):
                 agent = agent_config.get_agent(
@@ -1087,8 +1087,8 @@ After updating the RFC based on Round 2 findings, Oracle and Metis performed a f
 
 ### Key Source Files
 
-- `src/agentpool_server/acp_server/server.py` — `ACPServer`, pool lifecycle
-- `src/agentpool_server/acp_server/acp_agent.py` — `AgentPoolACPAgent`, protocol methods
-- `src/agentpool_server/acp_server/session_manager.py` — `ACPSessionManager`, session tracking
-- `src/agentpool_server/acp_server/session.py` — `ACPSession`, prompt processing
-- `src/agentpool_server/opencode_server/state.py` — Reference: OpenCode's `_session_agents`, `get_or_create_agent()`
+- `src/wolfharness_server/acp_server/server.py` — `ACPServer`, pool lifecycle
+- `src/wolfharness_server/acp_server/acp_agent.py` — `AgentPoolACPAgent`, protocol methods
+- `src/wolfharness_server/acp_server/session_manager.py` — `ACPSessionManager`, session tracking
+- `src/wolfharness_server/acp_server/session.py` — `ACPSession`, prompt processing
+- `src/wolfharness_server/opencode_server/state.py` — Reference: OpenCode's `_session_agents`, `get_or_create_agent()`

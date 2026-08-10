@@ -54,7 +54,7 @@ jobs:
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: uv run --no-group docs pytest --cov-report=xml --cov=src/agentpool/ --cov-report=term-missing
+        run: uv run --no-group docs pytest --cov-report=xml --cov=src/wolfharness/ --cov-report=term-missing
 
       - name: VCR tests
         run: uv run pytest tests/vcr/ --strict-vcr-cassette-usage --tb=short --no-cov -q
@@ -146,7 +146,7 @@ jobs:
         run: uv sync --all-extras
 
       - name: Build with PyInstaller
-        run: uv run pyinstaller agentpool.spec
+        run: uv run pyinstaller wolfharness.spec
 
       - name: Get package version (Unix)
         id: get_version_unix
@@ -167,23 +167,23 @@ jobs:
         if: ${{ matrix.os != 'windows' }}
         run: |
           cd dist
-          zip agentpool-${{ matrix.os }}-${{ matrix.arch }}-${{ steps.get_version_unix.outputs.version }}.zip agentpool
+          zip wolfharness-${{ matrix.os }}-${{ matrix.arch }}-${{ steps.get_version_unix.outputs.version }}.zip wolfharness
 
       - name: Zip binary (Windows)
         if: ${{ matrix.os == 'windows' }}
         shell: pwsh
         run: |
           cd dist
-          Compress-Archive -Path agentpool.exe -DestinationPath agentpool-${{ matrix.os }}-${{ matrix.arch }}-${{ steps.get_version_windows.outputs.version }}.zip
+          Compress-Archive -Path wolfharness.exe -DestinationPath wolfharness-${{ matrix.os }}-${{ matrix.arch }}-${{ steps.get_version_windows.outputs.version }}.zip
 
       - name: Upload binary to release (Unix)
         if: ${{ matrix.os != 'windows' }}
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/agentpool-${{ matrix.os }}-${{ matrix.arch }}-${{ steps.get_version_unix.outputs.version }}.zip
+          files: dist/wolfharness-${{ matrix.os }}-${{ matrix.arch }}-${{ steps.get_version_unix.outputs.version }}.zip
 
       - name: Upload binary to release (Windows)
         if: ${{ matrix.os == 'windows' }}
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/agentpool-${{ matrix.os }}-${{ matrix.arch }}-${{ steps.get_version_windows.outputs.version }}.zip
+          files: dist/wolfharness-${{ matrix.os }}-${{ matrix.arch }}-${{ steps.get_version_windows.outputs.version }}.zip

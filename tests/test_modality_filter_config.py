@@ -15,7 +15,7 @@ from __future__ import annotations
 from pydantic import TypeAdapter, ValidationError
 import pytest
 
-from agentpool_config.capabilities import (
+from wolfharness_config.capabilities import (
     KNOWN_CAPABILITY_TYPES,
     BuiltinCapabilityConfig,
     ModalityFilterCapabilityConfig,
@@ -54,7 +54,7 @@ def test_build_capability_returns_modality_filter() -> None:
     """``build_capability()`` returns a ``ModalityFilterCapability`` instance."""
     config = ModalityFilterCapabilityConfig()
     capability = build_capability(config)
-    from agentpool.capabilities.modality_filter import ModalityFilterCapability
+    from wolfharness.capabilities.modality_filter import ModalityFilterCapability
 
     assert isinstance(capability, ModalityFilterCapability)
 

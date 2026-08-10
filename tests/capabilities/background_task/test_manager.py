@@ -6,7 +6,7 @@ import asyncio
 import contextlib
 import time
 
-from agentpool.capabilities.background_task import BackgroundTask, BackgroundTaskManager
+from wolfharness.capabilities.background_task import BackgroundTask, BackgroundTaskManager
 
 
 # ---------------------------------------------------------------------------

@@ -20,20 +20,20 @@ from pydantic_ai.messages import (
 )
 import pytest
 
-from agentpool.agents.native_agent.checkpoint import (
+from wolfharness.agents.native_agent.checkpoint import (
     CheckpointData,
     CheckpointManager,
     MidStreamCheckpointError,
 )
-from agentpool.sessions.models import PendingDeferredCall
-from agentpool.storage.manager import StorageManager
+from wolfharness.sessions.models import PendingDeferredCall
+from wolfharness.storage.manager import StorageManager
 
 
 pytestmark = pytest.mark.unit
 
 
 if TYPE_CHECKING:
-    from agentpool.agents.events.events import ToolCallDeferredEvent
+    from wolfharness.agents.events.events import ToolCallDeferredEvent
 
 
 class TestCheckpointData:
@@ -68,7 +68,7 @@ class TestCheckpointData:
 @pytest.fixture
 def storage_manager() -> StorageManager:
     """Create a StorageManager with no providers (for unit testing)."""
-    from agentpool_config.storage import StorageConfig
+    from wolfharness_config.storage import StorageConfig
 
     config = StorageConfig(providers=[])
     return StorageManager(config=config)
@@ -443,7 +443,7 @@ class TestCheckpointSerialization:
         json_str = CheckpointManager._serialize_messages(sample_messages)
         assert json_str is not None
 
-        from agentpool.storage.serialization import deserialize_messages
+        from wolfharness.storage.serialization import deserialize_messages
 
         restored = deserialize_messages(json_str)
         assert len(restored) == len(sample_messages)
@@ -612,7 +612,7 @@ class TestCheckpointFailureLogging:
     @pytest.mark.anyio
     async def test_storage_manager_returns_success_flag(self) -> None:
         """StorageManager.save_checkpoint() returns True when any provider succeeds."""
-        from agentpool_config.storage import StorageConfig
+        from wolfharness_config.storage import StorageConfig
 
         config = StorageConfig(providers=[])
         mgr = StorageManager(config=config)
@@ -628,7 +628,7 @@ class TestCheckpointFailureLogging:
     @pytest.mark.anyio
     async def test_storage_manager_returns_failure_flag(self) -> None:
         """StorageManager.save_checkpoint() returns False when all providers fail."""
-        from agentpool_config.storage import StorageConfig
+        from wolfharness_config.storage import StorageConfig
 
         config = StorageConfig(providers=[])
         mgr = StorageManager(config=config)
@@ -644,7 +644,7 @@ class TestCheckpointFailureLogging:
     @pytest.mark.anyio
     async def test_storage_manager_returns_false_no_providers(self) -> None:
         """StorageManager.save_checkpoint() returns False when no providers configured."""
-        from agentpool_config.storage import StorageConfig
+        from wolfharness_config.storage import StorageConfig
 
         config = StorageConfig(providers=[])
         mgr = StorageManager(config=config)

@@ -24,19 +24,19 @@ from pydantic_ai import RunContext
 from pydantic_ai.messages import TextPartDelta
 import pytest
 
-from agentpool import ChatMessage
-from agentpool.agents.base_agent import BaseAgent
-from agentpool.agents.context import AgentContext
-from agentpool.agents.events import (
+from wolfharness import ChatMessage
+from wolfharness.agents.base_agent import BaseAgent
+from wolfharness.agents.context import AgentContext
+from wolfharness.agents.events import (
     PartDeltaEvent,
     RunFailedEvent,
     StreamCompleteEvent,
     SubAgentEvent,
 )
-from agentpool.capabilities.background_task.capability import (
+from wolfharness.capabilities.background_task.capability import (
     BackgroundTaskCapability,
 )
-from agentpool.delegation import AgentPool
+from wolfharness.delegation import AgentPool
 
 
 pytestmark = pytest.mark.anyio
@@ -230,7 +230,7 @@ async def test_async_task_does_not_emit_subagent_events():
     )
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_asevnt01",
     ):
         await capability._task(
@@ -278,7 +278,7 @@ async def test_async_task_does_not_emit_stream_complete_on_finish():
     )
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_asynct01",
     ):
         await capability._task(
@@ -323,7 +323,7 @@ async def test_async_task_does_not_emit_stream_complete_on_error():
     mock_node.run_stream = MagicMock(return_value=_error_stream())
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_asynct01",
     ):
         await capability._task(
@@ -363,7 +363,7 @@ async def test_async_task_preserves_filesystem_writing():
     )
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_fswrt001",
     ):
         await capability._task(
@@ -408,7 +408,7 @@ async def test_async_task_writes_part_delta_to_filesystem():
     )
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_delta001",
     ):
         await capability._task(
@@ -452,7 +452,7 @@ async def test_async_task_returns_immediately():
     )
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_quick0001",
     ):
         result = await capability._task(
@@ -500,7 +500,7 @@ async def test_async_task_completes_when_parent_session_ends():
     mock_node.run_stream = MagicMock(return_value=_slow_stream())
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_parend01",
     ):
         await capability._task(
@@ -538,7 +538,7 @@ async def test_async_task_completes_when_parent_session_ends():
 @pytest.mark.unit
 async def test_async_task_emits_spawn_session_start():
     """Verify that create_child_session() is called with spawn_mechanism='task'
-    so that SpawnSessionStart is auto-emitted by the agentpool framework.
+    so that SpawnSessionStart is auto-emitted by the wolfharness framework.
     """
     capability = BackgroundTaskCapability(schemas=None)
     pool = _make_mock_pool()
@@ -553,7 +553,7 @@ async def test_async_task_emits_spawn_session_start():
     )
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_spawn01",
     ):
         await capability._task(
@@ -596,7 +596,7 @@ async def test_async_task_completion_callback_injects_prompt():
     )
 
     with patch(
-        "agentpool.capabilities.background_task.capability._generate_task_id",
+        "wolfharness.capabilities.background_task.capability._generate_task_id",
         return_value="bg_inject01",
     ):
         await capability._task(

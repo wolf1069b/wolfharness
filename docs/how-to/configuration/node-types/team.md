@@ -2,7 +2,7 @@
 sync:
   agent: doc_sync_agent
   dependencies:
-    - src/agentpool_config/teams.py
+    - src/wolfharness_config/teams.py
 title: Teams
 description: Team configuration and setup
 icon: material/account-group

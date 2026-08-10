@@ -15,12 +15,12 @@ from unittest.mock import MagicMock
 from pydantic_ai.capabilities import AbstractCapability
 import pytest
 
-from agentpool.capabilities.resource_protocols import (
+from wolfharness.capabilities.resource_protocols import (
     SkillEntry,
     SkillResource,
 )
-from agentpool.capabilities.skill_manager_cap import SkillManagerCap
-from agentpool.skills.skill import Skill
+from wolfharness.capabilities.skill_manager_cap import SkillManagerCap
+from wolfharness.skills.skill import Skill
 
 
 pytestmark = pytest.mark.unit
@@ -467,7 +467,7 @@ async def test_safe_uri_flat_form() -> None:
     """Skill.safe_uri returns flat skill://{name} for local skills."""
     from upathtools import UPath
 
-    from agentpool.skills.skill import Skill
+    from wolfharness.skills.skill import Skill
 
     # Local filesystem skill
     local_skill = Skill(

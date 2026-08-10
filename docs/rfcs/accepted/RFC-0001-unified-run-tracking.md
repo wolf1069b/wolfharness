@@ -21,7 +21,7 @@ The proposal introduces `RunHandle` as a first-class ephemeral runtime object tr
 
 ### Current Architecture
 
-AgentPool's session orchestration lives in `src/agentpool/orchestrator/core.py`, combining `SessionController` (session CRUD) and `TurnRunner` (turn execution + manual queue management). Key components:
+AgentPool's session orchestration lives in `src/wolfharness/orchestrator/core.py`, combining `SessionController` (session CRUD) and `TurnRunner` (turn execution + manual queue management). Key components:
 
 - **`SessionState`**: Long-lived session metadata holding `turn_lock` (asyncio.Lock) and `active_run_ctx` (manually-synchronized pointer to `AgentRunContext`)
 - **`AgentRunContext`**: Ephemeral per-run container with `injection_manager` (`PromptInjectionManager`)

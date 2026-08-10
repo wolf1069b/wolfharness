@@ -9,7 +9,7 @@ from __future__ import annotations
 from pydantic_ai import BinaryContent, ImageUrl, TextContent
 import pytest
 
-from agentpool_storage.opencode_provider.helpers import convert_user_content_to_parts
+from wolfharness_storage.opencode_provider.helpers import convert_user_content_to_parts
 
 
 pytestmark = pytest.mark.unit

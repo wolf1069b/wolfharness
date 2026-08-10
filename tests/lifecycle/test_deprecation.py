@@ -15,7 +15,7 @@ import warnings
 
 import pytest
 
-from agentpool.messaging.messagenode import MessageNode
+from wolfharness.messaging.messagenode import MessageNode
 
 
 class _TestNode(MessageNode[Any, Any]):

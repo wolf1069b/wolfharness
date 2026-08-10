@@ -62,7 +62,7 @@ Each step's spec approval was siloed. The top-level `specs/` directory was updat
 
 ### Evidence of Problem
 
-1. **ACP server logs** (`~/Library/Logs/agentpool/acp.log`): Agent errors with `'FunctionTool' object has no attribute '__name__'` when trying to load skills.
+1. **ACP server logs** (`~/Library/Logs/wolfharness/acp.log`): Agent errors with `'FunctionTool' object has no attribute '__name__'` when trying to load skills.
 
 2. **User report**: Agent cannot access `load_skill` tool or resolve `skill://` URIs after M3 refactor.
 

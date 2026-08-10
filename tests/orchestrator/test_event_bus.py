@@ -20,7 +20,7 @@ from pydantic_ai import (
 )
 import pytest
 
-from agentpool.agents.events import (
+from wolfharness.agents.events import (
     CompactionEvent,
     CustomEvent,
     PartDeltaEvent,
@@ -41,8 +41,8 @@ from agentpool.agents.events import (
     ToolCallStartEvent,
     ToolResultMetadataEvent,
 )
-from agentpool.messaging import ChatMessage
-from agentpool.orchestrator.core import (  # type: ignore[attr-defined]
+from wolfharness.messaging import ChatMessage
+from wolfharness.orchestrator.core import (  # type: ignore[attr-defined]
     EventBus,
     EventEnvelope,
     _is_immediate,

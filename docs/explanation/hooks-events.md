@@ -2,11 +2,11 @@
 
 ## Hooks
 
-Hooks (`src/agentpool/hooks/`) intercept agent turns at 4 points: `pre_turn`, `post_turn`, `pre_tool_use`, `post_tool_use`. Three hook types: `CallableHook` (in-process), `CommandHook` (subprocess), `PromptHook` (LLM evaluation). Hooks run in parallel, results combined with priority: deny > ask > allow.
+Hooks (`src/wolfharness/hooks/`) intercept agent turns at 4 points: `pre_turn`, `post_turn`, `pre_tool_use`, `post_tool_use`. Three hook types: `CallableHook` (in-process), `CommandHook` (subprocess), `PromptHook` (LLM evaluation). Hooks run in parallel, results combined with priority: deny > ask > allow.
 
 ### HookAwareTurn Architecture
 
-Hooks fire through the `HookAwareTurn` mixin (`src/agentpool/orchestrator/turn.py`), which is inherited by both `NativeTurn` and `ACPTurn`. This provides a single choke point for hook execution inside `Turn.execute()`.
+Hooks fire through the `HookAwareTurn` mixin (`src/wolfharness/orchestrator/turn.py`), which is inherited by both `NativeTurn` and `ACPTurn`. This provides a single choke point for hook execution inside `Turn.execute()`.
 
 **Firing flow:**
 
@@ -83,8 +83,8 @@ capability = agent_hooks.as_capability(hook_manager)
 
 ## Events
 
-**Event Types** (`src/agentpool/agents/events/events.py`): `RichAgentStreamEvent` union type covers streaming deltas, tool calls (start/progress/complete), run lifecycle (started/error/failed), subagent events, session resume, compaction, plan updates, and custom events.
+**Event Types** (`src/wolfharness/agents/events/events.py`): `RichAgentStreamEvent` union type covers streaming deltas, tool calls (start/progress/complete), run lifecycle (started/error/failed), subagent events, session resume, compaction, plan updates, and custom events.
 
-**EventBus** (`src/agentpool/orchestrator/core.py`): Cross-turn event streaming for protocol servers. Bounded async queues per session, replay buffers, scoped subscriptions (`"session"`, `"descendants"`, `"subtree"`, `"all"`).
+**EventBus** (`src/wolfharness/orchestrator/core.py`): Cross-turn event streaming for protocol servers. Bounded async queues per session, replay buffers, scoped subscriptions (`"session"`, `"descendants"`, `"subtree"`, `"all"`).
 
 **Signal Architecture** (`anyenv.signals.Signal`): In-process type-safe pub/sub on `MessageNode` (`message_received`, `message_sent`) and `Talk` (`connection_processed`, `message_forwarded`). `SignalEmittingGraphRun` bridges pydantic-graph steps to signals.

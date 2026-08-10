@@ -12,14 +12,14 @@ icon: material/school
 Simple installation
 
 ```bash
-uv tool install agentpool
+uv tool install wolfharness
 
 ```
 
 Multiple extras
 
 ```bash
-uv tool install agentpool[default, coding]
+uv tool install wolfharness[default, coding]
 ```
 
 ## Available Extras
@@ -50,9 +50,9 @@ uv tool install agentpool[default, coding]
 No installation needed - run directly with uvx:
 
 ```bash
-uvx --python 3.13 agentpool@latest serve-acp 
+uvx --python 3.13 wolfharness@latest serve-acp 
 
 # or
 
-uvx --python 3.13 agentpool@latest serve-acp path/to/agents.yml
+uvx --python 3.13 wolfharness@latest serve-acp path/to/agents.yml
 ```

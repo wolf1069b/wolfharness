@@ -74,9 +74,9 @@ Keep `src/acp/schema/` aligned with the official Agent Client Protocol reference
    - `agent/implementations/debug_server/mock_agent.py` — add stubs to `MockAgent`
 
 7. **Wire up in the ACP server** (if needed):
-   - `src/agentpool_server/acp_server/acp_agent.py` — implement new methods, advertise new capabilities
-   - `src/agentpool_server/acp_server/event_converter.py` — emit new session update types
-   - `src/agentpool_server/acp_server/session.py` — store new state
+   - `src/wolfharness_server/acp_server/acp_agent.py` — implement new methods, advertise new capabilities
+   - `src/wolfharness_server/acp_server/event_converter.py` — emit new session update types
+   - `src/wolfharness_server/acp_server/session.py` — store new state
 
 8. **Update the synced commit hash** in `src/acp/__init__.py`:
    ```bash
@@ -106,7 +106,7 @@ Keep `src/acp/schema/` aligned with the official Agent Client Protocol reference
 - `connection.py` (base JSON-RPC connection) — only if the wire protocol itself changes
 - `transports.py` — transport layer is our own
 - `stdio.py` — our process management layer
-- `client/` implementations (`DefaultACPClient`, `HeadlessACPClient`, `NoOpClient`) — agentpool-specific
+- `client/` implementations (`DefaultACPClient`, `HeadlessACPClient`, `NoOpClient`) — wolfharness-specific
 - `registry/` — our agent registry, not part of ACP spec
 - `task/` — our task abstraction
 - `tool_call_reporter.py`, `tool_call_state.py` — our extensions

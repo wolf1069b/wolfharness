@@ -15,13 +15,13 @@ pytestmark = pytest.mark.unit
 
 
 REPOMAP_MODULES = [
-    "agentpool.repomap.context",
-    "agentpool.repomap.core",
-    "agentpool.repomap.languages",
-    "agentpool.repomap.outline",
-    "agentpool.repomap.tags",
-    "agentpool.repomap.types",
-    "agentpool.repomap.utils",
+    "wolfharness.repomap.context",
+    "wolfharness.repomap.core",
+    "wolfharness.repomap.languages",
+    "wolfharness.repomap.outline",
+    "wolfharness.repomap.tags",
+    "wolfharness.repomap.types",
+    "wolfharness.repomap.utils",
 ]
 
 

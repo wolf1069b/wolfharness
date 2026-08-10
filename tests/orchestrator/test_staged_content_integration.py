@@ -25,18 +25,18 @@ from unittest.mock import MagicMock
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool import Agent, AgentPool
-from agentpool.agents.context import AgentRunContext
-from agentpool.agents.events.events import StreamCompleteEvent
-from agentpool.agents.native_agent.turn import NativeTurn
-from agentpool.lifecycle import DirectChannel, MemoryJournal
-from agentpool.orchestrator.core import EventBus, SessionState
-from agentpool.orchestrator.run import RunHandle
 from tests._controller_helpers import send_via_controller
+from wolfharness import Agent, AgentPool
+from wolfharness.agents.context import AgentRunContext
+from wolfharness.agents.events.events import StreamCompleteEvent
+from wolfharness.agents.native_agent.turn import NativeTurn
+from wolfharness.lifecycle import DirectChannel, MemoryJournal
+from wolfharness.orchestrator.core import EventBus, SessionState
+from wolfharness.orchestrator.run import RunHandle
 
 
 if TYPE_CHECKING:
-    from agentpool.agents.events.events import RichAgentStreamEvent
+    from wolfharness.agents.events.events import RichAgentStreamEvent
 
 
 pytestmark = pytest.mark.unit
@@ -194,7 +194,7 @@ async def test_receive_request_empty_list_not_converted_to_string(minimal_pool: 
     followup()/steer() without stringification. The initial prompt
     is routed through followup() (D17), and start() is called with "".
     """
-    from agentpool.orchestrator.core import SessionController
+    from wolfharness.orchestrator.core import SessionController
 
     controller = SessionController(pool=minimal_pool)
     event_bus = EventBus()

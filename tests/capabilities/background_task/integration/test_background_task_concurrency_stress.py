@@ -25,16 +25,16 @@ import pytest
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-from agentpool import ChatMessage
-from agentpool.agents.base_agent import BaseAgent
-from agentpool.agents.context import AgentContext
-from agentpool.agents.events import StreamCompleteEvent
-from agentpool.capabilities.background_task.capability import (
+from wolfharness import ChatMessage
+from wolfharness.agents.base_agent import BaseAgent
+from wolfharness.agents.context import AgentContext
+from wolfharness.agents.events import StreamCompleteEvent
+from wolfharness.capabilities.background_task.capability import (
     BackgroundTaskCapability,
 )
-from agentpool.capabilities.background_task.manager import TERMINAL_STATES, BackgroundTaskManager
-from agentpool.capabilities.background_task.types import BackgroundTask
-from agentpool.delegation import AgentPool
+from wolfharness.capabilities.background_task.manager import TERMINAL_STATES, BackgroundTaskManager
+from wolfharness.capabilities.background_task.types import BackgroundTask
+from wolfharness.delegation import AgentPool
 
 
 # ---------------------------------------------------------------------------
@@ -443,7 +443,7 @@ async def test_team_delegation_async_path():
 
     with (
         patch(
-            "agentpool.capabilities.background_task.capability._generate_task_id",
+            "wolfharness.capabilities.background_task.capability._generate_task_id",
             return_value="bg_team_001",
         ),
         patch.object(

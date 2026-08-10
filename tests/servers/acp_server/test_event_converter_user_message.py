@@ -13,8 +13,8 @@ from typing import Any
 import pytest
 
 from acp.schema import UserMessageChunk
-from agentpool.agents.events.events import UserMessageInsertedEvent
-from agentpool_server.acp_server.event_converter import (
+from wolfharness.agents.events.events import UserMessageInsertedEvent
+from wolfharness_server.acp_server.event_converter import (
     ACPEventConverter,
     ACPUserMessageMeta,
 )

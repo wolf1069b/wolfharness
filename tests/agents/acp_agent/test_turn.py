@@ -12,9 +12,9 @@ from acp.schema import (
     AgentMessageChunk,
     TextContentBlock,
 )
-from agentpool.agents.acp_agent.turn import ACPTurn
-from agentpool.agents.context import AgentRunContext
-from agentpool.agents.events import (
+from wolfharness.agents.acp_agent.turn import ACPTurn
+from wolfharness.agents.context import AgentRunContext
+from wolfharness.agents.events import (
     PartDeltaEvent,
     RunErrorEvent,
     StreamCompleteEvent,

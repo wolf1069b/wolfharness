@@ -2,7 +2,7 @@
 sync:
   agent: doc_sync_agent
   dependencies:
-    - src/agentpool/models/acp_agents.py
+    - src/wolfharness/models/acp_agents.py
 title: ACP Agents
 description: External ACP agent integration
 icon: material/link-variant
@@ -34,7 +34,7 @@ These agents can be configured to work alongside AgentPool agents, enabling hybr
 ## Configuration Reference
 
 /// mknodes
-{{ "agentpool.models.acp_agents.ACPAgentConfigTypes" | union_to_markdown(display_mode="yaml", header_style="pymdownx", as_listitem=False, wrapped_in="agentname") }}
+{{ "wolfharness.models.acp_agents.ACPAgentConfigTypes" | union_to_markdown(display_mode="yaml", header_style="pymdownx", as_listitem=False, wrapped_in="agentname") }}
 ///
 
 ## Configuration Notes

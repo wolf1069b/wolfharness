@@ -17,21 +17,21 @@ from unittest.mock import ANY, AsyncMock, MagicMock
 
 import pytest
 
-from agentpool import Agent
-from agentpool.agents.events import (
+from wolfharness import Agent
+from wolfharness.agents.events import (
     SpawnSessionStart,
     StreamCompleteEvent,
     SubAgentEvent,
 )
-from agentpool.agents.exceptions import MAX_DELEGATION_DEPTH, DelegationDepthError
-from agentpool.delegation.base_team import BaseTeam
-from agentpool.messaging import ChatMessage
+from wolfharness.agents.exceptions import MAX_DELEGATION_DEPTH, DelegationDepthError
+from wolfharness.delegation.base_team import BaseTeam
+from wolfharness.messaging import ChatMessage
 
 
 pytestmark = pytest.mark.integration
 
 
-pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning:agentpool.agents.base_agent")
+pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning:wolfharness.agents.base_agent")
 
 
 # ============================================================================
@@ -43,7 +43,7 @@ def _make_echo_agent(name: str, response: str = "hello") -> Agent[Any, str]:
     """Create an Agent that echoes a fixed response via function_to_model."""
     from functools import partial
 
-    from agentpool.utils.model_helpers import function_to_model
+    from wolfharness.utils.model_helpers import function_to_model
 
     async def _echo(_msg: str, *, _response: str = response) -> str:
         return _response
@@ -84,7 +84,7 @@ async def test_team_run_stream_depth_guard() -> None:
 
 async def test_team_run_stream_depth_at_limit_ok() -> None:
     """Team.run_stream() should NOT raise at depth = MAX - 1."""
-    from agentpool.utils.model_helpers import function_to_model
+    from wolfharness.utils.model_helpers import function_to_model
 
     async def echo(msg: str) -> str:
         return msg
@@ -104,7 +104,7 @@ async def test_team_run_stream_depth_at_limit_ok() -> None:
 
 async def test_team_run_stream_emits_spawn_session_start() -> None:
     """Each member should emit SpawnSessionStart before SubAgentEvent content."""
-    from agentpool.utils.model_helpers import function_to_model
+    from wolfharness.utils.model_helpers import function_to_model
 
     async def echo(msg: str) -> str:
         return msg
@@ -133,7 +133,7 @@ async def test_team_run_stream_emits_spawn_session_start() -> None:
 
 async def test_spawn_session_start_precedes_subagent_for_member() -> None:
     """For each member, SpawnSessionStart should appear before any SubAgentEvent."""
-    from agentpool.utils.model_helpers import function_to_model
+    from wolfharness.utils.model_helpers import function_to_model
 
     async def echo(msg: str) -> str:
         return msg
@@ -164,7 +164,7 @@ async def test_spawn_session_start_precedes_subagent_for_member() -> None:
 
 async def test_subagent_event_preserves_session_ids() -> None:
     """SubAgentEvent should carry child_session_id and parent_session_id."""
-    from agentpool.utils.model_helpers import function_to_model
+    from wolfharness.utils.model_helpers import function_to_model
 
     async def echo(msg: str) -> str:
         return msg
@@ -189,7 +189,7 @@ async def test_subagent_event_preserves_session_ids() -> None:
 
 async def test_spawn_session_start_carries_session_ids() -> None:
     """SpawnSessionStart should carry child_session_id and parent_session_id."""
-    from agentpool.utils.model_helpers import function_to_model
+    from wolfharness.utils.model_helpers import function_to_model
 
     async def echo(msg: str) -> str:
         return msg
@@ -209,7 +209,7 @@ async def test_spawn_session_start_carries_session_ids() -> None:
 
 async def test_out_of_pool_team_generates_session_ids() -> None:
     """Team without pool should generate session IDs and not crash."""
-    from agentpool.utils.model_helpers import function_to_model
+    from wolfharness.utils.model_helpers import function_to_model
 
     async def echo(msg: str) -> str:
         return msg
@@ -239,7 +239,7 @@ async def test_out_of_pool_team_generates_session_ids() -> None:
 @pytest.mark.skip(reason="L2 migration: requires mock internals — remains L1 unit test")
 async def test_pool_backed_team_creates_child_sessions() -> None:
     """Team with pool.sessions should call create_child_session for each member."""
-    from agentpool.utils.model_helpers import function_to_model
+    from wolfharness.utils.model_helpers import function_to_model
 
     async def echo(msg: str) -> str:
         return msg
@@ -298,7 +298,7 @@ async def test_pool_backed_team_creates_child_sessions() -> None:
 
 async def test_team_kwargs_session_id_depth_popped() -> None:
     """Passing session_id/depth in kwargs should not cause duplicate keyword errors."""
-    from agentpool.utils.model_helpers import function_to_model
+    from wolfharness.utils.model_helpers import function_to_model
 
     async def echo(msg: str) -> str:
         return msg
@@ -324,7 +324,7 @@ async def test_team_kwargs_session_id_depth_popped() -> None:
 
 async def test_team_run_unchanged() -> None:
     """Team.run() should not be affected by run_stream() changes."""
-    from agentpool.utils.model_helpers import function_to_model
+    from wolfharness.utils.model_helpers import function_to_model
 
     async def echo(msg: str) -> str:
         return msg
@@ -341,7 +341,7 @@ async def test_team_run_unchanged() -> None:
 
 async def test_nested_subagent_event_session_ids_preserved() -> None:
     """Nested SubAgentEvent IDs should be preserved when a member is itself a Team."""
-    from agentpool.utils.model_helpers import function_to_model
+    from wolfharness.utils.model_helpers import function_to_model
 
     async def echo(msg: str) -> str:
         return msg

@@ -8,9 +8,9 @@ from typing import Any
 from pydantic_ai.toolsets import FilteredToolset
 import pytest
 
-from agentpool.capabilities.filtered_toolset import FilteredToolsetCapability
-from agentpool.capabilities.function_toolset import FunctionToolsetCapability
-from agentpool.tools.base import Tool
+from wolfharness.capabilities.filtered_toolset import FilteredToolsetCapability
+from wolfharness.capabilities.function_toolset import FunctionToolsetCapability
+from wolfharness.tools.base import Tool
 
 
 pytestmark = pytest.mark.unit
@@ -196,7 +196,7 @@ async def test_get_toolset_wraps_concrete_toolset() -> None:
     tool_a = _make_test_tool("tool_a")
     tool_b = _make_test_tool("tool_b")
 
-    from agentpool.capabilities.function_toolset import FunctionToolsetCapability
+    from wolfharness.capabilities.function_toolset import FunctionToolsetCapability
 
     inner = FunctionToolsetCapability([tool_a, tool_b], name="test")
 
@@ -219,7 +219,7 @@ async def test_concrete_toolset_filter_excludes_tools() -> None:
     tool_b = _make_test_tool("tool_b")
     tool_c = _make_test_tool("tool_c")
 
-    from agentpool.capabilities.function_toolset import FunctionToolsetCapability
+    from wolfharness.capabilities.function_toolset import FunctionToolsetCapability
 
     inner = FunctionToolsetCapability([tool_a, tool_b, tool_c], name="test")
 
@@ -240,7 +240,7 @@ async def test_concrete_toolset_filter_excludes_tools() -> None:
 @pytest.mark.asyncio
 async def test_concrete_toolset_returns_none_when_inner_returns_none() -> None:
     """Concrete toolset path returns None when inner returns None."""
-    from agentpool.capabilities.function_toolset import FunctionToolsetCapability
+    from wolfharness.capabilities.function_toolset import FunctionToolsetCapability
 
     inner = FunctionToolsetCapability(name="empty")
 
@@ -268,7 +268,7 @@ async def test_on_change_delegates_to_wrapped() -> None:
 
 
 @pytest.mark.asyncio
-async def test_on_change_returns_none_for_non_agentpool_capability() -> None:
+async def test_on_change_returns_none_for_non_wolfharness_capability() -> None:
     """on_change() returns None when wrapped capability doesn't implement on_change."""
 
     class _BareCapability:

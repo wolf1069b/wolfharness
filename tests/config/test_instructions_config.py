@@ -13,7 +13,7 @@ class TestProviderInstructionConfig:
 
     async def test_valid_config_with_ref(self):
         """Test valid config with ref field only."""
-        from agentpool_config.instructions import ProviderInstructionConfig
+        from wolfharness_config.instructions import ProviderInstructionConfig
 
         config = ProviderInstructionConfig(
             ref="my_provider",
@@ -26,7 +26,7 @@ class TestProviderInstructionConfig:
 
     async def test_valid_config_with_import_path(self):
         """Test valid config with import_path field only."""
-        from agentpool_config.instructions import ProviderInstructionConfig
+        from wolfharness_config.instructions import ProviderInstructionConfig
 
         config = ProviderInstructionConfig(
             import_path="my.module.Provider",
@@ -39,7 +39,7 @@ class TestProviderInstructionConfig:
 
     async def test_valid_config_with_import_path_and_kw_args(self):
         """Test valid config with import_path and kw_args."""
-        from agentpool_config.instructions import ProviderInstructionConfig
+        from wolfharness_config.instructions import ProviderInstructionConfig
 
         config = ProviderInstructionConfig(
             import_path="my.module.Provider",
@@ -53,7 +53,7 @@ class TestProviderInstructionConfig:
 
     async def test_invalid_config_both_ref_and_import_path(self):
         """Test that config with both ref and import_path raises error."""
-        from agentpool_config.instructions import ProviderInstructionConfig
+        from wolfharness_config.instructions import ProviderInstructionConfig
 
         with pytest.raises(ValueError, match="Only one of 'ref' or 'import_path' can be provided"):
             ProviderInstructionConfig(
@@ -63,7 +63,7 @@ class TestProviderInstructionConfig:
 
     async def test_invalid_config_neither_ref_nor_import_path(self):
         """Test that config with neither ref nor import_path raises error."""
-        from agentpool_config.instructions import ProviderInstructionConfig
+        from wolfharness_config.instructions import ProviderInstructionConfig
 
         with pytest.raises(ValueError, match="Either 'ref' or 'import_path' must be provided"):
             ProviderInstructionConfig()

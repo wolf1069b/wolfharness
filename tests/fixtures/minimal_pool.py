@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import pytest
 import yamling
 
-from agentpool import AgentPool, AgentsManifest
+from wolfharness import AgentPool, AgentsManifest
 
 
 if TYPE_CHECKING:

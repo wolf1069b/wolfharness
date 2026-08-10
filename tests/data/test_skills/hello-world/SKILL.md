@@ -29,7 +29,7 @@ When invoked, respond with a warm, friendly greeting message.
 
 Basic greeting:
 ```bash
-agentpool skill hello-world
+wolfharness skill hello-world
 ```
 
 Expected output:

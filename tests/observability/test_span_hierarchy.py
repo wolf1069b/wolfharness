@@ -232,7 +232,7 @@ def test_background_task_span(
 
     This simulates the ``with logfire.span()`` inside the
     ``_safe_background_run()`` nested function in
-    ``agentpool_toolsets/builtin/subagent_tools.py``.
+    ``wolfharness_toolsets/builtin/subagent_tools.py``.
     """
     tracer, exporter = in_memory_tracer
 

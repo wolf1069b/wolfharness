@@ -9,11 +9,11 @@ icon: material/plus
 Register a new agent configuration file.
 
 ```bash
-agentpool add <config_path>
+wolfharness add <config_path>
 ```
 
 For a full list of options, run:
 
 ```bash
-agentpool add --help
+wolfharness add --help
 ```

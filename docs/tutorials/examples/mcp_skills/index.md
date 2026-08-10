@@ -233,14 +233,14 @@ def get_pdf_example(filename: str) -> bytes:
 
 ```bash
 # List all available skills (local + MCP)
-agentpool run mcp_skills/skill_discoverer "List all available skills"
+wolfharness run mcp_skills/skill_discoverer "List all available skills"
 
 # Load a specific MCP skill
-agentpool run mcp_skills/mcp_skill_user \
+wolfharness run mcp_skills/mcp_skill_user \
   "Load the skill://mcp-server-with-prompts/code-review skill"
 
 # Auto-route to a skill by short name
-agentpool run mcp_skills/mcp_skill_user \
+wolfharness run mcp_skills/mcp_skill_user \
   "Load the code-review skill"
 ```
 
@@ -290,7 +290,7 @@ Reference not found: 'skill://server/skill/file.md'
 ### `config.yml`
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/Million-mo/agentpool/refs/heads/main/schema/config-schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Million-mo/wolfharness/refs/heads/main/schema/config-schema.json
 # Example: MCP-Exposed Skills
 #
 # This example demonstrates how to use skills exposed by MCP servers.

@@ -7,12 +7,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentpool import Agent
-from agentpool.delegation import AgentPool
-from agentpool.orchestrator.core import SessionPool
-from agentpool.sessions import SessionData
-from agentpool_server.acp_server.session_manager import ACPSessionManager
-from agentpool_storage.memory_provider.provider import MemoryStorageProvider
+from wolfharness import Agent
+from wolfharness.delegation import AgentPool
+from wolfharness.orchestrator.core import SessionPool
+from wolfharness.sessions import SessionData
+from wolfharness_server.acp_server.session_manager import ACPSessionManager
+from wolfharness_storage.memory_provider.provider import MemoryStorageProvider
 
 
 pytestmark = pytest.mark.unit
@@ -20,8 +20,8 @@ pytestmark = pytest.mark.unit
 
 def _make_pool_with_sessions() -> tuple[AgentPool, Agent, SessionPool, MemoryStorageProvider]:
     """Create a pool with a real SessionPool backed by MemoryStorageProvider."""
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.manifest import AgentsManifest
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.manifest import AgentsManifest
 
     manifest = AgentsManifest(agents={"test_agent": NativeAgentConfig(model="test")})
 
@@ -48,7 +48,7 @@ def _make_acp_session_manager(pool: AgentPool) -> ACPSessionManager:
 
     # Mock out ACPSession creation and initialization to avoid needing
     # a real ACP client and all the initialization machinery.
-    with patch("agentpool_server.acp_server.session_manager.ACPSession") as mock_session_cls:
+    with patch("wolfharness_server.acp_server.session_manager.ACPSession") as mock_session_cls:
         mock_session = MagicMock()
         mock_session.session_id = "session_top_001"
         mock_session.register_update_callback = MagicMock()
@@ -68,8 +68,8 @@ async def test_top_level_session_has_no_parent():
     mock_acp_agent = MagicMock()
 
     with (
-        patch("agentpool_server.acp_server.session_manager.ACPSession") as mock_session_cls,
-        patch("agentpool_server.acp_server.session_manager.ClientCapabilities"),
+        patch("wolfharness_server.acp_server.session_manager.ACPSession") as mock_session_cls,
+        patch("wolfharness_server.acp_server.session_manager.ClientCapabilities"),
     ):
         mock_session = MagicMock()
         mock_session.register_update_callback = MagicMock()
@@ -97,7 +97,7 @@ async def test_child_session_inherits_parent_project_id():
     pool, agent, _sessions, store = _make_pool_with_sessions()
 
     # Create a parent session in the store first
-    from agentpool_storage.opencode_provider.helpers import compute_project_id
+    from wolfharness_storage.opencode_provider.helpers import compute_project_id
 
     parent_cwd = tempfile.gettempdir()
     parent_project_id = compute_project_id(parent_cwd)
@@ -114,8 +114,8 @@ async def test_child_session_inherits_parent_project_id():
     mock_acp_agent = MagicMock()
 
     with (
-        patch("agentpool_server.acp_server.session_manager.ACPSession") as mock_session_cls,
-        patch("agentpool_server.acp_server.session_manager.ClientCapabilities"),
+        patch("wolfharness_server.acp_server.session_manager.ACPSession") as mock_session_cls,
+        patch("wolfharness_server.acp_server.session_manager.ClientCapabilities"),
     ):
         mock_session = MagicMock()
         mock_session.register_update_callback = MagicMock()
@@ -149,7 +149,7 @@ async def test_child_session_uses_effective_cwd_for_acp_session():
     pool, agent, _sessions, store = _make_pool_with_sessions()
 
     parent_cwd = tempfile.gettempdir()
-    from agentpool_storage.opencode_provider.helpers import compute_project_id
+    from wolfharness_storage.opencode_provider.helpers import compute_project_id
 
     parent_project_id = compute_project_id(parent_cwd)
     parent_data = SessionData(
@@ -165,8 +165,8 @@ async def test_child_session_uses_effective_cwd_for_acp_session():
     mock_acp_agent = MagicMock()
 
     with (
-        patch("agentpool_server.acp_server.session_manager.ACPSession") as mock_session_cls,
-        patch("agentpool_server.acp_server.session_manager.ClientCapabilities"),
+        patch("wolfharness_server.acp_server.session_manager.ACPSession") as mock_session_cls,
+        patch("wolfharness_server.acp_server.session_manager.ClientCapabilities"),
     ):
         mock_session = MagicMock()
         mock_session.register_update_callback = MagicMock()
@@ -198,8 +198,8 @@ async def test_no_parent_session_id_preserves_existing_behavior():
     mock_acp_agent = MagicMock()
 
     with (
-        patch("agentpool_server.acp_server.session_manager.ACPSession") as mock_session_cls,
-        patch("agentpool_server.acp_server.session_manager.ClientCapabilities"),
+        patch("wolfharness_server.acp_server.session_manager.ACPSession") as mock_session_cls,
+        patch("wolfharness_server.acp_server.session_manager.ClientCapabilities"),
     ):
         mock_session = MagicMock()
         mock_session.register_update_callback = MagicMock()
@@ -226,8 +226,8 @@ async def test_no_parent_session_id_preserves_existing_behavior():
 
 async def test_child_session_without_pool_sessions_falls_back_to_top_level():
     """When pool.sessions is None but parent_session_id is provided, should fall back to...."""
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.manifest import AgentsManifest
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.manifest import AgentsManifest
 
     manifest = AgentsManifest(agents={"test_agent": NativeAgentConfig(model="test")})
 
@@ -247,8 +247,8 @@ async def test_child_session_without_pool_sessions_falls_back_to_top_level():
     mock_acp_agent = MagicMock()
 
     with (
-        patch("agentpool_server.acp_server.session_manager.ACPSession") as mock_session_cls,
-        patch("agentpool_server.acp_server.session_manager.ClientCapabilities"),
+        patch("wolfharness_server.acp_server.session_manager.ACPSession") as mock_session_cls,
+        patch("wolfharness_server.acp_server.session_manager.ClientCapabilities"),
     ):
         mock_session = MagicMock()
         mock_session.register_update_callback = MagicMock()

@@ -15,8 +15,8 @@ import time
 import pytest
 
 from acp.schema import UserMessageChunk
-from agentpool.agents.events.events import UserMessageInsertedEvent
-from agentpool_server.acp_server.event_converter import ACPEventConverter
+from wolfharness.agents.events.events import UserMessageInsertedEvent
+from wolfharness_server.acp_server.event_converter import ACPEventConverter
 
 
 pytestmark = pytest.mark.unit

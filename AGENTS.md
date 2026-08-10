@@ -11,6 +11,28 @@ All significant changes go through OpenSpec: `/opsx:explore` → `/opsx:propose`
 - Location: `openspec/` (24 capability specs, 34 archived changes)
 - CLI: `openspec` v1.4+ — see `openspec/config.yaml`
 
+## Changelog
+
+Every release requires a changelog entry. See `changelog/README.md` for the full convention.
+
+### Release workflow
+
+1. Development changes accumulate in `changelog/unreleased/` — one detail file per logical change (`YYYY-MM-DD-short-slug.md`).
+2. At release time:
+   - Rename `unreleased/` to the version number (e.g. `2.10.0/`).
+   - Write `README.md` (summary linking each detail file) and `RELEASE.md` (GitHub Release body).
+   - Update `pyproject.toml` version.
+   - Commit **before** creating the git tag.
+   - Create a fresh empty `unreleased/` for the next cycle.
+
+### Detail file format
+
+```markdown
+# Title
+
+What changed and why. Use `##` sections once the entry covers more than one thing.
+```
+
 ## Quick Commands
 
 ```bash
@@ -22,9 +44,22 @@ uv run ruff check src/                  # Lint
 uv run ruff format src/                 # Format
 uv run --no-group docs mypy src/        # Type check
 duty lint                               # All checks
-agentpool run <name> "prompt"           # Run agent
-agentpool serve-acp config.yml          # Start ACP server
+wolfharness run <name> "prompt"           # Run agent
+wolfharness serve-acp config.yml          # Start ACP server
 ```
+
+### Documentation build — use `zensical`, NOT `mkdocs serve`
+
+GitHub Pages deployment (`.github/workflows/documentation.yml`) builds the docs with `zensical build`, not vanilla MkDocs. Local preview MUST use the same command, otherwise the theme renders differently than production:
+
+```bash
+uv run --group docs zensical build                          # Build to ./site (same as CI)
+python3 -m http.server 8000 --directory site                # Preview the zensical output
+```
+
+- **`zensical build`** renders using zensical/mknodes' built-in Material theme variant (white header) — this matches production.
+- **`mkdocs serve`** renders with standard Material (`primary: indigo`, blue header) and does NOT match production. Do not use it to preview docs unless you intentionally want the different theme.
+- Verify in a **private/incognito window** or after a hard refresh (Shift+F5) to rule out cached palette state.
 
 ## Code Style — Red Lines
 
@@ -32,7 +67,7 @@ agentpool serve-acp config.yml          # Start ACP server
 - PEP 8 via Ruff. Google-style docstrings (no types in Args section).
 - Type hints required (`mypy --strict`). **Never** use `as any`, `@ts-ignore`, or type suppressions.
 - `from __future__ import annotations` for forward references.
-- Use `TYPE_CHECKING` blocks to avoid circular imports. Config models import from `agentpool_config.*`, not `agentpool.models`.
+- Use `TYPE_CHECKING` blocks to avoid circular imports. Config models import from `wolfharness_config.*`, not `wolfharness.models`.
 - No `getattr`/`hasattr` — provide full type safety.
 - NEVER use shortcuts or leave TODOs unless explicitly asked.
 
@@ -50,28 +85,28 @@ Instrument critical-path code (RunLoop, Turn, delegation, protocol entry points)
 
 ## Key Files
 
-- `src/agentpool/delegation/pool.py` — AgentPool orchestration
-- `src/agentpool/agents/agent.py` — Native agent implementation
-- `src/agentpool/messaging/messagenode.py` — MessageNode base abstraction
-- `src/agentpool/orchestrator/core.py` — EventBus, SessionController
-- `src/agentpool/orchestrator/run.py` — RunHandle (RunLoop) lifecycle
-- `src/agentpool/models/manifest.py` — Configuration schema
-- `src/agentpool/capabilities/` — Capability system (M3)
-- `src/agentpool/lifecycle/` — Lifecycle dimensions (M2)
+- `src/wolfharness/delegation/pool.py` — AgentPool orchestration
+- `src/wolfharness/agents/agent.py` — Native agent implementation
+- `src/wolfharness/messaging/messagenode.py` — MessageNode base abstraction
+- `src/wolfharness/orchestrator/core.py` — EventBus, SessionController
+- `src/wolfharness/orchestrator/run.py` — RunHandle (RunLoop) lifecycle
+- `src/wolfharness/models/manifest.py` — Configuration schema
+- `src/wolfharness/capabilities/` — Capability system (M3)
+- `src/wolfharness/lifecycle/` — Lifecycle dimensions (M2)
 
 ## Context Loading
 
 | Working on | Read this |
 |---|---|
-| RunLoop / Turn / EventBus | `src/agentpool/orchestrator/AGENTS.md` |
-| Lifecycle dimensions | `src/agentpool/lifecycle/AGENTS.md` |
-| Capabilities / tools | `src/agentpool/capabilities/AGENTS.md` |
-| Skills system | `src/agentpool/skills/AGENTS.md` |
-| Hooks system | `src/agentpool/hooks/AGENTS.md` |
+| RunLoop / Turn / EventBus | `src/wolfharness/orchestrator/AGENTS.md` |
+| Lifecycle dimensions | `src/wolfharness/lifecycle/AGENTS.md` |
+| Capabilities / tools | `src/wolfharness/capabilities/AGENTS.md` |
+| Skills system | `src/wolfharness/skills/AGENTS.md` |
+| Hooks system | `src/wolfharness/hooks/AGENTS.md` |
 | Tests | `tests/AGENTS.md` |
-| Protocol servers | `src/agentpool_server/AGENTS.md` |
+| Protocol servers | `src/wolfharness_server/AGENTS.md` |
 | ACP protocol | `src/acp/AGENTS.md` |
-| Core framework overview | `src/agentpool/AGENTS.md` |
+| Core framework overview | `src/wolfharness/AGENTS.md` |
 | Architecture deep-dives | `docs/explanation/` |
 | Module structure | `docs/explanation/module-structure.md` |
 | Graph architecture | `docs/explanation/graph-architecture.md` |
@@ -83,7 +118,7 @@ Instrument critical-path code (RunLoop, Turn, delegation, protocol entry points)
 | ToolDisplayCapability (tool rename + diff + rich display events) | `docs/explanation/tool-display-capability.md` |
 | Telemetry rules | `docs/explanation/telemetry.md` |
 | Usage examples | `docs/explanation/usage-examples.md` |
-| Extending AgentPool | `docs/explanation/extending-agentpool.md` |
+| Extending AgentPool | `docs/explanation/extending-wolfharness.md` |
 | Where to put new docs | `docs/meta/documentation-guide.md` |
 
 ## Tool Compatibility

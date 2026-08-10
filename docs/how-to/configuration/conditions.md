@@ -2,7 +2,7 @@
 sync:
   agent: doc_sync_agent
   dependencies:
-    - src/agentpool_config/conditions.py
+    - src/wolfharness_config/conditions.py
 title: Conditions
 description: Conditional logic for message flow and lifecycle control
 icon: material/filter-variant
@@ -32,7 +32,7 @@ AgentPool supports various condition types:
 ## Configuration Reference
 
 /// mknodes
-{{ "agentpool_config.conditions.Condition" | union_to_markdown(display_mode="yaml", header_style="pymdownx") }}
+{{ "wolfharness_config.conditions.Condition" | union_to_markdown(display_mode="yaml", header_style="pymdownx") }}
 ///
 
 ## Control Levels

@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from agentpool.messaging import ChatMessage
-from agentpool.messaging.graph_adapter import AgentPoolState, MessageNodeStep
-from agentpool.messaging.messagenode import MessageNode
+from wolfharness.messaging import ChatMessage
+from wolfharness.messaging.graph_adapter import AgentPoolState, MessageNodeStep
+from wolfharness.messaging.messagenode import MessageNode
 
 
 pytestmark = pytest.mark.unit
@@ -39,7 +39,7 @@ class GraphMessageNodeWithEvents(MessageNode[Any, str]):
     async def _execute_node(self, *prompts: Any, **kwargs: Any) -> ChatMessage[str]:
         from pydantic_ai import TextPartDelta
 
-        from agentpool.agents.events import PartDeltaEvent
+        from wolfharness.agents.events import PartDeltaEvent
 
         state = kwargs.get("_state")
         if state is not None:
@@ -99,7 +99,7 @@ async def test_message_node_run_stream_uses_graph_iter():
     events = [event async for event in node.run_stream("stream_test")]
 
     assert len(events) == 1
-    from agentpool.agents.events import StreamCompleteEvent
+    from wolfharness.agents.events import StreamCompleteEvent
 
     assert isinstance(events[0], StreamCompleteEvent)
     assert events[0].message.content == "stream_test"
@@ -111,7 +111,7 @@ async def test_message_node_run_stream_drains_event_queue():
     node = GraphMessageNodeWithEvents(name="test_events")
     events = [event async for event in node.run_stream("event_test")]
 
-    from agentpool.agents.events import PartDeltaEvent, StreamCompleteEvent
+    from wolfharness.agents.events import PartDeltaEvent, StreamCompleteEvent
 
     assert len(events) == 2
     assert isinstance(events[0], PartDeltaEvent)

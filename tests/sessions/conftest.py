@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from agentpool.sessions.models import SessionData
-from agentpool_config.storage import SQLStorageConfig
-from agentpool_storage.sql_provider import SQLModelProvider
+from wolfharness.sessions.models import SessionData
+from wolfharness_config.storage import SQLStorageConfig
+from wolfharness_storage.sql_provider import SQLModelProvider
 
 
 if TYPE_CHECKING:
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 @pytest.fixture
 def _clear_engine_cache():
     """Clear engine cache to avoid cross-test contamination."""
-    from agentpool_config.storage import _engine_cache
+    from wolfharness_config.storage import _engine_cache
 
     _engine_cache.clear()
     yield

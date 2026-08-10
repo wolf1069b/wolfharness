@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from agentpool_server.opencode_server.models.common import FileDiff
+from wolfharness_server.opencode_server.models.common import FileDiff
 
 
 pytestmark = pytest.mark.integration
@@ -22,7 +22,7 @@ class _StubFileChange:
 
     def to_unified_diff(self) -> str:
         """Return a minimal unified diff string."""
-        from agentpool.utils.diffs import compute_unified_diff
+        from wolfharness.utils.diffs import compute_unified_diff
 
         return compute_unified_diff(
             self.old_content or "",

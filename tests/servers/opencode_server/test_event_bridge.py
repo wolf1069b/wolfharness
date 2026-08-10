@@ -13,18 +13,18 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from agentpool.agents.events.events import (
+from wolfharness.agents.events.events import (
     CustomEvent,
     RunFailedEvent,
     RunStartedEvent,
     StreamCompleteEvent,
 )
-from agentpool.messaging import ChatMessage
-from agentpool.orchestrator.core import EventBus, EventEnvelope
-from agentpool_server.opencode_server.event_processor_context import (
+from wolfharness.messaging import ChatMessage
+from wolfharness.orchestrator.core import EventBus, EventEnvelope
+from wolfharness_server.opencode_server.event_processor_context import (
     EventProcessorContext,
 )
-from agentpool_server.opencode_server.models import (
+from wolfharness_server.opencode_server.models import (
     AssistantMessage,
     MessagePath,
     MessageTime,
@@ -34,11 +34,11 @@ from agentpool_server.opencode_server.models import (
     SessionStatus,
     SessionStatusEvent,
 )
-from agentpool_server.opencode_server.models.events import ServerConnectedEvent
-from agentpool_server.opencode_server.opencode_event_bridge import (
+from wolfharness_server.opencode_server.models.events import ServerConnectedEvent
+from wolfharness_server.opencode_server.opencode_event_bridge import (
     OpenCodeEventBridgeMixin,
 )
-from agentpool_server.opencode_server.state import ServerState
+from wolfharness_server.opencode_server.state import ServerState
 
 
 pytestmark = pytest.mark.integration
@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
     from pathlib import Path
 
-    from agentpool_server.opencode_server.models.events import Event
+    from wolfharness_server.opencode_server.models.events import Event
 
 
 # =============================================================================
@@ -59,7 +59,7 @@ if TYPE_CHECKING:
 @pytest.fixture
 def bridged_state(tmp_project_dir: Path, mock_agent: Mock) -> ServerState:
     """Create a ServerState with an active OpenCodeEventBridge."""
-    from agentpool.orchestrator.core import EventBus
+    from wolfharness.orchestrator.core import EventBus
 
     # Wire a real EventBus into the mock pool so __post_init__ can discover it
     mock_agent.host_context.session_pool.event_bus = EventBus()
@@ -535,11 +535,11 @@ async def test_stream_complete_sets_time_completed() -> None:
 
     with (
         patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.set_session_status",
+            "wolfharness_server.opencode_server.opencode_event_bridge.set_session_status",
             new_callable=AsyncMock,
         ),
         patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.append_message_to_session",
+            "wolfharness_server.opencode_server.opencode_event_bridge.append_message_to_session",
             new_callable=AsyncMock,
         ) as mock_append,
     ):
@@ -578,11 +578,11 @@ async def test_stream_complete_skips_if_already_completed() -> None:
 
     with (
         patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.set_session_status",
+            "wolfharness_server.opencode_server.opencode_event_bridge.set_session_status",
             new_callable=AsyncMock,
         ),
         patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.append_message_to_session",
+            "wolfharness_server.opencode_server.opencode_event_bridge.append_message_to_session",
             new_callable=AsyncMock,
         ) as mock_append,
     ):
@@ -632,11 +632,11 @@ async def test_d1_reset_finalizes_previous_turn() -> None:
 
     with (
         patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.set_session_status",
+            "wolfharness_server.opencode_server.opencode_event_bridge.set_session_status",
             new_callable=AsyncMock,
         ),
         patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.append_message_to_session",
+            "wolfharness_server.opencode_server.opencode_event_bridge.append_message_to_session",
             new_callable=AsyncMock,
         ) as mock_append,
     ):
@@ -699,11 +699,11 @@ async def test_d1_reset_skips_finalize_if_already_completed() -> None:
 
     with (
         patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.set_session_status",
+            "wolfharness_server.opencode_server.opencode_event_bridge.set_session_status",
             new_callable=AsyncMock,
         ),
         patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.append_message_to_session",
+            "wolfharness_server.opencode_server.opencode_event_bridge.append_message_to_session",
             new_callable=AsyncMock,
         ) as mock_append,
     ):
@@ -732,7 +732,7 @@ async def test_d2_warning_logged_on_incomplete_turn() -> None:
     """
     from unittest.mock import AsyncMock, patch
 
-    import agentpool_server.opencode_server.opencode_event_bridge as bridge_module
+    import wolfharness_server.opencode_server.opencode_event_bridge as bridge_module
 
     session_id = "sess-d2"
     bridge, _ctx, _broadcast_calls = _setup_bridge_for_handle(
@@ -748,11 +748,11 @@ async def test_d2_warning_logged_on_incomplete_turn() -> None:
 
     with (
         patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.set_session_status",
+            "wolfharness_server.opencode_server.opencode_event_bridge.set_session_status",
             new_callable=AsyncMock,
         ),
         patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.append_message_to_session",
+            "wolfharness_server.opencode_server.opencode_event_bridge.append_message_to_session",
             new_callable=AsyncMock,
         ),
         patch.object(bridge_module.logger, "warning") as mock_warning,
@@ -792,11 +792,11 @@ async def test_run_failed_sets_time_completed() -> None:
 
     with (
         patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.set_session_status",
+            "wolfharness_server.opencode_server.opencode_event_bridge.set_session_status",
             new_callable=AsyncMock,
         ),
         patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.append_message_to_session",
+            "wolfharness_server.opencode_server.opencode_event_bridge.append_message_to_session",
             new_callable=AsyncMock,
         ) as mock_append,
     ):
@@ -839,11 +839,11 @@ async def test_stream_complete_cancelled_sets_time_completed() -> None:
 
     with (
         patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.set_session_status",
+            "wolfharness_server.opencode_server.opencode_event_bridge.set_session_status",
             new_callable=AsyncMock,
         ),
         patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.append_message_to_session",
+            "wolfharness_server.opencode_server.opencode_event_bridge.append_message_to_session",
             new_callable=AsyncMock,
         ),
     ):
@@ -877,11 +877,11 @@ async def test_finalize_skips_when_no_context() -> None:
 
     with (
         patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.set_session_status",
+            "wolfharness_server.opencode_server.opencode_event_bridge.set_session_status",
             new_callable=AsyncMock,
         ),
         patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.append_message_to_session",
+            "wolfharness_server.opencode_server.opencode_event_bridge.append_message_to_session",
             new_callable=AsyncMock,
         ) as mock_append,
     ):

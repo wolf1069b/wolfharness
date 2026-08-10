@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from agentpool.capabilities.extension_registry import (
+from wolfharness.capabilities.extension_registry import (
     ExtensionRegistry,
     Scope,
     ScopeLevel,
@@ -37,7 +37,7 @@ class CorruptSkillResource:
         return self._name
 
     async def list_skills(self) -> list:
-        from agentpool.capabilities.resource_protocols import SkillEntry
+        from wolfharness.capabilities.resource_protocols import SkillEntry
 
         entries = []
         for name, content in self._skills.items():
@@ -71,7 +71,7 @@ class TimeoutMcpResource:
         return []
 
     async def call_tool(self, name: str, args: dict[str, Any]) -> Any:
-        from agentpool.capabilities.resource_protocols import ToolResult
+        from wolfharness.capabilities.resource_protocols import ToolResult
 
         self._call_count += 1
         if self._call_count <= self._timeout_count:
@@ -115,7 +115,7 @@ class TestSkillFileCorruption:
     @pytest.mark.asyncio
     async def test_good_skill_still_resolvable(self) -> None:
         """Non-corrupted skills still resolve correctly."""
-        from agentpool.skills.skill import Skill
+        from wolfharness.skills.skill import Skill
 
         reg = ExtensionRegistry()
         cap = CorruptSkillResource()
@@ -159,7 +159,7 @@ class TestMcpServerTimeout:
 
         class GoodMcpResource(TimeoutMcpResource):
             async def call_tool(self, name: str, args: dict[str, Any]) -> Any:
-                from agentpool.capabilities.resource_protocols import ToolResult
+                from wolfharness.capabilities.resource_protocols import ToolResult
 
                 return ToolResult(content="good server working")
 

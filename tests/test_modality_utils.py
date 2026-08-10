@@ -12,7 +12,7 @@ from pydantic_ai.messages import (
 )
 import pytest
 
-from agentpool.capabilities.modality_utils import (
+from wolfharness.capabilities.modality_utils import (
     classify_binary_content,
     describe_multimodal_content,
 )

@@ -8,11 +8,11 @@ import pytest
 
 from acp import ClientCapabilities, DefaultACPClient, FileSystemCapability
 from acp.agent.implementations import TestAgent
-from agentpool import Agent
-from agentpool.delegation import AgentPool
-from agentpool.models.agents import NativeAgentConfig
-from agentpool.models.manifest import AgentsManifest
-from agentpool_server.acp_server.acp_agent import AgentPoolACPAgent
+from wolfharness import Agent
+from wolfharness.delegation import AgentPool
+from wolfharness.models.agents import NativeAgentConfig
+from wolfharness.models.manifest import AgentsManifest
+from wolfharness_server.acp_server.acp_agent import AgentPoolACPAgent
 
 
 @pytest.fixture

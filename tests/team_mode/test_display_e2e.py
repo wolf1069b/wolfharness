@@ -12,22 +12,22 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentpool.agents.events.events import SpawnSessionStart, StreamCompleteEvent
+from wolfharness.agents.events.events import SpawnSessionStart, StreamCompleteEvent
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_e2e_team_member_display_name_propagation():  # noqa: PLR0915
     """Verify display_name flows from SpawnSessionStart through ToolPart and session title."""
-    from agentpool_server.opencode_server.models import (
+    from wolfharness_server.opencode_server.models import (
         MessageWithParts,
         Session,
         ToolPart,
     )
-    from agentpool_server.opencode_server.opencode_event_bridge import (
+    from wolfharness_server.opencode_server.opencode_event_bridge import (
         OpenCodeEventBridgeMixin,
     )
-    from agentpool_server.opencode_server.opencode_message_bridge import (
+    from wolfharness_server.opencode_server.opencode_message_bridge import (
         OpenCodeMessageBridgeMixin,
     )
 
@@ -104,7 +104,7 @@ async def test_e2e_team_member_display_name_propagation():  # noqa: PLR0915
     mock_session.title = "New Session"  # Simulate pre-existing default title
 
     with patch(
-        "agentpool_server.opencode_server.opencode_event_bridge.ensure_session",
+        "wolfharness_server.opencode_server.opencode_event_bridge.ensure_session",
         new_callable=AsyncMock,
         return_value=mock_session,
     ):
@@ -169,14 +169,14 @@ async def test_e2e_team_member_display_name_propagation():  # noqa: PLR0915
 @pytest.mark.asyncio
 async def test_e2e_lead_display_name_propagation():
     """Verify lead agent gets 'Lead' role in display name."""
-    from agentpool_server.opencode_server.models import (
+    from wolfharness_server.opencode_server.models import (
         MessageWithParts,
         Session,
     )
-    from agentpool_server.opencode_server.opencode_event_bridge import (
+    from wolfharness_server.opencode_server.opencode_event_bridge import (
         OpenCodeEventBridgeMixin,
     )
-    from agentpool_server.opencode_server.opencode_message_bridge import (
+    from wolfharness_server.opencode_server.opencode_message_bridge import (
         OpenCodeMessageBridgeMixin,
     )
 
@@ -233,7 +233,7 @@ async def test_e2e_lead_display_name_propagation():
     mock_session.title = "New Session"
 
     with patch(
-        "agentpool_server.opencode_server.opencode_event_bridge.ensure_session",
+        "wolfharness_server.opencode_server.opencode_event_bridge.ensure_session",
         new_callable=AsyncMock,
         return_value=mock_session,
     ):
@@ -250,14 +250,14 @@ async def test_e2e_lead_display_name_propagation():
 @pytest.mark.asyncio
 async def test_e2e_regular_subagent_no_team_context():
     """Verify non-team subagents don't get team prefix."""
-    from agentpool_server.opencode_server.models import (
+    from wolfharness_server.opencode_server.models import (
         MessageWithParts,
         Session,
     )
-    from agentpool_server.opencode_server.opencode_event_bridge import (
+    from wolfharness_server.opencode_server.opencode_event_bridge import (
         OpenCodeEventBridgeMixin,
     )
-    from agentpool_server.opencode_server.opencode_message_bridge import (
+    from wolfharness_server.opencode_server.opencode_message_bridge import (
         OpenCodeMessageBridgeMixin,
     )
 
@@ -310,7 +310,7 @@ async def test_e2e_regular_subagent_no_team_context():
     mock_session.title = "New Session"
 
     with patch(
-        "agentpool_server.opencode_server.opencode_event_bridge.ensure_session",
+        "wolfharness_server.opencode_server.opencode_event_bridge.ensure_session",
         new_callable=AsyncMock,
         return_value=mock_session,
     ):

@@ -1,1 +1,1 @@
-"""Tests for agentpool_config package."""
+"""Tests for wolfharness_config package."""

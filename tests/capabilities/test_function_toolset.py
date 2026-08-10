@@ -7,8 +7,8 @@ from typing import Any
 from pydantic_ai.toolsets import FunctionToolset
 import pytest
 
-from agentpool.capabilities.function_toolset import FunctionToolsetCapability
-from agentpool.tools.base import Tool
+from wolfharness.capabilities.function_toolset import FunctionToolsetCapability
+from wolfharness.tools.base import Tool
 
 
 pytestmark = pytest.mark.unit

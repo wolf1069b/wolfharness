@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentpool.lifecycle.types import DeliveryMode
+from wolfharness.lifecycle.types import DeliveryMode
 
 
 pytestmark = [pytest.mark.unit, pytest.mark.anyio]
@@ -29,7 +29,7 @@ async def test_meta_delivery_ster_routes_as_asap() -> None:
     Then: ``handle_prompt`` receives ``delivery="steer"`` and ``send_message``
         is called with ``mode=DeliveryMode.STEER``.
     """
-    from agentpool_server.acp_server.handler import ACPProtocolHandler
+    from wolfharness_server.acp_server.handler import ACPProtocolHandler
 
     host_context = MagicMock()
     session_pool = MagicMock()
@@ -59,7 +59,7 @@ async def test_meta_delivery_ster_routes_as_asap() -> None:
     handler._ensure_event_consumer = AsyncMock()
 
     with patch(
-        "agentpool_server.acp_server.handler.ACPEventConverter.build_user_message_chunks",
+        "wolfharness_server.acp_server.handler.ACPEventConverter.build_user_message_chunks",
         return_value=[],
     ):
         await handler.handle_prompt(
@@ -80,7 +80,7 @@ async def test_meta_delivery_followup_routes_as_when_idle() -> None:
     When: ``handle_prompt(delivery="followup")`` is called.
     Then: ``send_message`` is called with ``mode=DeliveryMode.QUEUE``.
     """
-    from agentpool_server.acp_server.handler import ACPProtocolHandler
+    from wolfharness_server.acp_server.handler import ACPProtocolHandler
 
     host_context = MagicMock()
     session_pool = MagicMock()
@@ -110,7 +110,7 @@ async def test_meta_delivery_followup_routes_as_when_idle() -> None:
     handler._ensure_event_consumer = AsyncMock()
 
     with patch(
-        "agentpool_server.acp_server.handler.ACPEventConverter.build_user_message_chunks",
+        "wolfharness_server.acp_server.handler.ACPEventConverter.build_user_message_chunks",
         return_value=[],
     ):
         await handler.handle_prompt(
@@ -131,7 +131,7 @@ async def test_no_meta_delivery_defaults_to_queue() -> None:
     When: ``handle_prompt(delivery=None)`` is called.
     Then: ``send_message`` is called with ``mode=DeliveryMode.QUEUE``.
     """
-    from agentpool_server.acp_server.handler import ACPProtocolHandler
+    from wolfharness_server.acp_server.handler import ACPProtocolHandler
 
     host_context = MagicMock()
     session_pool = MagicMock()
@@ -161,7 +161,7 @@ async def test_no_meta_delivery_defaults_to_queue() -> None:
     handler._ensure_event_consumer = AsyncMock()
 
     with patch(
-        "agentpool_server.acp_server.handler.ACPEventConverter.build_user_message_chunks",
+        "wolfharness_server.acp_server.handler.ACPEventConverter.build_user_message_chunks",
         return_value=[],
     ):
         await handler.handle_prompt(
@@ -182,7 +182,7 @@ async def test_message_id_generated_and_passed_through() -> None:
     When: The prompt is processed.
     Then: ``send_message`` is called with a non-None ``message_id`` UUID string.
     """
-    from agentpool_server.acp_server.handler import ACPProtocolHandler
+    from wolfharness_server.acp_server.handler import ACPProtocolHandler
 
     host_context = MagicMock()
     session_pool = MagicMock()
@@ -212,7 +212,7 @@ async def test_message_id_generated_and_passed_through() -> None:
     handler._ensure_event_consumer = AsyncMock()
 
     with patch(
-        "agentpool_server.acp_server.handler.ACPEventConverter.build_user_message_chunks",
+        "wolfharness_server.acp_server.handler.ACPEventConverter.build_user_message_chunks",
         return_value=[],
     ):
         await handler.handle_prompt(

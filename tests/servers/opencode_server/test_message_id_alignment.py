@@ -15,10 +15,10 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from agentpool.lifecycle.types import DeliveryMode
-from agentpool_server.opencode_server.event_processor_context import EventProcessorContext
-from agentpool_server.opencode_server.models import MessagePath, MessageTime, MessageWithParts
-from agentpool_server.opencode_server.models.message import (
+from wolfharness.lifecycle.types import DeliveryMode
+from wolfharness_server.opencode_server.event_processor_context import EventProcessorContext
+from wolfharness_server.opencode_server.models import MessagePath, MessageTime, MessageWithParts
+from wolfharness_server.opencode_server.models.message import (
     CommandRequest,
     MessageRequest,
     TextPartInput,
@@ -122,7 +122,7 @@ class TestRouteMessagePassesMessageId:
     @pytest.mark.asyncio
     async def test_route_message_stores_pending_message_id(self):
         """route_message should store message_id in _pending_message_ids."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -137,7 +137,7 @@ class TestRouteMessagePassesMessageId:
 
         server_state = Mock()
         server_state.working_dir = "/tmp"
-        server_state.resolve_default_model_info = Mock(return_value=("default", "agentpool"))
+        server_state.resolve_default_model_info = Mock(return_value=("default", "wolfharness"))
         server_state.broadcast_event = AsyncMock()
 
         integration = OpenCodeSessionPoolIntegration(session_pool, server_state)
@@ -160,7 +160,7 @@ class TestRouteMessagePassesMessageId:
     @pytest.mark.asyncio
     async def test_route_message_passes_message_id_to_receive_request(self):
         """route_message should pass message_id to receive_request."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -172,7 +172,7 @@ class TestRouteMessagePassesMessageId:
 
         server_state = Mock()
         server_state.working_dir = "/tmp"
-        server_state.resolve_default_model_info = Mock(return_value=("default", "agentpool"))
+        server_state.resolve_default_model_info = Mock(return_value=("default", "wolfharness"))
 
         integration = OpenCodeSessionPoolIntegration(session_pool, server_state)
         integration._start_event_consumer = AsyncMock()
@@ -191,7 +191,7 @@ class TestRouteMessagePassesMessageId:
     @pytest.mark.asyncio
     async def test_route_message_without_message_id_passes_none(self):
         """route_message should pass message_id=None when not provided."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -203,7 +203,7 @@ class TestRouteMessagePassesMessageId:
 
         server_state = Mock()
         server_state.working_dir = "/tmp"
-        server_state.resolve_default_model_info = Mock(return_value=("default", "agentpool"))
+        server_state.resolve_default_model_info = Mock(return_value=("default", "wolfharness"))
 
         integration = OpenCodeSessionPoolIntegration(session_pool, server_state)
         integration._start_event_consumer = AsyncMock()
@@ -229,7 +229,7 @@ class TestBeforeConsumerLoopPendingMessageId:
     @pytest.mark.asyncio
     async def test_before_consumer_loop_uses_pending_message_id(self):
         """_before_consumer_loop should use pending message_id when available."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -238,7 +238,7 @@ class TestBeforeConsumerLoopPendingMessageId:
         session_pool.sessions.get_session = Mock(return_value=None)
         server_state = Mock()
         server_state.working_dir = "/tmp"
-        server_state.resolve_default_model_info = Mock(return_value=("default", "agentpool"))
+        server_state.resolve_default_model_info = Mock(return_value=("default", "wolfharness"))
 
         integration = OpenCodeSessionPoolIntegration(session_pool, server_state)
         # Set a pending message_id
@@ -256,7 +256,7 @@ class TestBeforeConsumerLoopPendingMessageId:
     @pytest.mark.asyncio
     async def test_before_consumer_loop_generates_id_when_no_pending(self):
         """_before_consumer_loop should generate a new ID when no pending message_id."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -265,7 +265,7 @@ class TestBeforeConsumerLoopPendingMessageId:
         session_pool.sessions.get_session = Mock(return_value=None)
         server_state = Mock()
         server_state.working_dir = "/tmp"
-        server_state.resolve_default_model_info = Mock(return_value=("default", "agentpool"))
+        server_state.resolve_default_model_info = Mock(return_value=("default", "wolfharness"))
 
         integration = OpenCodeSessionPoolIntegration(session_pool, server_state)
 
@@ -296,17 +296,17 @@ class TestHandleEventUpdatesMessageId:
         """
         from pydantic_ai.messages import TextPart as PydanticTextPart
 
-        from agentpool.agents.events import PartStartEvent
-        from agentpool.orchestrator.event_bus import EventEnvelope
-        from agentpool_server.opencode_server.models import MessageWithParts
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness.agents.events import PartStartEvent
+        from wolfharness.orchestrator.event_bus import EventEnvelope
+        from wolfharness_server.opencode_server.models import MessageWithParts
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
         session_pool = Mock()
         server_state = Mock()
         server_state.working_dir = "/tmp"
-        server_state.resolve_default_model_info = Mock(return_value=("default", "agentpool"))
+        server_state.resolve_default_model_info = Mock(return_value=("default", "wolfharness"))
         server_state.broadcast_event = AsyncMock()
 
         integration = OpenCodeSessionPoolIntegration(session_pool, server_state)
@@ -319,7 +319,7 @@ class TestHandleEventUpdatesMessageId:
             agent_name="agent",
             model_id="default",
             parent_id="",
-            provider_id="agentpool",
+            provider_id="wolfharness",
             path=MessagePath(cwd="/tmp", root="/tmp"),
         )
         ctx = EventProcessorContext(
@@ -363,16 +363,16 @@ class TestHandleEventUpdatesMessageId:
     @pytest.mark.asyncio
     async def test_handle_event_does_not_update_when_event_has_no_message_id(self):
         """_handle_event should not update ctx.assistant_msg_id when event has no message_id."""
-        from agentpool.agents.events import RunStartedEvent
-        from agentpool.orchestrator.event_bus import EventEnvelope
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness.agents.events import RunStartedEvent
+        from wolfharness.orchestrator.event_bus import EventEnvelope
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
         session_pool = Mock()
         server_state = Mock()
         server_state.working_dir = "/tmp"
-        server_state.resolve_default_model_info = Mock(return_value=("default", "agentpool"))
+        server_state.resolve_default_model_info = Mock(return_value=("default", "wolfharness"))
         server_state.broadcast_event = AsyncMock()
 
         integration = OpenCodeSessionPoolIntegration(session_pool, server_state)
@@ -384,7 +384,7 @@ class TestHandleEventUpdatesMessageId:
             agent_name="agent",
             model_id="default",
             parent_id="",
-            provider_id="agentpool",
+            provider_id="wolfharness",
             path=MessagePath(cwd="/tmp", root="/tmp"),
         )
         ctx = EventProcessorContext(
@@ -436,8 +436,8 @@ class TestMessageIdTimestampConsistency:
     @pytest.mark.unit
     def test_id_timestamp_matches_now_ms(self) -> None:
         """C1: Timestamp decoded from ascending ID should match now_ms() window."""
-        from agentpool.utils import identifiers
-        from agentpool.utils.time_utils import now_ms
+        from wolfharness.utils import identifiers
+        from wolfharness.utils.time_utils import now_ms
 
         ts_before = now_ms()
         msg_id = identifiers.ascending("message")
@@ -455,7 +455,7 @@ class TestMessageIdTimestampConsistency:
     @pytest.mark.unit
     def test_same_ms_ids_have_consistent_timestamps(self) -> None:
         """C1: Two IDs generated in rapid succession should have close timestamps."""
-        from agentpool.utils import identifiers
+        from wolfharness.utils import identifiers
 
         id1 = identifiers.ascending("message")
         id2 = identifiers.ascending("message")
@@ -487,14 +487,14 @@ class TestCustomEventBypassesRegistration:
     @pytest.mark.asyncio
     async def test_custom_event_does_not_register_assistant(self):
         """CustomEvent should NOT trigger assistant message registration."""
-        from agentpool.agents.events.events import CustomEvent
-        from agentpool.orchestrator.event_bus import EventEnvelope
-        from agentpool_server.opencode_server.models import (
+        from wolfharness.agents.events.events import CustomEvent
+        from wolfharness.orchestrator.event_bus import EventEnvelope
+        from wolfharness_server.opencode_server.models import (
             MessagePath,
             MessageTime,
             MessageWithParts,
         )
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -503,7 +503,7 @@ class TestCustomEventBypassesRegistration:
         session_pool.sessions.get_session = Mock(return_value=None)
         server_state = Mock()
         server_state.working_dir = "/tmp"
-        server_state.resolve_default_model_info = Mock(return_value=("default", "agentpool"))
+        server_state.resolve_default_model_info = Mock(return_value=("default", "wolfharness"))
         server_state.broadcast_event = AsyncMock()
 
         integration = OpenCodeSessionPoolIntegration(session_pool, server_state)
@@ -515,7 +515,7 @@ class TestCustomEventBypassesRegistration:
             agent_name="agent",
             model_id="default",
             parent_id="",
-            provider_id="agentpool",
+            provider_id="wolfharness",
             path=MessagePath(cwd="/tmp", root="/tmp"),
         )
         ctx = EventProcessorContext(
@@ -559,14 +559,14 @@ class TestCustomEventBypassesRegistration:
         the next real agent event (RunStartedEvent) must trigger assistant
         registration.
         """
-        from agentpool.agents.events import RunStartedEvent
-        from agentpool.orchestrator.event_bus import EventEnvelope
-        from agentpool_server.opencode_server.models import (
+        from wolfharness.agents.events import RunStartedEvent
+        from wolfharness.orchestrator.event_bus import EventEnvelope
+        from wolfharness_server.opencode_server.models import (
             MessagePath,
             MessageTime,
             MessageWithParts,
         )
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -575,7 +575,7 @@ class TestCustomEventBypassesRegistration:
         session_pool.sessions.get_session = Mock(return_value=None)
         server_state = Mock()
         server_state.working_dir = "/tmp"
-        server_state.resolve_default_model_info = Mock(return_value=("default", "agentpool"))
+        server_state.resolve_default_model_info = Mock(return_value=("default", "wolfharness"))
         server_state.broadcast_event = AsyncMock()
 
         integration = OpenCodeSessionPoolIntegration(session_pool, server_state)
@@ -587,7 +587,7 @@ class TestCustomEventBypassesRegistration:
             agent_name="agent",
             model_id="default",
             parent_id="",
-            provider_id="agentpool",
+            provider_id="wolfharness",
             path=MessagePath(cwd="/tmp", root="/tmp"),
         )
         ctx = EventProcessorContext(
@@ -614,7 +614,7 @@ class TestCustomEventBypassesRegistration:
         import unittest.mock as _mock
 
         with _mock.patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.append_message_to_session",
+            "wolfharness_server.opencode_server.opencode_event_bridge.append_message_to_session",
             new_callable=_mock.AsyncMock,
         ) as mock_append:
             event = RunStartedEvent(
@@ -656,15 +656,15 @@ class TestCustomEventBypassesRegistration:
         2. System notifications
         3. RunStartedEvent → register assistant message
         """
-        from agentpool.agents.events import RunStartedEvent
-        from agentpool.agents.events.events import CustomEvent
-        from agentpool.orchestrator.event_bus import EventEnvelope
-        from agentpool_server.opencode_server.models import (
+        from wolfharness.agents.events import RunStartedEvent
+        from wolfharness.agents.events.events import CustomEvent
+        from wolfharness.orchestrator.event_bus import EventEnvelope
+        from wolfharness_server.opencode_server.models import (
             MessagePath,
             MessageTime,
             MessageWithParts,
         )
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -673,7 +673,7 @@ class TestCustomEventBypassesRegistration:
         session_pool.sessions.get_session = Mock(return_value=None)
         server_state = Mock()
         server_state.working_dir = "/tmp"
-        server_state.resolve_default_model_info = Mock(return_value=("default", "agentpool"))
+        server_state.resolve_default_model_info = Mock(return_value=("default", "wolfharness"))
         server_state.broadcast_event = AsyncMock()
 
         integration = OpenCodeSessionPoolIntegration(session_pool, server_state)
@@ -685,7 +685,7 @@ class TestCustomEventBypassesRegistration:
             agent_name="agent",
             model_id="default",
             parent_id="",
-            provider_id="agentpool",
+            provider_id="wolfharness",
             path=MessagePath(cwd="/tmp", root="/tmp"),
         )
         ctx = EventProcessorContext(
@@ -738,7 +738,7 @@ class TestCustomEventBypassesRegistration:
         import unittest.mock as _mock
 
         with _mock.patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.append_message_to_session",
+            "wolfharness_server.opencode_server.opencode_event_bridge.append_message_to_session",
             new_callable=_mock.AsyncMock,
         ):
             await integration._handle_event("test-session", envelope2)
@@ -767,16 +767,16 @@ class TestEventBridgeStepStartPart:
     @pytest.mark.asyncio
     async def test_step_start_part_broadcast_on_registration(self):
         """StepStartPart should be broadcast when assistant message is registered."""
-        from agentpool.agents.events import RunStartedEvent
-        from agentpool.orchestrator.event_bus import EventEnvelope
-        from agentpool_server.opencode_server.models import (
+        from wolfharness.agents.events import RunStartedEvent
+        from wolfharness.orchestrator.event_bus import EventEnvelope
+        from wolfharness_server.opencode_server.models import (
             MessagePath,
             MessageTime,
             MessageWithParts,
             PartUpdatedEvent,
             StepStartPart,
         )
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -785,7 +785,7 @@ class TestEventBridgeStepStartPart:
         session_pool.sessions.get_session = Mock(return_value=None)
         server_state = Mock()
         server_state.working_dir = "/tmp"
-        server_state.resolve_default_model_info = Mock(return_value=("default", "agentpool"))
+        server_state.resolve_default_model_info = Mock(return_value=("default", "wolfharness"))
         server_state.broadcast_event = AsyncMock()
 
         integration = OpenCodeSessionPoolIntegration(session_pool, server_state)
@@ -797,7 +797,7 @@ class TestEventBridgeStepStartPart:
             agent_name="agent",
             model_id="default",
             parent_id="",
-            provider_id="agentpool",
+            provider_id="wolfharness",
             path=MessagePath(cwd="/tmp", root="/tmp"),
         )
         ctx = EventProcessorContext(
@@ -824,7 +824,7 @@ class TestEventBridgeStepStartPart:
         import unittest.mock as _mock
 
         with _mock.patch(
-            "agentpool_server.opencode_server.opencode_event_bridge.append_message_to_session",
+            "wolfharness_server.opencode_server.opencode_event_bridge.append_message_to_session",
             new_callable=_mock.AsyncMock,
         ):
             event = RunStartedEvent(

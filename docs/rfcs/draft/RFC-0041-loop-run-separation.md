@@ -104,7 +104,7 @@ pydantic-ai (installed at `.venv/lib/python3.13/site-packages/pydantic_ai/`) pro
 
 **Critical iteration requirement**: `AgentRun.next(node)` must be used instead of bare `async for node in agent_run` — the latter skips all capability hooks including `PendingMessageDrainCapability`'s drain logic. The current `RunExecutor` already uses `next(node)` correctly.
 
-**Note on naming**: pydantic-ai's `AgentRun` is an internal implementation detail of a single reactive cycle. In this RFC, we call the reactive cycle a **Turn** and use `agent_run` as a local variable name inside `NativeTurn.execute()`. There is no naming conflict because `AgentRun` is never exposed to agentpool users.
+**Note on naming**: pydantic-ai's `AgentRun` is an internal implementation detail of a single reactive cycle. In this RFC, we call the reactive cycle a **Turn** and use `agent_run` as a local variable name inside `NativeTurn.execute()`. There is no naming conflict because `AgentRun` is never exposed to wolfharness users.
 
 ### anyio Primitives Available
 
@@ -121,7 +121,7 @@ pydantic-ai (installed at `.venv/lib/python3.13/site-packages/pydantic_ai/`) pro
 - **RFC-0029** (2026-04-26): Introduced `inject_prompt()`/`queue_prompt()` with `asyncio.Event` notification for agent reactivation between `run_stream()` calls. This was the first attempt at "idle" semantics — the agent provides the signal, the caller provides the reactivation loop.
 - **RFC-0037** (2026-06-15): Proposed unifying `steer()`/`followup()` by mapping to pydantic-ai's `enqueue()` for native agents. Recognized the dual-system redundancy but kept the per-RunHandle lifecycle.
 - **`introduce-anyio-structured-concurrency`** OpenSpec change (completed): Established the CancelScope hierarchy (pool→session→agent run→subagent run). `RunHandle._cleanup_run()` sets `complete_event` in `anyio.CancelScope(shield=True)`.
-- **ACP v2 Prompt Lifecycle RFD** (by @benbrandt): Proposes `session/prompt` returning on accept (fire-and-forget), with turn lifecycle communicated via `state_change` notifications. **PR #1261** (`session/inject` by @kennethsinder) adds `mode: "queue" | "steer"` — directly mapping to agentpool's `followup()` / `steer()`.
+- **ACP v2 Prompt Lifecycle RFD** (by @benbrandt): Proposes `session/prompt` returning on accept (fire-and-forget), with turn lifecycle communicated via `state_change` notifications. **PR #1261** (`session/inject` by @kennethsinder) adds `mode: "queue" | "steer"` — directly mapping to wolfharness's `followup()` / `steer()`.
 
 ### Glossary
 
@@ -351,7 +351,7 @@ The agent run never exits `async with agent.iter()` — it loops within the grap
 
 - Idle lives entirely within pydantic-ai's graph model — all capability hooks fire correctly
 - `after_node_run` redirect is an established pattern (`PendingMessageDrainCapability` already uses it)
-- No agentpool-level Run concept needed — the graph itself persists
+- No wolfharness-level Run concept needed — the graph itself persists
 
 **Disadvantages**
 
@@ -966,7 +966,7 @@ class NativeTurn(Turn):
 | Method | Source / Implementation |
 |--------|------------------------|
 | `self._agent._build_deps(run_ctx)` | Wraps existing `self._agent.get_context(input_provider=..., run_ctx=run_ctx)` — to be extracted as a method on `NativeAgent` during Phase 1 implementation |
-| `self._agent._is_terminal_tool(tool_name)` | Delegates to `agentpool.tools.base.is_terminal_tool()` — to be wrapped as a method on `NativeAgent` during Phase 1 |
+| `self._agent._is_terminal_tool(tool_name)` | Delegates to `wolfharness.tools.base.is_terminal_tool()` — to be wrapped as a method on `NativeAgent` during Phase 1 |
 | `ChatMessage.from_model_message(last)` | Constructs `ChatMessage` from a `ModelMessage` — to be implemented as a classmethod during Phase 1 (current code uses `ChatMessage.from_run_result()` at run_executor.py L330; this is a simplification) |
 | `convert_acp_to_model_messages(acp_messages)` | Converts ACP message format to `list[ModelMessage]` — to be implemented in `agents/acp_agent/` during Phase 2 |
 | `ACPTurn._map_acp_event(event)` | Maps ACP stream events to `RichAgentStreamEvent` — to be implemented in Phase 2, delegates to `EventMapper` where event types overlap |

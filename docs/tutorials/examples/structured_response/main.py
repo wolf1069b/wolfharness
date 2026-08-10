@@ -1,5 +1,5 @@
 # /// script
-# dependencies = ["agentpool"]
+# dependencies = ["wolfharness"]
 # ///
 
 """Example of structured responses defined both in code and YAML."""
@@ -8,8 +8,8 @@ import os
 
 from schemez import Schema
 
-from agentpool import Agent, AgentPool, AgentsManifest
-from agentpool.docs.utils import get_config_path, is_pyodide, run
+from wolfharness import Agent, AgentPool, AgentsManifest
+from wolfharness.docs.utils import get_config_path, is_pyodide, run
 
 
 # set your OpenAI API key here

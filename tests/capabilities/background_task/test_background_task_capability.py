@@ -12,14 +12,21 @@ from pydantic_ai.messages import ModelRequest, UserPromptPart
 from pydantic_ai.toolsets import FunctionToolset
 from pydantic_graph import End
 
-from agentpool.agents.context import AgentContext
-from agentpool.capabilities.background_task import BackgroundTaskCapability
-import agentpool.capabilities.background_task.capability as btc_module
-from agentpool.capabilities.background_task.capability import ForceRetrievalMode
+from wolfharness.agents.context import AgentContext
+from wolfharness.capabilities.background_task import BackgroundTaskCapability
+import wolfharness.capabilities.background_task.capability as btc_module
+from wolfharness.capabilities.background_task.capability import ForceRetrievalMode
 
 
-CONFIG_DIR = Path(__file__).resolve().parents[3] / "config"
-TASK_SCHEMA_PATH = str(CONFIG_DIR / "tools" / "task.yaml")
+SCHEMAS_DIR = (
+    Path(__file__).resolve().parents[3]
+    / "src"
+    / "wolfharness"
+    / "capabilities"
+    / "background_task"
+    / "schemas"
+)
+TASK_SCHEMA_PATH = str(SCHEMAS_DIR / "task.yaml")
 
 
 @runtime_checkable
@@ -650,7 +657,7 @@ async def test_steer_task_interrupt_calls_steer():
 
 async def test_steer_task_raises_error_for_unknown_task():
     """_steer_task should raise ToolError when task_id is not found."""
-    from agentpool.tools.exceptions import ToolError
+    from wolfharness.tools.exceptions import ToolError
 
     capability = BackgroundTaskCapability()
 
@@ -695,7 +702,7 @@ async def test_steer_task_returns_message_for_terminal_task():
 
 async def test_steer_task_raises_error_when_no_session_pool():
     """_steer_task should raise ToolError when SessionPool is unavailable."""
-    from agentpool.tools.exceptions import ToolError
+    from wolfharness.tools.exceptions import ToolError
 
     capability = BackgroundTaskCapability()
 

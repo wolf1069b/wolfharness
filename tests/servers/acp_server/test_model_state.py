@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from acp.schema import SessionModelState
-from agentpool_server.acp_server.provider_router import ProviderRouter
-from agentpool_server.shared.model_utils import build_model_state_for_acp
+from wolfharness_server.acp_server.provider_router import ProviderRouter
+from wolfharness_server.shared.model_utils import build_model_state_for_acp
 
 
 pytestmark = pytest.mark.unit
@@ -55,7 +55,7 @@ def create_toko_model(model_id, name, description="", provider=""):
 @pytest.fixture
 def manifest_with_variants():
     """Manifest with configured variants."""
-    from agentpool.models.model_configs import StringModelConfig
+    from wolfharness.models.model_configs import StringModelConfig
 
     variants = {
         "fast_gpt": StringModelConfig(identifier="openai:gpt-4o-mini"),

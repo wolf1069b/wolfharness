@@ -11,12 +11,12 @@ from pydantic_ai import RequestUsage, RunUsage
 import pytest
 
 from acp.schema import UsageUpdate
-from agentpool.agents.events.events import (
+from wolfharness.agents.events.events import (
     StepUsageEvent,
     StreamCompleteEvent,
 )
-from agentpool.messaging import ChatMessage
-from agentpool_server.acp_server.event_converter import ACPEventConverter
+from wolfharness.messaging import ChatMessage
+from wolfharness_server.acp_server.event_converter import ACPEventConverter
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.anyio]

@@ -13,12 +13,12 @@ from unittest.mock import MagicMock
 from pydantic_ai import RunContext
 import pytest
 
-from agentpool import Agent, AgentContext
-from agentpool.agents.base_agent import BaseAgent
-from agentpool.capabilities.background_task.capability import BackgroundTaskCapability
-from agentpool.capabilities.background_task.manager import BackgroundTaskManager
-from agentpool.delegation import AgentPool
-from agentpool.tools.exceptions import ToolError
+from wolfharness import Agent, AgentContext
+from wolfharness.agents.base_agent import BaseAgent
+from wolfharness.capabilities.background_task.capability import BackgroundTaskCapability
+from wolfharness.capabilities.background_task.manager import BackgroundTaskManager
+from wolfharness.delegation import AgentPool
+from wolfharness.tools.exceptions import ToolError
 
 
 # ---------------------------------------------------------------------------

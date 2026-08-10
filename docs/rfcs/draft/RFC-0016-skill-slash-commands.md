@@ -34,7 +34,7 @@ This RFC proposes a unified architecture to expose **Skills** as **Slash Command
 
 ### Current State
 
-**Skills System** (`src/agentpool/skills/`):
+**Skills System** (`src/wolfharness/skills/`):
 - Skills are defined in `SKILL.md` files with YAML frontmatter containing `name`, `description`, `allowed-tools`, etc.
 - `Skill` class models skill metadata with validation per Agent Skills Spec
 - `SkillsRegistry` auto-discovers skills from directories (e.g., `~/.claude/skills/`)
@@ -46,13 +46,13 @@ This RFC proposes a unified architecture to expose **Skills** as **Slash Command
   - `CommandInputHint`: Text input specification for commands
 - ACP agents can expose capabilities including slash commands
 
-**OpenCode Protocol** (`src/agentpool_server/opencode_server/`):
+**OpenCode Protocol** (`src/wolfharness_server/opencode_server/`):
 - Uses `slashed` library for command handling
 - Has `SkillMetadata` TypedDict in tool_metadata.py
 - Commands defined with name, description, usage, and category
 - Supports streaming command output
 
-**AG-UI Protocol** (`src/agentpool_server/agui_server/`):
+**AG-UI Protocol** (`src/wolfharness_server/agui_server/`):
 - HTTP-based protocol with event streaming
 - Agents expose tools and capabilities via HTTP endpoints
 - Currently no native slash command support
@@ -333,7 +333,7 @@ All protocols (OpenCode/ACP/AG-UI) use existing tool exposure
 #### 1. SkillCommand (Protocol-Agnostic)
 
 ```python
-# src/agentpool/skills/command.py
+# src/wolfharness/skills/command.py
 
 from __future__ import annotations
 
@@ -341,7 +341,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Coroutine, ParamSpec
 
 if TYPE_CHECKING:
-    from agentpool.skills.skill import Skill
+    from wolfharness.skills.skill import Skill
 
 
 P = ParamSpec("P")
@@ -383,21 +383,21 @@ class SkillCommand:
 #### 2. SkillCommandRegistry
 
 ```python
-# src/agentpool/skills/command_registry.py
+# src/wolfharness/skills/command_registry.py
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from agentpool.log import get_logger
-from agentpool.skills.command import SkillCommand
-from agentpool.utils.baseregistry import BaseRegistry
+from wolfharness.log import get_logger
+from wolfharness.skills.command import SkillCommand
+from wolfharness.utils.baseregistry import BaseRegistry
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from agentpool.skills.skill import Skill
-    from agentpool.skills.registry import SkillsRegistry
+    from wolfharness.skills.skill import Skill
+    from wolfharness.skills.registry import SkillsRegistry
 
 
 logger = get_logger(__name__)
@@ -505,14 +505,14 @@ class SkillCommandRegistry(BaseRegistry[str, SkillCommand]):
 
     @property
     def _error_class(self) -> type[Exception]:
-        from agentpool.tools.exceptions import ToolError
+        from wolfharness.tools.exceptions import ToolError
 
         return ToolError
 ```
 
 #### 3. Protocol Bridges
 
-**OpenCode Bridge** (`src/agentpool_server/opencode_server/skill_bridge.py`):
+**OpenCode Bridge** (`src/wolfharness_server/opencode_server/skill_bridge.py`):
 
 **⚠️ CRITICAL**: OpenCode uses **native slashed Commands** for `/command-name` execution, NOT MCP Prompts. MCP Prompts are read-only templates that cannot execute commands or modify state.
 
@@ -526,9 +526,9 @@ from typing import TYPE_CHECKING
 from slashed import Command, CommandContext
 
 if TYPE_CHECKING:
-    from agentpool.agents.opencode_agent import OpenCodeAgent
-    from agentpool.skills.command import SkillCommand
-    from agentpool.skills.manager import SkillsManager
+    from wolfharness.agents.opencode_agent import OpenCodeAgent
+    from wolfharness.skills.command import SkillCommand
+    from wolfharness.skills.manager import SkillsManager
 
 
 class SkillCommandWrapper(Command):
@@ -634,7 +634,7 @@ class OpenCodeSkillBridge:
         return self._commands.get(name)
 ```
 
-**ACP Bridge** (`src/agentpool_server/acp_server/commands/skill_commands.py`):
+**ACP Bridge** (`src/wolfharness_server/acp_server/commands/skill_commands.py`):
 
 ```python
 """Bridge between SkillCommandRegistry and ACP server."""
@@ -646,7 +646,7 @@ from typing import TYPE_CHECKING
 from acp.schema.slash_commands import AvailableCommand
 
 if TYPE_CHECKING:
-    from agentpool.skills.command import SkillCommand
+    from wolfharness.skills.command import SkillCommand
 
 
 class ACPSkillBridge:
@@ -700,7 +700,7 @@ class AgentCapabilities(AnnotatedObject):
     """
 ```
 
-**AG-UI Bridge** (`src/agentpool_server/agui_server/skill_tools.py`):
+**AG-UI Bridge** (`src/wolfharness_server/agui_server/skill_tools.py`):
 
 **⚠️ CRITICAL**: AG-UI is **tool-oriented** with no native slash command concept. Skills must be exposed as **tools**.
 
@@ -714,8 +714,8 @@ from typing import TYPE_CHECKING, Any
 from ag_ui import Tool, UserMessage
 
 if TYPE_CHECKING:
-    from agentpool.skills.command import SkillCommand
-    from agentpool.skills.manager import SkillsManager
+    from wolfharness.skills.command import SkillCommand
+    from wolfharness.skills.manager import SkillsManager
 
 
 class AGUISkillToolAdapter:
@@ -794,7 +794,7 @@ class AGUISkillBridge:
 **SkillCommand Config** (optional enhancement):
 
 ```python
-# src/agentpool_config/skill_commands.py
+# src/wolfharness_config/skill_commands.py
 
 from __future__ import annotations
 
@@ -879,7 +879,7 @@ Therefore, skill commands must be implemented as:
 
 async def _setup_skill_commands(self) -> None:
     """Setup skill command registry with optional skills support."""
-    from agentpool.skills.command_registry import SkillCommandRegistry
+    from wolfharness.skills.command_registry import SkillCommandRegistry
     
     # SkillsRegistry may be None if no skill_dirs configured
     skills_registry = getattr(self, '_skills', None)
@@ -938,12 +938,12 @@ def get_tools(self) -> list[AGUITool]:
 **OpenCode Server Integration**:
 
 ```python
-# In agentpool_server/opencode_server/server.py
+# In wolfharness_server/opencode_server/server.py
 
 async def _setup_skill_commands(self) -> None:
     """Setup skill command bridge with OpenCode's native slashed system."""
-    from agentpool.skills.command_registry import SkillCommandRegistry
-    from agentpool_server.opencode_server.skill_bridge import OpenCodeSkillBridge
+    from wolfharness.skills.command_registry import SkillCommandRegistry
+    from wolfharness_server.opencode_server.skill_bridge import OpenCodeSkillBridge
     from slashed import CommandStore
 
     # Initialize command registry (watches SkillsRegistry for changes)
@@ -1004,11 +1004,11 @@ This provides true slash command UX with full execution capabilities.
 **ACP Server Integration**:
 
 ```python
-# In agentpool_server/acp_server/session.py or agent.py
+# In wolfharness_server/acp_server/session.py or agent.py
 
 async def _get_capabilities(self) -> AgentCapabilities:
     """Get agent capabilities including skill commands."""
-    from agentpool_server.acp_server.commands.skill_commands import ACPSkillBridge
+    from wolfharness_server.acp_server.commands.skill_commands import ACPSkillBridge
 
     bridge = ACPSkillBridge()
 
@@ -1037,17 +1037,17 @@ async def _get_capabilities(self) -> AgentCapabilities:
 
 ### Phase 1: Core Foundation (Weeks 1-2)
 
-1. **Create SkillCommand dataclass** (`src/agentpool/skills/command.py`)
+1. **Create SkillCommand dataclass** (`src/wolfharness/skills/command.py`)
    - Define protocol-agnostic command representation
    - Add validation methods
 
-2. **Create SkillCommandRegistry** (`src/agentpool/skills/command_registry.py`)
+2. **Create SkillCommandRegistry** (`src/wolfharness/skills/command_registry.py`)
    - Implement watcher pattern for skills changes
    - Add callback registration mechanism
    - Add dependency resolution for skills (handle depends-on field)
    - Unit tests with mocked SkillsRegistry
 
-3. **Integrate with AgentPool** (`src/agentpool/delegation/pool.py`)
+3. **Integrate with AgentPool** (`src/wolfharness/delegation/pool.py`)
    - Add `skill_commands` property to AgentPool
    - Initialize registry during pool startup
 
@@ -1061,7 +1061,7 @@ async def _get_capabilities(self) -> AgentCapabilities:
 
 **Strategy**: Implement ACP Bridge first as it has the cleanest mapping.
 
-1. **Create ACPSkillBridge** (`src/agentpool_server/acp_server/commands/skill_commands.py`)
+1. **Create ACPSkillBridge** (`src/wolfharness_server/acp_server/commands/skill_commands.py`)
    - Map SkillCommand to AvailableCommand
    - Handle capability updates via `AvailableCommandsUpdate`
 
@@ -1069,7 +1069,7 @@ async def _get_capabilities(self) -> AgentCapabilities:
    - Add `slash_commands` field to `AgentCapabilities`
    - Update JSON schema validation
 
-3. **Integrate with ACPServer** (`src/agentpool_server/acp_server/server.py`)
+3. **Integrate with ACPServer** (`src/wolfharness_server/acp_server/server.py`)
    - Include skill slash commands in agent capabilities
    - Handle command execution via session/prompt mechanism
 
@@ -1081,7 +1081,7 @@ async def _get_capabilities(self) -> AgentCapabilities:
 
 ### Phase 3: AG-UI Bridge (Weeks 3-5)
 
-1. **Create AGUISkillBridge** (`src/agentpool_server/agui_server/skill_tools.py`)
+1. **Create AGUISkillBridge** (`src/wolfharness_server/agui_server/skill_tools.py`)
    - Create `AGUISkillToolAdapter` for tool format conversion
    - Handle OpenAI function format conversion
 
@@ -1101,7 +1101,7 @@ async def _get_capabilities(self) -> AgentCapabilities:
 
 **⚠️ CRITICAL**: OpenCode Bridge uses **native slashed Commands** (NOT MCP Prompts).
 
-1. **Create OpenCodeSkillBridge** (`src/agentpool_server/opencode_server/skill_bridge.py`)
+1. **Create OpenCodeSkillBridge** (`src/wolfharness_server/opencode_server/skill_bridge.py`)
    - Create `SkillCommandWrapper` extending slashed `Command` class
    - Implement `execute()` method for skill loading
    - Integrate with OpenCode's `CommandStore`
@@ -1111,7 +1111,7 @@ async def _get_capabilities(self) -> AgentCapabilities:
    - Handle bash/fsspec argument substitution: `$1`, `$2`, `$@`, `$ARGUMENTS`
    - Implement `inject_skill_context()` in OpenCodeAgent
 
-3. **Integrate with OpenCodeServer** (`src/agentpool_server/opencode_server/server.py`)
+3. **Integrate with OpenCodeServer** (`src/wolfharness_server/opencode_server/server.py`)
    - Register bridge during server initialization
    - Make CommandStore available to GET /command endpoint
    - Wire up command execution in agent routes
@@ -1334,7 +1334,7 @@ aliases: ["myalias", "ms"]  # Alternative access names
 
 **Schema Addition**:
 ```python
-# agentpool_config/skill_commands.py
+# wolfharness_config/skill_commands.py
 class SkillSlashConfig(Schema):
     """Configuration for skill slash command exposure."""
     
@@ -1473,19 +1473,19 @@ allowed-tools: [read,grep]  # Enforced on invocation
 ### File Paths Reference
 
 ```
-src/agentpool/skills/
+src/wolfharness/skills/
 ├── command.py              # NEW: SkillCommand dataclass
 ├── command_registry.py     # NEW: SkillCommandRegistry
 └── ...                     # existing files
 
-src/agentpool_server/opencode_server/
+src/wolfharness_server/opencode_server/
 ├── skill_bridge.py         # NEW: OpenCodeSkillBridge
 └── server.py               # MODIFY: integration
 
-src/agentpool_server/acp_server/
+src/wolfharness_server/acp_server/
 └── commands/
     └── skill_commands.py   # NEW: ACPSkillBridge
 
-src/agentpool_config/
+src/wolfharness_config/
 └── skill_commands.py       # NEW: Optional config schema
 ```

@@ -9,7 +9,7 @@ import re
 
 import pytest
 
-from agentpool.agents.events.events import SpawnSessionStart
+from wolfharness.agents.events.events import SpawnSessionStart
 
 
 def _make_team_spawn_event(

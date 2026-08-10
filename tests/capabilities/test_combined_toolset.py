@@ -10,10 +10,10 @@ from pydantic_ai.tools import AgentDepsT
 from pydantic_ai.toolsets import CombinedToolset, FunctionToolset
 import pytest
 
-from agentpool.capabilities.change_event import ChangeEvent
-from agentpool.capabilities.combined_toolset import CombinedToolsetCapability
-from agentpool.capabilities.function_toolset import FunctionToolsetCapability
-from agentpool.tools.base import Tool
+from wolfharness.capabilities.change_event import ChangeEvent
+from wolfharness.capabilities.combined_toolset import CombinedToolsetCapability
+from wolfharness.capabilities.function_toolset import FunctionToolsetCapability
+from wolfharness.tools.base import Tool
 
 
 pytestmark = pytest.mark.unit
@@ -67,7 +67,7 @@ class _FakeCap(AbstractCapability[AgentDepsT]):
     def get_toolset(self) -> Any:
         if not self._tools:
             return None
-        from agentpool.tools.tool_wrapping import wrap_tool_for_pydantic_ai
+        from wolfharness.tools.tool_wrapping import wrap_tool_for_pydantic_ai
 
         pa_tools = [wrap_tool_for_pydantic_ai(tool) for tool in self._tools]
         return FunctionToolset(pa_tools, id=self._name)

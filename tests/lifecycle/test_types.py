@@ -6,13 +6,13 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from agentpool.agents.events import (
+from wolfharness.agents.events import (
     MessageReplacementEvent,
     RichAgentStreamEvent,
     StateUpdate,
     ToolCallUpdateEvent,
 )
-from agentpool.lifecycle import (
+from wolfharness.lifecycle import (
     CommChannel,
     EventEnvelope,
     EventTransport,

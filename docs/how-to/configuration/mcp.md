@@ -2,7 +2,7 @@
 sync:
   agent: doc_sync_agent
   dependencies:
-    - src/agentpool_config/mcp_server.py
+    - src/wolfharness_config/mcp_server.py
 title: MCP Servers
 description: MCP server configuration and integration
 icon: material/server-network
@@ -31,7 +31,7 @@ Servers can use simple string syntax (e.g., `"python -m mcp_server"`) or detaile
 ## Configuration Reference
 
 /// mknodes
-{{ "agentpool_config.mcp_server.MCPServerConfig" | union_to_markdown(display_mode="yaml", header_style="pymdownx") }}
+{{ "wolfharness_config.mcp_server.MCPServerConfig" | union_to_markdown(display_mode="yaml", header_style="pymdownx") }}
 ///
 
 ## Configuration Notes

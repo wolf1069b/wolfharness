@@ -43,7 +43,7 @@ CancelledError: Cancelled via cancel scope
 
 ### Where the Bug Occurs
 
-**File**: `/Users/yuchen.liu/src/yilab/iroot-llm/packages/agentpool/src/agentpool/agents/native_agent/agent.py`
+**File**: `/Users/yuchen.liu/src/yilab/iroot-llm/packages/wolfharness/src/wolfharness/agents/native_agent/agent.py`
 
 **Lines**: 829-845
 
@@ -88,13 +88,13 @@ agent.run_stream()
 
 ### Test Script Location
 
-`/Users/yuchen.liu/src/yilab/iroot-llm/packages/agentpool/tests/test_break_behavior.py`
+`/Users/yuchen.liu/src/yilab/iroot-llm/packages/wolfharness/tests/test_break_behavior.py`
 
 ### Minimal Reproduction
 
 ```python
 import asyncio
-from agentpool import Agent
+from wolfharness import Agent
 from pydantic_ai.models.test import TestModel
 
 async def test_break():
@@ -165,7 +165,7 @@ But this loses the ability to interrupt mid-execution.
 
 ### Deep Dive Areas
 
-1. **merge_queue_into_iterator** (`/Users/yuchen.liu/src/yilab/iroot-llm/packages/agentpool/src/agentpool/utils/streams.py`)
+1. **merge_queue_into_iterator** (`/Users/yuchen.liu/src/yilab/iroot-llm/packages/wolfharness/src/wolfharness/utils/streams.py`)
    - How are tasks spawned?
    - How is cancellation propagated?
    - Can we make scope exit task-aware?
@@ -186,10 +186,10 @@ But this loses the ability to interrupt mid-execution.
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `agentpool/agents/native_agent/agent.py` | 808-895 | Native agent stream with GeneratorExit handling |
-| `agentpool/agents/native_agent/agent.py` | 829-845 | merge_queue_into_iterator usage |
-| `agentpool/utils/streams.py` | ~ | merge_queue_into_iterator implementation |
-| `agentpool/agents/base_agent.py` | 566-648 | run_stream() top-level loop |
+| `wolfharness/agents/native_agent/agent.py` | 808-895 | Native agent stream with GeneratorExit handling |
+| `wolfharness/agents/native_agent/agent.py` | 829-845 | merge_queue_into_iterator usage |
+| `wolfharness/utils/streams.py` | ~ | merge_queue_into_iterator implementation |
+| `wolfharness/agents/base_agent.py` | 566-648 | run_stream() top-level loop |
 
 ### Key Code Segments
 
@@ -263,12 +263,12 @@ The bug was fixed by isolating the entire `agentlet.iter()` iteration in a backg
 
 ### Changes Made
 
-1. **`src/agentpool/utils/streams.py`**: Enhanced `merge_queue_into_iterator` with:
+1. **`src/wolfharness/utils/streams.py`**: Enhanced `merge_queue_into_iterator` with:
    - `shutdown_event` for cooperative cancellation
    - `except GeneratorExit` handler to signal graceful shutdown
    - Task-aware cleanup that uses `asyncio.shield` to prevent CancelScope issues
 
-2. **`src/agentpool/agents/native_agent/agent.py`**: Refactored `_stream_events()` to:
+2. **`src/wolfharness/agents/native_agent/agent.py`**: Refactored `_stream_events()` to:
    - Run the entire `agentlet.iter()` iteration in a background task
    - Yield events via a queue from the consumer task
    - Properly signal cancellation and cleanup

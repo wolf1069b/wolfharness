@@ -2,7 +2,7 @@
 
 The opencode TUI Edit component reads ``metadata.diff`` as a unified diff
 text string (produced by ``createTwoFilesPatch`` in opencode's edit.ts).
-The agentpool event_processor must convert ``DiffContentItem`` from
+The wolfharness event_processor must convert ``DiffContentItem`` from
 ``ToolCallProgressEvent`` into that text format and carry it through to
 ``ToolStateCompleted.metadata.diff`` so the TUI can render the diff view.
 """
@@ -11,13 +11,13 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool.agents.events import DiffContentItem, ToolCallProgressEvent
-from agentpool.agents.events.events import ToolCallCompleteEvent, ToolCallStartEvent
-from agentpool_server.opencode_server.event_processor import EventProcessor
-from agentpool_server.opencode_server.event_processor_context import (
+from wolfharness.agents.events import DiffContentItem, ToolCallProgressEvent
+from wolfharness.agents.events.events import ToolCallCompleteEvent, ToolCallStartEvent
+from wolfharness_server.opencode_server.event_processor import EventProcessor
+from wolfharness_server.opencode_server.event_processor_context import (
     EventProcessorContext,
 )
-from agentpool_server.opencode_server.models.message import (
+from wolfharness_server.opencode_server.models.message import (
     MessagePath,
     MessageTime,
     MessageWithParts,
@@ -33,7 +33,7 @@ def _make_ctx(server_state: object) -> EventProcessorContext:
         agent_name="test-agent",
         model_id="test-model",
         parent_id="parent-1",
-        provider_id="agentpool",
+        provider_id="wolfharness",
         path=MessagePath(cwd="/tmp", root="/tmp"),
     )
     return EventProcessorContext(
@@ -282,7 +282,7 @@ class TestRichProgressCarriesContent:
         server_state: object,
     ) -> None:
         """TextContentItem → appended to ctx.tool_outputs for the tool part."""
-        from agentpool.agents.events import TextContentItem
+        from wolfharness.agents.events import TextContentItem
 
         processor = EventProcessor()
         ctx = _make_ctx(server_state)

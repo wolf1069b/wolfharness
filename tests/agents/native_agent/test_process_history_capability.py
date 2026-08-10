@@ -11,7 +11,7 @@ from pydantic_ai.messages import ModelMessage, ModelRequest, UserPromptPart
 from pydantic_ai.tools import RunContext
 import pytest
 
-from agentpool.agents.native_agent.process_history_capability import (
+from wolfharness.agents.native_agent.process_history_capability import (
     ProcessHistoryAdapter,
     _is_run_context_annotation,
 )

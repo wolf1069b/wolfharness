@@ -15,13 +15,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from acp.schema import LoadSessionRequest, ResumeSessionRequest
-from agentpool.sessions.models import SessionData
-from agentpool_server.acp_server.acp_agent import AgentPoolACPAgent
-from agentpool_server.acp_server.session_manager import ACPSessionManager
+from wolfharness.sessions.models import SessionData
+from wolfharness_server.acp_server.acp_agent import AgentPoolACPAgent
+from wolfharness_server.acp_server.session_manager import ACPSessionManager
 
 
 if TYPE_CHECKING:
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
 
 # ---------------------------------------------------------------------------
@@ -124,7 +124,7 @@ async def test_create_then_resume_preserves_conversation_history(
     # Arrange: store session data
     session_manager.session_store.load_session = AsyncMock(return_value=known_session_data)  # type: ignore[union-attr]
 
-    with patch("agentpool_server.acp_server.session_manager.ACPSession") as mock_session_cls:
+    with patch("wolfharness_server.acp_server.session_manager.ACPSession") as mock_session_cls:
         mock_session_instance = MagicMock()
         mock_session_instance.session_id = "sess-abc-123"
         mock_session_instance.initialize = AsyncMock()
@@ -162,7 +162,7 @@ async def test_resume_preserves_created_at_timestamp(
     # Arrange
     session_manager.session_store.load_session = AsyncMock(return_value=known_session_data)  # type: ignore[union-attr]
 
-    with patch("agentpool_server.acp_server.session_manager.ACPSession") as mock_session_cls:
+    with patch("wolfharness_server.acp_server.session_manager.ACPSession") as mock_session_cls:
         mock_session_instance = MagicMock()
         mock_session_instance.initialize = AsyncMock()
         mock_session_instance.initialize_mcp_servers = AsyncMock()
@@ -197,7 +197,7 @@ async def test_resume_preserves_status_field(
     # Arrange
     session_manager.session_store.load_session = AsyncMock(return_value=checkpointed_session_data)  # type: ignore[union-attr]
 
-    with patch("agentpool_server.acp_server.session_manager.ACPSession") as mock_session_cls:
+    with patch("wolfharness_server.acp_server.session_manager.ACPSession") as mock_session_cls:
         mock_session_instance = MagicMock()
         mock_session_instance.initialize = AsyncMock()
         mock_session_instance.initialize_mcp_servers = AsyncMock()
@@ -232,7 +232,7 @@ async def test_resume_with_mcp_servers_initializes_connections(
     session_manager.session_store.load_session = AsyncMock(return_value=known_session_data)  # type: ignore[union-attr]
     mock_mcp_server = MagicMock()
 
-    with patch("agentpool_server.acp_server.session_manager.ACPSession") as mock_session_cls:
+    with patch("wolfharness_server.acp_server.session_manager.ACPSession") as mock_session_cls:
         mock_session_instance = MagicMock()
         mock_session_instance.initialize = AsyncMock()
         mock_session_instance.initialize_mcp_servers = AsyncMock()
@@ -327,7 +327,7 @@ async def test_no_duplicate_load_session_call_on_resume(
     # Arrange
     session_manager.session_store.load_session = AsyncMock(return_value=known_session_data)  # type: ignore[union-attr]
 
-    with patch("agentpool_server.acp_server.session_manager.ACPSession") as mock_session_cls:
+    with patch("wolfharness_server.acp_server.session_manager.ACPSession") as mock_session_cls:
         mock_session_instance = MagicMock()
         mock_session_instance.initialize = AsyncMock()
         mock_session_instance.initialize_mcp_servers = AsyncMock()

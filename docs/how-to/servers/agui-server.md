@@ -22,10 +22,10 @@ GET  http://localhost:8002/        -> List all agents
 
 ```bash
 # Run with default settings
-agentpool serve-agui config.yml
+wolfharness serve-agui config.yml
 
 # Custom host and port
-agentpool serve-agui config.yml --host 0.0.0.0 --port 8002
+wolfharness serve-agui config.yml --host 0.0.0.0 --port 8002
 ```
 
 See [`serve-agui`](../../reference/cli/serve-agui.md) for all CLI options.
@@ -34,8 +34,8 @@ See [`serve-agui`](../../reference/cli/serve-agui.md) for all CLI options.
 
 ```python
 import anyio
-from agentpool import AgentPool
-from agentpool_server.agui_server import AGUIServer
+from wolfharness import AgentPool
+from wolfharness_server.agui_server import AGUIServer
 
 
 async def main():

@@ -6,16 +6,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentpool.agents.base_agent import BaseAgent
-from agentpool_server.opencode_server.models import (
+from wolfharness.agents.base_agent import BaseAgent
+from wolfharness_server.opencode_server.models import (
     Session,
     SessionIdleEvent,
     SessionStatusEvent,
     SessionUpdatedEvent,
     TimeCreatedUpdated,
 )
-from agentpool_server.opencode_server.session_pool_integration import ensure_session
-from agentpool_server.opencode_server.state import ServerState
+from wolfharness_server.opencode_server.session_pool_integration import ensure_session
+from wolfharness_server.opencode_server.state import ServerState
 
 
 pytestmark = pytest.mark.integration
@@ -63,12 +63,12 @@ async def test_ensure_session_creates_new_session(mock_state: ServerState) -> No
     parent_id = "parent_session_456"
 
     with patch(
-        "agentpool_server.opencode_server.converters.opencode_to_session_data"
+        "wolfharness_server.opencode_server.converters.opencode_to_session_data"
     ) as mock_converter:
         mock_converter.return_value = MagicMock()
 
         with patch(
-            "agentpool_server.opencode_server.input_provider.OpenCodeInputProvider"
+            "wolfharness_server.opencode_server.input_provider.OpenCodeInputProvider"
         ) as mock_provider_class:
             mock_provider = MagicMock()
             mock_provider_class.return_value = mock_provider
@@ -114,13 +114,13 @@ async def test_ensure_session_persists_to_storage(mock_state: ServerState) -> No
     session_id = "test_session_789"
 
     with patch(
-        "agentpool_server.opencode_server.converters.opencode_to_session_data"
+        "wolfharness_server.opencode_server.converters.opencode_to_session_data"
     ) as mock_converter:
         mock_session_data = MagicMock()
         mock_converter.return_value = mock_session_data
 
         with patch(
-            "agentpool_server.opencode_server.input_provider.OpenCodeInputProvider"
+            "wolfharness_server.opencode_server.input_provider.OpenCodeInputProvider"
         ) as mock_provider_class:
             mock_provider_class.return_value = MagicMock()
 
@@ -144,9 +144,9 @@ async def test_ensure_session_caches_in_memory(mock_state: ServerState) -> None:
     session_id = "test_session_abc"
 
     with (
-        patch("agentpool_server.opencode_server.converters.opencode_to_session_data"),
+        patch("wolfharness_server.opencode_server.converters.opencode_to_session_data"),
         patch(
-            "agentpool_server.opencode_server.input_provider.OpenCodeInputProvider"
+            "wolfharness_server.opencode_server.input_provider.OpenCodeInputProvider"
         ) as mock_provider_class,
     ):
         mock_provider = MagicMock()
@@ -178,8 +178,8 @@ async def test_ensure_session_broadcasts_idle_events(mock_state: ServerState) ->
     session_id = "test_session_idle_event"
 
     with (
-        patch("agentpool_server.opencode_server.converters.opencode_to_session_data"),
-        patch("agentpool_server.opencode_server.input_provider.OpenCodeInputProvider"),
+        patch("wolfharness_server.opencode_server.converters.opencode_to_session_data"),
+        patch("wolfharness_server.opencode_server.input_provider.OpenCodeInputProvider"),
         patch.object(mock_state, "broadcast_event", new=AsyncMock()) as mock_broadcast,
     ):
         await ensure_session(mock_state, session_id)
@@ -206,9 +206,9 @@ async def test_ensure_session_creates_input_provider(mock_state: ServerState) ->
     session_id = "test_session_def"
 
     with (
-        patch("agentpool_server.opencode_server.converters.opencode_to_session_data"),
+        patch("wolfharness_server.opencode_server.converters.opencode_to_session_data"),
         patch(
-            "agentpool_server.opencode_server.input_provider.OpenCodeInputProvider"
+            "wolfharness_server.opencode_server.input_provider.OpenCodeInputProvider"
         ) as mock_provider_class,
     ):
         mock_provider = MagicMock()
@@ -227,8 +227,8 @@ async def test_ensure_session_without_parent_id(mock_state: ServerState) -> None
     session_id = "test_session_no_parent"
 
     with (
-        patch("agentpool_server.opencode_server.converters.opencode_to_session_data"),
-        patch("agentpool_server.opencode_server.input_provider.OpenCodeInputProvider"),
+        patch("wolfharness_server.opencode_server.converters.opencode_to_session_data"),
+        patch("wolfharness_server.opencode_server.input_provider.OpenCodeInputProvider"),
     ):
         result = await ensure_session(mock_state, session_id)
 
@@ -242,8 +242,8 @@ async def test_ensure_session_is_idempotent(mock_state: ServerState) -> None:
     session_id = "test_session_idempotent"
 
     with (
-        patch("agentpool_server.opencode_server.converters.opencode_to_session_data"),
-        patch("agentpool_server.opencode_server.input_provider.OpenCodeInputProvider"),
+        patch("wolfharness_server.opencode_server.converters.opencode_to_session_data"),
+        patch("wolfharness_server.opencode_server.input_provider.OpenCodeInputProvider"),
     ):
         result1 = await ensure_session(mock_state, session_id)
         result2 = await ensure_session(mock_state, session_id)
@@ -318,8 +318,8 @@ async def test_ensure_session_child_inherits_parent_project_and_directory(
     mock_state.sessions[parent_id] = parent_session
 
     with (
-        patch("agentpool_server.opencode_server.converters.opencode_to_session_data"),
-        patch("agentpool_server.opencode_server.input_provider.OpenCodeInputProvider"),
+        patch("wolfharness_server.opencode_server.converters.opencode_to_session_data"),
+        patch("wolfharness_server.opencode_server.input_provider.OpenCodeInputProvider"),
     ):
         child = await ensure_session(mock_state, child_id, parent_id=parent_id)
 
@@ -340,8 +340,8 @@ async def test_ensure_session_child_falls_back_when_parent_missing(
     orphan_parent_id = "nonexistent_parent"
 
     with (
-        patch("agentpool_server.opencode_server.converters.opencode_to_session_data"),
-        patch("agentpool_server.opencode_server.input_provider.OpenCodeInputProvider"),
+        patch("wolfharness_server.opencode_server.converters.opencode_to_session_data"),
+        patch("wolfharness_server.opencode_server.input_provider.OpenCodeInputProvider"),
     ):
         child = await ensure_session(mock_state, child_id, parent_id=orphan_parent_id)
 
@@ -362,8 +362,8 @@ async def test_ensure_session_child_skips_agent_binding(mock_state: ServerState)
     parent_id = "parent_session_xyz"
 
     with (
-        patch("agentpool_server.opencode_server.converters.opencode_to_session_data"),
-        patch("agentpool_server.opencode_server.input_provider.OpenCodeInputProvider"),
+        patch("wolfharness_server.opencode_server.converters.opencode_to_session_data"),
+        patch("wolfharness_server.opencode_server.input_provider.OpenCodeInputProvider"),
     ):
         result = await ensure_session(mock_state, session_id, parent_id=parent_id)
 

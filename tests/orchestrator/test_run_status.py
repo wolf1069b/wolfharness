@@ -1,4 +1,4 @@
-"""Tests for the RunState and RunOutcome enums in agentpool.lifecycle.types."""
+"""Tests for the RunState and RunOutcome enums in wolfharness.lifecycle.types."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from enum import Enum
 
 import pytest
 
-from agentpool.lifecycle import RunOutcome, RunState
+from wolfharness.lifecycle import RunOutcome, RunState
 
 
 pytestmark = pytest.mark.unit

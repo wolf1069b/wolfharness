@@ -27,7 +27,7 @@ This example demonstrates how to configure MCP servers directly in YAML and use 
 
 ```python
 # /// script
-# dependencies = ["agentpool"]
+# dependencies = ["wolfharness"]
 # ///
 
 
@@ -44,8 +44,8 @@ from __future__ import annotations
 
 import os
 
-from agentpool import AgentPool, AgentsManifest
-from agentpool.docs.utils import get_config_path, is_pyodide, run
+from wolfharness import AgentPool, AgentsManifest
+from wolfharness.docs.utils import get_config_path, is_pyodide, run
 
 
 PROMPT = "Get the latest commit hash!"
@@ -81,15 +81,15 @@ if __name__ == "__main__":
 
 ```python
 # /// script
-# dependencies = ["agentpool"]
+# dependencies = ["wolfharness"]
 # ///
 
 """Example: Two agents working together to explore git commit history."""
 
 from __future__ import annotations
 
-from agentpool import Agent, Team
-from agentpool.docs.utils import run
+from wolfharness import Agent, Team
+from wolfharness.docs.utils import run
 
 
 PICKER = """
@@ -151,7 +151,7 @@ includes the following details:
 ### `config.yml`
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/Million-mo/agentpool/refs/heads/main/schema/config-schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Million-mo/wolfharness/refs/heads/main/schema/config-schema.json
 mcp_servers:
   - "uvx mcp-server-git"
 

@@ -20,7 +20,7 @@ The `ToolManager` is a central component that manages the lifecycle and availabi
 ### 1. Tool Registration and Access
 
 ```python
-from agentpool.tools import ToolManager
+from wolfharness.tools import ToolManager
 
 
 

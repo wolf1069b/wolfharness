@@ -30,15 +30,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from pydantic_ai import RunContext
 import pytest
 
-from agentpool import ChatMessage
-from agentpool.agents.base_agent import BaseAgent
-from agentpool.agents.context import AgentContext
-from agentpool.agents.events import StreamCompleteEvent
-from agentpool.capabilities.background_task.capability import (
+from wolfharness import ChatMessage
+from wolfharness.agents.base_agent import BaseAgent
+from wolfharness.agents.context import AgentContext
+from wolfharness.agents.events import StreamCompleteEvent
+from wolfharness.capabilities.background_task.capability import (
     BackgroundTaskCapability,
 )
-from agentpool.delegation import AgentPool
-from agentpool.messaging import MessageHistory
+from wolfharness.delegation import AgentPool
+from wolfharness.messaging import MessageHistory
 
 
 pytestmark = pytest.mark.anyio
@@ -233,7 +233,7 @@ class TestPerTaskHistoryIsolation:
         node.run_stream = MagicMock(side_effect=_capturing_run_stream)
 
         with patch(
-            "agentpool.capabilities.background_task.capability._generate_task_id",
+            "wolfharness.capabilities.background_task.capability._generate_task_id",
             return_value="bg_isoasyn1",
         ):
             await capability._task(
@@ -320,7 +320,7 @@ class TestPerTaskHistoryIsolation:
 
         for i in range(2):
             with patch(
-                "agentpool.capabilities.background_task.capability._generate_task_id",
+                "wolfharness.capabilities.background_task.capability._generate_task_id",
                 return_value=f"bg_parl{i:02d}",
             ):
                 await capability._task(
@@ -362,7 +362,7 @@ class TestPerTaskHistoryIsolation:
         )
 
         with patch(
-            "agentpool.capabilities.background_task.capability._generate_task_id",
+            "wolfharness.capabilities.background_task.capability._generate_task_id",
             return_value="bg_nopoll1",
         ):
             await capability._task(
@@ -418,7 +418,7 @@ class TestSessionIdIsolation:
 
         for i in range(2):
             with patch(
-                "agentpool.capabilities.background_task.capability._generate_task_id",
+                "wolfharness.capabilities.background_task.capability._generate_task_id",
                 return_value=f"bg_sid{i:02d}",
             ):
                 await capability._task(
@@ -485,7 +485,7 @@ class TestDepsIsolation:
 
         for i in range(2):
             with patch(
-                "agentpool.capabilities.background_task.capability._generate_task_id",
+                "wolfharness.capabilities.background_task.capability._generate_task_id",
                 return_value=f"bg_dep{i:02d}",
             ):
                 await capability._task(

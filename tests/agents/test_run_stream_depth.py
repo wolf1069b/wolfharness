@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool.agents.context import AgentRunContext
+from wolfharness.agents.context import AgentRunContext
 
 
 pytestmark = pytest.mark.unit
@@ -44,7 +44,7 @@ def test_agent_run_context_terminal_tool_state_default() -> None:
 
 def test_terminal_tool_metadata_marks_run_completion() -> None:
     """Terminal-tool behavior should be declared by metadata, not by tool name."""
-    from agentpool.tools.base import TERMINAL_TOOL_METADATA_KEY, has_terminal_tool_metadata
+    from wolfharness.tools.base import TERMINAL_TOOL_METADATA_KEY, has_terminal_tool_metadata
 
     assert has_terminal_tool_metadata({TERMINAL_TOOL_METADATA_KEY: "true"})
     assert not has_terminal_tool_metadata({"name": "attempt_completion"})
@@ -59,7 +59,7 @@ def test_run_stream_accepts_depth_param() -> None:
     """
     import inspect
 
-    from agentpool.agents.base_agent import BaseAgent
+    from wolfharness.agents.base_agent import BaseAgent
 
     sig = inspect.signature(BaseAgent.run_stream)
     assert "depth" in sig.parameters
@@ -70,7 +70,7 @@ def test_run_accepts_depth_param() -> None:
     """BaseAgent.run() should accept depth parameter without TypeError."""
     import inspect
 
-    from agentpool.agents.base_agent import BaseAgent
+    from wolfharness.agents.base_agent import BaseAgent
 
     sig = inspect.signature(BaseAgent.run)
     assert "depth" in sig.parameters

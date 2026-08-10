@@ -1,0 +1,401 @@
+"""Event emitter delegate for AgentContext with fluent API."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Literal
+
+from wolfharness.agents.events import (
+    CustomEvent,
+    DiffContentItem,
+    LocationContentItem,
+    PlanUpdateEvent,
+    TextContentItem,
+    ToolCallProgressEvent,
+    ToolCallStartEvent,
+)
+from wolfharness.log import get_logger
+
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from wolfharness.agents.context import AgentContext
+    from wolfharness.agents.events import RichAgentStreamEvent, ToolCallContentItem
+    from wolfharness.agents.events.events import ToolCallStatus
+    from wolfharness.orchestrator.core import EventBus
+    from wolfharness.tools.base import ToolKind
+    from wolfharness.utils.todos import PlanEntry
+
+logger = get_logger(__name__)
+
+
+class StreamEventEmitter:
+    """Event emitter delegate that automatically injects context.
+
+    Provides a fluent API for emitting progress events with context
+    (tool_call_id, etc.) automatically injected.
+
+    UI content vs agent return values: Emit `tool_call_progress` with content
+    items for UI display, return raw data for the agent. See `events.py` for
+    the full pattern (aligned with ACP protocol).
+    """
+
+    def __init__(self, context: AgentContext, event_bus: EventBus | None = None) -> None:
+        """Initialize event emitter with agent context.
+
+        Args:
+            context: Agent context to extract metadata from
+            event_bus: Optional EventBus for forwarding events (set by SessionPool)
+        """
+        self._context = context
+        self._event_bus = event_bus
+
+    # =========================================================================
+    # Core methods - the essential API
+    # =========================================================================
+
+    async def tool_call_start(
+        self,
+        title: str,
+        kind: ToolKind = "other",
+        content: list[ToolCallContentItem] | None = None,
+        locations: list[str | LocationContentItem] | None = None,
+    ) -> None:
+        """Emit tool call start event with rich ACP metadata.
+
+        Args:
+            title: Human-readable title describing what the tool is doing
+            kind: Tool kind (read, edit, delete, move, search, execute, think, fetch, other)
+            content: Content produced by the tool call (terminals, diffs, text)
+            locations: File paths or LocationContentItem objects affected by this tool call
+        """
+        location_items = [
+            LocationContentItem(path=loc) if isinstance(loc, str) else loc
+            for loc in (locations or [])
+        ]
+        event = ToolCallStartEvent(
+            tool_call_id=self._context.tool_call_id or "",
+            tool_name=self._context.tool_name or "",
+            title=title,
+            kind=kind,
+            content=content or [],
+            locations=location_items,
+            raw_input=self._context.tool_input.copy(),
+        )
+        await self._emit(event)
+
+    async def tool_call_progress(
+        self,
+        title: str,
+        *,
+        status: ToolCallStatus = "in_progress",
+        items: Sequence[ToolCallContentItem | str] | None = None,
+        replace_content: bool = False,
+    ) -> None:
+        """Emit a progress event.
+
+        Args:
+            title: Human-readable title describing the operation
+            status: Execution status
+            items: Rich content items (terminals, diffs, locations, text)
+            replace_content: If True, items replace existing content instead of appending
+        """
+        # Record file changes from DiffContentItem for diff/revert support
+        if self._context.pool and self._context.pool.file_ops and items:
+            message_id = self._resolve_message_id()
+            for item in items:
+                if isinstance(item, DiffContentItem):
+                    self._context.pool.file_ops.record_change(
+                        path=item.path,
+                        old_content=item.old_text,
+                        new_content=item.new_text,
+                        operation="create" if item.old_text is None else "write",
+                        agent_name=self._context.node_name,
+                        message_id=message_id,
+                    )
+
+        event = ToolCallProgressEvent(
+            tool_call_id=self._context.tool_call_id or "",
+            tool_name=self._context.tool_name,
+            status=status,
+            title=title,
+            items=[TextContentItem(text=i) if isinstance(i, str) else i for i in items or []],
+            replace_content=replace_content,
+        )
+        await self._emit(event)
+
+    async def progress(self, progress: float, total: float | None, message: str) -> None:
+        """Emit numeric progress event (for MCP progress notifications).
+
+        Args:
+            progress: Current progress value
+            total: Total progress value
+            message: Progress message
+        """
+        await self._context.report_progress(progress, total, message)
+
+    async def emit_event(self, event: RichAgentStreamEvent[Any]) -> None:
+        """Emit a typed event into the agent's event stream.
+
+        This is the escape hatch for emitting any event type directly.
+
+        Args:
+            event: The event instance (PlanUpdateEvent, ToolCallProgressEvent, etc.)
+        """
+        await self._emit(event)
+
+    # =========================================================================
+    # Convenience methods - thin wrappers for common patterns
+    # =========================================================================
+
+    async def file_operation(
+        self,
+        operation: Literal["read", "write", "delete", "list", "edit"],
+        path: str,
+        success: bool,
+        error: str | None = None,
+        line: int = 0,
+    ) -> None:
+        """Emit file operation event.
+
+        Args:
+            operation: The filesystem operation performed
+            path: The file/directory path that was operated on
+            success: Whether the operation completed successfully
+            error: Error message if operation failed
+            line: Line number for navigation (0 = beginning)
+        """
+        event = ToolCallProgressEvent.file_operation(
+            tool_call_id=self._context.tool_call_id or "",
+            tool_name=self._context.tool_name,
+            operation=operation,
+            path=path,
+            success=success,
+            error=error,
+            line=line,
+        )
+        await self._emit(event)
+
+    async def file_edit_progress(
+        self,
+        path: str,
+        old_text: str,
+        new_text: str,
+        status: ToolCallStatus,
+    ) -> None:
+        """Emit file edit progress event with diff information.
+
+        Args:
+            path: The file path being edited
+            old_text: Original file content
+            new_text: New file content
+            status: Current status of the edit operation
+        """
+        # Record file change for diff/revert support
+        if self._context.pool and self._context.pool.file_ops:
+            self._context.pool.file_ops.record_change(
+                path=path,
+                old_content=old_text,
+                new_content=new_text,
+                operation="edit",
+                agent_name=self._context.node_name,
+                message_id=self._resolve_message_id(),
+            )
+
+        event = ToolCallProgressEvent.file_edit(
+            tool_call_id=self._context.tool_call_id or "",
+            tool_name=self._context.tool_name,
+            path=path,
+            old_text=old_text,
+            new_text=new_text,
+            status=status,
+        )
+        await self._emit(event)
+
+    async def process_started(
+        self,
+        process_id: str,
+        command: str,
+        success: bool = True,
+        error: str | None = None,
+    ) -> None:
+        """Emit process start event.
+
+        Args:
+            process_id: Unique process identifier (terminal_id for ACP)
+            command: Command being executed
+            success: Whether the process started successfully
+            error: Error message if start failed
+        """
+        event = ToolCallProgressEvent.process_started(
+            tool_call_id=self._context.tool_call_id or "",
+            tool_name=self._context.tool_name,
+            process_id=process_id,
+            command=command,
+            success=success,
+            error=error,
+        )
+        await self._emit(event)
+
+    async def process_output(self, process_id: str, output: str) -> None:
+        """Emit process output event.
+
+        Args:
+            process_id: Process identifier
+            output: Process output
+        """
+        event = ToolCallProgressEvent.process_output(
+            tool_call_id=self._context.tool_call_id or "",
+            tool_name=self._context.tool_name,
+            process_id=process_id,
+            output=output,
+        )
+        await self._emit(event)
+
+    async def process_exit(
+        self,
+        process_id: str,
+        exit_code: int,
+        final_output: str | None = None,
+    ) -> None:
+        """Emit process exit event.
+
+        Args:
+            process_id: Process identifier
+            exit_code: Process exit code
+            final_output: Final process output
+        """
+        event = ToolCallProgressEvent.process_exit(
+            tool_call_id=self._context.tool_call_id or "",
+            tool_name=self._context.tool_name,
+            process_id=process_id,
+            exit_code=exit_code,
+            final_output=final_output,
+        )
+        await self._emit(event)
+
+    async def process_killed(
+        self,
+        process_id: str,
+        success: bool = True,
+        error: str | None = None,
+    ) -> None:
+        """Emit process kill event.
+
+        Args:
+            process_id: Process identifier
+            success: Whether the process was successfully killed
+            error: Error message if kill failed
+        """
+        event = ToolCallProgressEvent.process_killed(
+            tool_call_id=self._context.tool_call_id or "",
+            tool_name=self._context.tool_name,
+            process_id=process_id,
+            success=success,
+            error=error,
+        )
+        await self._emit(event)
+
+    async def process_released(
+        self,
+        process_id: str,
+        success: bool = True,
+        error: str | None = None,
+    ) -> None:
+        """Emit process release event.
+
+        Args:
+            process_id: Process identifier
+            success: Whether resources were successfully released
+            error: Error message if release failed
+        """
+        event = ToolCallProgressEvent.process_released(
+            tool_call_id=self._context.tool_call_id or "",
+            tool_name=self._context.tool_name,
+            process_id=process_id,
+            success=success,
+            error=error,
+        )
+        await self._emit(event)
+
+    async def plan_updated(self, entries: Sequence[PlanEntry]) -> None:
+        """Emit plan update event.
+
+        Args:
+            entries: Current plan entries
+        """
+        event = PlanUpdateEvent(
+            entries=list(entries),
+            tool_call_id=self._context.tool_call_id,
+        )
+        await self._emit(event)
+
+    async def custom(
+        self,
+        event_data: Any,
+        event_type: str = "custom",
+        source: str | None = None,
+    ) -> None:
+        """Emit custom event.
+
+        Args:
+            event_data: The custom event data of any type
+            event_type: Type identifier for the custom event
+            source: Optional source identifier
+        """
+        event = CustomEvent(
+            event_data=event_data,
+            event_type=event_type,
+            source=source or self._context.tool_name,
+        )
+        await self._emit(event)
+
+    # =========================================================================
+    # Private helpers
+    # =========================================================================
+
+    def _resolve_message_id(self) -> str | None:
+        """Resolve the message ID for file change tracking.
+
+        Prefers ``opencode_message_id`` from the run context (same ID space
+        as the revert endpoint's ``request.message_id``). Falls back to
+        ``turn_id`` when ``opencode_message_id`` is not set (e.g. standalone
+        execution without the OpenCode server).
+
+        Returns:
+            The resolved message ID, or ``None`` if no run context is available.
+        """
+        run_ctx = self._context.run_ctx
+        if run_ctx is None:
+            return None
+        return run_ctx.opencode_message_id or run_ctx.turn_id
+
+    async def _emit(self, event: RichAgentStreamEvent[Any]) -> None:
+        """Internal method to emit events to EventBus."""
+        if self._event_bus is not None:
+            session_id = getattr(self._context.agent, "session_id", None)
+            if not session_id and self._context.run_ctx is not None:
+                session_id = self._context.run_ctx.session_id
+            if session_id:
+                try:
+                    await self._event_bus.publish(session_id, event)
+                except (ValueError, TypeError, RuntimeError, KeyError, AttributeError):
+                    logger.warning(
+                        "EventBus publish failed — event dropped",
+                        session_id=session_id,
+                        event_type=type(event).__name__,
+                    )
+                    return
+                else:
+                    return
+            logger.warning(
+                "Event dropped: no session_id for event_bus publish",
+                agent_name=self._context.agent.name,
+                event_type=type(event).__name__,
+            )
+            return
+        logger.warning(
+            "Event dropped: no event_bus available",
+            agent_name=self._context.agent.name,
+            event_type=type(event).__name__,
+        )

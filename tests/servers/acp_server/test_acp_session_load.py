@@ -14,10 +14,10 @@ from acp.schema import (
     SessionModelState,
     SessionModeState,
 )
-from agentpool import Agent
-from agentpool.delegation import AgentPool
-from agentpool.messaging import ChatMessage
-from agentpool_server.acp_server.acp_agent import AgentPoolACPAgent
+from wolfharness import Agent
+from wolfharness.delegation import AgentPool
+from wolfharness.messaging import ChatMessage
+from wolfharness_server.acp_server.acp_agent import AgentPoolACPAgent
 
 
 @pytest.fixture
@@ -33,8 +33,8 @@ def mock_agent_pool_with_agent():
     def simple_callback(message: str) -> str:
         return f"Test response: {message}"
 
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.manifest import AgentsManifest
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.manifest import AgentsManifest
 
     manifest = AgentsManifest(agents={"test_agent": NativeAgentConfig(model="test")})
 
@@ -252,7 +252,7 @@ async def test_load_session_with_nested_acp_agent(
     mock_acp_agent, mock_session, load_session_request
 ):
     """Test load_session with nested ACP agent populates models/modes from agent state."""
-    from agentpool.agents.acp_agent import ACPAgent
+    from wolfharness.agents.acp_agent import ACPAgent
 
     nested_agent = MagicMock(spec=ACPAgent)
     nested_agent._state = MagicMock()

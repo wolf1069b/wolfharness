@@ -24,11 +24,11 @@ from pydantic_ai.messages import (
 )
 import pytest
 
-from agentpool.agents.native_agent.helpers import (
+from wolfharness.agents.native_agent.helpers import (
     _summarize_content_block,
     extract_text_from_messages,
 )
-from agentpool.storage.serialization import (
+from wolfharness.storage.serialization import (
     deserialize_prompts,
     serialize_prompts,
 )
@@ -229,7 +229,7 @@ def test_deserialize_prompts_empty_string_returns_empty() -> None:
 @pytest.mark.unit
 def test_snapshot_store_saves_prompts_serialized() -> None:
     """Snapshot store should save prompts_serialized with full multimodal data."""
-    from agentpool.lifecycle import MemorySnapshotStore
+    from wolfharness.lifecycle import MemorySnapshotStore
 
     store = MemorySnapshotStore()
     img = BinaryImage(data=b"\x89PNG\r\n\x1a\n", media_type="image/png")
@@ -319,7 +319,7 @@ def test_opencode_converter_uses_summarize_content_block() -> None:
 @pytest.mark.unit
 def test_compaction_extract_text_content_uses_summarize() -> None:
     """compaction._extract_text_content should include placeholders for non-string items."""
-    from agentpool.messaging.compaction import _extract_text_content
+    from wolfharness.messaging.compaction import _extract_text_content
 
     img = BinaryImage(data=b"\x89PNG\r\n\x1a\n", media_type="image/png")
     msg = ModelRequest(
@@ -348,16 +348,16 @@ async def test_multimodal_prompt_round_trip_through_db(tmp_path: Any) -> None:
     ``get_session_messages()``, and verifies the ``BinaryImage`` is
     preserved with correct data and media_type.
     """
-    from agentpool.messaging import ChatMessage
-    from agentpool_config.storage import SQLStorageConfig
-    from agentpool_storage.sql_provider import SQLModelProvider
+    from wolfharness.messaging import ChatMessage
+    from wolfharness_config.storage import SQLStorageConfig
+    from wolfharness_storage.sql_provider import SQLModelProvider
 
     db_path = tmp_path / "test_multimodal.db"
     config = SQLStorageConfig(url=f"sqlite:///{db_path}")
     provider = SQLModelProvider(config)
 
     # Clear engine cache to avoid cross-test contamination.
-    from agentpool_config.storage import _engine_cache
+    from wolfharness_config.storage import _engine_cache
 
     _engine_cache.clear()
 

@@ -3,9 +3,9 @@ from __future__ import annotations
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool import Agent, AgentPool
-from agentpool.models.agents import NativeAgentConfig
-from agentpool.models.manifest import AgentsManifest
+from wolfharness import Agent, AgentPool
+from wolfharness.models.agents import NativeAgentConfig
+from wolfharness.models.manifest import AgentsManifest
 
 
 pytestmark = pytest.mark.integration

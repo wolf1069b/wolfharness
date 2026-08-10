@@ -22,9 +22,10 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from agentpool.utils import identifiers as identifier
-from agentpool.utils.time_utils import now_ms
-from agentpool_server.opencode_server.models import (
+from tests.servers.opencode_server.conftest import run_message_phases
+from wolfharness.utils import identifiers as identifier
+from wolfharness.utils.time_utils import now_ms
+from wolfharness_server.opencode_server.models import (
     AssistantMessage,
     MessageRequest,
     MessageUpdatedEvent,
@@ -32,12 +33,11 @@ from agentpool_server.opencode_server.models import (
     TimeCreated,
     UserMessage,
 )
-from agentpool_server.opencode_server.models.message import (
+from wolfharness_server.opencode_server.models.message import (
     MessageAbortedError,
     MessageWithParts,
 )
-from agentpool_server.opencode_server.state import ServerState
-from tests.servers.opencode_server.conftest import run_message_phases
+from wolfharness_server.opencode_server.state import ServerState
 
 
 pytestmark = pytest.mark.integration
@@ -62,7 +62,7 @@ class CancellableAgentMock:
         self.model_name = "test-model"
         self.session_id: str | None = None
         # Real MessageHistory so conversation state is testable
-        from agentpool.messaging.message_history import MessageHistory
+        from wolfharness.messaging.message_history import MessageHistory
 
         self.conversation = MessageHistory()
 
@@ -120,7 +120,7 @@ def cancellable_mock_agent():
     agent._agent_pool = pool  # state.py resolves _pool via agent._agent_pool
 
     # Set up SessionPool mock for new architecture
-    from agentpool.lifecycle import RunState
+    from wolfharness.lifecycle import RunState
 
     session_pool = Mock()
     session_pool.sessions = Mock()
@@ -188,8 +188,8 @@ def sample_message_request():
 
 def _setup_session(state: ServerState, session_id: str) -> None:
     """Set up session state manually (bypassing ensure_session which needs pool.storage)."""
-    from agentpool_server.opencode_server.models import Session
-    from agentpool_server.opencode_server.models.common import TimeCreatedUpdated
+    from wolfharness_server.opencode_server.models import Session
+    from wolfharness_server.opencode_server.models.common import TimeCreatedUpdated
 
     now = now_ms()
     session = Session(

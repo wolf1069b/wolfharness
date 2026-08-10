@@ -3,10 +3,10 @@
 Run with: uv run python tests/agents/acp_agent/test_load_session_manual.py
 
 This tests the full flow:
-1. Client connects to agentpool ACP server (wrapping Claude Code)
+1. Client connects to wolfharness ACP server (wrapping Claude Code)
 2. Lists sessions from Claude Code
 3. Loads a session - server delegates to Claude Code's load_session
-4. Claude Code replays notifications -> agentpool forwards -> client receives
+4. Claude Code replays notifications -> wolfharness forwards -> client receives
 5. Client's conversation.chat_messages gets populated
 
 Logs are written to /tmp/load_session_test.log for inspection.
@@ -21,7 +21,7 @@ import tempfile
 
 import pytest
 
-from agentpool.agents.acp_agent import ACPAgent
+from wolfharness.agents.acp_agent import ACPAgent
 
 
 pytestmark = pytest.mark.unit
@@ -37,8 +37,8 @@ logging.basicConfig(
         logging.StreamHandler(),  # Also print to console
     ],
 )
-logging.getLogger("agentpool").setLevel(logging.DEBUG)
-logging.getLogger("agentpool_server").setLevel(logging.DEBUG)
+logging.getLogger("wolfharness").setLevel(logging.DEBUG)
+logging.getLogger("wolfharness_server").setLevel(logging.DEBUG)
 logging.getLogger("acp").setLevel(logging.DEBUG)
 
 print(f"Logs will be written to: {LOG_FILE}")
@@ -46,13 +46,13 @@ print(f"Logs will be written to: {LOG_FILE}")
 
 async def main() -> None:
     """Test load_session flow."""
-    # Connect to agentpool ACP server running Claude Code agent
+    # Connect to wolfharness ACP server running Claude Code agent
     print("Starting ACPAgent...")
     async with ACPAgent(
         command="uv",
-        args=["run", "agentpool", "serve-acp", "tests/agents/acp_agent/claude_code_config.yml"],
+        args=["run", "wolfharness", "serve-acp", "tests/agents/acp_agent/claude_code_config.yml"],
         name="test_client",
-        cwd="/home/phil65/dev/oss/agentpool",
+        cwd="/home/phil65/dev/oss/wolfharness",
     ) as agent:
         print(f"Connected to ACP server, session_id: {agent._sdk_session_id}")
 

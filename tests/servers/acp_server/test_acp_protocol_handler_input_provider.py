@@ -19,10 +19,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from acp.schema import TextContentBlock
-from agentpool.orchestrator.core import EventEnvelope
-from agentpool.orchestrator.run import RunHandle
-from agentpool_server.acp_server.handler import ACPProtocolHandler, _ACPSessionProxy
-from agentpool_server.acp_server.input_provider import ACPInputProvider
+from wolfharness.orchestrator.core import EventEnvelope
+from wolfharness.orchestrator.run import RunHandle
+from wolfharness_server.acp_server.handler import ACPProtocolHandler, _ACPSessionProxy
+from wolfharness_server.acp_server.input_provider import ACPInputProvider
 
 
 pytestmark = pytest.mark.unit
@@ -281,7 +281,7 @@ class TestEventConsumerConverterFlag:
     ) -> None:
         """When client supports turn_complete, converter is created with flag=True."""
         from acp.schema.capabilities import ClientCapabilities
-        from agentpool_server.acp_server.handler import ACPEventConverter
+        from wolfharness_server.acp_server.handler import ACPEventConverter
 
         handler = ACPProtocolHandler(
             host_context=mock_pool,
@@ -460,7 +460,7 @@ class TestHandlePromptBlockingBehavior:
         mock_client: MagicMock,
     ) -> None:
         """When client_capabilities is None, converter defaults to flag=False."""
-        from agentpool_server.acp_server.handler import ACPEventConverter
+        from wolfharness_server.acp_server.handler import ACPEventConverter
 
         handler = ACPProtocolHandler(
             host_context=mock_pool,
@@ -510,8 +510,8 @@ async def test_handle_event_uses_event_session_id_for_child(
     mock_converter.subagent_meta = {}
     handler._converters["parent-sid"] = mock_converter
 
-    from agentpool.agents.events import StreamCompleteEvent
-    from agentpool.messaging import ChatMessage
+    from wolfharness.agents.events import StreamCompleteEvent
+    from wolfharness.messaging import ChatMessage
 
     # Child event wrapped in EventEnvelope with source_session_id
     event = StreamCompleteEvent(
@@ -556,8 +556,8 @@ async def test_handle_event_falls_back_to_consumer_session_id(
     mock_converter.subagent_meta = {}
     handler._converters["parent-sid"] = mock_converter
 
-    from agentpool.agents.events import StreamCompleteEvent
-    from agentpool.messaging import ChatMessage
+    from wolfharness.agents.events import StreamCompleteEvent
+    from wolfharness.messaging import ChatMessage
 
     # Event without session_id wrapped in EventEnvelope with empty source_session_id
     event = StreamCompleteEvent(

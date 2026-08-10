@@ -15,13 +15,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from agentpool.utils.identifiers import generate_session_id
-from agentpool_storage.memory_provider.provider import MemoryStorageProvider
+from wolfharness.utils.identifiers import generate_session_id
+from wolfharness_storage.memory_provider.provider import MemoryStorageProvider
 
 
 if TYPE_CHECKING:
-    from agentpool import AgentPool
-    from agentpool.sessions.models import SessionData
+    from wolfharness import AgentPool
+    from wolfharness.sessions.models import SessionData
 
 
 pytestmark = pytest.mark.unit
@@ -46,7 +46,7 @@ async def test_session_pool_create_session_registers_in_pool(minimal_pool: Agent
     """SessionPool.create_session() registers the session in the controller."""
     store = MemoryStorageProvider()
     async with store:
-        from agentpool.orchestrator.session_controller import SessionController
+        from wolfharness.orchestrator.session_controller import SessionController
 
         controller = SessionController(minimal_pool, store=store)
         state, _was_created = await controller.get_or_create_session(
@@ -65,7 +65,7 @@ async def test_acp_creation_path_registers_in_pool(minimal_pool: AgentPool) -> N
     """ACP creation path delegates to SessionPool.create_session()."""
     store = MemoryStorageProvider()
     async with store:
-        from agentpool.orchestrator.session_controller import SessionController
+        from wolfharness.orchestrator.session_controller import SessionController
 
         controller = SessionController(minimal_pool, store=store)
         # Simulate what ACPSessionManager.create_session() does for top-level
@@ -90,7 +90,7 @@ async def test_a2a_creation_path_registers_in_pool(minimal_pool: AgentPool) -> N
     """A2A creation path uses SessionPool.create_session() + get_or_create_session_agent."""
     store = MemoryStorageProvider()
     async with store:
-        from agentpool.orchestrator.session_controller import SessionController
+        from wolfharness.orchestrator.session_controller import SessionController
 
         controller = SessionController(minimal_pool, store=store)
         # Simulate what A2AServer agent_handler does
@@ -105,7 +105,7 @@ async def test_agui_creation_path_registers_in_pool(minimal_pool: AgentPool) -> 
     """AG-UI creation path uses two-step pattern: create_session + get_or_create_session_agent."""
     store = MemoryStorageProvider()
     async with store:
-        from agentpool.orchestrator.session_controller import SessionController
+        from wolfharness.orchestrator.session_controller import SessionController
 
         controller = SessionController(minimal_pool, store=store)
         # Simulate what AGUIServer agent_handler does
@@ -120,7 +120,7 @@ async def test_openai_api_creation_path_registers_in_pool(minimal_pool: AgentPoo
     """OpenAI API creation path uses generate_session_id()."""
     store = MemoryStorageProvider()
     async with store:
-        from agentpool.orchestrator.session_controller import SessionController
+        from wolfharness.orchestrator.session_controller import SessionController
 
         controller = SessionController(minimal_pool, store=store)
         session_id = generate_session_id()
@@ -139,7 +139,7 @@ async def test_child_session_inherits_parent_project_id_and_cwd(minimal_pool: Ag
     """Child session created via SessionPool inherits parent's project_id and cwd."""
     store = MemoryStorageProvider()
     async with store:
-        from agentpool.orchestrator.session_controller import SessionController
+        from wolfharness.orchestrator.session_controller import SessionController
 
         controller = SessionController(minimal_pool, store=store)
 
@@ -176,7 +176,7 @@ async def test_create_child_session_api_inherits_parent(minimal_pool: AgentPool)
     """SessionPool.create_child_session() inherits parent's project_id and cwd."""
     store = MemoryStorageProvider()
     async with store:
-        from agentpool.orchestrator.session_pool import SessionPool
+        from wolfharness.orchestrator.session_pool import SessionPool
 
         sp = SessionPool(minimal_pool, store=store, enable_event_bus=False)
 
@@ -265,7 +265,7 @@ async def test_acp_create_delegates_to_session_pool(minimal_pool: AgentPool) -> 
     """ACP create delegates to SessionPool (no direct store.save_session)."""
     store = MemoryStorageProvider()
     async with store:
-        from agentpool.orchestrator.session_controller import SessionController
+        from wolfharness.orchestrator.session_controller import SessionController
 
         controller = SessionController(minimal_pool, store=store)
 
@@ -302,7 +302,7 @@ async def test_acp_close_delegates_through_chain(minimal_pool: AgentPool) -> Non
     """ACP close delegates through SessionController → RunHandle cleanup."""
     store = MemoryStorageProvider()
     async with store:
-        from agentpool.orchestrator.session_controller import SessionController
+        from wolfharness.orchestrator.session_controller import SessionController
 
         controller = SessionController(minimal_pool, store=store)
         session_id = generate_session_id()
@@ -326,7 +326,7 @@ async def test_agui_child_consumer_lifecycle(minimal_pool: AgentPool) -> None:
     """AG-UI child consumer lifecycle works after create_child_session extraction."""
     store = MemoryStorageProvider()
     async with store:
-        from agentpool.orchestrator.session_pool import SessionPool
+        from wolfharness.orchestrator.session_pool import SessionPool
 
         sp = SessionPool(minimal_pool, store=store, enable_event_bus=True)
 
@@ -352,7 +352,7 @@ async def test_openai_api_child_consumer_lifecycle(minimal_pool: AgentPool) -> N
     """OpenAI API session lifecycle works with generate_session_id()."""
     store = MemoryStorageProvider()
     async with store:
-        from agentpool.orchestrator.session_controller import SessionController
+        from wolfharness.orchestrator.session_controller import SessionController
 
         controller = SessionController(minimal_pool, store=store)
 
@@ -381,7 +381,7 @@ async def test_concurrent_session_creation_multiple_protocols(minimal_pool: Agen
     """Concurrent session creation from ACP + OpenCode + AG-UI clients simultaneously."""
     store = MemoryStorageProvider()
     async with store:
-        from agentpool.orchestrator.session_controller import SessionController
+        from wolfharness.orchestrator.session_controller import SessionController
 
         controller = SessionController(minimal_pool, store=store)
 

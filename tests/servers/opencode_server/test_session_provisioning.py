@@ -14,12 +14,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentpool.agents.base_agent import BaseAgent
-from agentpool.agents.native_agent.checkpoint import CheckpointData
-from agentpool.lifecycle.types import DeliveryMode
-from agentpool.sessions.models import PendingDeferredCall, SessionData
-from agentpool_server.opencode_server.converters import session_data_to_opencode
-from agentpool_server.opencode_server.models import (
+from wolfharness.agents.base_agent import BaseAgent
+from wolfharness.agents.native_agent.checkpoint import CheckpointData
+from wolfharness.lifecycle.types import DeliveryMode
+from wolfharness.sessions.models import PendingDeferredCall, SessionData
+from wolfharness_server.opencode_server.converters import session_data_to_opencode
+from wolfharness_server.opencode_server.models import (
     MessageWithParts,
     Session,
     SessionCreatedEvent,
@@ -28,15 +28,15 @@ from agentpool_server.opencode_server.models import (
     SessionUpdatedEvent,
     TimeCreatedUpdated,
 )
-from agentpool_server.opencode_server.models.parts import (
+from wolfharness_server.opencode_server.models.parts import (
     ToolPart,
     ToolStateRunning,
 )
-from agentpool_server.opencode_server.session_pool_integration import (
+from wolfharness_server.opencode_server.session_pool_integration import (
     OpenCodeSessionPoolIntegration,
     ensure_session,
 )
-from agentpool_server.opencode_server.state import ServerState
+from wolfharness_server.opencode_server.state import ServerState
 
 
 pytestmark = pytest.mark.integration
@@ -464,7 +464,7 @@ async def test_ensure_session_checkpointed_restores_input_provider(
     with (
         patch.object(mock_state, "broadcast_event", new=AsyncMock()),
         patch(
-            "agentpool_server.opencode_server.input_provider.OpenCodeInputProvider"
+            "wolfharness_server.opencode_server.input_provider.OpenCodeInputProvider"
         ) as mock_prov_cls,
     ):
         mock_prov = MagicMock()
@@ -497,7 +497,7 @@ async def test_ensure_session_checkpointed_without_store(
     with (
         patch.object(mock_state, "broadcast_event", new=AsyncMock()),
         patch(
-            "agentpool_server.opencode_server.input_provider.OpenCodeInputProvider"
+            "wolfharness_server.opencode_server.input_provider.OpenCodeInputProvider"
         ) as mock_prov_cls,
     ):
         mock_prov_cls.return_value = MagicMock()
@@ -687,8 +687,8 @@ async def test_concurrent_calls_produce_one_session(
     mock_state_store_first.pool.storage.load_session = AsyncMock(return_value=None)
 
     with (
-        patch("agentpool_server.opencode_server.converters.opencode_to_session_data"),
-        patch("agentpool_server.opencode_server.input_provider.OpenCodeInputProvider"),
+        patch("wolfharness_server.opencode_server.converters.opencode_to_session_data"),
+        patch("wolfharness_server.opencode_server.input_provider.OpenCodeInputProvider"),
         patch.object(mock_state_store_first, "broadcast_event", new=AsyncMock()),
     ):
         results = await asyncio.gather(
@@ -845,9 +845,11 @@ async def test_store_miss_fallback_creates_and_persists(
     mock_state_store_first.pool.session_pool.sessions.store = mock_store
 
     with (
-        patch("agentpool_server.opencode_server.converters.opencode_to_session_data") as mock_conv,
         patch(
-            "agentpool_server.opencode_server.input_provider.OpenCodeInputProvider"
+            "wolfharness_server.opencode_server.converters.opencode_to_session_data"
+        ) as mock_conv,
+        patch(
+            "wolfharness_server.opencode_server.input_provider.OpenCodeInputProvider"
         ) as mock_prov_cls,
         patch.object(mock_state_store_first, "broadcast_event", new=AsyncMock()),
     ):

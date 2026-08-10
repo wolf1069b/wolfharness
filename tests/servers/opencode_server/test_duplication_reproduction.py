@@ -22,15 +22,15 @@ from typing import Any
 
 import pytest
 
-from agentpool.orchestrator.core import EventBus, EventEnvelope
-from agentpool_server.opencode_server.models import (
+from wolfharness.orchestrator.core import EventBus, EventEnvelope
+from wolfharness_server.opencode_server.models import (
     MessageUpdatedEvent,
     MessageWithParts,
     PartUpdatedEvent,
     TextPart,
     UserMessage,
 )
-from agentpool_server.opencode_server.models.common import TimeCreated
+from wolfharness_server.opencode_server.models.common import TimeCreated
 
 
 pytestmark = pytest.mark.integration
@@ -57,7 +57,7 @@ def _make_user_message(session_id: str = "sess-dup") -> MessageWithParts:
 
 def _wrap_sse_event(data: Any, session_id: str) -> EventEnvelope:
     """Wrap an SSE event as the event bridge does (CustomEvent wrapper)."""
-    from agentpool.agents.events.events import CustomEvent
+    from wolfharness.agents.events.events import CustomEvent
 
     return EventEnvelope(
         source_session_id=session_id,

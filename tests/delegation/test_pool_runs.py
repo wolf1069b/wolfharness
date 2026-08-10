@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool import AgentPool, AgentsManifest, NativeAgentConfig
-from agentpool.orchestrator import RunHandle
+from wolfharness import AgentPool, AgentsManifest, NativeAgentConfig
+from wolfharness.orchestrator import RunHandle
 
 
 @pytest.fixture

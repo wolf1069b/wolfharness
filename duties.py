@@ -78,13 +78,13 @@ def serve(ctx, *args: str):
         ctx.run("uv run zensical build")
         ctx.run("uv run python scripts/reorder_nav.py")
         # Serve the static site directly (zensical serve would rebuild and undo reorder)
-        # Create a temp structure to match zensical's URL scheme: /agentpool/
+        # Create a temp structure to match zensical's URL scheme: /wolfharness/
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
-            (tmp_path / "agentpool").symlink_to(Path("site").resolve())
-            print(f"Serving at http://localhost:{port}/agentpool/")
+            (tmp_path / "wolfharness").symlink_to(Path("site").resolve())
+            print(f"Serving at http://localhost:{port}/wolfharness/")
             ctx.run(f"uv run python -m http.server {port} -d {tmpdir} -b localhost")
     else:
         args_str = " " + " ".join(args) if args else ""
@@ -122,7 +122,7 @@ def _get_lint_targets(filepath: str | None) -> tuple[str, str, str | None]:
         return (
             ".",
             "src/",
-            "src/agentpool/config_resources/*.yml docs/examples/**/config.yml",
+            "src/wolfharness/config_resources/*.yml docs/examples/**/config.yml",
         )
 
     path = Path(filepath)
@@ -169,7 +169,7 @@ def lint(ctx, filepath: str | None = None):  # noqa: D417
         # Full project lint - run jsonschema on all config files
         ctx.run(
             "uv run check-jsonschema --schemafile schema/config-schema.json "
-            "src/agentpool/config_resources/*.yml "
+            "src/wolfharness/config_resources/*.yml "
             "docs/examples/**/config.yml"
         )
 
@@ -198,7 +198,7 @@ def lint_check(ctx, filepath: str | None = None):  # noqa: D417
         # Full project lint - run jsonschema on all config files
         ctx.run(
             "uv run check-jsonschema --schemafile schema/config-schema.json "
-            "src/agentpool/config_resources/*.yml "
+            "src/wolfharness/config_resources/*.yml "
             "docs/examples/**/config.yml"
         )
 
@@ -270,7 +270,7 @@ def smoke_test(ctx, timeout: int = 10):  # noqa: D417
 
         # Run serve-acp from the wheel in an isolated environment
         result = subprocess.run(  # noqa: PLW1510
-            ["timeout", str(timeout), "uvx", "--from", str(wheel), "agentpool", "serve-acp"],
+            ["timeout", str(timeout), "uvx", "--from", str(wheel), "wolfharness", "serve-acp"],
             capture_output=True,
             text=True,
         )
@@ -308,4 +308,4 @@ def opencode_server(ctx, *args: str):
         duty opencode-server --port 8080        # Start on custom port
     """
     args_str = " " + " ".join(args) if args else ""
-    ctx.run(f"uv run agentpool serve-opencode{args_str}")
+    ctx.run(f"uv run wolfharness serve-opencode{args_str}")

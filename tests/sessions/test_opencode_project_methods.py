@@ -13,9 +13,9 @@ import tempfile
 
 import pytest
 
-from agentpool.sessions.models import ProjectData
-from agentpool_config.storage import OpenCodeStorageConfig
-from agentpool_storage.opencode_provider import OpenCodeStorageProvider
+from wolfharness.sessions.models import ProjectData
+from wolfharness_config.storage import OpenCodeStorageConfig
+from wolfharness_storage.opencode_provider import OpenCodeStorageProvider
 
 
 pytestmark = pytest.mark.unit
@@ -60,7 +60,7 @@ async def test_save_and_get_project(provider: OpenCodeStorageProvider) -> None:
         worktree="/home/user/project-a",
         name="project-a",
         vcs="git",
-        config_path="/home/user/project-a/.agentpool.yml",
+        config_path="/home/user/project-a/.wolfharness.yml",
         settings={"model": "openai:gpt-4o"},
     )
 
@@ -73,7 +73,7 @@ async def test_save_and_get_project(provider: OpenCodeStorageProvider) -> None:
     assert result.worktree == "/home/user/project-a"
     assert result.name == "project-a"
     assert result.vcs == "git"
-    assert result.config_path == "/home/user/project-a/.agentpool.yml"
+    assert result.config_path == "/home/user/project-a/.wolfharness.yml"
     assert result.settings == {"model": "openai:gpt-4o"}
 
 

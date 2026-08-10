@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from agentpool import AgentsManifest
+from wolfharness import AgentsManifest
 
 
 pytestmark = pytest.mark.unit

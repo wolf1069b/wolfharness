@@ -14,9 +14,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from agentpool.sessions.models import SessionData
-from agentpool_config.storage import SQLStorageConfig
-from agentpool_storage.sql_provider import SQLModelProvider
+from wolfharness.sessions.models import SessionData
+from wolfharness_config.storage import SQLStorageConfig
+from wolfharness_storage.sql_provider import SQLModelProvider
 
 
 pytestmark = pytest.mark.unit

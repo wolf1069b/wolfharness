@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, MagicMock
 from pydantic_ai.tools import ToolDefinition
 import pytest
 
-from agentpool.capabilities.team_comm_capability import TeamCommCapability
-from agentpool_config.team_mode import TeamBounds, TeamModeConfig
+from wolfharness.capabilities.team_comm_capability import TeamCommCapability
+from wolfharness_config.team_mode import TeamBounds, TeamModeConfig
 
 
 # ---- Helpers ----
@@ -233,7 +233,7 @@ def _make_factory() -> Any:
     Returns an AgentFactory with a mock pool (the method under test
     does not access self._pool).
     """
-    from agentpool.host.factory import AgentFactory
+    from wolfharness.host.factory import AgentFactory
 
     mock_pool = MagicMock()
     return AgentFactory(mock_pool)
@@ -263,7 +263,7 @@ def _make_native_config(team_mode: Any = None) -> Any:
     Returns:
         A NativeAgentConfig with model='openai:test' and no tools.
     """
-    from agentpool.models.agents import NativeAgentConfig
+    from wolfharness.models.agents import NativeAgentConfig
 
     return NativeAgentConfig(
         name="test_agent",
@@ -452,7 +452,7 @@ def _make_run_context(
     Returns:
         A MagicMock whose .deps is a mock AgentContextDeps.
     """
-    from agentpool.capabilities.agent_context import AgentContextDeps
+    from wolfharness.capabilities.agent_context import AgentContextDeps
 
     cfg = config or _make_enabled_config(base_dir=base_dir)
 
@@ -501,7 +501,7 @@ def _make_lead_metadata(team_id: str = "team_123") -> dict[str, Any]:
 
 def _init_team(base_dir: str, team_id: str = "team_123") -> None:
     """Initialize a real FileTeamState with a team and members."""
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     state = FileTeamState(base_dir)
     state.init(
@@ -650,7 +650,7 @@ async def test_send_message_uses_steer_by_default(tmp_path: Any) -> None:
     When: send_message is called.
     Then: session_pool.send_message called with DeliveryMode.STEER.
     """
-    from agentpool.lifecycle.types import DeliveryMode
+    from wolfharness.lifecycle.types import DeliveryMode
 
     _init_team(str(tmp_path))
     mock_pool = MagicMock()
@@ -758,7 +758,7 @@ async def test_bounds_started_at_recorded(tmp_path: Any) -> None:
     When: team_create completes.
     Then: state.json contains a 'started_at' field with an ISO timestamp.
     """
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     config = _make_enabled_config(
         member_eligible=["worker", "reviewer"],
@@ -1560,7 +1560,7 @@ async def test_shutdown_request_success(tmp_path: Any) -> None:
     assert result.return_value == "Shutdown completed for translator_agent"
     mock_pool.close_session.assert_awaited_once_with("sess_translator")
     # Verify member is removed from the members dict entirely (hard remove).
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     team_state = FileTeamState(str(tmp_path))
     state = team_state._read_json(team_state._state_path("team_123"))
@@ -1688,7 +1688,7 @@ async def test_send_message_queue_mode(tmp_path: Any) -> None:
     When: send_message is called.
     Then: DeliveryMode.QUEUE is used.
     """
-    from agentpool.lifecycle.types import DeliveryMode
+    from wolfharness.lifecycle.types import DeliveryMode
 
     _init_team(str(tmp_path))
     mock_pool = MagicMock()
@@ -1803,7 +1803,7 @@ async def test_team_create_uses_config_default_members(tmp_path: Any) -> None:
     When: team_create is called with members=[].
     Then: uses defaults.members from config to create the team.
     """
-    from agentpool_config.team_mode import MemberSpec, TeamDefaultsConfig
+    from wolfharness_config.team_mode import MemberSpec, TeamDefaultsConfig
 
     config = _make_enabled_config(
         member_eligible=["translator", "reviewer"],
@@ -1850,9 +1850,9 @@ async def test_resolve_agent_context_from_runtime_context(tmp_path: Any) -> None
     The tool functions receive ctx.deps = agents.context.AgentContext, and our
     capabilities.agent_context.AgentContextDeps is at ctx.deps.data.
     """
-    from agentpool.agents.context import AgentContext as RuntimeAgentContext
-    from agentpool.capabilities.agent_context import AgentContextDeps
-    from agentpool.orchestrator.session_controller import SessionState
+    from wolfharness.agents.context import AgentContext as RuntimeAgentContext
+    from wolfharness.capabilities.agent_context import AgentContextDeps
+    from wolfharness.orchestrator.session_controller import SessionState
 
     # Create our capabilities AgentContextDeps (the frozen dataclass).
     session = SessionState(session_id="test-session-123", agent_name="test_agent")
@@ -2165,7 +2165,7 @@ async def test_team_add_member_success(tmp_path: Any) -> None:
     assert mock_pool.send_message.await_count == 3
 
     # Verify agent field in team state is the actual agent type, not the member name.
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     team_state = FileTeamState(str(tmp_path))
     state = team_state._read_json(team_state._state_path("team_123"))
@@ -2277,7 +2277,7 @@ async def test_team_add_member_ephemeral(tmp_path: Any) -> None:
 
     assert result.return_value == "Member 'temp_member' added to team (lifecycle=ephemeral)"
     # Verify the member was registered in team state.
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     team_state = FileTeamState(str(tmp_path))
     sid = team_state.get_member_session_id("team_123", "temp_member")
@@ -2309,7 +2309,7 @@ async def test_shutdown_request_removes_member(tmp_path: Any) -> None:
     assert result.return_value == "Shutdown completed for translator_agent"
     mock_pool.close_session.assert_awaited_once_with("sess_translator")
     # Verify member removed from team state (hard remove, not soft shutdown).
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     team_state = FileTeamState(str(tmp_path))
     sid = team_state.get_member_session_id("team_123", "translator_agent")
@@ -2382,7 +2382,7 @@ async def test_team_add_member_non_ascii_name(tmp_path: Any) -> None:
     assert "added to team" in result.return_value
 
     # Verify blackboard key was sanitized (non-ASCII chars replaced with _).
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     safe_name = re.sub(r"[^a-zA-Z0-9_]", "_", "推理员B")
     team_state = FileTeamState(str(tmp_path))
@@ -2401,7 +2401,7 @@ async def test_team_add_member_hyphen_in_name(tmp_path: Any) -> None:
     assert "added to team" in result.return_value
 
     # Verify blackboard key was sanitized (hyphen replaced with _).
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     safe_name = re.sub(r"[^a-zA-Z0-9_]", "_", "logician-B")
     team_state = FileTeamState(str(tmp_path))
@@ -2415,7 +2415,7 @@ async def test_team_add_member_agent_field_correct(tmp_path: Any) -> None:
     cap, ctx, _mock_pool, _mock_delegation, _mock_registry = _make_add_member_setup(tmp_path)
     await cap.team_add_member(ctx, "my_member", "editor")
 
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     team_state = FileTeamState(str(tmp_path))
     state = team_state._read_json(team_state._state_path("team_123"))
@@ -2430,7 +2430,7 @@ async def test_team_add_member_roster_includes_work_summary(tmp_path: Any) -> No
     When: team_add_member is called.
     Then: the initial prompt to the new member includes work-status for each member.
     """
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     cap, ctx, mock_pool, _mock_delegation, _mock_registry = _make_add_member_setup(tmp_path)
 
@@ -2536,7 +2536,7 @@ async def test_shutdown_request_non_ascii_name(tmp_path: Any) -> None:
     assert "Shutdown completed" in result.return_value
 
     # Verify blackboard was written with sanitized key.
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     safe_name = re.sub(r"[^a-zA-Z0-9_]", "_", "推理员")
     team_state = FileTeamState(str(tmp_path))
@@ -2590,7 +2590,7 @@ async def test_send_message_to_nonexistent_member_no_phantom(tmp_path: Any) -> N
 
     assert "not found" in result.return_value
     # Verify NO phantom entry was created in team state.
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     team_state = FileTeamState(str(tmp_path))
     state = team_state._read_json(team_state._state_path("team_123"))
@@ -3452,7 +3452,7 @@ async def test_after_run_reminder_for_unfinished_tasks(tmp_path: Any) -> None:
     Then: routes a reminder message to the member's own session via
         session_pool.send_message with QUEUE mode.
     """
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     _init_team(str(tmp_path))
     team_state = FileTeamState(str(tmp_path))
@@ -3489,7 +3489,7 @@ async def test_after_run_reminder_for_unfinished_tasks(tmp_path: Any) -> None:
     # Verify QUEUE mode was used.
     call_args = mock_pool.send_message.await_args
     call_kwargs = call_args.kwargs
-    from agentpool.lifecycle.types import DeliveryMode
+    from wolfharness.lifecycle.types import DeliveryMode
 
     assert call_kwargs.get("mode") is DeliveryMode.QUEUE
     # Verify message content (2nd positional arg) mentions the unfinished task.
@@ -3507,7 +3507,7 @@ async def test_after_run_no_reminder_for_lead(tmp_path: Any) -> None:
     When: after_run fires.
     Then: no reminder is sent (lead doesn't get task reminders).
     """
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     _init_team(str(tmp_path))
     team_state = FileTeamState(str(tmp_path))
@@ -3547,7 +3547,7 @@ async def test_after_run_no_reminder_when_session_closing(tmp_path: Any) -> None
     When: after_run fires.
     Then: no reminder is sent (shutdown path handles notification instead).
     """
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     _init_team(str(tmp_path))
     team_state = FileTeamState(str(tmp_path))
@@ -3588,7 +3588,7 @@ async def test_after_run_no_duplicate_reminder(tmp_path: Any) -> None:
     When: after_run fires again.
     Then: no second reminder is sent (max 1 per session).
     """
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     _init_team(str(tmp_path))
     team_state = FileTeamState(str(tmp_path))
@@ -3631,7 +3631,7 @@ async def test_after_run_no_reminder_when_no_unfinished_tasks(tmp_path: Any) -> 
     When: after_run fires.
     Then: no reminder is sent.
     """
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     _init_team(str(tmp_path))
     team_state = FileTeamState(str(tmp_path))
@@ -3678,7 +3678,7 @@ async def test_shutdown_request_warns_about_unfinished_tasks(tmp_path: Any) -> N
     When: shutdown_request is called.
     Then: return value includes a warning about the unfinished task.
     """
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     _init_team(str(tmp_path))
     team_state = FileTeamState(str(tmp_path))
@@ -3719,7 +3719,7 @@ async def test_shutdown_request_no_warning_when_tasks_completed(tmp_path: Any) -
     When: shutdown_request is called.
     Then: return value is the standard message with no warning.
     """
-    from agentpool.capabilities.file_team_state import FileTeamState
+    from wolfharness.capabilities.file_team_state import FileTeamState
 
     _init_team(str(tmp_path))
     team_state = FileTeamState(str(tmp_path))

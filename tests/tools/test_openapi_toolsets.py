@@ -7,7 +7,7 @@ import anyenv
 from openapi_spec_validator import validate
 import pytest
 
-from agentpool_toolsets.openapi import OpenAPITools
+from wolfharness_toolsets.openapi import OpenAPITools
 
 
 pytestmark = pytest.mark.unit

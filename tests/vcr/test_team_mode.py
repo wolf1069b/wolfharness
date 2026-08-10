@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from agentpool.agents.events import (
+from wolfharness.agents.events import (
     PartDeltaEvent,
     StreamCompleteEvent,
     ToolCallCompleteEvent,
@@ -41,7 +41,7 @@ from agentpool.agents.events import (
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
 
 pytestmark = pytest.mark.vcr

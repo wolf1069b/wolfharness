@@ -22,11 +22,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentpool_server.opencode_server.event_processor import (
+from wolfharness_server.opencode_server.event_processor import (
     EventProcessor,
     OpenCodeUserMessageMeta,
 )
-from agentpool_server.opencode_server.models.message import (
+from wolfharness_server.opencode_server.models.message import (
     MessagePath,
     MessageTime,
     MessageWithParts,
@@ -35,7 +35,7 @@ from agentpool_server.opencode_server.models.message import (
 
 def _make_ctx(session_id: str = "test-session") -> Any:
     """Create a minimal EventProcessorContext for testing."""
-    from agentpool_server.opencode_server.event_processor_context import (
+    from wolfharness_server.opencode_server.event_processor_context import (
         EventProcessorContext,
     )
 
@@ -46,7 +46,7 @@ def _make_ctx(session_id: str = "test-session") -> Any:
         agent_name="test-agent",
         model_id="test-model",
         parent_id="parent-001",
-        provider_id="agentpool",
+        provider_id="wolfharness",
         path=MessagePath(cwd="/tmp", root="/tmp"),
     )
     ctx = EventProcessorContext(
@@ -74,7 +74,7 @@ async def test_accepted_source_does_not_yield_part_updated_events() -> None:
 
     # Mock append_message_to_session to avoid actual state mutation
     with patch(
-        "agentpool_server.opencode_server.opencode_message_bridge.append_message_to_session",
+        "wolfharness_server.opencode_server.opencode_message_bridge.append_message_to_session",
         new_callable=AsyncMock,
     ):
         meta = OpenCodeUserMessageMeta(
@@ -118,7 +118,7 @@ async def test_accepted_source_yields_part_updated_events() -> None:
     ctx.state.messages = {}
 
     with patch(
-        "agentpool_server.opencode_server.opencode_message_bridge.append_message_to_session",
+        "wolfharness_server.opencode_server.opencode_message_bridge.append_message_to_session",
         new_callable=AsyncMock,
     ):
         meta = OpenCodeUserMessageMeta(
@@ -157,8 +157,8 @@ async def test_accepted_source_part_ids_differ_from_db_reconstruction() -> None:
     sources causes duplication: ``chat_message_to_opencode`` generates
     new part IDs, different from the original parts in meta.
     """
-    from agentpool.messaging.messages import ChatMessage
-    from agentpool_server.opencode_server.converters import chat_message_to_opencode
+    from wolfharness.messaging.messages import ChatMessage
+    from wolfharness_server.opencode_server.converters import chat_message_to_opencode
 
     # Create a ChatMessage as stored in DB
     chat_msg = ChatMessage[str](
@@ -197,7 +197,7 @@ async def test_accepted_source_no_part_updated_with_text_content() -> None:
     ctx.state.messages = {}
 
     with patch(
-        "agentpool_server.opencode_server.opencode_message_bridge.append_message_to_session",
+        "wolfharness_server.opencode_server.opencode_message_bridge.append_message_to_session",
         new_callable=AsyncMock,
     ):
         events = []
@@ -226,7 +226,7 @@ async def test_accepted_source_text_content_yields_part_updated() -> None:
     ctx.state.messages = {}
 
     with patch(
-        "agentpool_server.opencode_server.opencode_message_bridge.append_message_to_session",
+        "wolfharness_server.opencode_server.opencode_message_bridge.append_message_to_session",
         new_callable=AsyncMock,
     ):
         events = []

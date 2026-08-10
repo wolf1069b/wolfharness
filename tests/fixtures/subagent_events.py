@@ -36,7 +36,7 @@ from pydantic_ai import (
 )
 import pytest
 
-from agentpool.agents.events import (
+from wolfharness.agents.events import (
     PartDeltaEvent,
     PartStartEvent,
     SpawnSessionStart,
@@ -109,7 +109,7 @@ def get_tool_error_event(
 
 def get_stream_complete_event() -> StreamCompleteEvent[Any]:
     """Create a stream complete event."""
-    from agentpool.messaging import ChatMessage
+    from wolfharness.messaging import ChatMessage
 
     message = ChatMessage(
         role="assistant",

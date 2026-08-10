@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool import Agent, AgentPool, AgentsManifest, NativeAgentConfig
-from agentpool.orchestrator import SessionPool
-from agentpool_config.session_pool import SessionPoolConfig
+from wolfharness import Agent, AgentPool, AgentsManifest, NativeAgentConfig
+from wolfharness.orchestrator import SessionPool
+from wolfharness_config.session_pool import SessionPoolConfig
 
 
 @pytest.fixture

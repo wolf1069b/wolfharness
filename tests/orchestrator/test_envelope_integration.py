@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from agentpool.orchestrator.core import EventBus, EventEnvelope
+from wolfharness.orchestrator.core import EventBus, EventEnvelope
 
 
 pytestmark = pytest.mark.integration
@@ -15,7 +15,7 @@ pytestmark = pytest.mark.integration
 if TYPE_CHECKING:
     import asyncio
 
-    from agentpool import AgentPool
+    from wolfharness import AgentPool
 
 
 def _queue_empty(queue: asyncio.Queue) -> bool:
@@ -54,8 +54,8 @@ class TestEventEnvelopeIntegration:
 
     async def test_transparent_forwarding(self) -> None:
         """Attribute access transparently forwards to the wrapped event via __getattr__."""
-        from agentpool.agents.events import StreamCompleteEvent
-        from agentpool.messaging import ChatMessage
+        from wolfharness.agents.events import StreamCompleteEvent
+        from wolfharness.messaging import ChatMessage
 
         message = ChatMessage(content="hello world", role="assistant")
         event = StreamCompleteEvent(message=message)

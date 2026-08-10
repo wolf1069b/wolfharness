@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentpool.host.stubs import CapabilityCache, resolve_capabilities
-from agentpool_config.model_capabilities import ModelCapabilities
+from wolfharness.host.stubs import CapabilityCache, resolve_capabilities
+from wolfharness_config.model_capabilities import ModelCapabilities
 
 
 pytestmark = pytest.mark.unit

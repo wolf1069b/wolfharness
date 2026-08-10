@@ -42,7 +42,7 @@ When you use a bare skill name, AgentPool searches all skill sources (local
 skills first, then MCP providers) in priority order:
 
 ```python
-from agentpool import AgentPool
+from wolfharness import AgentPool
 
 async with AgentPool("config.yml") as pool:
     agent = pool.get_agent("assistant")

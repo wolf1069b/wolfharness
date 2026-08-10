@@ -14,9 +14,9 @@ import jsonschema
 import pytest
 import yamling
 
-from agentpool import AgentsManifest
-from agentpool.models.agents import NativeAgentConfig
-from agentpool.models.model_configs import StringModelConfig
+from wolfharness import AgentsManifest
+from wolfharness.models.agents import NativeAgentConfig
+from wolfharness.models.model_configs import StringModelConfig
 
 
 pytestmark = pytest.mark.unit

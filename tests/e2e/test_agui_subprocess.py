@@ -1,4 +1,4 @@
-"""L4 subprocess E2E tests for the AG-UI server (``agentpool serve-agui``).
+"""L4 subprocess E2E tests for the AG-UI server (``wolfharness serve-agui``).
 
 L4a smoke tests (``@pytest.mark.e2e``, NOT slow):
     - test_server_startup: spawn serve-agui, verify HTTP health
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 pytestmark = [
     pytest.mark.e2e,
-    pytest.mark.skipif(SKIP_NO_BINARY, reason="agentpool binary not on PATH"),
+    pytest.mark.skipif(SKIP_NO_BINARY, reason="wolfharness binary not on PATH"),
     pytest.mark.skipif(SKIP_WINDOWS, reason="Windows subprocess issues"),
 ]
 

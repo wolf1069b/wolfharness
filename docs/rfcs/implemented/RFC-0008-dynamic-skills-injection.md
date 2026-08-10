@@ -47,7 +47,7 @@ This RFC proposes a new approach for automatic skills injection into agent syste
 
 AgentPool now has RFC-0007's dynamic instruction infrastructure:
 
-1. **Instruction Function Types** (`src/agentpool/prompts/instructions.py`):
+1. **Instruction Function Types** (`src/wolfharness/prompts/instructions.py`):
    ```python
    InstructionFunc = (
        SimpleInstruction | AgentContextInstruction | 
@@ -55,7 +55,7 @@ AgentPool now has RFC-0007's dynamic instruction infrastructure:
    )
    ```
 
-2. **ResourceProvider Extension** (`src/agentpool/resource_providers/base.py`):
+2. **ResourceProvider Extension** (`src/wolfharness/resource_providers/base.py`):
    ```python
    class ResourceProvider:
        async def get_instructions(self) -> list[InstructionFunc]:
@@ -63,7 +63,7 @@ AgentPool now has RFC-0007's dynamic instruction infrastructure:
            return []
    ```
 
-3. **NativeAgent Integration** (`src/agentpool/agents/native_agent/agent.py`):
+3. **NativeAgent Integration** (`src/wolfharness/agents/native_agent/agent.py`):
    ```python
    async def get_agentlet(self, ...):
        # Collect instructions from all providers
@@ -79,7 +79,7 @@ AgentPool now has RFC-0007's dynamic instruction infrastructure:
        )
    ```
 
-4. **Context Wrapping** (`src/agentpool/utils/context_wrapping.py`):
+4. **Context Wrapping** (`src/wolfharness/utils/context_wrapping.py`):
    - `wrap_instruction()` adapts instruction functions to pydantic-ai's `(RunContext) -> str` signature
    - Automatically injects AgentContext and/or RunContext based on function signature
 
@@ -90,7 +90,7 @@ RFC-0005 proposed **static skill injection** into agent system prompts through m
 #### RFC-0005 Skill.format_for_injection()
 
 ```python
-# src/agentpool/skills/skill.py
+# src/wolfharness/skills/skill.py
 class Skill:
     def format_for_injection(
         self,
@@ -115,7 +115,7 @@ class Skill:
             self._load_content()
         return f"### {self.name}\n\n{self.description}\n\n{self._instructions}"
 
-# src/agentpool/agents/sys_prompts.py
+# src/wolfharness/agents/sys_prompts.py
 class SystemPrompts:
     def __init__(
         self,
@@ -234,7 +234,7 @@ agents:
 
 **Description**
 
-Create a dedicated `SkillsInstructionProvider` class (`src/agentpool/resource_providers/skills_instruction.py`) that implements RFC-0007's dynamic instruction mechanism. This approach:
+Create a dedicated `SkillsInstructionProvider` class (`src/wolfharness/resource_providers/skills_instruction.py`) that implements RFC-0007's dynamic instruction mechanism. This approach:
 - Keeps concern separated from tool provision (`SkillsTools` remains unchanged).
 - Uses **structured XML format** for skill representation.
 - Supports runtime selection and formatting based on `AgentContext`.
@@ -268,7 +268,7 @@ class SkillsConfig(BaseModel):
 
 
 ```python
-# src/agentpool_config/toolsets.py (extend existing SkillsToolsConfig)
+# src/wolfharness_config/toolsets.py (extend existing SkillsToolsConfig)
 class SkillsToolsConfig(ToolsetConfig):
     """Configuration for skills tools toolset.
     
@@ -556,7 +556,7 @@ Option 1 is recommended because:
 
 #### 1. SkillsInstructionProvider (NEW)
 
-**File**: `src/agentpool/resource_providers/skills_instruction.py`
+**File**: `src/wolfharness/resource_providers/skills_instruction.py`
 
 Dedicated ResourceProvider for skills injection via RFC-0007's `get_instructions()`.
 Keeps concerns separated from SkillsTools.
@@ -567,13 +567,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Literal, cast
 from xml.sax.saxutils import escape
 
-from agentpool.agents.context import AgentContext
-from agentpool.log import get_logger
-from agentpool.resource_providers import ResourceProvider
+from wolfharness.agents.context import AgentContext
+from wolfharness.log import get_logger
+from wolfharness.resource_providers import ResourceProvider
 
 if TYPE_CHECKING:
-    from agentpool.prompts.instructions import InstructionFunc
-    from agentpool.skills.registry import SkillsRegistry
+    from wolfharness.prompts.instructions import InstructionFunc
+    from wolfharness.skills.registry import SkillsRegistry
 
 logger = get_logger(__name__)
 
@@ -712,7 +712,7 @@ class SkillsInstructionProvider(ResourceProvider):
 
 #### 2. SkillsTools (UNCHANGED)
 
-**File**: `src/agentpool_toolsets/builtin/skills.py`
+**File**: `src/wolfharness_toolsets/builtin/skills.py`
 
 Existing tools provider remains unchanged. Provides:
 - `load_skill` tool
@@ -722,7 +722,7 @@ No modifications needed for RFC-0008.
 
 #### 2. Configuration Models
 
-**File**: `src/agentpool_config/skills.py`
+**File**: `src/wolfharness_config/skills.py`
 
 ```python
 class SkillsInstructionConfig(BaseModel):
@@ -745,7 +745,7 @@ class SkillsConfig(BaseModel):
 
 #### 3. Toolset Configuration
 
-**File**: `src/agentpool_config/toolsets.py` (extend)
+**File**: `src/wolfharness_config/toolsets.py` (extend)
 
 ```python
 class SkillsToolsetConfig(ToolsetConfig):
@@ -760,7 +760,7 @@ class SkillsToolsetConfig(ToolsetConfig):
 
 #### 4. AgentPool Integration
 
-**File**: `src/agentpool/delegation/pool.py` (extend)
+**File**: `src/wolfharness/delegation/pool.py` (extend)
 
 ```python
 class AgentPool:
@@ -783,12 +783,12 @@ class AgentPool:
 ### Data Model Changes
 
 **New Files**:
-- `src/agentpool/resource_providers/skills_instruction.py` - Dedicated instruction provider
+- `src/wolfharness/resource_providers/skills_instruction.py` - Dedicated instruction provider
 - `tests/resource_providers/test_skills_instruction.py` - Tests for skills instruction provider
 
 **Modified Files**:
-- `src/agentpool_config/skills.py` - Add `SkillsInstructionConfig`
-- `src/agentpool/delegation/pool.py` - Integrate skills injection provider
+- `src/wolfharness_config/skills.py` - Add `SkillsInstructionConfig`
+- `src/wolfharness/delegation/pool.py` - Integrate skills injection provider
 
 ### Configuration Examples
 
@@ -933,7 +933,7 @@ agents:
 
 - **Scope**: Create `SkillsInstructionProvider`
 - **Deliverables**:
-  - `src/agentpool/resource_providers/skills_instruction.py`:
+  - `src/wolfharness/resource_providers/skills_instruction.py`:
     - Implement `get_instructions()` returning dynamic XML generators
     - Implement XML formatting with proper character escaping
   - Unit tests for instruction generation logic
@@ -942,8 +942,8 @@ agents:
 
 - **Scope**: Add configuration models
 - **Deliverables**:
-  - Update `agentpool_config/skills.py` with `SkillsInstructionConfig`
-  - Update `agentpool_config/toolsets.py` to support injection overrides
+  - Update `wolfharness_config/skills.py` with `SkillsInstructionConfig`
+  - Update `wolfharness_config/toolsets.py` to support injection overrides
   - Config validation tests
 
 ### Phase 3: AgentPool Integration (Day 2)
@@ -999,8 +999,8 @@ agents:
 ## References
 
 - RFC-0007: Dynamic Instructions for Resource Providers
-- `src/agentpool/resource_providers/base.py`
-- `src/agentpool/prompts/instructions.py`
+- `src/wolfharness/resource_providers/base.py`
+- `src/wolfharness/prompts/instructions.py`
 **Consequences**:
 - Positive: Cleaner architecture, better extensibility
 - Positive: Aligns with RFC-0007
@@ -1014,6 +1014,6 @@ agents:
 
 - RFC-0005: Skills Injection into System Prompts (SUPERSEDED)
 - RFC-0007: Dynamic Instructions for Resource Providers
-- `src/agentpool/prompts/instructions.py`
-- `src/agentpool/resource_providers/base.py`
-- `src/agentpool/utils/context_wrapping.py`
+- `src/wolfharness/prompts/instructions.py`
+- `src/wolfharness/resource_providers/base.py`
+- `src/wolfharness/utils/context_wrapping.py`

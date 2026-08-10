@@ -110,7 +110,7 @@ await agent.stop()
 AgentPool supports event-driven agent operation through file watchers and other triggers. The simplest way to start event-based mode is through the CLI:
 
 ```bash
-agentpool watch --config agents.yml
+wolfharness watch --config agents.yml
 ```
 
 This command:

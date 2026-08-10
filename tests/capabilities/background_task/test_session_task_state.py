@@ -35,10 +35,10 @@ from unittest.mock import AsyncMock, MagicMock
 import anyio
 import pytest
 
-from agentpool.capabilities.background_task.capability import (
+from wolfharness.capabilities.background_task.capability import (
     BackgroundTaskCapability,
 )
-from agentpool.capabilities.background_task.types import BackgroundTask, SessionTaskState
+from wolfharness.capabilities.background_task.types import BackgroundTask, SessionTaskState
 
 
 # ---------------------------------------------------------------------------
@@ -147,7 +147,7 @@ class _MockRunContext:
     """A lightweight mock AgentRunContext.
 
     Real AgentRunContext cannot be imported in this test directory due to
-    the ``tests/agentpool/__init__.py`` shadowing the ``agentpool`` package.
+    the ``tests/wolfharness/__init__.py`` shadowing the ``wolfharness`` package.
     This mock provides the attributes needed by the capability:
     ``child_done_events``, ``_run_handle``, ``session_id``, ``run_id``.
     """

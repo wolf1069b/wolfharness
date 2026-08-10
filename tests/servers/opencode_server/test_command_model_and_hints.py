@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool_server.opencode_server.models.agent import Command
-from agentpool_server.opencode_server.routes.agent_routes import _extract_hints
+from wolfharness_server.opencode_server.models.agent import Command
+from wolfharness_server.opencode_server.routes.agent_routes import _extract_hints
 
 
 pytestmark = pytest.mark.integration

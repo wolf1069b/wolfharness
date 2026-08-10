@@ -9,7 +9,7 @@
 
 ## Table of Contents
 
-1. [Current AgentPool Lifecycle](#1-current-agentpool-lifecycle)
+1. [Current AgentPool Lifecycle](#1-current-wolfharness-lifecycle)
 2. [ACP v1 vs v2 Protocol Differences](#2-acp-v1-vs-v2-protocol-differences)
 3. [Cross-Framework Comparison](#3-cross-framework-comparison)
 4. [Key Design Issues](#4-key-design-issues)
@@ -255,7 +255,7 @@ Key bridging difficulties:
 
 | Framework | Language | Location | Focus |
 |---|---|---|---|
-| **AgentPool** | Python | `/packages/agentpool/` | Unified agent orchestration, YAML config, multi-protocol |
+| **AgentPool** | Python | `/packages/wolfharness/` | Unified agent orchestration, YAML config, multi-protocol |
 | **pydantic-ai** | Python | `/Users/yuchen.liu/src/pydantic-ai/` | PydanticAI agent framework with graph execution |
 | **opencode** | TypeScript (Effect-TS) | `/Users/yuchen.liu/src/opencode/` | Code agent with durable event sourcing |
 | **pi** | TypeScript | `/Users/yuchen.liu/src/pi/` | Minimal event-stream agent loop |
@@ -473,21 +473,21 @@ Turn should have unified interface, NativeTurn and ACPTurn through same abstract
 ## Appendix: Key Files Examined
 
 ### AgentPool
-- `src/agentpool/delegation/pool.py` — AgentPool entry/exit lifecycle
-- `src/agentpool/orchestrator/run.py` — RunHandle idle/wake/turn loop
-- `src/agentpool/orchestrator/turn.py` — Turn ABC + HookAwareTurn mixin
-- `src/agentpool/orchestrator/session_pool.py` — SessionPool
-- `src/agentpool/orchestrator/session_controller.py` — SessionController
-- `src/agentpool/orchestrator/event_bus.py` — EventBus
-- `src/agentpool/orchestrator/event_mapper.py` — EventMapper
-- `src/agentpool/agents/base_agent.py` — BaseAgent
-- `src/agentpool/agents/context.py` — AgentRunContext + AgentContext
-- `src/agentpool/agents/native_agent/turn.py` — NativeTurn
-- `src/agentpool/agents/acp_agent/turn.py` — ACPTurn
-- `src/agentpool/agents/native_agent/agent.py` — Native Agent
-- `src/agentpool/agents/prompt_injection.py` — PromptInjectionManager
-- `src/agentpool_server/mixins.py` — ProtocolEventConsumerMixin
-- `src/agentpool/mcp_server/manager.py` — MCPManager
+- `src/wolfharness/delegation/pool.py` — AgentPool entry/exit lifecycle
+- `src/wolfharness/orchestrator/run.py` — RunHandle idle/wake/turn loop
+- `src/wolfharness/orchestrator/turn.py` — Turn ABC + HookAwareTurn mixin
+- `src/wolfharness/orchestrator/session_pool.py` — SessionPool
+- `src/wolfharness/orchestrator/session_controller.py` — SessionController
+- `src/wolfharness/orchestrator/event_bus.py` — EventBus
+- `src/wolfharness/orchestrator/event_mapper.py` — EventMapper
+- `src/wolfharness/agents/base_agent.py` — BaseAgent
+- `src/wolfharness/agents/context.py` — AgentRunContext + AgentContext
+- `src/wolfharness/agents/native_agent/turn.py` — NativeTurn
+- `src/wolfharness/agents/acp_agent/turn.py` — ACPTurn
+- `src/wolfharness/agents/native_agent/agent.py` — Native Agent
+- `src/wolfharness/agents/prompt_injection.py` — PromptInjectionManager
+- `src/wolfharness_server/mixins.py` — ProtocolEventConsumerMixin
+- `src/wolfharness/mcp_server/manager.py` — MCPManager
 
 ### ACP Reference
 - `agent-client-protocol-schema/src/v1/` — ACP v1 schema

@@ -9,5 +9,5 @@ RUN pip install --no-cache-dir "."
 EXPOSE 8000
 
 # Run the server
-ENTRYPOINT ["agentpool", "serve-api"]
+ENTRYPOINT ["wolfharness", "serve-api"]
 CMD ["--auto-discover"]

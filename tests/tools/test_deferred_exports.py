@@ -1,4 +1,4 @@
-"""Tests for CallDeferred and ApprovalRequired re-exports from agentpool.tools.
+"""Tests for CallDeferred and ApprovalRequired re-exports from wolfharness.tools.
 
 These are pydantic-ai exception classes used by tool authors for:
 - CallDeferred: Signal that tool execution should be deferred.
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool.tools import ApprovalRequired, CallDeferred
+from wolfharness.tools import ApprovalRequired, CallDeferred
 
 
 pytestmark = pytest.mark.unit
@@ -65,9 +65,9 @@ def test_approval_required_is_pydantic_ai_class():
     assert ApprovalRequired is PydanticApprovalRequired
 
 
-def test_both_in_agentpool_tools_all():
-    """Both exceptions should be listed in agentpool.tools.__all__."""
-    from agentpool import tools
+def test_both_in_wolfharness_tools_all():
+    """Both exceptions should be listed in wolfharness.tools.__all__."""
+    from wolfharness import tools
 
     assert "CallDeferred" in tools.__all__
     assert "ApprovalRequired" in tools.__all__

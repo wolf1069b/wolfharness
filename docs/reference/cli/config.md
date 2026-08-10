@@ -10,9 +10,9 @@ The `config` command group helps you understand and manage AgentPool's layered c
 
 AgentPool automatically discovers and merges configuration from multiple sources:
 
-1. **Global config** (`~/.config/agentpool/agentpool.yml`)
+1. **Global config** (`~/.config/wolfharness/wolfharness.yml`)
 2. **Custom config** (`AGENTPOOL_CONFIG` environment variable)
-3. **Project config** (`agentpool.yml` in project/git root)
+3. **Project config** (`wolfharness.yml` in project/git root)
 4. **Explicit config** (CLI argument)
 
 These commands help you inspect which configs are being loaded and create new ones.
@@ -23,13 +23,13 @@ The `config` command group includes the following commands:
 
 ```bash
 # Show current configuration
-agentpool config show [config_path]
+wolfharness config show [config_path]
 
 # Show config search paths
-agentpool config paths
+wolfharness config paths
 
 # Initialize a new configuration
-agentpool config init [path] [--force]
+wolfharness config init [path] [--force]
 ```
 
 ### config show
@@ -38,13 +38,13 @@ Display the current configuration, showing which config files are found and what
 
 ```bash
 # Show merged configuration
-agentpool config show
+wolfharness config show
 
 # Show with a specific explicit config
-agentpool config show my-agents.yml
+wolfharness config show my-agents.yml
 
 # Output as YAML
-agentpool config show --format yaml
+wolfharness config show --format yaml
 ```
 
 ### config paths
@@ -52,7 +52,7 @@ agentpool config show --format yaml
 Display the paths AgentPool searches for configuration files.
 
 ```bash
-agentpool config paths
+wolfharness config paths
 ```
 
 ### config init
@@ -61,16 +61,16 @@ Create a new configuration file.
 
 ```bash
 # Create a starter config in current project
-agentpool config init
+wolfharness config init
 
 # Create global config for user-wide preferences
-agentpool config init global
+wolfharness config init global
 
 # Create at a specific path
-agentpool config init ./configs/my-agents.yml
+wolfharness config init ./configs/my-agents.yml
 
 # Overwrite existing config
-agentpool config init --force
+wolfharness config init --force
 ```
 
 ## Examples
@@ -79,36 +79,36 @@ agentpool config init --force
 
 ```bash
 # Show which config files are found and what they contain
-agentpool config show
+wolfharness config show
 
 # Show with a specific explicit config included
-agentpool config show my-agents.yml
+wolfharness config show my-agents.yml
 
 # Output as YAML for scripting
-agentpool config show --format yaml
+wolfharness config show --format yaml
 ```
 
 ### View Config Paths
 
 ```bash
 # Show where AgentPool looks for config files
-agentpool config paths
+wolfharness config paths
 ```
 
 ### Create New Config
 
 ```bash
 # Create a starter config in current project
-agentpool config init
+wolfharness config init
 
 # Create a global config for user-wide preferences
-agentpool config init global
+wolfharness config init global
 
 # Create at a specific path
-agentpool config init ./configs/my-agents.yml
+wolfharness config init ./configs/my-agents.yml
 
 # Overwrite existing config
-agentpool config init --force
+wolfharness config init --force
 ```
 
 ## Use Cases
@@ -118,10 +118,10 @@ agentpool config init --force
 Create a global config to set preferences that apply to all projects:
 
 ```bash
-agentpool config init global
+wolfharness config init global
 ```
 
-Then edit `~/.config/agentpool/agentpool.yml`:
+Then edit `~/.config/wolfharness/wolfharness.yml`:
 
 ```yaml
 # Global preferences
@@ -135,7 +135,7 @@ model_variants:
 
 storage:
   provider: sql
-  database_url: sqlite:///~/.local/share/agentpool/history.db
+  database_url: sqlite:///~/.local/share/wolfharness/history.db
 ```
 
 ### Project-Specific Agents
@@ -143,10 +143,10 @@ storage:
 Create a project config that inherits global settings:
 
 ```bash
-agentpool config init
+wolfharness config init
 ```
 
-Then edit `./agentpool.yml`:
+Then edit `./wolfharness.yml`:
 
 ```yaml
 agents:
@@ -163,7 +163,7 @@ agents:
 If your agent isn't behaving as expected, check which configs are being loaded:
 
 ```bash
-agentpool config show
+wolfharness config show
 ```
 
 This shows:

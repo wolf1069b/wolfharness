@@ -11,17 +11,20 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from agentpool.orchestrator.core import SessionState
-from agentpool_server.opencode_server.input_provider import OpenCodeInputProvider, PendingPermission
-from agentpool_server.opencode_server.models import (
+from wolfharness.orchestrator.core import SessionState
+from wolfharness_server.opencode_server.input_provider import (
+    OpenCodeInputProvider,
+    PendingPermission,
+)
+from wolfharness_server.opencode_server.models import (
     PermissionReplyRequest,
     PermissionResolvedEvent,
 )
-from agentpool_server.opencode_server.routes.permission_routes import (
+from wolfharness_server.opencode_server.routes.permission_routes import (
     list_permissions,
     reply_to_permission,
 )
-from agentpool_server.opencode_server.state import ServerState
+from wolfharness_server.opencode_server.state import ServerState
 
 
 pytestmark = pytest.mark.integration

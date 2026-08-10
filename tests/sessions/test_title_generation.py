@@ -9,27 +9,27 @@ from unittest.mock import patch
 import anyio
 import pytest
 
-from agentpool import AgentPool
-from agentpool.messaging import ChatMessage
-from agentpool.models.agents import NativeAgentConfig
-from agentpool.models.manifest import AgentsManifest
-from agentpool.storage.manager import StorageManager
-from agentpool_config.storage import (
+from wolfharness import AgentPool
+from wolfharness.messaging import ChatMessage
+from wolfharness.models.agents import NativeAgentConfig
+from wolfharness.models.manifest import AgentsManifest
+from wolfharness.storage.manager import StorageManager
+from wolfharness_config.storage import (
     FileStorageConfig,
     MemoryStorageConfig,
     SQLStorageConfig,
     StorageConfig,
 )
-from agentpool_storage.file_provider import FileProvider
-from agentpool_storage.memory_provider import MemoryStorageProvider
-from agentpool_storage.sql_provider import SQLModelProvider
+from wolfharness_storage.file_provider import FileProvider
+from wolfharness_storage.memory_provider import MemoryStorageProvider
+from wolfharness_storage.sql_provider import SQLModelProvider
 
 
 pytestmark = pytest.mark.integration
 
 
 if TYPE_CHECKING:
-    from agentpool_storage.models import ConversationData
+    from wolfharness_storage.models import ConversationData
 
 
 GENERATED_TITLE = "Test Conversation Title"

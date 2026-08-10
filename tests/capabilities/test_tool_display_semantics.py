@@ -22,11 +22,11 @@ from pydantic_ai.tools import ToolDefinition
 from pydantic_ai.toolsets import AbstractToolset, RenamedToolset
 import pytest
 
-from agentpool.capabilities.tool_display_capability import ToolDisplayCapability
+from wolfharness.capabilities.tool_display_capability import ToolDisplayCapability
 
 
 if TYPE_CHECKING:
-    from agentpool.agents.events import DiffContentItem
+    from wolfharness.agents.events import DiffContentItem
 
 
 pytestmark = pytest.mark.unit

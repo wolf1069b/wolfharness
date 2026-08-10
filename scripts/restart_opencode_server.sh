@@ -22,8 +22,8 @@ fi
 
 echo ""
 echo "To start the server again with updated code, run:"
-echo "  cd /home/phil65/dev/oss/agentpool"
-echo "  agentpool ui desktop"
+echo "  cd /home/phil65/dev/oss/wolfharness"
+echo "  wolfharness ui desktop"
 echo ""
 echo "Or if you want to run just the server (without desktop app):"
-echo "  agentpool serve-opencode --port 4096"
+echo "  wolfharness serve-opencode --port 4096"

@@ -15,7 +15,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from agentpool.capabilities.mcp_server_cap import McpServerCap
+from wolfharness.capabilities.mcp_server_cap import McpServerCap
 
 
 pytestmark = pytest.mark.unit
@@ -24,7 +24,7 @@ pytestmark = pytest.mark.unit
 if TYPE_CHECKING:
     from typing import Self
 
-    from agentpool.capabilities.resource_protocols import SkillEntry
+    from wolfharness.capabilities.resource_protocols import SkillEntry
 
 
 # ---------------------------------------------------------------------------
@@ -225,8 +225,8 @@ class TestMatcherFnBackwardCompat:
     @pytest.mark.asyncio
     async def test_two_arg_matcher_fn_receives_skill_names(self) -> None:
         """Matcher functions expecting (messages, skill_names) should work."""
-        from agentpool.capabilities.skill_manager_cap import SkillManagerCap
-        from agentpool.skills.skill import Skill
+        from wolfharness.capabilities.skill_manager_cap import SkillManagerCap
+        from wolfharness.skills.skill import Skill
 
         # Create a minimal skill
         skill = MagicMock(spec=Skill)
@@ -269,7 +269,7 @@ class TestMatcherFnBackwardCompat:
     @pytest.mark.asyncio
     async def test_one_arg_matcher_fn_still_works(self) -> None:
         """Single-arg matcher functions should continue to work."""
-        from agentpool.capabilities.skill_manager_cap import SkillManagerCap
+        from wolfharness.capabilities.skill_manager_cap import SkillManagerCap
 
         skill = MagicMock()
         skill.name = "test-skill"
@@ -322,13 +322,13 @@ class TestResolveUriProviderRouting:
         With D9, provider segment is removed. skill://shared-name
         iterates all caps and returns the first match.
         """
-        from agentpool.capabilities.extension_registry import (
+        from wolfharness.capabilities.extension_registry import (
             ExtensionRegistry,
             Scope,
             ScopeLevel,
         )
-        from agentpool.capabilities.resource_protocols import SkillEntry
-        from agentpool.skills.skill import Skill
+        from wolfharness.capabilities.resource_protocols import SkillEntry
+        from wolfharness.skills.skill import Skill
 
         class NamedSkillCap:
             """Fake SkillResource with a configurable serialization name."""
@@ -369,13 +369,13 @@ class TestResolveUriProviderRouting:
     @pytest.mark.asyncio
     async def test_resolve_uri_without_provider_iterates_all(self) -> None:
         """skill://name without provider should iterate all (backward compat)."""
-        from agentpool.capabilities.extension_registry import (
+        from wolfharness.capabilities.extension_registry import (
             ExtensionRegistry,
             Scope,
             ScopeLevel,
         )
-        from agentpool.capabilities.resource_protocols import SkillEntry
-        from agentpool.skills.skill import Skill
+        from wolfharness.capabilities.resource_protocols import SkillEntry
+        from wolfharness.skills.skill import Skill
 
         class NamedSkillCap:
             def __init__(self, ser_name: str, skills: dict[str, str]) -> None:

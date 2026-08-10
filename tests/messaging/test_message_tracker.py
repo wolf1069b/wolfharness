@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING, Any
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool import Agent, AgentPool, BaseTeam
-from agentpool.models.agents import NativeAgentConfig
-from agentpool.models.manifest import AgentsManifest
+from wolfharness import Agent, AgentPool, BaseTeam
+from wolfharness.models.agents import NativeAgentConfig
+from wolfharness.models.manifest import AgentsManifest
 
 
 pytestmark = pytest.mark.integration
@@ -18,9 +18,9 @@ pytestmark = pytest.mark.integration
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-    from agentpool.agents.base_agent import BaseAgent
-    from agentpool.messaging import ChatMessage
-    from agentpool.orchestrator.core import SessionPool
+    from wolfharness.agents.base_agent import BaseAgent
+    from wolfharness.messaging import ChatMessage
+    from wolfharness.orchestrator.core import SessionPool
 
 
 def _make_pool() -> AgentPool:

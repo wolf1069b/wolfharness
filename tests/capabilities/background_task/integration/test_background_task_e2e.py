@@ -20,19 +20,19 @@ from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart, ToolCall
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 import pytest
 
-from agentpool import Agent, AgentContext, ChatMessage
-from agentpool.agents.context import AgentRunContext
-from agentpool.agents.events import StreamCompleteEvent
-from agentpool.capabilities.background_task import (
+from wolfharness import Agent, AgentContext, ChatMessage
+from wolfharness.agents.context import AgentRunContext
+from wolfharness.agents.events import StreamCompleteEvent
+from wolfharness.capabilities.background_task import (
     BackgroundTaskCapability as BackgroundTaskProvider,
 )
-from agentpool.capabilities.background_task.capability import (
+from wolfharness.capabilities.background_task.capability import (
     BackgroundTaskCapability,
 )
-from agentpool.capabilities.background_task.manager import BackgroundTaskManager
-from agentpool.capabilities.background_task.types import BackgroundTask
-from agentpool.delegation import AgentPool
-from agentpool.tools.exceptions import ToolError
+from wolfharness.capabilities.background_task.manager import BackgroundTaskManager
+from wolfharness.capabilities.background_task.types import BackgroundTask
+from wolfharness.delegation import AgentPool
+from wolfharness.tools.exceptions import ToolError
 
 
 def _wrap_in_run_context(agent_ctx):
@@ -562,7 +562,7 @@ async def test_shutdown_clears_empty_manager():
 @pytest.mark.integration
 async def test_background_task_provider_importable_from_package():
     """Test that BackgroundTaskCapability is importable from the capabilities package."""
-    from agentpool.capabilities.background_task import (
+    from wolfharness.capabilities.background_task import (
         BackgroundTaskCapability as Imported,
     )
 

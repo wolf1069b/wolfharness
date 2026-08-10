@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from agentpool.agents.events import (
+from wolfharness.agents.events import (
     MessageReplacementEvent,
     PartDeltaEvent,
     PartStartEvent,
@@ -15,7 +15,7 @@ from agentpool.agents.events import (
     StateUpdate,
     ToolCallUpdateEvent,
 )
-from agentpool.lifecycle import (
+from wolfharness.lifecycle import (
     CommChannel,
     DeliveryMode,
     DirectChannel,
@@ -24,7 +24,7 @@ from agentpool.lifecycle import (
     ProtocolChannel,
     RunState,
 )
-from agentpool.orchestrator.event_bus import EventBus
+from wolfharness.orchestrator.event_bus import EventBus
 
 
 pytestmark = pytest.mark.unit
@@ -80,7 +80,7 @@ def _make_plan_update(tool_call_id: str | None = "tc-plan") -> PlanUpdateEvent:
 
 def test_upsert_key_tool_call_update():
     """ToolCallUpdateEvent derives key tool_call:{tool_call_id}."""
-    from agentpool.lifecycle.comm_channel import _derive_upsert_key
+    from wolfharness.lifecycle.comm_channel import _derive_upsert_key
 
     event = _make_tool_call_update()
     assert _derive_upsert_key(event) == "tool_call:tc-123"
@@ -88,7 +88,7 @@ def test_upsert_key_tool_call_update():
 
 def test_upsert_key_tool_call_update_empty_id():
     """ToolCallUpdateEvent with empty tool_call_id returns None."""
-    from agentpool.lifecycle.comm_channel import _derive_upsert_key
+    from wolfharness.lifecycle.comm_channel import _derive_upsert_key
 
     event = ToolCallUpdateEvent(tool_call_id="", tool_name="bash")
     assert _derive_upsert_key(event) is None
@@ -96,7 +96,7 @@ def test_upsert_key_tool_call_update_empty_id():
 
 def test_upsert_key_state_update():
     """StateUpdate derives key state:{session_id}."""
-    from agentpool.lifecycle.comm_channel import _derive_upsert_key
+    from wolfharness.lifecycle.comm_channel import _derive_upsert_key
 
     event = _make_state_update()
     assert _derive_upsert_key(event) == "state:sess-1"
@@ -104,7 +104,7 @@ def test_upsert_key_state_update():
 
 def test_upsert_key_state_update_empty_session():
     """StateUpdate with empty session_id returns None."""
-    from agentpool.lifecycle.comm_channel import _derive_upsert_key
+    from wolfharness.lifecycle.comm_channel import _derive_upsert_key
 
     event = StateUpdate(session_id="", state=RunState.IDLE)
     assert _derive_upsert_key(event) is None
@@ -112,7 +112,7 @@ def test_upsert_key_state_update_empty_session():
 
 def test_upsert_key_message_replacement():
     """MessageReplacementEvent derives key msg:{message_id}."""
-    from agentpool.lifecycle.comm_channel import _derive_upsert_key
+    from wolfharness.lifecycle.comm_channel import _derive_upsert_key
 
     event = _make_message_replacement()
     assert _derive_upsert_key(event) == "msg:msg-1"
@@ -120,7 +120,7 @@ def test_upsert_key_message_replacement():
 
 def test_upsert_key_message_replacement_empty_id():
     """MessageReplacementEvent with empty message_id returns None."""
-    from agentpool.lifecycle.comm_channel import _derive_upsert_key
+    from wolfharness.lifecycle.comm_channel import _derive_upsert_key
 
     event = MessageReplacementEvent(message_id="", content="x")
     assert _derive_upsert_key(event) is None
@@ -128,7 +128,7 @@ def test_upsert_key_message_replacement_empty_id():
 
 def test_upsert_key_plan_update_with_tool_call_id():
     """PlanUpdateEvent with tool_call_id derives key plan:{tool_call_id}."""
-    from agentpool.lifecycle.comm_channel import _derive_upsert_key
+    from wolfharness.lifecycle.comm_channel import _derive_upsert_key
 
     event = _make_plan_update(tool_call_id="tc-plan")
     assert _derive_upsert_key(event) == "plan:tc-plan"
@@ -136,7 +136,7 @@ def test_upsert_key_plan_update_with_tool_call_id():
 
 def test_upsert_key_plan_update_without_tool_call_id():
     """PlanUpdateEvent with None tool_call_id returns None."""
-    from agentpool.lifecycle.comm_channel import _derive_upsert_key
+    from wolfharness.lifecycle.comm_channel import _derive_upsert_key
 
     event = _make_plan_update(tool_call_id=None)
     assert _derive_upsert_key(event) is None
@@ -144,7 +144,7 @@ def test_upsert_key_plan_update_without_tool_call_id():
 
 def test_upsert_key_delta_event_returns_none():
     """PartDeltaEvent returns None (append semantics)."""
-    from agentpool.lifecycle.comm_channel import _derive_upsert_key
+    from wolfharness.lifecycle.comm_channel import _derive_upsert_key
 
     event = _make_delta_event()
     assert _derive_upsert_key(event) is None
@@ -152,7 +152,7 @@ def test_upsert_key_delta_event_returns_none():
 
 def test_upsert_key_part_start_event_returns_none():
     """PartStartEvent returns None (append semantics)."""
-    from agentpool.lifecycle.comm_channel import _derive_upsert_key
+    from wolfharness.lifecycle.comm_channel import _derive_upsert_key
 
     event = PartStartEvent.text(index=0, content="start")
     assert _derive_upsert_key(event) is None
@@ -160,7 +160,7 @@ def test_upsert_key_part_start_event_returns_none():
 
 def test_upsert_key_arbitrary_object_returns_none():
     """Arbitrary objects return None (append semantics)."""
-    from agentpool.lifecycle.comm_channel import _derive_upsert_key
+    from wolfharness.lifecycle.comm_channel import _derive_upsert_key
 
     assert _derive_upsert_key("not an event") is None
     assert _derive_upsert_key(42) is None
@@ -583,7 +583,7 @@ def test_protocol_channel_recv_none_after_close():
 
 async def test_protocol_channel_with_real_event_bus():
     """ProtocolChannel works with a real EventBus instance."""
-    from agentpool.orchestrator.event_bus import EventBus
+    from wolfharness.orchestrator.event_bus import EventBus
 
     bus = EventBus()
     journal = MemoryJournal()

@@ -1,5 +1,5 @@
 # /// script
-# dependencies = ["agentpool"]
+# dependencies = ["wolfharness"]
 # ///
 
 
@@ -20,13 +20,13 @@ from dataclasses import dataclass
 import os
 from typing import TYPE_CHECKING, Any
 
-from agentpool import AgentPool, AgentsManifest
-from agentpool.agents.events import RichAgentStreamEvent
-from agentpool.docs.utils import get_config_path, is_pyodide, run
+from wolfharness import AgentPool, AgentsManifest
+from wolfharness.docs.utils import get_config_path, is_pyodide, run
 
 
 if TYPE_CHECKING:
-    from agentpool.agents.context import AgentContext
+    from wolfharness.agents.context import AgentContext
+    from wolfharness.agents.events import RichAgentStreamEvent
 
 
 # set your OpenAI API key here
@@ -69,7 +69,7 @@ async def run_example() -> None:
     manifest = AgentsManifest.from_file(config_path)
 
     async def event_handler(ctx: AgentContext[Any], event: RichAgentStreamEvent[Any]) -> None:
-        from agentpool.agents.events import ToolCallProgressEvent
+        from wolfharness.agents.events import ToolCallProgressEvent
 
         if isinstance(event, ToolCallProgressEvent):
             print(f"Progress: {event.progress}/{event.total} - {event.message}")

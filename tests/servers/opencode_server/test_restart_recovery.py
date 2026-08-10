@@ -8,11 +8,11 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from agentpool.sessions.models import SessionData
-from agentpool_server.opencode_server.models import SessionIdleEvent
-from agentpool_server.opencode_server.routes.session_routes import get_or_load_session
-from agentpool_server.opencode_server.state import ServerState
-from agentpool_storage.opencode_provider import helpers
+from wolfharness.sessions.models import SessionData
+from wolfharness_server.opencode_server.models import SessionIdleEvent
+from wolfharness_server.opencode_server.routes.session_routes import get_or_load_session
+from wolfharness_server.opencode_server.state import ServerState
+from wolfharness_storage.opencode_provider import helpers
 
 
 pytestmark = pytest.mark.integration

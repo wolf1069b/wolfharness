@@ -7,7 +7,7 @@ import structlog
 
 from acp.schema import AgentCapabilities
 from acp.schema.mcp import AcpMcpServer, HttpMcpServer, StdioMcpServer
-from agentpool.agents.acp_agent.helpers import filter_servers_by_capabilities
+from wolfharness.agents.acp_agent.helpers import filter_servers_by_capabilities
 
 
 pytestmark = pytest.mark.unit

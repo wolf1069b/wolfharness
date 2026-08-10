@@ -22,10 +22,10 @@ ACP is a standardized JSON-RPC 2.0 protocol that provides:
 
 ```bash
 # Using uvx (no installation required)
-uvx --python 3.13 agentpool@latest serve-acp config.yml
+uvx --python 3.13 wolfharness@latest serve-acp config.yml
 
 # Or with installed package
-agentpool serve-acp config.yml
+wolfharness serve-acp config.yml
 ```
 
 See [`serve-acp`](../../reference/cli/serve-acp.md) for all CLI options.
@@ -43,7 +43,7 @@ Add to your Zed `settings.json`:
       "command": "uvx",
       "args": [
         "--python", "3.13",
-        "agentpool[coding]@latest",
+        "wolfharness[coding]@latest",
         "serve-acp",
         "path/to/config.yml"
       ],
@@ -59,7 +59,7 @@ Add to your Zed `settings.json`:
 
 For IDEs that support ACP:
 
-1. Set command to `agentpool` or `uvx agentpool@latest`
+1. Set command to `wolfharness` or `uvx wolfharness@latest`
 2. Add `serve-acp` as first argument
 3. Specify your configuration file
 4. Add CLI options as needed

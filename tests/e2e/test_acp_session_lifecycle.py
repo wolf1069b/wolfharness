@@ -50,7 +50,7 @@ if TYPE_CHECKING:
 
 pytestmark = [
     pytest.mark.e2e,
-    pytest.mark.skipif(SKIP_NO_BINARY, reason="agentpool binary not on PATH"),
+    pytest.mark.skipif(SKIP_NO_BINARY, reason="wolfharness binary not on PATH"),
     pytest.mark.skipif(SKIP_WINDOWS, reason="Windows stdio subprocess issues"),
 ]
 
@@ -110,7 +110,7 @@ async def acp_server(
     client = DefaultACPClient(allow_file_operations=False)
     cm = spawn_agent_process(
         lambda _conn: client,
-        "agentpool",
+        "wolfharness",
         "serve-acp",
         str(e2e_config),
         "--agent",

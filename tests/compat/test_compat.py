@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import pytest
 
-from agentpool.hooks.agent_hooks import AgentHooks
-from agentpool.utils.context_wrapping import wrap_instruction
+from wolfharness.hooks.agent_hooks import AgentHooks
+from wolfharness.utils.context_wrapping import wrap_instruction
 
 
 pytestmark = pytest.mark.unit
@@ -38,7 +38,7 @@ def test_agent_hooks_still_works() -> None:
 
 def test_mcp_manager_still_works() -> None:
     """MCPManager initializes and accepts server configs."""
-    from agentpool.mcp_server.manager import MCPManager
+    from wolfharness.mcp_server.manager import MCPManager
 
     mm = MCPManager()
     assert mm.name == "mcp"
@@ -48,7 +48,7 @@ def test_mcp_manager_still_works() -> None:
 
 def test_resolve_history_processors_still_works() -> None:
     """_resolve_history_processors with _warn=False returns list."""
-    from agentpool.agents.native_agent.agent import Agent
+    from wolfharness.agents.native_agent.agent import Agent
 
     agent = Agent.__new__(Agent)
     agent._resolved_history_processors = None
@@ -85,7 +85,7 @@ def test_wrap_instruction_still_works() -> None:
 
 def test_resolve_history_processors_emits_deprecation_warning() -> None:
     """_resolve_history_processors emits DeprecationWarning with v0.5.0 and alternative."""
-    from agentpool.agents.native_agent.agent import Agent
+    from wolfharness.agents.native_agent.agent import Agent
 
     agent = Agent.__new__(Agent)
     agent._resolved_history_processors = None

@@ -22,10 +22,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from acp.schema.mcp import AcpMcpServer
-from agentpool.mcp_server.manager import MCPManager
-from agentpool.sessions import SessionData
-from agentpool_server.acp_server.acp_mcp_manager import AcpMcpConnectionManager
-from agentpool_server.acp_server.session_manager import ACPSessionManager
+from wolfharness.mcp_server.manager import MCPManager
+from wolfharness.sessions import SessionData
+from wolfharness_server.acp_server.acp_mcp_manager import AcpMcpConnectionManager
+from wolfharness_server.acp_server.session_manager import ACPSessionManager
 
 
 # ============================================================================
@@ -162,12 +162,12 @@ async def test_acp_session_post_init_wires_acp_mcp_manager() -> None:
     ``__post_init__`` must wire ``agent.mcp._acp_mcp_manager`` to
     ``acp_agent._mcp_manager`` so that cleanup delegation works.
     """
-    from agentpool import Agent
-    from agentpool.delegation import AgentPool
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.manifest import AgentsManifest
-    from agentpool_server.acp_server.acp_agent import AgentPoolACPAgent
-    from agentpool_server.acp_server.session import ACPSession
+    from wolfharness import Agent
+    from wolfharness.delegation import AgentPool
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.manifest import AgentsManifest
+    from wolfharness_server.acp_server.acp_agent import AgentPoolACPAgent
+    from wolfharness_server.acp_server.session import ACPSession
 
     def simple_callback(message: str) -> str:
         return f"Test: {message}"
@@ -211,12 +211,12 @@ async def test_acp_session_close_full_delegation_chain() -> None:
     up the session context registry, ``_session_connections``, and the
     connection's active sessions.
     """
-    from agentpool import Agent
-    from agentpool.delegation import AgentPool
-    from agentpool.models.agents import NativeAgentConfig
-    from agentpool.models.manifest import AgentsManifest
-    from agentpool_server.acp_server.acp_agent import AgentPoolACPAgent
-    from agentpool_server.acp_server.session import ACPSession
+    from wolfharness import Agent
+    from wolfharness.delegation import AgentPool
+    from wolfharness.models.agents import NativeAgentConfig
+    from wolfharness.models.manifest import AgentsManifest
+    from wolfharness_server.acp_server.acp_agent import AgentPoolACPAgent
+    from wolfharness_server.acp_server.session import ACPSession
 
     mcp_manager, acp_manager = _make_wired_managers()
     session_id = "test-close-chain-1"
@@ -648,7 +648,7 @@ async def test_resume_session_old_closed_new_has_fresh_acp_mcp_manager() -> None
         return mock_new_session
 
     with patch(
-        "agentpool_server.acp_server.session_manager.ACPSession",
+        "wolfharness_server.acp_server.session_manager.ACPSession",
         side_effect=_capture_session,
     ):
         result = await acp_manager.resume_session(

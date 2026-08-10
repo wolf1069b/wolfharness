@@ -5,7 +5,7 @@ plan. Tests exercise cross-module interactions: SessionController resume
 paths, ElicitationFutureRegistry lifecycle, ACP/OpenCode event conversion,
 and ACP capability-gated elicitation behavior.
 
-Refs: https://github.com/Leoyzen/agentpool/issues/107
+Refs: https://github.com/Leoyzen/wolfharness/issues/107
 """
 
 from __future__ import annotations
@@ -18,18 +18,18 @@ from pydantic_ai.messages import ToolCallPart
 from pydantic_ai.tools import DeferredToolRequests, DeferredToolResults, RunContext
 import pytest
 
-from agentpool.agents.context import AgentContext, AgentRunContext
-from agentpool.agents.events.events import ElicitationDeferredEvent
-from agentpool.agents.native_agent.elicitation_bridge import (
+from wolfharness.agents.context import AgentContext, AgentRunContext
+from wolfharness.agents.events.events import ElicitationDeferredEvent
+from wolfharness.agents.native_agent.elicitation_bridge import (
     ElicitationFutureRegistry,
     create_elicitation_bridge_capability,
 )
-from agentpool.orchestrator.core import SessionClosedError
-from agentpool.sessions.models import (
+from wolfharness.orchestrator.core import SessionClosedError
+from wolfharness.sessions.models import (
     ElicitationResumePayload,
     PendingDeferredCall,
 )
-from agentpool.ui.base import InputProvider
+from wolfharness.ui.base import InputProvider
 
 
 # ============================================================================
@@ -141,7 +141,7 @@ async def test_in_process_resume_resolves_future_and_completes_tool(
     run_ctx.deps.run_ctx.event_bus = mock_bus
 
     with patch(
-        "agentpool.agents.native_agent.elicitation_bridge._emit_elicitation_event",
+        "wolfharness.agents.native_agent.elicitation_bridge._emit_elicitation_event",
         new_callable=AsyncMock,
     ):
         result = await cap.handle_deferred_tool_calls(run_ctx, requests=requests)
@@ -319,7 +319,7 @@ async def test_mixed_elicitation_and_deferred_tool_results_routing(
     run_ctx.deps.run_ctx.event_bus = mock_bus
 
     with patch(
-        "agentpool.agents.native_agent.elicitation_bridge._emit_elicitation_event",
+        "wolfharness.agents.native_agent.elicitation_bridge._emit_elicitation_event",
         new_callable=AsyncMock,
     ):
         result = await cap.handle_deferred_tool_calls(run_ctx, requests=requests)
@@ -352,7 +352,7 @@ async def test_acp_converter_outputs_toolcallstart_for_elicitation_event() -> No
     with elicitation params in field_meta (deferred_handle, elicitation: True,
     elicitation_message, elicitation_schema, elicitation_mode).
     """
-    from agentpool_server.acp_server.event_converter import ACPEventConverter
+    from wolfharness_server.acp_server.event_converter import ACPEventConverter
 
     converter = ACPEventConverter()
     event = ElicitationDeferredEvent(
@@ -442,7 +442,7 @@ async def test_end_to_end_durable_elicitation_checkpoint_and_resume(
         captured_event.append(event)
 
     with patch(
-        "agentpool.agents.native_agent.elicitation_bridge._emit_elicitation_event",
+        "wolfharness.agents.native_agent.elicitation_bridge._emit_elicitation_event",
         new=capture_emit,
     ):
         result = await cap.handle_deferred_tool_calls(run_ctx, requests=requests)
@@ -540,16 +540,16 @@ async def test_opencode_processor_creates_toolpart_for_elicitation_event() -> No
     deferred_handle, elicitation: True, elicitation_message,
     elicitation_schema, elicitation_mode.
     """
-    from agentpool_server.opencode_server.event_processor import EventProcessor
-    from agentpool_server.opencode_server.event_processor_context import (
+    from wolfharness_server.opencode_server.event_processor import EventProcessor
+    from wolfharness_server.opencode_server.event_processor_context import (
         EventProcessorContext,
     )
-    from agentpool_server.opencode_server.models.message import (
+    from wolfharness_server.opencode_server.models.message import (
         MessagePath,
         MessageTime,
         MessageWithParts,
     )
-    from agentpool_server.opencode_server.models.parts import ToolStateRunning
+    from wolfharness_server.opencode_server.models.parts import ToolStateRunning
 
     mock_state = MagicMock()
     assistant_msg = MessageWithParts.assistant(
@@ -616,8 +616,8 @@ def test_acp_capability_gated_elicitation_fallback_to_request_permission() -> No
     ``checkpoint_enabled`` is False, ``supports_durable_elicitation`` returns
     False, meaning elicitation goes through the synchronous path.
     """
-    from agentpool_server.acp_server.input_provider import ACPInputProvider
-    from agentpool_server.acp_server.session import ACPSession
+    from wolfharness_server.acp_server.input_provider import ACPInputProvider
+    from wolfharness_server.acp_server.session import ACPSession
 
     mock_session = MagicMock(spec=ACPSession)
     mock_session.checkpoint_enabled = False
@@ -636,8 +636,8 @@ async def test_acp_capability_gated_form_but_not_url() -> None:
     only form-mode elicitation should be durable. This tests the
     ``_client_supports_elicitation`` method's mode-based gating.
     """
-    from agentpool_server.acp_server.input_provider import ACPInputProvider
-    from agentpool_server.acp_server.session import ACPSession
+    from wolfharness_server.acp_server.input_provider import ACPInputProvider
+    from wolfharness_server.acp_server.session import ACPSession
 
     mock_session = MagicMock(spec=ACPSession)
     mock_session.checkpoint_enabled = True

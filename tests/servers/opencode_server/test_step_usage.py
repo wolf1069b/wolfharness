@@ -14,28 +14,28 @@ from pydantic_ai import RequestUsage
 from pydantic_ai.usage import RunUsage
 import pytest
 
-from agentpool.agents.events import (
+from wolfharness.agents.events import (
     PartDeltaEvent as AgentPoolPartDeltaEvent,
     PartStartEvent,
     StepUsageEvent,
     StreamCompleteEvent,
 )
-from agentpool_server.opencode_server.event_adapter import OpenCodeEventAdapter
-from agentpool_server.opencode_server.event_processor_context import (
+from wolfharness_server.opencode_server.event_adapter import OpenCodeEventAdapter
+from wolfharness_server.opencode_server.event_processor_context import (
     EventProcessorContext,
 )
-from agentpool_server.opencode_server.models import (
+from wolfharness_server.opencode_server.models import (
     MessagePath,
     MessageTime,
     MessageWithParts,
     PartDeltaEvent,
     PartUpdatedEvent,
 )
-from agentpool_server.opencode_server.models.parts import (
+from wolfharness_server.opencode_server.models.parts import (
     StepFinishPart,
     TextPart,
 )
-from agentpool_server.opencode_server.stream_adapter import OpenCodeStreamAdapter
+from wolfharness_server.opencode_server.stream_adapter import OpenCodeStreamAdapter
 
 
 pytestmark = pytest.mark.integration
@@ -57,7 +57,7 @@ def adapter_context() -> EventProcessorContext:
         time=MessageTime(created=0),
         agent_name="test-agent",
         model_id="test-model",
-        provider_id="agentpool",
+        provider_id="wolfharness",
         path=MessagePath(cwd="/tmp", root="/tmp"),
         parent_id="msg-000",
     )
@@ -216,7 +216,7 @@ async def test_final_step_finish_still_emitted(
             time=MessageTime(created=0),
             agent_name="test-agent",
             model_id="test-model",
-            provider_id="agentpool",
+            provider_id="wolfharness",
             path=MessagePath(cwd="/tmp", root="/tmp"),
             parent_id="msg-000",
         ),
@@ -400,7 +400,7 @@ async def test_step_finish_emitted_flag_edge_cases(
             time=MessageTime(created=0),
             agent_name="test-agent",
             model_id="test-model",
-            provider_id="agentpool",
+            provider_id="wolfharness",
             path=MessagePath(cwd="/tmp", root="/tmp"),
             parent_id="msg-000",
         ),
@@ -428,7 +428,7 @@ async def test_step_finish_emitted_flag_edge_cases(
             time=MessageTime(created=0),
             agent_name="test-agent",
             model_id="test-model",
-            provider_id="agentpool",
+            provider_id="wolfharness",
             path=MessagePath(cwd="/tmp", root="/tmp"),
             parent_id="msg-000",
         ),
@@ -471,7 +471,7 @@ async def test_step_finish_emitted_flag_edge_cases(
             time=MessageTime(created=0),
             agent_name="test-agent",
             model_id="test-model",
-            provider_id="agentpool",
+            provider_id="wolfharness",
             path=MessagePath(cwd="/tmp", root="/tmp"),
             parent_id="msg-000",
         ),
@@ -532,7 +532,7 @@ async def test_subagent_session_id_does_not_suppress_parent_finalize(
     a *child* context (different session_id), then verifying the parent
     adapter's ``finalize()`` still emits its own ``StepFinishPart``.
     """
-    from agentpool_server.opencode_server.event_processor import EventProcessor
+    from wolfharness_server.opencode_server.event_processor import EventProcessor
 
     # --- Create parent adapter ---
     adapter = _make_stream_adapter(adapter_context)
@@ -547,7 +547,7 @@ async def test_subagent_session_id_does_not_suppress_parent_finalize(
         time=MessageTime(created=0),
         agent_name="test-agent",
         model_id="test-model",
-        provider_id="agentpool",
+        provider_id="wolfharness",
         path=MessagePath(cwd="/tmp", root="/tmp"),
         parent_id="msg-000",
     )

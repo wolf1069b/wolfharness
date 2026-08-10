@@ -11,7 +11,7 @@ Non-skip tests (B9.1-B9.3): Verify SessionUpdate notifications emitted
 during a basic prompt turn with TestModel.
 
 Skip tests (B9.4-B9.12): SessionUpdate variants not yet implemented in
-the agentpool ACP server. Each skip test documents the test intent so
+the wolfharness ACP server. Each skip test documents the test intent so
 the expected behavior is clear once the feature is implemented.
 
 All tests use ``model: test`` (pydantic-ai TestModel) so NO API key is needed.
@@ -51,7 +51,7 @@ if TYPE_CHECKING:
 
 pytestmark = [
     pytest.mark.e2e,
-    pytest.mark.skipif(SKIP_NO_BINARY, reason="agentpool binary not on PATH"),
+    pytest.mark.skipif(SKIP_NO_BINARY, reason="wolfharness binary not on PATH"),
     pytest.mark.skipif(SKIP_WINDOWS, reason="Windows stdio subprocess issues"),
 ]
 
@@ -99,7 +99,7 @@ async def _spawn_acp_server(
     *,
     agent: str = "test_agent",
 ) -> AsyncIterator[ACPServerHandle]:
-    """Spawn ``agentpool serve-acp`` and return a handle with client connection.
+    """Spawn ``wolfharness serve-acp`` and return a handle with client connection.
 
     Args:
         config_path: Path to the YAML config file.
@@ -114,7 +114,7 @@ async def _spawn_acp_server(
     client = DefaultACPClient(allow_file_operations=False)
     async with spawn_agent_process(
         lambda _conn: client,
-        "agentpool",
+        "wolfharness",
         "serve-acp",
         str(config_path),
         "--agent",
@@ -172,7 +172,7 @@ async def test_user_message_chunk_notification(e2e_config: Path) -> None:
     ``session/update`` notification with ``update.session_update="user_message_chunk"``
     is emitted when the user's message is processed by the server.
 
-    Note: The agentpool ACP server does not currently emit ``user_message_chunk``
+    Note: The wolfharness ACP server does not currently emit ``user_message_chunk``
     notifications (the event_converter only emits ``agent_message_chunk`` for
     agent output). This test documents the expected behavior per the ACP spec.
     See issue #188 for the server-side gap.

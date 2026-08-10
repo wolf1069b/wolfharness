@@ -2,7 +2,7 @@
 sync:
   agent: doc_sync_agent
   dependencies:
-    - src/agentpool_config/builtin_tools.py
+    - src/wolfharness_config/builtin_tools.py
 title: Built-in Tools
 description: PydanticAI built-in tool configuration
 icon: material/wrench
@@ -26,5 +26,5 @@ These tools integrate seamlessly with the agent's capability system and can be c
 ## Configuration Reference
 
 /// mknodes
-{{ "agentpool_config.builtin_tools.BuiltinToolConfig" | union_to_markdown(display_mode="yaml", header_style="pymdownx") }}
+{{ "wolfharness_config.builtin_tools.BuiltinToolConfig" | union_to_markdown(display_mode="yaml", header_style="pymdownx") }}
 ///

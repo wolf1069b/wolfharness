@@ -7,10 +7,10 @@ from typing import Any
 import pytest
 from upathtools import UPath
 
-from agentpool.capabilities.resource_protocols import SkillEntry, SkillResource
-from agentpool.capabilities.skill_manager_cap import SkillManagerCap
-from agentpool.skills.skill import Skill
-from agentpool_toolsets.builtin.skills import list_skills, load_skill, load_skill_for_node
+from wolfharness.capabilities.resource_protocols import SkillEntry, SkillResource
+from wolfharness.capabilities.skill_manager_cap import SkillManagerCap
+from wolfharness.skills.skill import Skill
+from wolfharness_toolsets.builtin.skills import list_skills, load_skill, load_skill_for_node
 
 
 def _write_skill(root, name: str, description: str) -> Skill:
@@ -77,7 +77,7 @@ class _FakePool:
 
 def _ctx(pool: _FakePool, node_name: str) -> Any:
     """Build a RuntimeAgentContext (AgentContext) deps with pool + node name."""
-    from agentpool.agents.context import AgentContext as RuntimeAgentContext
+    from wolfharness.agents.context import AgentContext as RuntimeAgentContext
 
     node = SimpleNamespace(name=node_name)
     return RuntimeAgentContext(node=node, pool=pool)

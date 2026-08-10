@@ -4,8 +4,8 @@ import pytest
 from upathtools.filesystems import UnionFileSystem
 import yamling
 
-from agentpool import AgentPool
-from agentpool.models import AgentsManifest
+from wolfharness import AgentPool
+from wolfharness.models import AgentsManifest
 
 
 pytestmark = pytest.mark.integration

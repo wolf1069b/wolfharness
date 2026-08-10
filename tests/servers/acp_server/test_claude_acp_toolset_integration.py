@@ -12,10 +12,10 @@ import shutil
 
 import pytest
 
-from agentpool import AgentPool
-from agentpool.agents.acp_agent import ACPAgent
-from agentpool.models.acp_agents.base import ACPAgentConfig
-from agentpool_config.toolsets import SubagentToolsetConfig
+from wolfharness import AgentPool
+from wolfharness.agents.acp_agent import ACPAgent
+from wolfharness.models.acp_agents.base import ACPAgentConfig
+from wolfharness_config.toolsets import SubagentToolsetConfig
 
 
 if not shutil.which("claude-code-acp"):
@@ -51,7 +51,7 @@ async def test_claude_acp_tool_bridge_mcp_config(claude_config_with_subagent: AC
 
 async def test_claude_acp_multiple_toolsets():
     """Test Claude ACP agent with multiple toolsets."""
-    from agentpool_config.toolsets import DebugToolsetConfig
+    from wolfharness_config.toolsets import DebugToolsetConfig
 
     tools = [SubagentToolsetConfig(), DebugToolsetConfig()]
     config = ACPAgentConfig(

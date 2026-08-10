@@ -26,11 +26,11 @@ import pytest
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-from agentpool.lifecycle.types import DeliveryMode
-from agentpool.orchestrator.core import SessionPool
-from agentpool.sessions.models import SessionData
-from agentpool_server.opencode_server.input_provider import OpenCodeInputProvider
-from agentpool_server.opencode_server.state import ServerState
+from wolfharness.lifecycle.types import DeliveryMode
+from wolfharness.orchestrator.core import SessionPool
+from wolfharness.sessions.models import SessionData
+from wolfharness_server.opencode_server.input_provider import OpenCodeInputProvider
+from wolfharness_server.opencode_server.state import ServerState
 
 
 pytestmark = pytest.mark.integration
@@ -49,8 +49,8 @@ def _stream_empty(queue: asyncio.Queue[Any]) -> bool:
 @pytest.fixture
 def mock_agent_pool() -> Mock:
     """Create a mock AgentPool for SessionPool construction."""
-    from agentpool.agents.events import RunStartedEvent, StreamCompleteEvent
-    from agentpool.messaging.messages import ChatMessage
+    from wolfharness.agents.events import RunStartedEvent, StreamCompleteEvent
+    from wolfharness.messaging.messages import ChatMessage
 
     pool = Mock()
     pool.main_agent = Mock()
@@ -170,7 +170,7 @@ class TestOpenCodeSessionPoolIntegrationExists:
     @pytest.mark.asyncio
     async def test_integration_class_importable(self) -> None:
         """The OpenCodeSessionPoolIntegration class should be importable."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -183,7 +183,7 @@ class TestOpenCodeSessionPoolIntegrationExists:
         server_state: ServerState,
     ) -> None:
         """Integration should accept SessionPool and ServerState."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -205,7 +205,7 @@ class TestSessionCreation:
         server_state: ServerState,
     ) -> None:
         """Creating a session should delegate to SessionPool.create_session()."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -234,7 +234,7 @@ class TestSessionCreation:
         mock_session_store: Mock,
     ) -> None:
         """Session creation should persist to the session store."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -261,7 +261,7 @@ class TestSessionCreation:
         server_state: ServerState,
     ) -> None:
         """Session creation should broadcast a session.created SSE event."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -300,7 +300,7 @@ class TestMessageRouting:
         server_state: ServerState,
     ) -> None:
         """Routing a message should create a RunHandle via receive_request()."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -330,7 +330,7 @@ class TestMessageRouting:
         server_state: ServerState,
     ) -> None:
         """Routing with 'when_idle' priority should queue when busy."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -370,7 +370,7 @@ class TestMessageRouting:
         server_state: ServerState,
     ) -> None:
         """Routing with 'asap' priority should inject into active turn."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -400,7 +400,7 @@ class TestMessageRouting:
         server_state: ServerState,
     ) -> None:
         """Routing a message should publish RunStartedEvent to EventBus."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -448,7 +448,7 @@ class TestSessionStatusSync:
         server_state: ServerState,
     ) -> None:
         """Creating a session should start the event consumer."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -472,7 +472,7 @@ class TestSessionStatusSync:
         server_state: ServerState,
     ) -> None:
         """Run start should broadcast session.status with type 'busy'."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -520,7 +520,7 @@ class TestSessionStatusSync:
         server_state: ServerState,
     ) -> None:
         """Run completion should broadcast session.status with type 'idle'."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -574,7 +574,7 @@ class TestSessionAbort:
         server_state: ServerState,
     ) -> None:
         """Aborting a session should cancel the active run."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -647,7 +647,7 @@ class TestSessionAbort:
         server_state: ServerState,
     ) -> None:
         """Abort should broadcast a session.error SSE event."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -687,7 +687,7 @@ class TestSessionAbort:
         server_state: ServerState,
     ) -> None:
         """Aborting an idle session should be a no-op."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -715,7 +715,7 @@ class TestSessionFork:
         server_state: ServerState,
     ) -> None:
         """Forking a session should create a child with parent_session_id."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -749,7 +749,7 @@ class TestSessionFork:
         mock_session_store: Mock,
     ) -> None:
         """Forked session should inherit parent's metadata."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -794,7 +794,7 @@ class TestSessionFork:
         server_state: ServerState,
     ) -> None:
         """Forked session should be tracked as a child of parent."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -832,7 +832,7 @@ class TestInputProviderFlow:
         mock_input_provider: OpenCodeInputProvider,
     ) -> None:
         """Input provider should be attachable to a session."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -863,7 +863,7 @@ class TestInputProviderFlow:
         mock_input_provider: OpenCodeInputProvider,
     ) -> None:
         """Routing a message should pass the input provider to the turn runner."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -904,7 +904,7 @@ class TestInputProviderFlow:
         providers on ``SessionState`` only and lets SessionController
         pass the correct one at run time.
         """
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -924,7 +924,7 @@ class TestInputProviderFlow:
         )
 
         # Create distinct input providers for each session
-        from agentpool_server.opencode_server.input_provider import OpenCodeInputProvider
+        from wolfharness_server.opencode_server.input_provider import OpenCodeInputProvider
 
         provider_a = OpenCodeInputProvider(
             state=server_state, session_id="test-session-concurrent-a"
@@ -968,7 +968,7 @@ class TestEventSubscription:
         """Should be able to subscribe to session events and receive OpenCode events."""
         import asyncio
 
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -1002,7 +1002,7 @@ class TestEventSubscription:
         server_state: ServerState,
     ) -> None:
         """Subscribed events should be converted to OpenCode SSE events."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -1017,7 +1017,7 @@ class TestEventSubscription:
         )
 
         # Publish a RunErrorEvent which is converted to SessionErrorEvent by the adapter
-        from agentpool.agents.events import RunErrorEvent
+        from wolfharness.agents.events import RunErrorEvent
 
         await session_pool.event_bus.publish(
             "test-session-017",
@@ -1052,7 +1052,7 @@ class TestIntegrationLifecycle:
         server_state: ServerState,
     ) -> None:
         """Shutting down integration should close all tracked sessions."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 
@@ -1082,7 +1082,7 @@ class TestIntegrationLifecycle:
         server_state: ServerState,
     ) -> None:
         """Should return the current status of a session."""
-        from agentpool_server.opencode_server.session_pool_integration import (
+        from wolfharness_server.opencode_server.session_pool_integration import (
             OpenCodeSessionPoolIntegration,
         )
 

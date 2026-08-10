@@ -9,9 +9,9 @@ from __future__ import annotations
 import pytest
 from upathtools import UPath
 
-from agentpool.skills.command import SkillCommand
-from agentpool.skills.skill import Skill
-from agentpool_server.agui_server.skill_tools import (
+from wolfharness.skills.command import SkillCommand
+from wolfharness.skills.skill import Skill
+from wolfharness_server.agui_server.skill_tools import (
     AGUISkillBridge,
     AGUISkillToolAdapter,
 )

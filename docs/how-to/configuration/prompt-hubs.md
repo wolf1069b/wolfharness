@@ -2,7 +2,7 @@
 sync:
   agent: doc_sync_agent
   dependencies:
-    - src/agentpool_config/prompt_hubs.py
+    - src/wolfharness_config/prompt_hubs.py
 title: Prompt Hubs
 description: External prompt hub integration
 icon: material/library
@@ -24,7 +24,7 @@ These integrations allow you to fetch prompts from these services by identifiers
 ## Configuration Reference
 
 /// mknodes
-{{ "agentpool_config.prompt_hubs.PromptHubConfig" | union_to_markdown(display_mode="yaml", header_style="pymdownx") }}
+{{ "wolfharness_config.prompt_hubs.PromptHubConfig" | union_to_markdown(display_mode="yaml", header_style="pymdownx") }}
 ///
 
 ## Configuration Notes

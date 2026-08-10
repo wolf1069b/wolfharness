@@ -22,17 +22,17 @@ from pydantic_ai.models import ModelRequestContext
 from pydantic_ai.models.test import TestModel
 import pytest
 
-from agentpool.capabilities.dcp.block_store import CompressionBlockStore
-from agentpool.capabilities.dcp.capability import DynamicContextPruningCapability
-from agentpool.capabilities.dcp.state import (
+from wolfharness.capabilities.dcp.block_store import CompressionBlockStore
+from wolfharness.capabilities.dcp.capability import DynamicContextPruningCapability
+from wolfharness.capabilities.dcp.state import (
     CompressionBlock,
     DCPState,
     PruneAction,
     WatermarkLevel,
 )
-from agentpool.capabilities.dcp.strategies import _is_pruned, _prune_part
-from agentpool.capabilities.tool_output_budget import ToolOutputBudgetCapability
-from agentpool_config.capabilities import (
+from wolfharness.capabilities.dcp.strategies import _is_pruned, _prune_part
+from wolfharness.capabilities.tool_output_budget import ToolOutputBudgetCapability
+from wolfharness_config.capabilities import (
     GenericCapabilityConfig,
 )
 
@@ -206,7 +206,7 @@ async def test_protected_pattern_matches_nothing_all_prunable() -> None:
 
     # Build prunable list to verify "read" is not protected.
     state = cap._get_dcp_state(ctx)
-    from agentpool.capabilities.dcp.prunable_list import build_prunable_list
+    from wolfharness.capabilities.dcp.prunable_list import build_prunable_list
 
     build_prunable_list([msg1, msg2, msg3], state, cap._config)
     # "read" should appear in tool_id_list since "nonexistent_*" doesn't match it.
@@ -233,7 +233,7 @@ async def test_star_glob_protects_all_tools() -> None:
     ctx = _make_run_context(messages=[msg1, msg2, msg3])
 
     state = cap._get_dcp_state(ctx)
-    from agentpool.capabilities.dcp.prunable_list import build_prunable_list
+    from wolfharness.capabilities.dcp.prunable_list import build_prunable_list
 
     build_prunable_list([msg1, msg2, msg3], state, cap._config)
     # Since "*" is a literal string in protected_tools (not a glob), it won't
@@ -326,7 +326,7 @@ async def test_decompress_on_non_pruned_tool_returns_error() -> None:
     is unavailable.  We provide a real ``SessionData`` mock so the
     state lookup succeeds and the decompress logic can run.
     """
-    from agentpool.sessions.models import SessionData
+    from wolfharness.sessions.models import SessionData
 
     cap = DynamicContextPruningCapability()
 
@@ -560,7 +560,7 @@ def test_dynamic_context_type_raises_error() -> None:
     which tries to import ``dynamic_context`` as a module path — that fails.
     """
     # "dynamic_context" is not a known built-in type.
-    from agentpool_config.capabilities import is_known_capability_type
+    from wolfharness_config.capabilities import is_known_capability_type
 
     assert not is_known_capability_type("dynamic_context")
 

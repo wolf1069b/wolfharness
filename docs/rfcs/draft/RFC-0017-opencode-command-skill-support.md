@@ -21,7 +21,7 @@ The current OpenCode server `/session/{id}/command` endpoint only executes MCP P
 
 ## Problem Statement
 
-### Current Implementation (src/agentpool_server/opencode_server/routes/session_routes.py)
+### Current Implementation (src/wolfharness_server/opencode_server/routes/session_routes.py)
 
 ```python
 @router.post("/{session_id}/command")
@@ -219,7 +219,7 @@ class UnifiedCommandExecutor:
 
 ### Implementation Details
 
-**Modified File**: `src/agentpool_server/opencode_server/routes/session_routes.py`
+**Modified File**: `src/wolfharness_server/opencode_server/routes/session_routes.py`
 
 **New Helper Function**:
 
@@ -300,7 +300,7 @@ async def execute_command(
 **CommandStore Integration**:
 
 ```python
-# In src/agentpool_server/opencode_server/server.py
+# In src/wolfharness_server/opencode_server/server.py
 
 async def _setup_skill_commands(self) -> None:
     """Setup command store with skills."""

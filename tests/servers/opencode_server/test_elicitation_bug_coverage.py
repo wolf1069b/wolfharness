@@ -30,14 +30,14 @@ from pydantic_ai.messages import ToolCallPart
 from pydantic_ai.tools import DeferredToolRequests, RunContext
 import pytest
 
-from agentpool.agents.context import AgentContext, AgentRunContext
-from agentpool.agents.events.events import ElicitationDeferredEvent
-from agentpool.agents.native_agent.elicitation_bridge import (
+from wolfharness.agents.context import AgentContext, AgentRunContext
+from wolfharness.agents.events.events import ElicitationDeferredEvent
+from wolfharness.agents.native_agent.elicitation_bridge import (
     ElicitationFutureRegistry,
     create_elicitation_bridge_capability,
 )
-from agentpool_server.opencode_server.input_provider import OpenCodeInputProvider
-from agentpool_server.opencode_server.state import ServerState
+from wolfharness_server.opencode_server.input_provider import OpenCodeInputProvider
+from wolfharness_server.opencode_server.state import ServerState
 
 
 pytestmark = pytest.mark.integration
@@ -50,7 +50,7 @@ pytestmark = pytest.mark.integration
 
 def _make_mock_session_controller(session_id: str, *, checkpoint_enabled: bool = False) -> Mock:
     """Create a mock SessionController with a SessionState for the given session."""
-    from agentpool.orchestrator.core import SessionState
+    from wolfharness.orchestrator.core import SessionState
 
     session = SessionState(session_id=session_id, agent_name="test-agent")
     session.checkpoint_enabled = checkpoint_enabled
@@ -125,8 +125,8 @@ def _make_provider(
         session_id, checkpoint_enabled=checkpoint_enabled
     )
 
-    from agentpool_server.opencode_server.models import Session
-    from agentpool_server.opencode_server.models.common import TimeCreatedUpdated
+    from wolfharness_server.opencode_server.models import Session
+    from wolfharness_server.opencode_server.models.common import TimeCreatedUpdated
 
     now = 0
     session = Session(
@@ -188,7 +188,7 @@ class TestMCPElicitationRegistersPendingQuestion:
         )
 
         with patch(
-            "agentpool.agents.native_agent.elicitation_bridge._emit_elicitation_event",
+            "wolfharness.agents.native_agent.elicitation_bridge._emit_elicitation_event",
             new_callable=AsyncMock,
         ):
             await cap.handle_deferred_tool_calls(run_ctx, requests=requests)
@@ -223,7 +223,7 @@ class TestMCPElicitationRegistersPendingQuestion:
         requests = _make_deferred_requests()
 
         with patch(
-            "agentpool.agents.native_agent.elicitation_bridge._emit_elicitation_event",
+            "wolfharness.agents.native_agent.elicitation_bridge._emit_elicitation_event",
             new_callable=AsyncMock,
         ) as mock_emit:
             await cap.handle_deferred_tool_calls(run_ctx, requests=requests)
@@ -257,7 +257,7 @@ class TestMCPElicitationRegistersPendingQuestion:
         )
 
         with patch(
-            "agentpool.agents.native_agent.elicitation_bridge._emit_elicitation_event",
+            "wolfharness.agents.native_agent.elicitation_bridge._emit_elicitation_event",
             new_callable=AsyncMock,
         ):
             await cap.handle_deferred_tool_calls(run_ctx, requests=requests)
@@ -377,7 +377,7 @@ class TestQuestionRouteSucceedsForMCPElicitation:
         run_ctx: RunContext[Any],
     ) -> None:
         """reply_to_question succeeds for a handle registered via ElicitationBridgeCapability."""
-        from agentpool_server.opencode_server.models import QuestionReply
+        from wolfharness_server.opencode_server.models import QuestionReply
 
         provider, _state, _controller = _make_provider("test-session")
 
@@ -394,7 +394,7 @@ class TestQuestionRouteSucceedsForMCPElicitation:
         )
 
         with patch(
-            "agentpool.agents.native_agent.elicitation_bridge._emit_elicitation_event",
+            "wolfharness.agents.native_agent.elicitation_bridge._emit_elicitation_event",
             new_callable=AsyncMock,
         ):
             await cap.handle_deferred_tool_calls(run_ctx, requests=requests)
@@ -427,7 +427,7 @@ class TestLocalToolPath3RegistersPendingQuestion:
         agent_ctx: AgentContext,
     ) -> None:
         """handle_elicitation Path 3 calls broadcast_elicitation_question()."""
-        from agentpool.sessions.models import ElicitationResumePayload
+        from wolfharness.sessions.models import ElicitationResumePayload
 
         provider, _state, _controller = _make_provider("test-session", checkpoint_enabled=True)
         provider._broadcast_called = False
@@ -493,7 +493,7 @@ class TestElicitationToolPartName:
     ToolPart is NOT auto-cleaned when it transitions to completed/error.
 
     This is an opencode TUI-side issue (session-data.ts) that cannot be
-    fixed in the agentpool repo. This test documents the behavior.
+    fixed in the wolfharness repo. This test documents the behavior.
     """
 
     @pytest.mark.asyncio
@@ -501,16 +501,16 @@ class TestElicitationToolPartName:
         self,
     ) -> None:
         """ElicitationDeferredEvent creates a ToolPart with tool='elicitation'."""
-        from agentpool_server.opencode_server.event_processor import EventProcessor
-        from agentpool_server.opencode_server.event_processor_context import (
+        from wolfharness_server.opencode_server.event_processor import EventProcessor
+        from wolfharness_server.opencode_server.event_processor_context import (
             EventProcessorContext,
         )
-        from agentpool_server.opencode_server.models.message import (
+        from wolfharness_server.opencode_server.models.message import (
             MessagePath,
             MessageTime,
             MessageWithParts,
         )
-        from agentpool_server.opencode_server.models.parts import ToolStateRunning
+        from wolfharness_server.opencode_server.models.parts import ToolStateRunning
 
         mock_state = MagicMock()
         assistant_msg = MessageWithParts.assistant(

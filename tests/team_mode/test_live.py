@@ -79,7 +79,7 @@ def _create_test_config(tmp_path: Path) -> Path:
 
 def _collect_tool_names(events: list[Any]) -> list[str]:
     """Extract tool names from ``ToolCallStartEvent`` entries."""
-    from agentpool.agents.events.events import ToolCallStartEvent
+    from wolfharness.agents.events.events import ToolCallStartEvent
 
     return [e.tool_name for e in events if isinstance(e, ToolCallStartEvent)]
 
@@ -88,7 +88,7 @@ def _collect_text(events: list[Any]) -> str:
     """Concatenate all text deltas from ``PartDeltaEvent`` entries."""
     from pydantic_ai import TextPartDelta, ThinkingPartDelta
 
-    from agentpool.agents.events.events import PartDeltaEvent
+    from wolfharness.agents.events.events import PartDeltaEvent
 
     parts: list[str] = []
     for e in events:
@@ -148,7 +148,7 @@ async def test_live_full_team_lifecycle(tmp_path: Path) -> None:
     Then: all seven team tools are invoked and the final response contains
         "ALL TESTS PASSED".
     """
-    from agentpool.delegation.pool import AgentPool
+    from wolfharness.delegation.pool import AgentPool
 
     config_path = _create_test_config(tmp_path)
 
@@ -186,7 +186,7 @@ async def test_live_member_session_cleanup(tmp_path: Path) -> None:
     Then: after the run completes, no active child sessions with
         ``parent_session_id`` matching the lead session remain.
     """
-    from agentpool.delegation.pool import AgentPool
+    from wolfharness.delegation.pool import AgentPool
 
     config_path = _create_test_config(tmp_path)
 
@@ -232,7 +232,7 @@ async def test_live_team_status_reflects_members(tmp_path: Path) -> None:
     Then: the ``team_create`` and ``team_status`` tools are invoked, and the
         response text mentions both member names.
     """
-    from agentpool.delegation.pool import AgentPool
+    from wolfharness.delegation.pool import AgentPool
 
     config_path = _create_test_config(tmp_path)
 

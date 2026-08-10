@@ -16,32 +16,32 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import FastAPI
 import pytest
 
-from agentpool.agents.events import StreamCompleteEvent, SubAgentEvent
-from agentpool.messaging import ChatMessage
-from agentpool_server.opencode_server.dependencies import get_state
-from agentpool_server.opencode_server.event_processor_context import (
+from wolfharness.agents.events import StreamCompleteEvent, SubAgentEvent
+from wolfharness.messaging import ChatMessage
+from wolfharness_server.opencode_server.dependencies import get_state
+from wolfharness_server.opencode_server.event_processor_context import (
     EventProcessorContext,
 )
-from agentpool_server.opencode_server.models import (
+from wolfharness_server.opencode_server.models import (
     MessagePath,
     MessageTime,
     MessageWithParts,
 )
-from agentpool_server.opencode_server.routes import file_router, message_router, session_router
-from agentpool_server.opencode_server.session_pool_integration import (
+from wolfharness_server.opencode_server.routes import file_router, message_router, session_router
+from wolfharness_server.opencode_server.session_pool_integration import (
     ensure_session,
     get_messages_for_session,
 )
-from agentpool_server.opencode_server.stream_adapter import OpenCodeStreamAdapter
-from agentpool_toolsets.builtin.subagent_tools import SubagentTools
+from wolfharness_server.opencode_server.stream_adapter import OpenCodeStreamAdapter
+from wolfharness_toolsets.builtin.subagent_tools import SubagentTools
 
 
 pytestmark = pytest.mark.integration
 
 
 if TYPE_CHECKING:
-    from agentpool_server.opencode_server.event_processor import EventProcessor
-    from agentpool_server.opencode_server.state import ServerState
+    from wolfharness_server.opencode_server.event_processor import EventProcessor
+    from wolfharness_server.opencode_server.state import ServerState
 
 
 # =============================================================================
@@ -62,7 +62,7 @@ def _make_parent_ctx(
         agent_name="lead-agent",
         model_id="test-model",
         parent_id="parent-user-1",
-        provider_id="agentpool",
+        provider_id="wolfharness",
         path=MessagePath(cwd="/tmp", root="/tmp"),
     )
     return EventProcessorContext(
@@ -111,7 +111,7 @@ async def test_background_task_inject_prompt_wakes_lead_agent(
     """
     import inspect
 
-    from agentpool.agents.base_agent import BaseAgent
+    from wolfharness.agents.base_agent import BaseAgent
 
     source = inspect.getsource(BaseAgent.inject_prompt)
 
@@ -292,7 +292,7 @@ async def test_subagent_event_without_child_session_id(server_state: ServerState
     # Setup
     session_id = "parent-session"
 
-    from agentpool_server.opencode_server.models import MessagePath, MessageTime
+    from wolfharness_server.opencode_server.models import MessagePath, MessageTime
 
     assistant_msg = MessageWithParts.assistant(
         message_id="msg-1",
@@ -326,7 +326,7 @@ async def test_subagent_event_without_child_session_id(server_state: ServerState
 
     # Run process_stream with ensure_session patched
     with patch(
-        "agentpool_server.opencode_server.session_pool_integration.ensure_session"
+        "wolfharness_server.opencode_server.session_pool_integration.ensure_session"
     ) as mock_ensure:
         async for _ in adapter.process_stream(event_stream()):
             pass
@@ -404,7 +404,7 @@ class TestSubagentSessions:
 
         # Mock normal stream without subagent events
         async def stream_generator(*args, **kwargs):
-            from agentpool.agents.events import PartDeltaEvent
+            from wolfharness.agents.events import PartDeltaEvent
 
             yield PartDeltaEvent.text(index=0, content="Normal response")
             yield StreamCompleteEvent(

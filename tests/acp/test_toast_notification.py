@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentpool.agents.events import ToastInfo
+from wolfharness.agents.events import ToastInfo
 
 
 pytestmark = pytest.mark.unit
@@ -27,7 +27,7 @@ class TestSendToast:
 
     async def test_send_toast_error(self, mock_session):
         """Test sending error toast notification."""
-        from agentpool_server.acp_server.session import ACPSession
+        from wolfharness_server.acp_server.session import ACPSession
 
         # Patch the method onto the mock
         with patch.object(mock_session, "notifications") as mock_notifs:
@@ -37,7 +37,7 @@ class TestSendToast:
                 level="error",
             )
             mock_notifs.send_ext_notification.assert_called_once_with(
-                method="_agentpool/toast",
+                method="_wolfharness/toast",
                 params={
                     "message": "Test error",
                     "level": "error",
@@ -48,7 +48,7 @@ class TestSendToast:
 
     async def test_send_toast_warning(self, mock_session):
         """Test sending warning toast notification."""
-        from agentpool_server.acp_server.session import ACPSession
+        from wolfharness_server.acp_server.session import ACPSession
 
         with patch.object(mock_session, "notifications") as mock_notifs:
             await ACPSession._send_toast(
@@ -58,7 +58,7 @@ class TestSendToast:
                 duration=5000,
             )
             mock_notifs.send_ext_notification.assert_called_once_with(
-                method="_agentpool/toast",
+                method="_wolfharness/toast",
                 params={
                     "message": "Warning message",
                     "level": "warning",
@@ -69,7 +69,7 @@ class TestSendToast:
 
     async def test_send_toast_with_action(self, mock_session):
         """Test sending toast with action button."""
-        from agentpool_server.acp_server.session import ACPSession
+        from wolfharness_server.acp_server.session import ACPSession
 
         with patch.object(mock_session, "notifications") as mock_notifs:
             await ACPSession._send_toast(
@@ -79,7 +79,7 @@ class TestSendToast:
                 action={"label": "Retry", "command": "/retry"},
             )
             mock_notifs.send_ext_notification.assert_called_once_with(
-                method="_agentpool/toast",
+                method="_wolfharness/toast",
                 params={
                     "message": "Click to retry",
                     "level": "info",
@@ -90,7 +90,7 @@ class TestSendToast:
 
     async def test_send_toast_cancelled(self, mock_session):
         """Test that toast is not sent when session is cancelled."""
-        from agentpool_server.acp_server.session import ACPSession
+        from wolfharness_server.acp_server.session import ACPSession
 
         mock_session._cancelled = True
         with patch.object(mock_session, "notifications") as mock_notifs:
@@ -103,7 +103,7 @@ class TestSendToast:
 
     async def test_send_toast_exception_handled(self, mock_session):
         """Test that exceptions in send_ext_notification are handled."""
-        from agentpool_server.acp_server.session import ACPSession
+        from wolfharness_server.acp_server.session import ACPSession
 
         with patch.object(mock_session, "notifications") as mock_notifs:
             mock_notifs.send_ext_notification.side_effect = RuntimeError("Network error")
@@ -129,8 +129,8 @@ class TestClientHandlerToast:
         return handler
 
     async def test_handle_toast_notification(self, mock_handler):
-        """Test handling _agentpool/toast ext notification."""
-        from agentpool.agents.acp_agent.client_handler import ACPClientHandler
+        """Test handling _wolfharness/toast ext notification."""
+        from wolfharness.agents.acp_agent.client_handler import ACPClientHandler
 
         params = {
             "message": "Error occurred",
@@ -139,7 +139,7 @@ class TestClientHandlerToast:
             "action": {"label": "Retry", "command": "/retry"},
         }
 
-        await ACPClientHandler.ext_notification(mock_handler, "_agentpool/toast", params)
+        await ACPClientHandler.ext_notification(mock_handler, "_wolfharness/toast", params)
 
         # Verify state_updated was emitted with ToastInfo
         mock_handler._agent.state_updated.emit.assert_called_once()
@@ -152,11 +152,11 @@ class TestClientHandlerToast:
 
     async def test_handle_toast_notification_defaults(self, mock_handler):
         """Test handling toast with default values."""
-        from agentpool.agents.acp_agent.client_handler import ACPClientHandler
+        from wolfharness.agents.acp_agent.client_handler import ACPClientHandler
 
         params = {"message": "Info message"}
 
-        await ACPClientHandler.ext_notification(mock_handler, "_agentpool/toast", params)
+        await ACPClientHandler.ext_notification(mock_handler, "_wolfharness/toast", params)
 
         toast = mock_handler._agent.state_updated.emit.call_args[0][0]
         assert isinstance(toast, ToastInfo)
@@ -167,7 +167,7 @@ class TestClientHandlerToast:
 
     async def test_handle_unknown_ext_notification(self, mock_handler):
         """Test that unknown ext notifications are ignored gracefully."""
-        from agentpool.agents.acp_agent.client_handler import ACPClientHandler
+        from wolfharness.agents.acp_agent.client_handler import ACPClientHandler
 
         await ACPClientHandler.ext_notification(mock_handler, "_unknown/method", {"foo": "bar"})
 
@@ -191,12 +191,12 @@ class TestNotificationsSendExt:
 
         await ACPNotifications.send_ext_notification(
             mock_notifications,
-            method="_agentpool/toast",
+            method="_wolfharness/toast",
             params={"message": "Hello", "level": "info"},
         )
 
         mock_notifications.client.ext_notification.assert_called_once_with(
-            "_agentpool/toast",
+            "_wolfharness/toast",
             {"message": "Hello", "level": "info"},
         )
 
@@ -243,7 +243,7 @@ class TestToastInfo:
 
     def test_toast_info_in_state_update(self):
         """Test that ToastInfo can be used as a state update."""
-        from agentpool.agents.events import ToastInfo
+        from wolfharness.agents.events import ToastInfo
 
         toast = ToastInfo(message="Test", level="warning")
         assert isinstance(toast, ToastInfo)
