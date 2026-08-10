@@ -305,3 +305,4 @@ nav:
           - Status Index: rfcs/STATUS.md
       - Meta:
           - Documentation Guide: meta/documentation-guide.md
+  - Examples: examples.md

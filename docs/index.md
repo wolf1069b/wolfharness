@@ -8,6 +8,16 @@ hide:
 
 **Connect all the agents!**
 
+<p align="center">
+  <a href="https://github.com/wolf1069b/wolfharness/actions/workflows/pytest.yml"><img src="https://img.shields.io/github/actions/workflow/status/wolf1069b/wolfharness/pytest.yml?branch=main&label=Tests" alt="Tests"></a>
+  <a href="https://codecov.io/gh/wolf1069b/wolfharness"><img src="https://img.shields.io/codecov/c/github/wolf1069b/wolfharness" alt="codecov"></a>
+  <a href="https://pypi.org/project/wolfharness/"><img src="https://img.shields.io/pypi/v/wolfharness" alt="PyPI version"></a>
+  <a href="https://pypi.org/project/wolfharness/"><img src="https://img.shields.io/pypi/pyversions/wolfharness" alt="Python versions"></a>
+  <a href="https://pypi.org/project/wolfharness/"><img src="https://img.shields.io/pypi/dm/wolfharness" alt="Downloads"></a>
+  <a href="https://github.com/wolf1069b/wolfharness/stargazers"><img src="https://img.shields.io/github/stars/wolf1069b/wolfharness" alt="GitHub stars"></a>
+  <a href="https://github.com/wolf1069b/wolfharness/blob/main/LICENSE"><img src="https://img.shields.io/github/license/wolf1069b/wolfharness" alt="License"></a>
+</p>
+
 ## Architecture
 
 Define your agents once in YAML, then expose them through any protocol. WolfHarness sits at the center — every node is a `MessageNode`, so native agents, remote (ACP / AG-UI) agents, and teams compose seamlessly:
