@@ -8,8 +8,8 @@ edit_uri: edit/main/docs/
 
 theme:
   name: material
-  icon:
-    logo: material/robot-outline
+  logo: assets/logo.png
+  favicon: assets/favicon.png
   font:
     text: Inter
     code: JetBrains Mono
@@ -56,6 +56,9 @@ theme:
     - search.highlight
     - search.suggest
   # - search.share
+
+extra_css:
+  - stylesheets/extra.css
 
 extra_javascript: # for code blocks with { .interactive }
   - js/run_code_config.js

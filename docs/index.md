@@ -8,6 +8,45 @@ hide:
 
 **Connect all the agents!**
 
+## Architecture
+
+Define your agents once in YAML, then expose them through any protocol. WolfHarness sits at the center — every node is a `MessageNode`, so native agents, remote (ACP / AG-UI) agents, and teams compose seamlessly:
+
+```mermaid
+flowchart LR
+    subgraph YAML["One config"]
+        A["agents.yml"]
+    end
+
+    subgraph Pool["AgentPool / WolfHarness"]
+        NAT["Native Agent"]:::node
+        ACP["ACP Agent<br/>(Claude Code · Goose · Codex)"]:::node
+        AGUI["AG-UI Agent"]:::node
+        TEAM["Team<br/>(parallel · sequential)"]:::node
+    end
+
+    subgraph Proto["Protocols"]
+        P1["ACP"]:::proto
+        P2["OpenCode"]:::proto
+        P3["MCP"]:::proto
+        P4["AG-UI"]:::proto
+        P5["OpenAI-compatible API"]:::proto
+    end
+
+    A --> Pool
+    NAT --- TEAM
+    ACP --- TEAM
+    AGUI --- TEAM
+    Pool --> P1
+    Pool --> P2
+    Pool --> P3
+    Pool --> P4
+    Pool --> P5
+
+    classDef node fill:#e8eaf6,stroke:#3949ab,color:#1a237e
+    classDef proto fill:#fff3e0,stroke:#ef6c00,color:#e65100
+```
+
 ## Key Features
 
 ### Slash Commands
@@ -76,6 +115,33 @@ MIT License - see [LICENSE](https://github.com/Leoyzen/wolfharness/blob/main/LIC
 - [Decision Records](adr/) — Architecture Decision Records (ADRs)
 - [RFCs](rfcs/STATUS.md) — Request for Comments proposals and status
 - [Documentation Guide](meta/documentation-guide.md) — Where to put new documentation
+
+## Why choose WolfHarness?
+
+> **With raw frameworks, you write glue code for every agent pair — at 1× speed.**
+> With WolfHarness, you define agents once in YAML and use them everywhere — at 10×.
+
+### Versus hand-writing the glue
+
+If you build multi-agent systems directly on `pydantic-ai` or raw MCP, every agent-to-agent interaction, every protocol binding, every team orchestration is **code you write and maintain yourself**. WolfHarness replaces that plumbing with declarative YAML.
+
+| | Hand-rolled glue | WolfHarness |
+|---|---|---|
+| **Define an agent** | Subclass, wire model + tools in code | A few lines of YAML |
+| **Expose over ACP** | Write a server, hand-roll transport | `wolfharness serve-acp agents.yml` |
+| **Team up agents** | Manual message passing, state mgmt | Declarative teams (`parallel` / `sequential`) |
+| **Persist state / history** | Build your own storage layer | Built-in SQLite / PostgreSQL providers |
+| **Human-in-the-loop** | Custom approval plumbing | First-class prompting + permission nodes |
+
+### One config, every protocol
+
+You are not locked into one runtime — the **same `agents.yml`** serves as an ACP server, an OpenCode endpoint, an MCP tool provider, an AG-UI backend, or an OpenAI-compatible API. Add or drop a protocol without changing your agent definitions.
+
+### Built on a modern, typed core
+
+- **PydanticAI + Pydantic** under the hood — validated, excellently typed, fully async
+- `MessageNode` abstraction — native agents, remote agents, and teams share one interface
+- **Observability first** — Logfire instrumentation on critical paths out of the box
 
 ## Quick Start
 
