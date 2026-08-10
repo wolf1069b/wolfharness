@@ -48,6 +48,19 @@ wolfharness run <name> "prompt"           # Run agent
 wolfharness serve-acp config.yml          # Start ACP server
 ```
 
+### Documentation build — use `zensical`, NOT `mkdocs serve`
+
+GitHub Pages deployment (`.github/workflows/documentation.yml`) builds the docs with `zensical build`, not vanilla MkDocs. Local preview MUST use the same command, otherwise the theme renders differently than production:
+
+```bash
+uv run --group docs zensical build                          # Build to ./site (same as CI)
+python3 -m http.server 8000 --directory site                # Preview the zensical output
+```
+
+- **`zensical build`** renders using zensical/mknodes' built-in Material theme variant (white header) — this matches production.
+- **`mkdocs serve`** renders with standard Material (`primary: indigo`, blue header) and does NOT match production. Do not use it to preview docs unless you intentionally want the different theme.
+- Verify in a **private/incognito window** or after a hard refresh (Shift+F5) to rule out cached palette state.
+
 ## Code Style — Red Lines
 
 - Python 3.13+ required. Use modern syntax (PEP 695 generics, `match/case`, walrus operator, `asyncio.TaskGroup`).
