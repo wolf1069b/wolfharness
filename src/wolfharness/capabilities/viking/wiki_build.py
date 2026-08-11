@@ -106,6 +106,7 @@ ALL_WIKI_TOOLS: frozenset[str] = frozenset(
         "get_related_resources",
         "trace_diagnostic_path",
         "search_wiki",
+        "find_wiki",
         "grep_wiki",
         "audit_wiki",
         "prune_stale_index_entries",
@@ -123,6 +124,11 @@ ALL_WIKI_TOOLS: frozenset[str] = frozenset(
         "auto_repair",
         "get_schema",
         "create_opa",
+        "create_ops",
+        "get_ops",
+        "create_opl",
+        "get_opls",
+        "op_flow_status",
         "discover_opa",
         "get_opas",
         "resolve_opa",
@@ -159,6 +165,7 @@ _READ_TOOLS: frozenset[str] = frozenset(
         "list_children",
         "get_related_resources",
         "search_wiki",
+        "find_wiki",
         "grep_wiki",
         "get_schema",
     },
@@ -215,6 +222,11 @@ _LIFECYCLE_TOOLS: frozenset[str] = frozenset(
 # OPA conflict/gap records.
 _OPA_READ_TOOLS: frozenset[str] = frozenset({"get_opas"})
 _OPA_WRITE_TOOLS: frozenset[str] = frozenset({"create_opa"})
+_OPS_READ_TOOLS: frozenset[str] = frozenset({"get_ops"})
+_OPS_WRITE_TOOLS: frozenset[str] = frozenset({"create_ops"})
+_OPL_READ_TOOLS: frozenset[str] = frozenset({"get_opls"})
+_OPL_WRITE_TOOLS: frozenset[str] = frozenset({"create_opl"})
+_OP_FLOW_READ_TOOLS: frozenset[str] = frozenset({"op_flow_status"})
 _OPA_DISCOVERY_TOOLS: frozenset[str] = frozenset({"discover_opa"})
 _OPA_RESOLVE_TOOLS: frozenset[str] = frozenset({"resolve_opa"})
 _OPA_APPLY_TOOLS: frozenset[str] = frozenset({"apply_opa"})
@@ -229,6 +241,9 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
         | _FINALIZE_TOOLS
         | _OPA_READ_TOOLS
         | _OPA_DISCOVERY_TOOLS
+        | _OPS_READ_TOOLS
+        | _OPL_READ_TOOLS
+        | _OP_FLOW_READ_TOOLS
         | frozenset(
             {
                 "get_bom_taxonomy",
@@ -247,6 +262,9 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
         | _DIFF_TOOLS
         | _OPA_WRITE_TOOLS
         | _OPA_READ_TOOLS
+        | _OPS_READ_TOOLS
+        | _OPL_READ_TOOLS
+        | _OP_FLOW_READ_TOOLS
         | frozenset({"record_source_packet"})
     ),
     # Relation worker: patches formal entities (frontmatter relation fields +
@@ -262,6 +280,32 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
             },
         )
     ),
+    # OPA worker turns deterministic audit findings into readable, evidence-
+    # bound OPA records. It cannot write formal entities or proposals.
+    "wiki_opa_worker": (
+        _READ_TOOLS
+        | _OPA_WRITE_TOOLS
+        | _OPA_READ_TOOLS
+        | _OPS_READ_TOOLS
+        | _OPL_READ_TOOLS
+    ),
+    # OPS worker retrieves the target/raw neighbourhood and writes only expert
+    # suggestions; formal entity writes remain unavailable.
+    "wiki_ops_worker": (
+        _READ_TOOLS
+        | _OPA_READ_TOOLS
+        | _OPS_READ_TOOLS
+        | _OPS_WRITE_TOOLS
+        | _OPL_READ_TOOLS
+    ),
+    # OPL worker combines existing OPA + OPS into unconfirmed proposals.
+    "wiki_opl_worker": (
+        _READ_TOOLS
+        | _OPA_READ_TOOLS
+        | _OPS_READ_TOOLS
+        | _OPL_READ_TOOLS
+        | _OPL_WRITE_TOOLS
+    ),
     # File operator: structural repairs, OPA management.  Reads entities to
     # plan moves/repairs but does not need raw-source chapter reading.
     "wiki_file_operator": (
@@ -273,6 +317,7 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
                 "list_children",
                 "get_related_resources",
                 "search_wiki",
+                "find_wiki",
                 "grep_wiki",
                 "get_schema",
             },
@@ -294,6 +339,9 @@ WIKI_AGENT_ROLES: tuple[str, ...] = (
     "wiki_extraction_worker",
     "wiki_relation_worker",
     "wiki_file_operator",
+    "wiki_opa_worker",
+    "wiki_ops_worker",
+    "wiki_opl_worker",
 )
 
 
