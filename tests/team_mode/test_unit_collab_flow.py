@@ -1011,6 +1011,38 @@ async def test_mine_only_filters_correctly(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
+async def test_mine_only_includes_owned_subtasks_under_other_parent(tmp_path: Path) -> None:
+    """A worker can see an owned child task even when its parent is owned by the lead."""
+    init_team(str(tmp_path))
+    ctx_lead = make_run_context(
+        metadata=make_lead_metadata(),
+        base_dir=str(tmp_path),
+    )
+    config = make_enabled_config(base_dir=str(tmp_path))
+    lead_cap = TeamCommCapability(config, "coordinator", make_lead_metadata())
+
+    parent_result = await lead_cap.task_create(ctx_lead, "Build phase", owner="coordinator")
+    parent_id = parent_result.return_value.splitlines()[0].replace("Task created: ", "")
+    await lead_cap.task_create(
+        ctx_lead,
+        "Extract sy75 electric chapters",
+        parent_id=parent_id,
+        owner="translator_agent",
+    )
+
+    member_ctx = make_run_context(
+        metadata=make_member_metadata(),
+        base_dir=str(tmp_path),
+    )
+    member_cap = TeamCommCapability(config, "worker", make_member_metadata())
+
+    result = await member_cap.task_list(member_ctx, mine_only=True)
+
+    assert "Extract sy75 electric chapters" in result.return_value
+    assert "Build phase" not in result.return_value
+
+
+@pytest.mark.unit
 async def test_mine_only_zero_owned_tasks(tmp_path: Path) -> None:
     """Given: member owns no tasks.
 

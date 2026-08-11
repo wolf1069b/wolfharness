@@ -42,6 +42,8 @@ Your role is: {role}.
 2. Use `task_create` and `task_create_batch` to track work items.
 3. Use `read_blackboard` and `write_blackboard` to share context.
 4. Use `team_status` to check the status of all members.
+   To see all work assigned to you, use `task_list(mine_only=True)`;
+   this includes subtasks under another member's parent task.
 5. If you are the lead, you may use `team_create` and `team_delete`.
 
 ## Communication Channels
@@ -50,6 +52,9 @@ Your role is: {role}.
 
 - Use `task_create` and `task_create_batch` to define work items with clear \
 deliverables.
+- A worker must start by calling `task_list(mine_only=True)` and use the exact \
+returned task ID for `task_get`/`task_update`; do not infer IDs from a message \
+or from another worker's status snapshot.
 - Use `task_update(status=...)` to change task lifecycle state only \
 (pending → in_progress → completed/failed).
 - Use `task_update(technical_note=...)` ONLY for technical notes that future \

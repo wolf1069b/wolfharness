@@ -908,6 +908,10 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         that task (as a flat list).  When ``include_children=True``,
         subtasks are nested inside parent tasks in the XML output.
         When ``mine_only=True``, filters to tasks owned by the calling member.
+        The owned view is flat and includes owned subtasks even when their
+        parent belongs to another member; otherwise a worker can be assigned
+        work but see an empty board because the default view contains only
+        top-level tasks.
 
         Returns:
             XML task list with owner summary, or error string.
@@ -941,6 +945,18 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                 return ToolReturn(
                     return_value=(f"<task_list>(empty)</task_list>\n0 tasks for {current_member}")
                 )
+
+            # A worker's primary question is "what is assigned to me?".
+            # Do not apply the top-level-only presentation below: assigned
+            # work is commonly represented as a child of a conductor task.
+            if parent_id is None:
+                lines = ["<task_list>"]
+                lines.append(
+                    f"<!-- {format_owner_summary([TaskRecord.from_dict(t) for t in all_tasks])} -->"
+                )
+                lines.extend(self._format_task_xml(t, indent=2) for t in all_tasks)
+                lines.append("</task_list>")
+                return ToolReturn(return_value="\n".join(lines))
 
         # Build TaskRecord list for owner summary.
         task_records = [TaskRecord.from_dict(t) for t in all_tasks]
