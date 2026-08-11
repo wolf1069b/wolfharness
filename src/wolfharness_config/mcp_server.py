@@ -22,6 +22,26 @@ if TYPE_CHECKING:
 _MCP_HTTP_READ_TIMEOUT: float = 60.0
 
 
+def _expand_headers(headers: dict[str, str] | None) -> dict[str, str] | None:
+    """Expand ``${VAR}`` environment variables in all HTTP header values.
+
+    Mirrors the env expansion already performed for skill ``mcp.json``
+    companion files (``wolfharness.skills.skill._expand_env_vars_in_value``).
+    Without this, header values such as ``Bearer ${API_TOKEN}`` are sent to
+    the MCP server as literals, causing auth failures (e.g. ``401``).
+
+    Args:
+        headers: Header dict whose values may contain ``${VAR}`` placeholders.
+
+    Returns:
+        A new dict with every header value passed through
+        ``os.path.expandvars``, or ``None`` if ``headers`` is ``None``.
+    """
+    if headers is None:
+        return None
+    return {key: os.path.expandvars(value) for key, value in headers.items()}
+
+
 def make_mcp_httpx_client_factory(
     read_timeout: float = _MCP_HTTP_READ_TIMEOUT,
 ) -> Callable[..., httpx.AsyncClient]:
@@ -386,7 +406,7 @@ class SSEMCPServerConfig(BaseMCPServerConfig):
 
         return SSETransport(
             url=str(self.url),
-            headers=self.headers,
+            headers=_expand_headers(self.headers),
             httpx_client_factory=make_mcp_httpx_client_factory(read_timeout=self.timeout),
         )
 
@@ -456,7 +476,7 @@ class StreamableHTTPMCPServerConfig(BaseMCPServerConfig):
 
         return StreamableHttpTransport(
             url=str(self.url),
-            headers=self.headers,
+            headers=_expand_headers(self.headers),
             httpx_client_factory=make_mcp_httpx_client_factory(read_timeout=self.timeout),
         )
 
