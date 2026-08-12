@@ -6,7 +6,15 @@ AgentPool is a unified agent orchestration framework for YAML-based configuratio
 
 ## Development Workflow
 
-All significant changes go through OpenSpec: `/opsx:explore` → `/opsx:propose` → `/opsx:apply` → `/opsx:archive`.
+Significant or structural changes go through OpenSpec: `/opsx:explore` → `/opsx:propose` → `/opsx:apply` → `/opsx:archive`.
+
+Simple, self-contained changes skip OpenSpec and go straight to implementation:
+
+- **Scope**: a single file or a small set of related files, one logical change
+- **No design decisions**: the approach is obvious from the request (bug fixes, small telemetry/logging adjustments, cosmetic refactors, docs/typo fixes)
+- **No cross-module blast radius**: doesn't add new capabilities, change the manifest/schema, or alter protocol behavior
+
+If the change would need a design discussion, affects how agents are configured, or spans multiple modules, use OpenSpec. When in doubt, OpenSpec is the safer default.
 
 - Location: `openspec/` (24 capability specs, 34 archived changes)
 - CLI: `openspec` v1.4+ — see `openspec/config.yaml`
@@ -139,7 +147,7 @@ Instrument critical-path code (RunLoop, Turn, delegation, protocol entry points)
 1. Your AI tool reads this file automatically — it is the collaboration rulebook.
 2. Humans should also read it (5 minutes).
 3. For deeper context on a subsystem, read the sub-AGENTS.md in that directory.
-4. Any significant change goes through OpenSpec: `/opsx:explore` → `/opsx:propose` → `/opsx:apply` → `/opsx:archive`.
+4. Significant or structural changes go through OpenSpec: `/opsx:explore` → `/opsx:propose` → `/opsx:apply` → `/opsx:archive`. Simple, self-contained changes (single-file fixes, small telemetry/logging tweaks, cosmetic refactors, docs updates) skip OpenSpec and go straight to implementation — see "Development Workflow" above.
 5. Unsure where documentation goes? Open an issue, don't create a new directory.
 
 ## Rules
