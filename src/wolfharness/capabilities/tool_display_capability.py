@@ -470,7 +470,12 @@ class ToolDisplayCapability(AbstractCapability[Any]):
         Returns:
             The tool execution result, unchanged.
         """
-        with logfire.span("capability.tool_display.wrap_tool_execute", tool_name=call.tool_name):
+        with logfire.span(
+            "capability.tool_display.wrap_tool_execute",
+            tool_name=call.tool_name,
+            tool_call_id=call.tool_call_id,
+            args=args,
+        ):
             original_name = self._get_original_name(call.tool_name)
             rich_target = self.emit_rich and original_name in self.emit_rich_for
 

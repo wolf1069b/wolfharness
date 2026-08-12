@@ -757,3 +757,49 @@ async def test_no_double_firing_when_old_agenthooks_active(
     assert isinstance(capability, ToolInterceptCapability)
     assert hasattr(capability, "before_tool_execute")
     assert hasattr(capability, "after_tool_execute")
+
+
+# ============================================================================
+# 5.14: wrap_tool_execute() records a logfire span carrying tool call args
+# ============================================================================
+
+
+@pytest.mark.anyio
+async def test_wrap_tool_execute_records_tool_call_span_with_args(
+    mock_hook_manager: MagicMock,
+) -> None:
+    """wrap_tool_execute() opens a logfire span carrying tool name, id, and args.
+
+    Regression test for missing tool-call arguments in observability data:
+    the span attributes must include ``tool_name``, ``tool_call_id`` and the
+    full ``args`` dict so logfire exports per-tool-call parameters.
+    """
+    import logfire
+
+    cap = make_capability(mock_hook_manager)
+    ctx = make_run_context()
+    call = make_tool_call("test_tool", args={"mode": "standard", "max_tokens": 42})
+    tool_def = make_tool_def("test_tool")
+    args: dict[str, Any] = {"mode": "standard", "max_tokens": 42}
+
+    async def success_handler(a: dict[str, Any]) -> Any:
+        return "ok"
+
+    expected_span: dict[str, Any] = {}
+
+    def fake_span(name: str, **attributes: Any) -> MagicMock:
+        expected_span["name"] = name
+        expected_span["attributes"] = attributes
+        return MagicMock()
+
+    with patch.object(logfire, "span", side_effect=fake_span):
+        result = await cap.wrap_tool_execute(
+            ctx, call=call, tool_def=tool_def, args=args, handler=success_handler
+        )
+
+    assert result == "ok"
+    assert expected_span["name"] == "tool.call"
+    attributes = expected_span["attributes"]
+    assert attributes["tool_name"] == "test_tool"
+    assert attributes["tool_call_id"] == call.tool_call_id
+    assert attributes["args"] == {"mode": "standard", "max_tokens": 42}
