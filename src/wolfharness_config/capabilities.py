@@ -127,6 +127,9 @@ class DCPCapabilityConfig(BaseModel):
     """Glob patterns matching tool names that should never be pruned."""
     protected_tools: set[str] = Field(default_factory=set)
     """Literal tool names that should never be pruned."""
+    auto_compact_on_critical: bool = Field(default=False)
+    """Whether to run the manifest ``compaction`` pipeline on the persistent
+    conversation when the watermark reaches CRITICAL (fires once per episode)."""
 
 
 class SkillActivationCapabilityConfig(BaseModel):
@@ -296,6 +299,17 @@ class VikingCapabilityConfig(BaseModel):
     """When True (default), profile injection runs only on the first turn
     of a session (message count <= 2). When False, injection runs on every
     before_model_request call where _profile_injected is False."""
+    index_enabled: bool = False
+    """Enable first-turn resource-namespace index injection. When True, the
+    capability lists live ``viking://resources/<namespace>`` namespaces on
+    the first turn and injects them as an <openviking-index> XML block."""
+    index_max_tokens: int = 1000
+    """Maximum token budget for the injected index block. Content exceeding
+    this budget is truncated with a [... truncated] indicator."""
+    index_limit: int = 20
+    """Maximum number of namespace names to include in the index block."""
+    index_uri: str | None = None
+    """Namespace URI to list. When None, resolves to ``viking://resources/``."""
 
 
 # ---------------------------------------------------------------------------

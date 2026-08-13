@@ -83,6 +83,10 @@ blockers, coordinating handoffs, notifying completion.
 - Messages are ephemeral — they arrive as notifications but are NOT persisted \
 in team state. If the information needs to be durable, write it to the \
 blackboard instead (or use `persist_to_blackboard` parameter).
+- Every message carries a `sent_at` timestamp. Treat status claims as an \
+observation made at that time, not as current truth. Before reassigning work, \
+shutting down a member, or taking another destructive coordination action, \
+re-read `task_list`/`team_status` and prefer the newer authoritative state.
 - Use `message_type` to categorize: "question", "escalation", "handoff", \
 "notification".
 """

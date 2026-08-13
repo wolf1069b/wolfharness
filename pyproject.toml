@@ -442,8 +442,7 @@ module = [
   "fastmcp.tools.tool",
   "apprise",
   "openviking_sdk",
-  "xeno_adp_agentic",
-  "xeno_adp_harness",
+  "xeno_adp_agentic.*",
 ]
 ignore_missing_imports = true
 

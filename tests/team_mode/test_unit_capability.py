@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -576,6 +577,11 @@ async def test_send_message_happy_path(tmp_path: Any) -> None:
 
     assert result.return_value == "Message sent to reviewer_agent"
     mock_pool.send_message.assert_awaited_once()
+    delivered = mock_pool.send_message.await_args.args[1]
+    assert re.search(
+        r'<team-message from="worker" type="private" sent_at="[^"]+Z">',
+        delivered,
+    )
 
 
 @pytest.mark.unit
@@ -1421,6 +1427,35 @@ async def test_team_create_success(tmp_path: Any) -> None:
 
 
 @pytest.mark.unit
+async def test_team_create_propagates_team_state_directory_to_members(tmp_path: Any) -> None:
+    """Spawned member sessions receive the directory containing their task board."""
+    config = _make_enabled_config(
+        member_eligible=["worker"],
+        base_dir=str(tmp_path),
+    )
+    mock_registry = MagicMock()
+    mock_registry.exists = MagicMock(return_value=True)
+    mock_pool = MagicMock()
+    mock_pool.send_message = AsyncMock(return_value="msg_id")
+    ctx = _make_run_context(
+        metadata=_make_lead_metadata(),
+        session_pool=mock_pool,
+        config=config,
+        base_dir=str(tmp_path),
+        agent_registry=mock_registry,
+    )
+    cap = TeamCommCapability(config, "coordinator", _make_lead_metadata())
+
+    await cap.team_create(
+        ctx,
+        "my_team",
+        [{"agent": "worker", "name": "extraction_1"}],
+    )
+
+    assert mock_pool.create_child_session.await_args.kwargs["team_base_dir"] == str(tmp_path)
+
+
+@pytest.mark.unit
 async def test_team_create_not_lead() -> None:
     """Given: non-lead agent (team_role='translator').
 
@@ -2257,6 +2292,27 @@ async def test_team_add_member_with_notify(tmp_path: Any) -> None:
     assert "sess_translator" in broadcast_targets  # existing member received
     assert "sess_reviewer" in broadcast_targets  # existing member received
     assert "child_session_new" not in broadcast_targets  # new member excluded
+
+
+@pytest.mark.unit
+async def test_team_add_member_prompt_preserves_member_identity_protocol(tmp_path: Any) -> None:
+    """A task prompt supplements, but never replaces, the member identity protocol."""
+    cap, ctx, mock_pool, _mock_delegation, _mock_registry = _make_add_member_setup(tmp_path)
+
+    await cap.team_add_member(
+        ctx,
+        "extraction_2",
+        "worker",
+        prompt="Process the next source-packet shard.",
+    )
+
+    initial_prompt = mock_pool.send_message.await_args_list[0].args[1]
+    assert "extraction_2" in initial_prompt
+    assert "alpha_team" in initial_prompt
+    assert "Process the next source-packet shard." in initial_prompt
+    assert initial_prompt.index("extraction_2") < initial_prompt.index(
+        "Process the next source-packet shard."
+    )
 
 
 @pytest.mark.unit
@@ -3278,6 +3334,33 @@ async def test_member_can_update_own_task(tmp_path: Any) -> None:
 
 
 @pytest.mark.unit
+async def test_member_cannot_start_second_task_before_completing_first(tmp_path: Any) -> None:
+    """A worker has one authoritative current task at a time."""
+    _init_team(str(tmp_path))
+    lead_ctx = _make_run_context(
+        metadata=_make_lead_metadata(),
+        base_dir=str(tmp_path),
+    )
+    config = _make_enabled_config(base_dir=str(tmp_path))
+    lead_cap = TeamCommCapability(config, "coordinator", _make_lead_metadata())
+    first = await lead_cap.task_create(lead_ctx, "First", owner="translator_agent")
+    second = await lead_cap.task_create(lead_ctx, "Second", owner="translator_agent")
+    first_id = first.return_value.replace("Task created: ", "")
+    second_id = second.return_value.replace("Task created: ", "")
+    member_ctx = _make_run_context(
+        metadata=_make_member_metadata(),
+        base_dir=str(tmp_path),
+    )
+    member_cap = TeamCommCapability(config, "worker", _make_member_metadata())
+
+    first_update = await member_cap.task_update(member_ctx, first_id, status="in_progress")
+    second_update = await member_cap.task_update(member_ctx, second_id, status="in_progress")
+
+    assert 'status="in_progress"' in first_update.return_value
+    assert "already has in_progress task" in second_update.return_value
+
+
+@pytest.mark.unit
 async def test_member_cannot_update_other_member_task(tmp_path: Any) -> None:
     """Given: task owned by another member.
 
@@ -3312,6 +3395,36 @@ async def test_member_cannot_update_other_member_task(tmp_path: Any) -> None:
 
 
 @pytest.mark.unit
+async def test_member_cannot_reassign_own_task_to_another_member(tmp_path: Any) -> None:
+    """Only the lead can transfer an already-owned task between members."""
+    _init_team(str(tmp_path))
+    lead_ctx = _make_run_context(
+        metadata=_make_lead_metadata(),
+        base_dir=str(tmp_path),
+    )
+    config = _make_enabled_config(base_dir=str(tmp_path))
+    lead_cap = TeamCommCapability(config, "coordinator", _make_lead_metadata())
+    create_result = await lead_cap.task_create(
+        lead_ctx,
+        "Owned task",
+        owner="translator_agent",
+    )
+    task_id = create_result.return_value.replace("Task created: ", "")
+    member_ctx = _make_run_context(
+        metadata=_make_member_metadata(),
+        base_dir=str(tmp_path),
+    )
+    member_cap = TeamCommCapability(config, "worker", _make_member_metadata())
+
+    result = await member_cap.task_update(member_ctx, task_id, owner="reviewer_agent")
+
+    assert "Only the team lead can reassign" in result.return_value
+    task_result = await lead_cap.task_get(lead_ctx, task_id)
+    assert 'owner="translator_agent"' in task_result.return_value
+    assert 'owner="reviewer_agent"' not in task_result.return_value
+
+
+@pytest.mark.unit
 async def test_member_can_claim_unclaimed_task(tmp_path: Any) -> None:
     """Given: task with no owner.
 
@@ -3335,9 +3448,9 @@ async def test_member_can_claim_unclaimed_task(tmp_path: Any) -> None:
     )
     member_cap = TeamCommCapability(config, "worker", _make_member_metadata())
 
-    result = await member_cap.task_update(member_ctx, task_id, owner="worker")
+    result = await member_cap.task_update(member_ctx, task_id, owner="translator_agent")
 
-    assert 'owner="worker"' in result.return_value
+    assert 'owner="translator_agent"' in result.return_value
 
 
 @pytest.mark.unit
@@ -3672,11 +3785,11 @@ async def test_after_run_no_reminder_when_no_unfinished_tasks(tmp_path: Any) -> 
 
 
 @pytest.mark.unit
-async def test_shutdown_request_warns_about_unfinished_tasks(tmp_path: Any) -> None:
-    """Given: lead shuts down a member who has an in_progress task.
+async def test_shutdown_request_rejects_member_with_in_progress_task(tmp_path: Any) -> None:
+    """Given: lead tries to shut down a member who has an in_progress task.
 
     When: shutdown_request is called.
-    Then: return value includes a warning about the unfinished task.
+    Then: shutdown is rejected until the lead explicitly resolves the active task.
     """
     from wolfharness.capabilities.file_team_state import FileTeamState
 
@@ -3704,12 +3817,51 @@ async def test_shutdown_request_warns_about_unfinished_tasks(tmp_path: Any) -> N
 
     result = await cap.shutdown_request(ctx, "translator_agent")
 
-    assert "Shutdown completed for translator_agent" in result.return_value
-    assert "Warning" in result.return_value
+    assert "Shutdown rejected for translator_agent" in result.return_value
     assert "Translate chapter 3" in result.return_value
-    assert "in_progress" not in result.return_value  # status word not in output
-    assert "unfinished" in result.return_value
-    mock_pool.close_session.assert_awaited_once_with("sess_translator")
+    assert "in_progress" in result.return_value
+    assert "reassign or cancel" in result.return_value
+    mock_pool.close_session.assert_not_awaited()
+
+
+@pytest.mark.unit
+async def test_shutdown_request_rejects_member_with_active_run_and_pending_tasks(
+    tmp_path: Any,
+) -> None:
+    """A busy member cannot be killed before its task heartbeat is persisted."""
+    from wolfharness.capabilities.file_team_state import FileTeamState
+
+    _init_team(str(tmp_path))
+    team_state = FileTeamState(str(tmp_path))
+    team_state.create_task(
+        "team_123",
+        {
+            "subject": "Decode and persist source packet",
+            "owner": "translator_agent",
+            "status": "pending",
+            "content": "",
+        },
+    )
+
+    member_session = MagicMock()
+    member_session.current_run_id = "run_active_123"
+    mock_pool = MagicMock()
+    mock_pool.close_session = AsyncMock()
+    ctx = _make_run_context(
+        metadata=_make_lead_metadata(),
+        session_pool=mock_pool,
+        base_dir=str(tmp_path),
+    )
+    mock_pool.sessions.get_session.return_value = member_session
+    config = _make_enabled_config(base_dir=str(tmp_path))
+    cap = TeamCommCapability(config, "coordinator", _make_lead_metadata())
+
+    result = await cap.shutdown_request(ctx, "translator_agent")
+
+    assert "Shutdown rejected for translator_agent" in result.return_value
+    assert "active run run_active_123" in result.return_value
+    assert "Wait for it to become idle" in result.return_value
+    mock_pool.close_session.assert_not_awaited()
 
 
 @pytest.mark.unit
@@ -3746,4 +3898,38 @@ async def test_shutdown_request_no_warning_when_tasks_completed(tmp_path: Any) -
     result = await cap.shutdown_request(ctx, "translator_agent")
 
     assert result.return_value == "Shutdown completed for translator_agent"
+    mock_pool.close_session.assert_awaited_once_with("sess_translator")
+
+
+@pytest.mark.unit
+async def test_shutdown_request_warns_and_closes_member_with_pending_task(tmp_path: Any) -> None:
+    """Pending work can be transferred safely after the member is closed."""
+    from wolfharness.capabilities.file_team_state import FileTeamState
+
+    _init_team(str(tmp_path))
+    team_state = FileTeamState(str(tmp_path))
+    team_state.create_task(
+        "team_123",
+        {
+            "subject": "Translate chapter 4",
+            "owner": "translator_agent",
+            "status": "pending",
+            "content": "",
+        },
+    )
+    mock_pool = MagicMock()
+    mock_pool.close_session = AsyncMock()
+    ctx = _make_run_context(
+        metadata=_make_lead_metadata(),
+        session_pool=mock_pool,
+        base_dir=str(tmp_path),
+    )
+    config = _make_enabled_config(base_dir=str(tmp_path))
+    cap = TeamCommCapability(config, "coordinator", _make_lead_metadata())
+
+    result = await cap.shutdown_request(ctx, "translator_agent")
+
+    assert "Shutdown completed for translator_agent" in result.return_value
+    assert "Warning" in result.return_value
+    assert "Translate chapter 4" in result.return_value
     mock_pool.close_session.assert_awaited_once_with("sess_translator")

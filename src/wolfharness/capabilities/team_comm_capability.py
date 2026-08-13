@@ -176,12 +176,25 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         team_id: str,
         member_name: str,
         msg_body: str,
+        *,
+        force_queue: bool = True,
     ) -> None:
         """Send a best-effort system notification to a team member.
 
         Used by task_create and task_update to push notifications when
         tasks are assigned or unblocked, so agents don't have to poll
         task_list to discover their work.
+
+        Task notifications default to QUEUE delivery so that, when the
+        member is busy, the message lands in ``prompt_queue`` and
+        ``_consume_run`` chains a follow-up turn after the current one
+        ends.  STEER (``self._notice_mode``) would inject into the active
+        turn and be consumed there without scheduling a follow-up —
+        leaving the member permanently idle at one turn.  When the member
+        is idle, QUEUE still starts a new run via ``_start_run_handle``
+        (idle sessions ignore priority), so no wakeup is lost.  Pass
+        ``force_queue=False`` only for genuinely in-band steerable
+        messages.
 
         Silently skips when the member has no session, when notifying
         self, or when session_pool is unavailable.
@@ -205,11 +218,16 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             f'<team-message from="system" type="task_notification">\n\n'
             f"{msg_body}\n\n</team-message>"
         )
+        # Task notifications must QUEUE so a busy member gets a follow-up
+        # turn; STEER would be swallowed by the active turn (see docstring).
+        from wolfharness.lifecycle.types import DeliveryMode
+
+        mode = DeliveryMode.QUEUE if force_queue else self._notice_mode
         try:
             await session_pool.send_message(
                 target_sid,
                 self._wrap_notice_content(wrapped),
-                mode=self._notice_mode,
+                mode=mode,
                 source="accepted",
                 meta={"from": "system", "team_id": team_id},
             )
@@ -341,17 +359,17 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         # Prefer base_dir from session metadata (set by team_create) so
         # that team_status and other tools always find the state even if
         # team_mode_config is None in the per-turn AgentContextDeps.
-        base_dir: str = agent_ctx.session.metadata.get(
-            "team_base_dir",
-            "",
-        )
-        if not base_dir:
-            base_dir = (
-                agent_ctx.team_mode_config.effective_base_dir
-                if agent_ctx.team_mode_config is not None
-                else tempfile.gettempdir()
-            )
-        return FileTeamState(base_dir)
+        return FileTeamState(self._get_team_base_dir(agent_ctx))
+
+    @staticmethod
+    def _get_team_base_dir(agent_ctx: AgentContextDeps) -> str:
+        """Resolve the shared directory containing a team's durable state."""
+        base_dir: str = agent_ctx.session.metadata.get("team_base_dir", "")
+        if base_dir:
+            return base_dir
+        if agent_ctx.team_mode_config is not None:
+            return agent_ctx.team_mode_config.effective_base_dir
+        return tempfile.gettempdir()
 
     async def _create_member_session(
         self,
@@ -595,8 +613,10 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             mode = self._notice_mode
             delivered = 0
             lead_sid = agent_ctx.session.session_id
+            sent_at = datetime.datetime.now(datetime.UTC).isoformat().replace("+00:00", "Z")
             msg_body = (
-                f'<team-message from="{self._agent_name}" type="broadcast">'
+                f'<team-message from="{self._agent_name}" type="broadcast" '
+                f'sent_at="{sent_at}">'
                 f"\n\n{body}\n\n</team-message>"
             )
             for member_name in members:
@@ -679,8 +699,10 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         from wolfharness.lifecycle.types import DeliveryMode
 
         mode = self._notice_mode
+        sent_at = datetime.datetime.now(datetime.UTC).isoformat().replace("+00:00", "Z")
         msg_body = (
-            f'<team-message from="{self._agent_name}" type="private">\n\n{body}\n\n</team-message>'
+            f'<team-message from="{self._agent_name}" type="private" '
+            f'sent_at="{sent_at}">\n\n{body}\n\n</team-message>'
         )
         result = await session_pool.send_message(
             target_sid,
@@ -1190,6 +1212,31 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                         f"coordinate, or ask the lead to reassign."
                     )
                 )
+            if owner and owner != current_owner and (current_owner or owner != current_member):
+                return ToolReturn(
+                    return_value=(
+                        f"Only the team lead can reassign task {task_id} "
+                        f"from '{current_owner or 'unclaimed'}' to '{owner}'. "
+                        "A member may only claim an unclaimed task for itself."
+                    )
+                )
+            if status == "in_progress" and existing_task.get("status") != "in_progress":
+                active_tasks = [
+                    task
+                    for task in team_state.list_tasks(team_id)
+                    if task.get("owner") == current_member
+                    and task.get("status") == "in_progress"
+                    and task.get("task_id") != task_id
+                ]
+                if active_tasks:
+                    active = active_tasks[0]
+                    return ToolReturn(
+                        return_value=(
+                            f"Team member '{current_member}' already has in_progress task "
+                            f"{active.get('task_id', '?')} ({active.get('subject', '?')}). "
+                            "Complete or fail that task before starting another."
+                        )
+                    )
 
         try:
             updated = team_state.update_task(
@@ -1843,11 +1890,7 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
 
         from wolfharness.capabilities.file_team_state import FileTeamState
 
-        base_dir = (
-            agent_ctx.team_mode_config.effective_base_dir
-            if agent_ctx.team_mode_config is not None
-            else tempfile.gettempdir()
-        )
+        base_dir = self._get_team_base_dir(agent_ctx)
         team_state = FileTeamState(base_dir)
         team_state.init(
             team_id,
@@ -1900,6 +1943,7 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                     tool_call_id=ctx.tool_call_id,
                     team_id=team_id,
                     team_name=name,
+                    team_base_dir=base_dir,
                     team_role="member",
                     team_member_name=member["name"],
                     team_member_instructions=member_instructions,
@@ -2318,6 +2362,7 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                 tool_call_id=ctx.tool_call_id,
                 team_id=team_id,
                 team_name=agent_ctx.session.metadata.get("team_name"),
+                team_base_dir=self._get_team_base_dir(agent_ctx),
                 team_role="member",
                 team_member_name=name,
                 team_member_instructions=member_instructions,
@@ -2343,7 +2388,7 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         from wolfharness.lifecycle.types import DeliveryMode
 
         team_name: str = state.get("team_name", "unknown")
-        base_prompt = prompt or self._config.protocol_template.format(
+        base_prompt = self._config.protocol_template.format(
             team_name=team_name,
             role="member",
             member_name=name,
@@ -2361,6 +2406,7 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             role_label = "lead" if m_name == lead_member_name else "member"
             work = work_summaries.get(m_name, "No active work")
             roster_lines.append(f"  - `{m_name}` (agent=`{m_agent}`, role=`{role_label}`) — {work}")
+        roster_lines.append(f"  - `{name}` (agent=`{agent}`, role=`member`) — No active work")
         roster = "\n".join(roster_lines)
         initial_prompt = f"{base_prompt}\n\n## Team Members\n{roster}"
         if prompt:
@@ -2497,10 +2543,39 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         if member_sid is None:
             return ToolReturn(return_value=f"Member '{member_name}' not found")
 
+        # The task heartbeat and artifact write are separate calls. A member
+        # can therefore be doing real work while all owned tasks still say
+        # ``pending``. Closing such a session cancels its in-flight write.
+        session_pool = agent_ctx.host.session_pool
+        member_session = (
+            session_pool.sessions.get_session(member_sid) if session_pool is not None else None
+        )
+        active_run_id = member_session.current_run_id if member_session is not None else None
+        if isinstance(active_run_id, str) and active_run_id:
+            return ToolReturn(
+                return_value=(
+                    f"Shutdown rejected for {member_name}: member has active run "
+                    f"{active_run_id}. Wait for it to become idle, then re-read "
+                    "task_list/team_status before retrying shutdown."
+                ),
+            )
+
         # Check for unfinished tasks before closing the session.
         unfinished = self._get_unfinished_tasks(team_state, team_id, member_name)
+        active = [task for task in unfinished if task.get("status") == "in_progress"]
+        if active:
+            active_tasks = ", ".join(
+                f"'{task.get('subject', '?')}' (id={task.get('task_id', '?')})"
+                for task in active
+            )
+            return ToolReturn(
+                return_value=(
+                    f"Shutdown rejected for {member_name}: member still has "
+                    f"{len(active)} in_progress task(s): {active_tasks}. "
+                    "The lead must reassign or cancel each active task before shutdown."
+                ),
+            )
 
-        session_pool = agent_ctx.host.session_pool
         if session_pool is not None:
             await session_pool.close_session(member_sid)
 
@@ -2710,11 +2785,11 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
     ) -> AgentRunResult[Any]:
         """Check for unfinished tasks after a member agent's run completes.
 
-        If this is a team member (not lead) with ``in_progress`` tasks,
-        routes a reminder message to the member's own session via the same
-        delivery mechanism as ``send_message``.  Skipped when the session
-        is being closed (shutdown path).  Limited to one reminder per
-        session to avoid infinite loops.
+        If this is a team member (not lead) with ``pending`` or
+        ``in_progress`` tasks, routes a reminder message to the member's
+        own session via the same delivery mechanism as ``send_message``.
+        Skipped when the session is being closed (shutdown path).
+        Limited to one reminder per session to avoid infinite loops.
         """
         try:
             agent_ctx = self._resolve_agent_context(ctx)
@@ -2755,12 +2830,13 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             f"  - '{t.get('subject', '?')}' (id={t.get('task_id', '?')})" for t in unfinished
         )
         reminder_body = (
-            f"You have {len(unfinished)} unfinished task(s) still "
-            f"in_progress:\n{task_lines}\n\n"
-            f"Please complete your work and update the task status using "
-            f"task_update(task_id=..., status='completed') or "
-            f"task_update(task_id=..., status='failed') if you encountered "
-            f"issues."
+            f"You have {len(unfinished)} unfinished task(s) (pending or "
+            f"in_progress):\n{task_lines}\n\n"
+            f"Please start or complete your work and update the task "
+            f"status using task_update(task_id=..., status='in_progress') "
+            f"to begin, then task_update(task_id=..., status='completed') "
+            f"or task_update(task_id=..., status='failed') if you "
+            f"encountered issues."
         )
         msg_body = (
             f'<team-message from="system" type="task_reminder">\n\n'
@@ -2789,12 +2865,20 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         team_id: str,
         member_name: str,
     ) -> list[dict[str, Any]]:
-        """Return tasks owned by *member_name* that are still in_progress."""
+        """Return tasks owned by *member_name* that are not yet completed.
+
+        Includes both ``pending`` (assigned but not started) and
+        ``in_progress`` tasks.  Pending tasks are included so that
+        ``after_run`` can remind an idle worker whose task notification
+        was consumed by a prior turn without triggering a follow-up
+        turn — see ``_notify_member`` for the QUEUE delivery fix.
+        """
         all_tasks = team_state.list_tasks(team_id)
         return [
             t
             for t in all_tasks
-            if t.get("owner") == member_name and t.get("status") == "in_progress"
+            if t.get("owner") == member_name
+            and t.get("status") in ("pending", "in_progress")
         ]
 
     @staticmethod

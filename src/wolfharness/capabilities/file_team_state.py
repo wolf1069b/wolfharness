@@ -294,6 +294,16 @@ class FileTeamState:
         sid: str = member.get("session_id", "")
         return sid if sid else None
 
+    def get_member_agent(self, team_id: str, member_name: str) -> str | None:
+        """Return the registered agent role behind one team member name."""
+        state = self._read_json(self._state_path(team_id))
+        members: dict[str, dict[str, str]] = state["members"]
+        member = members.get(member_name)
+        if member is None:
+            return None
+        agent = member.get("agent", "")
+        return agent if agent else None
+
     # ------------------------------------------------------------------
     # Messaging
     # ------------------------------------------------------------------

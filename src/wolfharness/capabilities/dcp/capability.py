@@ -99,6 +99,8 @@ if TYPE_CHECKING:
     from pydantic_ai.models import ModelRequestContext
     from pydantic_ai.tools import ToolDefinition
 
+    from wolfharness.messaging.message_history import MessageHistory
+
 _DCP_METADATA_KEY = "dcp"
 
 logger = logging.getLogger(__name__)
@@ -185,6 +187,7 @@ class DynamicContextPruningCapability(AbstractCapability[Any]):
         protected_tools: set[str] | None = None,
         meta_tool_retention: int = 1,
         clear_thinking_enabled: bool = False,
+        auto_compact_on_critical: bool = False,
     ) -> None:
         """Initialize the dynamic context pruning capability.
 
@@ -217,6 +220,9 @@ class DynamicContextPruningCapability(AbstractCapability[Any]):
                 on the prune tool is active.  When ``True``, the model can
                 toggle persistent stripping of ``ThinkingPart`` content from
                 assistant messages before the last user message.
+            auto_compact_on_critical: When ``True`` and the watermark reaches
+                CRITICAL, run the manifest ``compaction`` pipeline on the
+                persistent conversation once per episode.
         """
         self._config: DCPConfig = DCPConfig(
             enabled=enabled,
@@ -238,6 +244,7 @@ class DynamicContextPruningCapability(AbstractCapability[Any]):
             protected_tools=protected_tools if protected_tools is not None else set(),
             meta_tool_retention=meta_tool_retention,
             clear_thinking_enabled=clear_thinking_enabled,
+            auto_compact_on_critical=auto_compact_on_critical,
         )
         self._watermark: WatermarkStateMachine = WatermarkStateMachine(
             info_threshold=self._config.info_threshold,
@@ -289,6 +296,7 @@ class DynamicContextPruningCapability(AbstractCapability[Any]):
             protected_tools=config.protected_tools,
             meta_tool_retention=config.meta_tool_retention,
             clear_thinking_enabled=config.clear_thinking_enabled,
+            auto_compact_on_critical=config.auto_compact_on_critical,
         )
 
     # ---- DCPState access ----
@@ -585,6 +593,23 @@ class DynamicContextPruningCapability(AbstractCapability[Any]):
         state.watermark_level = level
         state.current_tokens = total_tokens
 
+        # Re-arm the CRITICAL compactor once pressure drops below CRITICAL.
+        # ``_compact_on_critical`` sets ``critical_compacted`` permanently at
+        # first CRITICAL, so without this reset it would only ever compact
+        # ONCE per session — leaving every subsequent context overflow
+        # unhandled.  A sawtooth (rise -> compact -> fall -> rise) must
+        # trigger a fresh compaction each cycle.
+        if level < WatermarkLevel.CRITICAL and state.critical_compacted:
+            state.critical_compacted = False
+            logger.info(
+                "DynamicContextPruning Phase 0: re-armed CRITICAL compactor "
+                "(turn=%d watermark=%s tokens=%d/%d)",
+                state.current_turn,
+                level.name,
+                total_tokens,
+                self._config.max_context_tokens,
+            )
+
         logger.info(
             "DynamicContextPruning Phase 0: turn=%d msgs=%d tokens=%d/%d (%.1f%%) "
             "watermark=%s (estimated=%d last_real=%d new_msgs=%d delta=%d)",
@@ -803,6 +828,16 @@ class DynamicContextPruningCapability(AbstractCapability[Any]):
                 self._config.nudge_step_frequency,
             )
 
+        # --- Phase 5: Auto-compact on CRITICAL watermark ---
+        # Opt-in (auto_compact_on_critical). Runs the manifest ``compaction``
+        # pipeline on the persistent conversation so the next turn seeds from
+        # compacted history — DCP's own request-context edits are ephemeral.
+        if (
+            self._config.auto_compact_on_critical
+            and state.watermark_level >= WatermarkLevel.CRITICAL
+        ):
+            await self._compact_on_critical(ctx, messages)
+
         # --- Pipeline summary ---
         # Store cumulative for next iteration's delta calculation.
         state.last_cumulative_input_tokens = current_cumulative
@@ -833,6 +868,60 @@ class DynamicContextPruningCapability(AbstractCapability[Any]):
         )
 
         return dataclasses.replace(request_context, messages=messages)
+
+    async def _compact_on_critical(
+        self,
+        ctx: RunContext[AgentContext],
+        request_messages: list[ModelMessage],
+    ) -> None:
+        """Run the manifest compaction pipeline on the persistent conversation.
+
+        Priorities: (1) the agent's persistent ``conversation`` when the node
+        is a native agent, (2) otherwise the request snapshot. Fires at most
+        once per CRITICAL episode to avoid repeated summarization every turn.
+
+        Args:
+            ctx: The pydantic-ai run context carrying the agent/state.
+            request_messages: The current request message snapshot (fallback).
+        """
+        host_ctx = ctx.deps.node.host_context
+        pipeline = host_ctx.manifest.get_compaction_pipeline() if host_ctx is not None else None
+        if pipeline is None:
+            logger.debug("DynamicContextPruning Phase 5: no manifest compaction pipeline, skip")
+            return
+
+        state = self._get_dcp_state(ctx)
+        if state.critical_compacted:
+            return
+
+        conversation: MessageHistory | None = None
+        try:
+            conversation = ctx.deps.native_agent.conversation
+        except AssertionError:
+            conversation = None
+
+        if conversation is not None:
+            from wolfharness.messaging.compaction import compact_conversation
+
+            _, compacted_count = await compact_conversation(pipeline, conversation)
+            logger.info(
+                "DynamicContextPruning Phase 5: compacted persistent conversation "
+                "(turn=%d msgs=%d watermark=%s)",
+                state.current_turn,
+                compacted_count,
+                state.watermark_level.name,
+            )
+        else:
+            compacted_messages = await pipeline.apply(request_messages)
+            logger.info(
+                "DynamicContextPruning Phase 5: compacted request snapshot "
+                "(turn=%d msgs=%d→%d watermark=%s)",
+                state.current_turn,
+                len(request_messages),
+                len(compacted_messages),
+                state.watermark_level.name,
+            )
+        state.critical_compacted = True
 
     # ---- Post-tool hook ----
 

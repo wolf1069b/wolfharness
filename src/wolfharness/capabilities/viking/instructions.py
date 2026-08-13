@@ -187,4 +187,6 @@ permanently removes documents from the Viking knowledge graph. It is
   (`viking_remember`, `viking_recall`) does not enable `viking_forget`.
 - Even when enabled, always confirm with the user before deleting
   content. Deletion is irreversible.
+
+An `<openviking-index>` block may be present in the first turn, listing live resource namespaces under `viking://resources/` for direct exploration via `viking_ls`.
 """
