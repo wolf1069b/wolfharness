@@ -171,6 +171,7 @@ ALL_WIKI_TOOLS: frozenset[str] = frozenset(
         # In-process navigation/snapshot helpers exposed by the host tools
         # (read-only; safe for every role).
         "browse_chapters",
+        "browse",
         "library_doc_ids",
         "read_chapter_map",
         "read_raw_resource",
@@ -182,6 +183,7 @@ ALL_WIKI_TOOLS: frozenset[str] = frozenset(
 _HELPER_TOOL_NAMES: frozenset[str] = frozenset(
     {
         "browse_chapters",
+        "browse",
         "library_doc_ids",
         "read_chapter_map",
         "read_raw_resource",
@@ -193,6 +195,8 @@ _HELPER_TOOL_NAMES: frozenset[str] = frozenset(
 _READ_TOOLS: frozenset[str] = frozenset(
     {
         "list_chapters",
+        "browse_chapters",
+        "browse",
         "read_chapter",
         "read_chapters_batch",
         "read_resource",
