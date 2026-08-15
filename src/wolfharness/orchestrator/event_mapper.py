@@ -569,19 +569,21 @@ def _extract_first_json_object(s: str) -> str | None:
 def sanitize_tool_call_args_in_messages(
     messages: list[Any],
 ) -> None:
-    """Repair duplicated tool call arguments in message history in-place.
+    """Repair corrupted tool call arguments in message history in-place.
 
-    Some inference backends (vLLM with the ``glm47`` parser, SGLang with GLM
-    detectors) have a known streaming bug where tool call arguments are emitted
-    twice, producing concatenated JSON like::
+    Two distinct corruption modes are handled::
 
-        {"path": "/foo"}{"path": "/foo"}
+        {"path": "/foo"}{"path": "/foo"}   # duplicated (vLLM glm47 parser)
+        {"path": "abc"def}                  # invalid JSON (truncated/unescaped)
 
-    This corrupts downstream model requests (HTTP 400 "Extra data") and tool
-    execution.  This function walks every ``ModelResponse`` in the list, checks
-    each ``BaseToolCallPart`` whose ``args`` is a ``str``, and — when the string
-    contains concatenated JSON objects — replaces it with just the first valid
-    object.
+    * Duplicated concatenated JSON objects (vLLM ``glm47`` parser, SGLang GLM
+      detectors) are replaced with just the first valid object.
+    * String args that fail ``json.loads`` entirely are replaced with ``{}``
+      so the raw garbage never reaches ``function.arguments`` on the next
+      model request (vLLM rejects it with HTTP 400 "must be valid JSON") and
+      never reaches tool execution.  The tool then fails argument validation,
+      pydantic-ai injects a ``ModelRetry``, and the model regenerates a valid
+      call — a recoverable detour instead of a hard request failure.
 
     This is idempotent: parts with valid JSON args, ``dict`` args, or ``None``
     args are left unchanged.
@@ -607,18 +609,37 @@ def sanitize_tool_call_args_in_messages(
                 continue
             if not isinstance(part.args, str):
                 continue
+            try:
+                json.loads(part.args)
+            except json.JSONDecodeError:
+                pass
+            else:
+                # Already valid JSON — leave untouched.
+                continue
+            # Try extracting the first complete JSON object (duplicated-args
+            # bug); fall back to an empty object for irreparable args.
             repaired = _extract_first_json_object(part.args)
             if repaired is None:
-                continue
-            _logger.warning(
-                "Repaired duplicated tool call arguments",
-                extra={
-                    "tool_name": part.tool_name,
-                    "tool_call_id": part.tool_call_id,
-                    "original_len": len(part.args),
-                    "repaired_len": len(repaired),
-                },
-            )
+                repaired = "{}"
+                _logger.warning(
+                    "Replaced invalid tool call arguments with empty object",
+                    extra={
+                        "tool_name": part.tool_name,
+                        "tool_call_id": part.tool_call_id,
+                        "original_len": len(part.args),
+                        "original_preview": part.args[:200],
+                    },
+                )
+            else:
+                _logger.warning(
+                    "Repaired duplicated tool call arguments",
+                    extra={
+                        "tool_name": part.tool_name,
+                        "tool_call_id": part.tool_call_id,
+                        "original_len": len(part.args),
+                        "repaired_len": len(repaired),
+                    },
+                )
             needs_repair = True
             new_parts[i] = dataclasses.replace(part, args=repaired)
         if needs_repair:

@@ -143,6 +143,7 @@ ALL_WIKI_TOOLS: frozenset[str] = frozenset(
         "audit_wiki",
         "prune_stale_index_entries",
         "rebuild_backlinks",
+        "rebuild_all_backlinks",
         "finalize_wiki",
         "inspect_wiki_state",
         "inspect_build_checkpoint",
@@ -244,6 +245,7 @@ _FILE_OP_TOOLS: frozenset[str] = frozenset(
 _FINALIZE_TOOLS: frozenset[str] = frozenset(
     {
         "rebuild_backlinks",
+        "rebuild_all_backlinks",
         "finalize_wiki",
     },
 )
