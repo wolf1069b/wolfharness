@@ -125,6 +125,7 @@ def convert_acp_mcp_server_to_config(acp_server: McpServer) -> MCPServerConfig:
 def from_acp_content(  # noqa: PLR0911
     block: ContentBlock,
     fs: AsyncFileSystem | None = None,
+    normalizer: Any | None = None,
 ) -> UserContent | PathReference:
     """Convert ACP content blocks to UserContent or PathReference objects.
 
@@ -134,6 +135,8 @@ def from_acp_content(  # noqa: PLR0911
     Args:
         block: ACP ContentBlock
         fs: Optional filesystem for file references
+        normalizer: Optional ``ImageNormalizer`` for normalizing oversized
+            image attachments (RFC-0059). Applied to ``ImageContentBlock``.
 
     Returns:
         UserContent or PathReference objects
@@ -145,6 +148,11 @@ def from_acp_content(  # noqa: PLR0911
 
         case ImageContentBlock(data=data, mime_type=mime_type):
             binary_data = base64.b64decode(data)
+            if normalizer is not None:
+                normalized, new_mime = normalizer.normalize_bytes(binary_data, mime_type)
+                if normalized is not binary_data:
+                    binary_data = normalized
+                    mime_type = new_mime
             return BinaryImage(data=binary_data, media_type=mime_type)
 
         case AudioContentBlock(data=data, mime_type=mime_type):

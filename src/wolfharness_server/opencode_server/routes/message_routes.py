@@ -55,6 +55,7 @@ if TYPE_CHECKING:
     from pydantic_ai import UserContent
 
     from wolfharness.common_types import PathReference
+    from wolfharness.images.normalizer import ImageNormalizer
     from wolfharness.messaging import ChatMessage
     from wolfharness.orchestrator.session_pool import SessionPool
     from wolfharness_server.opencode_server.session_pool_integration import (
@@ -64,6 +65,20 @@ if TYPE_CHECKING:
 
 
 logger = get_logger(__name__)
+
+
+def _make_image_normalizer(state: ServerState) -> ImageNormalizer | None:
+    """Build an ``ImageNormalizer`` from the pool manifest (RFC-0059).
+
+    Returns ``None`` when the pool manifest is unavailable, in which case
+    no normalization is applied.
+    """
+    from wolfharness.images.normalizer import ImageNormalizer
+
+    manifest = state.pool.manifest if state.pool is not None else None
+    if manifest is None:
+        return None
+    return ImageNormalizer(manifest.attachment)
 
 
 @dataclass
@@ -494,6 +509,7 @@ async def _route_message_locked(  # noqa: PLR0915
         session_id,
         fs=state.fs,
         agent=state.agent,
+        normalizer=_make_image_normalizer(state),
     )
 
     # --- Trigger title generation on first message (fire-and-forget) ---
@@ -1042,6 +1058,7 @@ async def send_message_async(session_id: str, request: MessageRequest, state: St
                 session_id,
                 fs=state.fs,
                 agent=state.agent,
+                normalizer=_make_image_normalizer(state),
             )
 
             # D13: Map delivery mode from request to priority.

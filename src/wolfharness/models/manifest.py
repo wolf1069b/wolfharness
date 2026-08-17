@@ -17,6 +17,7 @@ from wolfharness.models.acp_agents import ACPAgentConfigTypes
 from wolfharness.models.agents import NativeAgentConfig
 from wolfharness.models.file_agents import FileAgentConfig
 from wolfharness.models.model_configs import AnyModelConfig, StringModelConfig
+from wolfharness_config.attachment import AttachmentImageConfig
 from wolfharness_config.commands import CommandConfig, StaticCommandConfig
 from wolfharness_config.compaction import CompactionConfig
 from wolfharness_config.context import ConfigContextManager
@@ -369,6 +370,23 @@ class AgentsManifest(Schema):
             - ./my-skills
             - s3://bucket/skills
           include_default: true
+        ```
+    """
+
+    attachment: AttachmentImageConfig = Field(default_factory=AttachmentImageConfig)
+    """Image attachment normalization configuration (RFC-0059).
+
+    Controls automatic resizing/re-encoding of oversized image attachments
+    on the protocol user-upload path. Defaults mirror opencode's limits.
+
+    Example:
+        ```yaml
+        attachment:
+          image:
+            auto_resize: true
+            max_width: 2000
+            max_height: 2000
+            max_base64_bytes: 5242880
         ```
     """
 

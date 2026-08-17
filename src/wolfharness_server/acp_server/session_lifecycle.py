@@ -30,6 +30,17 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+def _make_image_normalizer(agent: Any) -> Any | None:
+    """Build an ``ImageNormalizer`` from the agent's host context (RFC-0059)."""
+    from wolfharness.images.normalizer import ImageNormalizer
+
+    host_context = getattr(agent, "host_context", None)
+    manifest = getattr(host_context, "manifest", None)
+    if manifest is None:
+        return None
+    return ImageNormalizer(manifest.attachment)
+
+
 class ACPSessionLifecycleMixin:
     """Mixin providing session lifecycle methods for ACPSession.
 
@@ -260,7 +271,8 @@ class ACPSessionLifecycleMixin:
 
         self._cancelled = False
         fs = self.agent.env.get_fs()
-        contents = [from_acp_content(i, fs=fs) for i in content_blocks]
+        normalizer = _make_image_normalizer(self.agent)
+        contents = [from_acp_content(i, fs=fs, normalizer=normalizer) for i in content_blocks]
         self.log.debug("Converted content", content=contents)
         if not contents:
             self.log.warning("Empty prompt received")

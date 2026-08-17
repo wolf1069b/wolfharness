@@ -134,11 +134,11 @@ Images travel as base64 data URIs into `BinaryContent`/`ImageUrl` and are sent t
 
 ### Success Criteria
 
-- [ ] Oversized images are resized/re-encoded within configured limits before reaching the model.
-- [ ] `attachment.image` config independently overrides defaults.
-- [ ] Over-limit user attachment (with `auto_resize: false`) yields a clear user-visible error.
+- [x] Oversized images are resized/re-encoded within configured limits before reaching the model.
+- [x] `attachment.image` config independently overrides defaults.
+- [x] Over-limit user attachment (with `auto_resize: false`) yields a clear user-visible error.
 - [ ] Over-limit tool-result attachment is omitted and annotated.
-- [ ] Resizer unavailable → original image passed through; session not interrupted.
+- [x] Resizer unavailable → original image passed through; session not interrupted.
 - [ ] p99 added latency for normalization of a typical-size image < 500 ms.
 
 ---
@@ -398,9 +398,9 @@ No regulatory requirements identified.
 
 | Milestone | Description | Target | Status |
 |-----------|-------------|--------|--------|
-| M1 | ImageNormalizer + config schema | TBD | Not Started |
-| M2 | Entry-point wiring + unit tests | TBD | Not Started |
-| M3 | End-to-end validation + docs | TBD | Not Started |
+| M1 | ImageNormalizer + config schema | TBD | Implemented |
+| M2 | Entry-point wiring + unit tests | TBD | Implemented |
+| M3 | End-to-end validation + docs | TBD | In Progress |
 
 ### Rollback Strategy
 
