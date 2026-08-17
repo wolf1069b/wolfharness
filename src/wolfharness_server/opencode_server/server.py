@@ -56,6 +56,42 @@ def filter_headers(headers: Headers) -> dict[str, str]:
     return {k: v for k, v in headers.items() if k.lower() not in excluded_headers}
 
 
+PROXY_BLOCKED_PREFIXES = (
+    "api/",
+    "session/",
+    "config/",
+    "agent/",
+    "model/",
+    "provider/",
+    "command/",
+    "skill/",
+    "location/",
+    "integration/",
+    "file/",
+    "todo/",
+    "diff/",
+    "snapshot/",
+    "v1/",
+    "experimental/",
+)
+"""Unmatched API path prefixes that must NOT be forwarded to the hosted Web UI.
+
+Requests falling under these prefixes return 404 so the OpenCode SDK/TUI learns
+the endpoint doesn't exist instead of receiving a `text/html` SPA page, which
+the client would mis-parse and crash on (see `fs.find`).
+"""
+
+
+def is_proxy_path_blocked(path: str) -> bool:
+    """Return whether an unmatched path should 404 instead of proxying.
+
+    Any route under ``api/`` (or a known API prefix) is treated as a missing
+    endpoint so the OpenCode client gets a structured error rather than the
+    hosted Web UI's ``index.html`` being forwarded back and crashing the TUI.
+    """
+    return any(path.startswith(prefix) for prefix in PROXY_BLOCKED_PREFIXES)
+
+
 class OpenCodeJSONResponse(JSONResponse):
     """Custom JSON response that excludes None values (like OpenCode does)."""
 
@@ -527,24 +563,7 @@ def create_app(*, agent: BaseAgent[Any, Any], working_dir: str | None = None) ->
         """
         # Don't proxy API paths — return 404 so the TUI knows the endpoint
         # doesn't exist rather than receiving cloud data for local sessions.
-        _api_prefixes = (
-            "session/",
-            "config/",
-            "agent/",
-            "model/",
-            "provider/",
-            "command/",
-            "skill/",
-            "location/",
-            "integration/",
-            "file/",
-            "todo/",
-            "diff/",
-            "snapshot/",
-            "v1/",
-            "experimental/",
-        )
-        if any(path.startswith(prefix) for prefix in _api_prefixes):
+        if is_proxy_path_blocked(path):
             raise HTTPException(status_code=404, detail=f"Endpoint not found: /{path}")
 
         import httpx
