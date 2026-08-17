@@ -108,6 +108,8 @@ ALL_WIKI_TOOLS: frozenset[str] = frozenset(
         "get_opas",
         "resolve_opa",
         "apply_opa",
+        "refine_opa_reason_code",
+        "ops_dispatch_plan",
         "browse_chapters",
         "browse",
         "next_chapter_window",
@@ -219,7 +221,11 @@ _OPL_WRITE_TOOLS: frozenset[str] = frozenset({"create_opl"})
 _OP_FLOW_READ_TOOLS: frozenset[str] = frozenset({"op_flow_status", "op_flow_report"})
 _OPA_DISCOVERY_TOOLS: frozenset[str] = frozenset({"discover_opa"})
 _OPA_RESOLVE_TOOLS: frozenset[str] = frozenset({"resolve_opa"})
+_OPA_REFINE_TOOLS: frozenset[str] = frozenset({"refine_opa_reason_code"})
 _OPA_APPLY_TOOLS: frozenset[str] = frozenset({"apply_opa"})
+_OPS_DISPATCH_TOOLS: frozenset[str] = frozenset({"ops_dispatch_plan"})
+# OPS resolver closes relation_missed gaps only; materialization stays with file_operator.
+_OPS_RESOLVE_WRITE_TOOLS: frozenset[str] = frozenset({"patch_entity", "rebuild_backlinks"})
 
 ROLE_TOOLS: dict[str, frozenset[str]] = {
     "wiki_conductor": (
@@ -231,6 +237,7 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
         | _OPS_READ_TOOLS
         | _OPL_READ_TOOLS
         | _OP_FLOW_READ_TOOLS
+        | _OPS_DISPATCH_TOOLS
         | frozenset(
             {
                 "get_bom_taxonomy",
@@ -281,7 +288,14 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
         _READ_TOOLS | _OPA_WRITE_TOOLS | _OPA_READ_TOOLS | _OPS_READ_TOOLS | _OPL_READ_TOOLS
     ),
     "wiki_ops_worker": (
-        _READ_TOOLS | _OPA_READ_TOOLS | _OPS_READ_TOOLS | _OPS_WRITE_TOOLS | _OPL_READ_TOOLS
+        _READ_TOOLS
+        | _OPA_READ_TOOLS
+        | _OPS_READ_TOOLS
+        | _OPS_WRITE_TOOLS
+        | _OPL_READ_TOOLS
+        | _OPA_REFINE_TOOLS
+        | _OPA_RESOLVE_TOOLS
+        | _OPS_RESOLVE_WRITE_TOOLS
     ),
     "wiki_opl_worker": (
         _READ_TOOLS | _OPA_READ_TOOLS | _OPS_READ_TOOLS | _OPL_READ_TOOLS | _OPL_WRITE_TOOLS
