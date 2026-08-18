@@ -23,17 +23,17 @@ from pydantic import BaseModel
 from pydantic_ai.capabilities import AbstractCapability
 from pydantic_ai.toolsets import AgentToolset, FunctionToolset
 
-from wolfharness.log import get_logger
-
 # Re-export tool inventory and role types from wiki_build_tools so existing
 # imports from ``wiki_build`` keep working.
 from wolfharness.capabilities.viking.wiki_build_tools import (  # noqa: F401
     ALL_WIKI_TOOLS,
     ROLE_TOOLS,
-    RoleFilter,
     WIKI_AGENT_ROLES,
+    RoleFilter,
     _build_method_wrappers as _build_tool_fns,
 )
+from wolfharness.log import get_logger
+
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -73,11 +73,9 @@ class WikiBuildConfig(BaseModel):
     build_log_dir: str | None = None
     sync_after_apply: bool = False
     """When True, push patched wiki page to remote Viking after
-    ``apply_external_opl``. Intended for ``local_viking`` storage mode."""
-    include_external_ops: bool = False
-    """When True, supplement the role's method-wrapper tools with the
-    three external OP closures. Automatically True for
-    ``wiki_external_expert`` role."""
+    applying a knowledge proposal (OPL).  Honoured by the ticket
+    ``apply_opl_ticket`` tool; intended for ``local_viking`` storage
+    mode."""
 
 
 class WikiBuildCapability(AbstractCapability[Any]):
@@ -106,7 +104,6 @@ class WikiBuildCapability(AbstractCapability[Any]):
         index_limit: int = 20,
         build_log_dir: str | None = None,
         sync_after_apply: bool = False,
-        include_external_ops: bool = False,
     ) -> None:
         self._config = config or WikiBuildConfig(
             wiki_root=wiki_root,
@@ -121,7 +118,6 @@ class WikiBuildCapability(AbstractCapability[Any]):
             index_limit=index_limit,
             build_log_dir=build_log_dir,
             sync_after_apply=sync_after_apply,
-            include_external_ops=include_external_ops,
         )
         self._tools: Any | None = None
         self._build_logger: Any | None = None
@@ -169,7 +165,6 @@ class WikiBuildCapability(AbstractCapability[Any]):
 
     def get_toolset(self) -> AgentToolset[Any] | None:
         from wolfharness.capabilities.viking.wiki_build_tools import (
-            RoleFilter,
             build_tools,
         )
 
