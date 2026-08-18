@@ -209,6 +209,30 @@ def test_batch_with_progress_total(initialized_team: FileTeamState) -> None:
     assert task["progress_total"] == 50
 
 
+def test_batch_persists_write_scope_and_write_set(initialized_team: FileTeamState) -> None:
+    """Given: a formal-write task with an explicit isolation contract.
+
+    When: the task is created through the batch API.
+    Then: both fields survive persistence for retries and conflict checks.
+    """
+    write_set = ["viking://resources/816/Component/engine"]
+    task_ids = initialized_team.create_tasks_batch(
+        "team-1",
+        [
+            {
+                "subject": "Write engine",
+                "write_scope": "component_write",
+                "write_set": write_set,
+            }
+        ],
+    )
+
+    task = initialized_team.get_task("team-1", task_ids[0])
+    assert task is not None
+    assert task["write_scope"] == "component_write"
+    assert task["write_set"] == write_set
+
+
 def test_batch_empty_list_returns_empty(initialized_team: FileTeamState) -> None:
     """Given: initialized team.
 

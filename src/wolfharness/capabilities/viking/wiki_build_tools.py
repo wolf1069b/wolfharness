@@ -157,6 +157,12 @@ _READ_TOOLS: frozenset[str] = frozenset(
     },
 )
 
+# Extraction is deliberately chapter-granular.  ``read_chapters_batch`` is
+# retained in the general read set for conductor/backward-compatible callers,
+# but exposing it to an extraction worker lets a small task expand into an
+# unbounded model context before the worker can persist a packet.
+_EXTRACTION_READ_TOOLS: frozenset[str] = _READ_TOOLS - frozenset({"read_chapters_batch"})
+
 _WRITE_TOOLS: frozenset[str] = frozenset(
     {
         "write_entity",
@@ -247,7 +253,7 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
         )
     ),
     "wiki_extraction_worker": (
-        _READ_TOOLS
+        _EXTRACTION_READ_TOOLS
         | _WRITE_TOOLS
         | _DIFF_TOOLS
         | _OPA_WRITE_TOOLS

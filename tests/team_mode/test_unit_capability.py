@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 from pydantic_ai.tools import ToolDefinition
 import pytest
 
+from wolfharness.capabilities.file_team_state import FileTeamState
 from wolfharness.capabilities.team_comm_capability import TeamCommCapability
 from wolfharness_config.team_mode import TeamBounds, TeamModeConfig
 
@@ -25,6 +26,7 @@ def _make_enabled_config(
     base_dir: str | None = None,
     notice_delivery_mode: str = "steer",
     max_watch_timeout: int = 120,
+    member_can_create_subtasks: bool = True,
 ) -> TeamModeConfig:
     """Create an enabled TeamModeConfig for testing.
 
@@ -35,6 +37,7 @@ def _make_enabled_config(
         base_dir: Base directory for team state files.
         notice_delivery_mode: Delivery mode for notifications.
         max_watch_timeout: Max watch timeout in seconds.
+        member_can_create_subtasks: Whether members may create child tasks.
 
     Returns:
         A frozen TeamModeConfig with enabled=True.
@@ -48,6 +51,7 @@ def _make_enabled_config(
         base_dir=base_dir,
         notice_delivery_mode=notice_delivery_mode,
         max_watch_timeout=max_watch_timeout,
+        member_can_create_subtasks=member_can_create_subtasks,
     )
 
 
@@ -3151,6 +3155,41 @@ async def test_member_can_create_subtask(tmp_path: Any) -> None:
 
 
 @pytest.mark.unit
+async def test_member_subtask_creation_can_be_disabled_per_workflow(tmp_path: Any) -> None:
+    """A workflow may require the lead to own all task decomposition."""
+    _init_team(str(tmp_path))
+    lead_ctx = _make_run_context(
+        metadata=_make_lead_metadata(),
+        base_dir=str(tmp_path),
+    )
+    config = _make_enabled_config(
+        base_dir=str(tmp_path),
+        member_can_create_subtasks=False,
+    )
+    lead_cap = TeamCommCapability(config, "coordinator", _make_lead_metadata())
+    parent_result = await lead_cap.task_create(lead_ctx, "Parent task", owner="translator_agent")
+    parent_id = parent_result.return_value.replace("Task created: ", "")
+
+    member_ctx = _make_run_context(
+        metadata=_make_member_metadata(),
+        base_dir=str(tmp_path),
+    )
+    member_cap = TeamCommCapability(config, "worker", _make_member_metadata())
+
+    result = await member_cap.task_create(
+        member_ctx,
+        "Subtask",
+        parent_id=parent_id,
+        owner="translator_agent",
+    )
+
+    assert result.return_value == (
+        "Member subtask creation is disabled for this workflow; "
+        "report the missing work to the lead instead of creating a task."
+    )
+
+
+@pytest.mark.unit
 async def test_member_cannot_create_top_level_task(tmp_path: Any) -> None:
     """Given: non-lead member.
 
@@ -3331,6 +3370,10 @@ async def test_member_can_update_own_task(tmp_path: Any) -> None:
     result = await member_cap.task_update(member_ctx, task_id, status="in_progress")
 
     assert 'status="in_progress"' in result.return_value
+    stored = FileTeamState(str(tmp_path)).get_task("team_123", task_id)
+    assert stored is not None
+    assert stored["lease_token"]
+    assert stored["lease_expires_at"]
 
 
 @pytest.mark.unit
@@ -3933,3 +3976,198 @@ async def test_shutdown_request_warns_and_closes_member_with_pending_task(tmp_pa
     assert "Warning" in result.return_value
     assert "Translate chapter 4" in result.return_value
     mock_pool.close_session.assert_awaited_once_with("sess_translator")
+
+
+@pytest.mark.unit
+def test_task_lease_revocation_rejects_stale_worker(tmp_path: Any) -> None:
+    """A released worker cannot complete or mutate a task with an old token."""
+    team_state = FileTeamState(str(tmp_path))
+    team_state.init(
+        "team-lease",
+        "wiki",
+        [{"name": "worker-a", "agent": "worker"}],
+    )
+    task_id = team_state.create_task(
+        "team-lease",
+        {"subject": "one bounded task", "owner": "worker-a"},
+    )
+
+    claimed = team_state.update_task(
+        "team-lease",
+        task_id,
+        {"status": "in_progress"},
+        claim=True,
+        lease_owner="worker-a",
+    )
+    old_token = str(claimed["lease_token"])
+    team_state.release_task_lease("team-lease", task_id)
+
+    with pytest.raises(ValueError, match="TASK_LEASE_INVALID"):
+        team_state.update_task(
+            "team-lease",
+            task_id,
+            {"status": "completed"},
+            lease_owner="worker-a",
+            expected_lease_token=old_token,
+        )
+
+    reclaimed = team_state.update_task(
+        "team-lease",
+        task_id,
+        {"status": "in_progress"},
+        claim=True,
+        lease_owner="worker-a",
+    )
+    assert reclaimed["lease_token"] != old_token
+
+
+@pytest.mark.unit
+def test_lead_reassignment_revokes_old_lease_before_new_worker_claims(tmp_path: Any) -> None:
+    """A lead handoff must not leave the new owner behind a stale token."""
+    team_state = FileTeamState(str(tmp_path))
+    team_state.init(
+        "team-handoff",
+        "wiki",
+        [
+            {"name": "worker-a", "agent": "worker"},
+            {"name": "worker-b", "agent": "worker"},
+        ],
+    )
+    task_id = team_state.create_task(
+        "team-handoff",
+        {"subject": "handoff", "owner": "worker-a"},
+    )
+    claimed = team_state.update_task(
+        "team-handoff",
+        task_id,
+        {"status": "in_progress"},
+        claim=True,
+        lease_owner="worker-a",
+    )
+
+    reassigned = team_state.update_task(
+        "team-handoff",
+        task_id,
+        {"owner": "worker-b"},
+    )
+
+    assert reassigned["status"] == "pending"
+    assert reassigned["owner"] == "worker-b"
+    assert reassigned["lease_token"] == ""
+    assert reassigned["lease_token"] != claimed["lease_token"]
+
+    reclaimed = team_state.update_task(
+        "team-handoff",
+        task_id,
+        {"status": "in_progress"},
+        claim=True,
+        lease_owner="worker-b",
+    )
+    assert reclaimed["status"] == "in_progress"
+    assert reclaimed["lease_token"]
+    assert reclaimed["lease_token"] != claimed["lease_token"]
+
+
+@pytest.mark.unit
+def test_control_plane_metrics_track_retry_reassign_and_duplicate_intent(tmp_path: Any) -> None:
+    """Runtime counters expose the task-board events used by build metrics."""
+    team_state = FileTeamState(str(tmp_path))
+    team_state.init("team-metrics", "wiki", [{"name": "worker-a", "agent": "worker"}])
+    task = {
+        "subject": "one bounded task",
+        "owner": "worker-a",
+        "intent_key": "build|extract|component|pump",
+    }
+    task_id = team_state.create_task("team-metrics", task)
+    assert team_state.create_task("team-metrics", task) == task_id
+    team_state.update_task(
+        "team-metrics",
+        task_id,
+        {"status": "in_progress"},
+        claim=True,
+        lease_owner="worker-a",
+    )
+    team_state.release_task_lease("team-metrics", task_id)
+    team_state.update_task(
+        "team-metrics",
+        task_id,
+        {"status": "in_progress"},
+        claim=True,
+        lease_owner="worker-a",
+    )
+
+    metrics = team_state.control_plane_metrics("team-metrics")
+
+    assert metrics["task_count"] == 1
+    assert metrics["duplicate_intent_count"] == 1
+    assert metrics["task_retry_count"] == 1
+    assert metrics["task_reassign_count"] == 1
+
+
+@pytest.mark.unit
+def test_task_intent_is_idempotent_at_file_store_boundary(tmp_path: Any) -> None:
+    """Concurrent retry paths cannot create two tasks for one intent."""
+    team_state = FileTeamState(str(tmp_path))
+    team_state.init("team-intent", "wiki", [])
+    first = team_state.create_task(
+        "team-intent",
+        {"subject": "packet", "intent_key": "build-1:packet-1"},
+    )
+    second = team_state.create_task(
+        "team-intent",
+        {"subject": "packet retry", "intent_key": "build-1:packet-1"},
+    )
+    assert second == first
+    assert len(team_state.list_tasks("team-intent")) == 1
+
+    batch_ids = team_state.create_tasks_batch(
+        "team-intent",
+        [{"subject": "batch packet", "intent_key": "build-1:packet-2"}],
+    )
+    batch_task = team_state.get_task("team-intent", batch_ids[0])
+    assert batch_task is not None
+    assert batch_task["intent_key"] == "build-1:packet-2"
+
+
+@pytest.mark.unit
+def test_workflow_task_intent_ignores_retry_title_changes() -> None:
+    """A reworded workflow retry keeps the same packet intent."""
+    key_one = TeamCommCapability._task_idempotency_key(
+        "Extract source packet",
+        "phase=1A packet_id=packet-7 entity_type=Fault",
+    )
+    key_two = TeamCommCapability._task_idempotency_key(
+        "Extract source packet (retry)",
+        "phase=1A packet_id=packet-7 entity_type=Fault",
+    )
+    assert key_one
+    assert key_one == key_two
+
+
+@pytest.mark.unit
+def test_workflow_task_intent_separates_write_shards() -> None:
+    """One packet may fan out into independent, idempotent write shards."""
+    description_template = (
+        "phase=phase0 phase0_operation=component_write packet_id=sy75_bom_identity "
+        "write_set: [{target}]"
+    )
+    engine_uri = "viking://resources/816/Component/发动机/电控发动机/五十铃CC-4JG1-PAC-02"
+    pump_uri = "viking://resources/816/Component/主泵/开式柱塞泵/川崎HP3V80"
+
+    engine_key = TeamCommCapability._task_idempotency_key(
+        "component shard",
+        description_template.format(target=engine_uri),
+    )
+    pump_key = TeamCommCapability._task_idempotency_key(
+        "component shard retry with another title",
+        description_template.format(target=pump_uri),
+    )
+    engine_retry_key = TeamCommCapability._task_idempotency_key(
+        "component shard renamed",
+        description_template.format(target=engine_uri),
+    )
+
+    assert engine_key
+    assert pump_key
+    assert engine_key != pump_key
+    assert engine_key == engine_retry_key

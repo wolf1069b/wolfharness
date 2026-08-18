@@ -117,6 +117,18 @@ def test_string_model_reads_credential_from_named_environment(
     )
 
 
+def test_string_model_forwards_reasoning_effort_to_openai_settings() -> None:
+    """OpenAI-compatible string models preserve the configured effort level."""
+    config = StringModelConfig(
+        identifier="openai:svc/deepseek-v4-flash",
+        reasoning_effort="low",
+    )
+
+    settings = config.get_model_settings()
+
+    assert settings["openai_reasoning_effort"] == "low"
+
+
 def test_string_model_rejects_missing_named_credential(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

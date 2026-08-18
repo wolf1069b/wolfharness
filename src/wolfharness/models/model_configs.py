@@ -23,6 +23,9 @@ from tokonomics.model_names.openai import OpenaiModelName
 from wolfharness_config.model_capabilities import ModelCapabilities
 
 
+ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
+
+
 if TYPE_CHECKING:
     from pydantic_ai.models import Model
     from pydantic_ai.models.anthropic import AnthropicModelSettings
@@ -298,6 +301,12 @@ class StringModelConfig(BaseModelConfig):
     )
     """Extra body to send to the model."""
 
+    reasoning_effort: ReasoningEffort | None = Field(
+        default=None,
+        title="Reasoning effort",
+    )
+    """Constrains reasoning effort for OpenAI-compatible reasoning models."""
+
     def get_model_settings(self) -> PyAIModelSettings:
         """Get model settings in pydantic-ai format."""
         from pydantic_ai.settings import ModelSettings
@@ -315,6 +324,7 @@ class StringModelConfig(BaseModelConfig):
             "stop_sequences": self.stop_sequences,
             "extra_headers": self.extra_headers,
             "extra_body": self.extra_body,
+            "openai_reasoning_effort": self.reasoning_effort,
         }
         return ModelSettings(**{k: v for k, v in settings.items() if v is not None})  # type: ignore[typeddict-item, no-any-return]
 
@@ -641,7 +651,7 @@ class OpenAIModelConfig(BaseModelConfig):
     )
     """Extra body to send to the model."""
 
-    reasoning_effort: Literal["none", "minimal", "low", "medium", "high", "xhigh"] | None = Field(
+    reasoning_effort: ReasoningEffort | None = Field(
         default=None,
         title="Reasoning effort",
     )

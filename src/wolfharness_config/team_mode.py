@@ -57,6 +57,9 @@ returned task ID for `task_get`/`task_update`; do not infer IDs from a message \
 or from another worker's status snapshot.
 - Use `task_update(status=...)` to change task lifecycle state only \
 (pending → in_progress → completed/failed).
+- The first `task_update(status="in_progress")` claims a server-side lease. \
+Keep the returned `lease_token` for completion; technical-note/progress updates \
+renew the lease, and stale tokens are rejected.
 - Use `task_update(technical_note=...)` ONLY for technical notes that future \
 readers of the task need. Do NOT use task notes for progress chatter.
 - Use `task_update(progress_current=..., progress_total=...)` to report \
@@ -257,6 +260,19 @@ class TeamModeConfig(Schema):
     broadcast_on_create: bool = Field(
         default=True,
         title="Auto-broadcast on member creation",
+    )
+    member_can_create_subtasks: bool = Field(
+        default=True,
+        title="Allow members to create subtasks",
+        description=(
+            "Whether non-lead members may create child tasks. Disable this "
+            "for workflows whose conductor owns the task graph."
+        ),
+    )
+    lease_ttl_seconds: int = Field(
+        default=300,
+        ge=1,
+        title="Task lease TTL (seconds)",
     )
     max_watch_timeout: int = Field(
         default=120,
