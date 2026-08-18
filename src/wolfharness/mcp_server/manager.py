@@ -414,8 +414,9 @@ class MCPManager:
             return None
 
         # De-duplicate the model-visible tool prefix across servers sharing
-        # a display_name so prefixed tool names never collide (RFC-0058).
-        base_prefix = config.display_name
+        # a configured prefix/display_name so prefixed tool names never collide
+        # (RFC-0058).
+        base_prefix = config.tool_prefix or config.display_name
         candidate = base_prefix
         n = 2
         while candidate in self._used_tool_prefixes:
@@ -711,6 +712,7 @@ class MCPManager:
         """
         from pydantic_ai.capabilities import MCP
         from pydantic_ai.mcp import MCPToolset
+        from pydantic_ai.toolsets import PrefixedToolset
 
         from wolfharness_config.mcp_server import (
             SSEMCPServerConfig,
@@ -782,12 +784,19 @@ class MCPManager:
                     raise
                 toolset_cache[client_id] = toolset
 
+            local_toolset = (
+                PrefixedToolset(toolset, server.tool_prefix) if server.tool_prefix else toolset
+            )
             return MCP(
                 url=_derive_url(server),
-                local=toolset,
+                local=local_toolset,
                 native=False,
                 id=server.name or server.client_id,
-                allowed_tools=server.enabled_tools,
+                allowed_tools=(
+                    [f"{server.tool_prefix}_{name}" for name in server.enabled_tools]
+                    if server.tool_prefix and server.enabled_tools
+                    else server.enabled_tools
+                ),
             )
 
         async def _process_global_configs(
