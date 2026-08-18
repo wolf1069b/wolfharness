@@ -91,6 +91,7 @@ class McpServerCap(
         *,
         name: str | None = None,
         client: MCPClient | None = None,
+        tool_prefix: str | None = None,
     ) -> None:
         """Initialize the capability.
 
@@ -101,10 +102,17 @@ class McpServerCap(
             name: Optional name override. Defaults to ``config.client_id``.
             client: Optional pre-created ``MCPClient``. When provided,
                 bypasses the session pool and uses this client directly.
+            tool_prefix: Optional model-visible tool namespace for MCP tools.
+                Passed by ``MCPManager`` for POOL-scope servers so prefixed tool
+                names never collide across servers sharing a ``display_name``
+                (RFC-0058). When ``None`` (direct-construction paths such as
+                ``NativeAgentConfig(mcp_servers=[...])``), tools keep their raw
+                MCP names for backward compatibility.
         """
         self._config = config
         self._session_pool = session_pool
         self._name = name or config.client_id
+        self._tool_prefix = tool_prefix
         self._client: MCPClient | None = client
         self._change_queues: set[asyncio.Queue[ChangeEvent]] = set()
 
@@ -114,6 +122,11 @@ class McpServerCap(
     def name(self) -> str:
         """Return the capability name."""
         return self._name
+
+    @property
+    def tool_prefix(self) -> str | None:
+        """Return the model-visible tool namespace for this server."""
+        return self._tool_prefix
 
     @property
     def config(self) -> MCPServerConfig:
@@ -210,10 +223,12 @@ class McpServerCap(
                 for q in list(self._change_queues):
                     await q.put(event)
 
-            client._tool_change_callback = _on_tools_changed
-            client._resource_list_changed_callback = _on_resource_list_changed
-            client._resource_updated_callback = _on_resource_updated
-            client._prompt_change_callback = _on_prompts_changed
+            client.set_notification_callbacks(
+                tool_change_callback=_on_tools_changed,
+                resource_list_changed_callback=_on_resource_list_changed,
+                resource_updated_callback=_on_resource_updated,
+                prompt_change_callback=_on_prompts_changed,
+            )
             self._client = client
             return client
 
@@ -263,7 +278,10 @@ class McpServerCap(
             if not toolsets:
                 return None
             combined = CombinedToolset(toolsets)
-            return PrefixedToolset(wrapped=combined, prefix=f"{self._name}__")
+            prefix = self._tool_prefix
+            if not prefix:
+                return combined
+            return PrefixedToolset(wrapped=combined, prefix=prefix)
 
         return _build_toolset
 
@@ -361,7 +379,7 @@ class McpServerCap(
         return [
             ResourceEntry(
                 uri=str(r.uri),
-                name=r.name,
+                name=r.title or r.name,
                 description=r.description or "",
                 mime_type=r.mimeType if r.mimeType else "",
             )

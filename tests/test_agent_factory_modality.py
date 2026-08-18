@@ -201,6 +201,131 @@ async def test_no_inject_when_no_config() -> None:
 
 
 # ---------------------------------------------------------------------------
+# VikingCapability.model_capabilities population
+# ---------------------------------------------------------------------------
+
+
+async def test_viking_cap_populated_with_resolved_caps() -> None:
+    """VikingCapability.model_capabilities is populated by the factory.
+
+    A user-configured VikingCapability must receive the resolved model
+    capabilities so ``viking_read`` can auto-detect image-byte returns.
+    """
+    from wolfharness.capabilities.viking import VikingCapability
+
+    viking = VikingCapability(mode="all")
+    config = NativeAgentConfig(
+        model=_TestModelConfig(capabilities=_all_true_caps()),
+    )
+    agent = Agent(
+        name="test",
+        model="test",
+        agent_config=config,
+        capabilities=[viking],
+    )
+    pydantic_agent = await agent.get_agentlet(model=None, output_type=str)
+    viking_caps = [
+        cap
+        for cap in pydantic_agent.root_capability.capabilities
+        if isinstance(cap, VikingCapability)
+    ]
+    assert len(viking_caps) == 1
+    assert viking_caps[0].model_capabilities is not None
+    assert viking_caps[0].model_capabilities.image_input is True
+    assert viking_caps[0]._should_return_image_bytes() is True
+
+
+async def test_viking_cap_text_only_model_returns_false() -> None:
+    """Text-only model resolution prevents image-byte returns in viking_read."""
+    from wolfharness.capabilities.viking import VikingCapability
+
+    viking = VikingCapability(mode="all")
+    config = NativeAgentConfig(
+        model=_TestModelConfig(capabilities=_text_only_caps()),
+    )
+    agent = Agent(
+        name="test",
+        model="test",
+        agent_config=config,
+        capabilities=[viking],
+    )
+    pydantic_agent = await agent.get_agentlet(model=None, output_type=str)
+    viking_caps = [
+        cap
+        for cap in pydantic_agent.root_capability.capabilities
+        if isinstance(cap, VikingCapability)
+    ]
+    assert len(viking_caps) == 1
+    assert viking_caps[0]._should_return_image_bytes() is False
+
+
+async def test_viking_cap_no_model_name_gets_all_none_caps() -> None:
+    """No resolvable model name injects ModelCapabilities() (all None fields).
+
+    _should_return_image_bytes must degrade to text-only (safe default),
+    even though model_capabilities is a non-None object.
+    """
+    from wolfharness.capabilities.viking import VikingCapability
+
+    viking = VikingCapability(mode="all")
+    agent = Agent(
+        name="test",
+        model="test",
+        capabilities=[viking],
+    )
+    pydantic_agent = await agent.get_agentlet(model=None, output_type=str)
+    viking_caps = [
+        cap
+        for cap in pydantic_agent.root_capability.capabilities
+        if isinstance(cap, VikingCapability)
+    ]
+    assert len(viking_caps) == 1
+    # Injected (non-None), but all fields None → text-only degradation.
+    assert viking_caps[0].model_capabilities is not None
+    assert viking_caps[0].model_capabilities.image_input is None
+    assert viking_caps[0]._should_return_image_bytes() is False
+
+
+async def test_viking_injected_caps_feed_multimodal_bridge() -> None:
+    """Injected ModelCapabilities also drive multimodal bridge modality checks.
+
+    _supports_modality must reflect the resolved model: True for a vision
+    model (bridge keeps images as HTTP URLs), False for text-only (bridge
+    replaces images with viking:// text links).
+    """
+    from wolfharness.capabilities.viking import VikingCapability
+
+    for caps in (_all_true_caps(), _text_only_caps()):
+        viking = VikingCapability(mode="all", multimodal_bridge=True)
+        config = NativeAgentConfig(
+            model=_TestModelConfig(capabilities=caps),
+        )
+        agent = Agent(
+            name="test",
+            model="test",
+            agent_config=config,
+            capabilities=[viking],
+        )
+        pydantic_agent = await agent.get_agentlet(model=None, output_type=str)
+        viking_caps = [
+            cap
+            for cap in pydantic_agent.root_capability.capabilities
+            if isinstance(cap, VikingCapability)
+        ]
+        assert len(viking_caps) == 1
+        cap = viking_caps[0]
+        # Bridge modality check follows resolved capabilities.
+        assert cap._supports_modality("image/png") is bool(caps.image_input)
+
+        # A for_run() copy must preserve the injected caps so the bridge
+        # sees them inside a run.
+        from unittest.mock import MagicMock
+
+        copy_cap = await cap.for_run(MagicMock())  # type: ignore[arg-type]
+        assert copy_cap._supports_modality("image/png") is bool(caps.image_input)
+
+
+# ---------------------------------------------------------------------------
 # 5.6 — FallbackModelConfig intersection (pessimistic)
 # ---------------------------------------------------------------------------
 

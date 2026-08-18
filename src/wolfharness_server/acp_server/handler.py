@@ -39,6 +39,16 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+def _make_image_normalizer(host_context: HostContext) -> Any | None:
+    """Build an ``ImageNormalizer`` from the host context manifest (RFC-0059)."""
+    from wolfharness.images.normalizer import ImageNormalizer
+
+    manifest = getattr(host_context, "manifest", None)
+    if manifest is None:
+        return None
+    return ImageNormalizer(manifest.attachment)
+
+
 class ACPProtocolHandler(ProtocolEventConsumerMixin):
     """ACP protocol handler backed by SessionPool.
 
@@ -584,7 +594,8 @@ class ACPProtocolHandler(ProtocolEventConsumerMixin):
         await self._ensure_event_consumer(session_id)
 
         # Convert ACP content blocks to agent prompts
-        contents = [from_acp_content(block, fs=None) for block in prompt]
+        normalizer = _make_image_normalizer(self._host_context)
+        contents = [from_acp_content(block, fs=None, normalizer=normalizer) for block in prompt]
 
         # Split slash commands from content and execute local commands.
         # Commands inject expanded prompts into the SessionPool per-session

@@ -102,24 +102,33 @@ class MCPMessageHandler:
     async def on_tool_list_changed(self, message: mcp.types.ToolListChangedNotification) -> None:
         """Handle tool list changes."""
         logger.info("MCP tool list changed", message=message)
-        # Call the tool change callback if provided
-        if self.tool_change_callback:
-            await self.tool_change_callback()
+        # Prefer the construction-time field; fall back to reading the callback
+        # dynamically so a client's callback can be swapped after the message
+        # handler was created (see MCPClient.set_notification_callbacks).
+        callback = self.tool_change_callback or getattr(self.client, "_tool_change_callback", None)
+        if callback:
+            await callback()
 
     async def on_resource_list_changed(
         self, message: mcp.types.ResourceListChangedNotification
     ) -> None:
         """Handle resource list changes."""
         logger.info("MCP resource list changed", message=message)
-        if self.resource_list_changed_callback:
-            await self.resource_list_changed_callback()
+        callback = self.resource_list_changed_callback or getattr(
+            self.client, "_resource_list_changed_callback", None
+        )
+        if callback:
+            await callback()
 
     async def on_resource_updated(self, message: mcp.types.ResourceUpdatedNotification) -> None:
         """Handle resource content updates."""
         uri = str(message.params.uri)
         logger.info("MCP resource updated", uri=uri)
-        if self.resource_updated_callback:
-            await self.resource_updated_callback(uri)
+        callback = self.resource_updated_callback or getattr(
+            self.client, "_resource_updated_callback", None
+        )
+        if callback:
+            await callback(uri)
 
     async def on_progress(self, message: mcp.types.ProgressNotification) -> None:
         """Handle progress notifications with proper context."""
@@ -131,9 +140,11 @@ class MCPMessageHandler:
     ) -> None:
         """Handle prompt list changes."""
         logger.info("MCP prompt list changed", message=message)
-        # Call the prompt change callback if provided
-        if self.prompt_change_callback:
-            await self.prompt_change_callback()
+        callback = self.prompt_change_callback or getattr(
+            self.client, "_prompt_change_callback", None
+        )
+        if callback:
+            await callback()
 
     async def on_cancelled(self, message: mcp.types.CancelledNotification) -> None:
         """Handle cancelled operations."""

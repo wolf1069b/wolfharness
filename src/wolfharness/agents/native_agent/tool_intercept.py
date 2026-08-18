@@ -21,6 +21,7 @@ from __future__ import annotations
 from dataclasses import KW_ONLY, dataclass
 from typing import TYPE_CHECKING, Any
 
+import logfire
 from pydantic_ai import ModelRetry
 from pydantic_ai.capabilities.abstract import AbstractCapability
 from pydantic_ai.exceptions import ApprovalRequired, CallDeferred, ToolRetryError
@@ -132,7 +133,13 @@ class ToolInterceptCapability(AbstractCapability[Any]):
         from wolfharness.tasks.exceptions import RunAbortedError, ToolSkippedError
 
         try:
-            result = await handler(args)
+            with logfire.span(
+                "tool.call",
+                tool_name=call.tool_name,
+                tool_call_id=call.tool_call_id,
+                args=args,
+            ):
+                result = await handler(args)
         except (
             # Pydantic-AI control-flow exceptions — must propagate to
             # _run_execute_hooks and the framework's retry/defer/approval logic.

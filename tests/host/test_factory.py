@@ -162,12 +162,15 @@ def test_compile_registers_config_capabilities_at_agent_scope(
 
     agent_scope = Scope(level=ScopeLevel.AGENT, agent_name="test_agent")
     visible = minimal_pool.extension_registry.get_visible_capabilities(agent_scope)
-    # TestResourceAccessCap should be at AGENT scope
+    # TestResourceAccessCap should be at AGENT scope.
     from wolfharness.capabilities.resource_protocols import ResourceAccess
 
     ra_caps = [c for c in visible if isinstance(c, ResourceAccess)]
-    assert len(ra_caps) == 1
-    assert isinstance(ra_caps[0], TestResourceAccessCap)
+    # SkillManagerCap now also implements ResourceAccess (RFC-0058); filter to
+    # the config-defined capability under test.
+    test_ra_caps = [c for c in ra_caps if isinstance(c, TestResourceAccessCap)]
+    assert len(test_ra_caps) == 1
+    assert isinstance(test_ra_caps[0], TestResourceAccessCap)
 
 
 def test_get_visible_capabilities_no_duplicates_across_scopes(

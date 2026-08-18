@@ -91,6 +91,8 @@ class MCPClient:
         self._sampling_callback = sampling_callback
         # Store message handler or mark for lazy creation
         self._message_handler = message_handler
+        # Lazily-created wolfharness message handler (see _get_message_handler).
+        self._wolfharness_message_handler: MCPMessageHandler | None = None
         self._accessible_roots = accessible_roots or []
         self._tool_change_callback = tool_change_callback
         self._prompt_change_callback = prompt_change_callback
@@ -113,6 +115,45 @@ class MCPClient:
     def connected(self) -> bool:
         """Check if client is connected by examining session state."""
         return self._client.is_connected()
+
+    def set_notification_callbacks(
+        self,
+        *,
+        tool_change_callback: Callable[[], Awaitable[None]] | None = None,
+        prompt_change_callback: Callable[[], Awaitable[None]] | None = None,
+        resource_list_changed_callback: Callable[[], Awaitable[None]] | None = None,
+        resource_updated_callback: Callable[[str], Awaitable[None]] | None = None,
+    ) -> None:
+        """Set server-notification callbacks after the client is connected.
+
+        The ``MCPMessageHandler`` reads these callbacks dynamically from the
+        client on each notification (rather than snapshotting them at
+        construction), so callbacks set here apply immediately even if the
+        message handler was already created.
+        """
+        self._tool_change_callback = tool_change_callback
+        self._prompt_change_callback = prompt_change_callback
+        self._resource_list_changed_callback = resource_list_changed_callback
+        self._resource_updated_callback = resource_updated_callback
+
+    def _get_message_handler(self) -> MessageHandlerT | MessageHandler:
+        """Return the wolfharness message handler for this client.
+
+        The handler reads notification callbacks dynamically from the client
+        (see ``set_notification_callbacks``), so it can be created any time
+        after construction and still see the latest callbacks.
+        """
+        if self._message_handler is not None:
+            return self._message_handler
+        if self._wolfharness_message_handler is None:
+            self._wolfharness_message_handler = MCPMessageHandler(
+                self,
+                self._tool_change_callback,
+                self._prompt_change_callback,
+                self._resource_list_changed_callback,
+                self._resource_updated_callback,
+            )
+        return self._wolfharness_message_handler
 
     @property
     def server_info(self) -> dict[str, str] | None:
@@ -184,6 +225,11 @@ class MCPClient:
             else:
                 raise
 
+        # When a shared transport (e.g. SessionConnectionPool's stdio
+        # owner-task) pre-connects before this MCPClient exists, fastmcp
+        # reuses that session and our MCPMessageHandler is never bound.
+        # Rebind so server notifications reach wolfharness callbacks.
+        self._rebind_session_message_handler()
         return self
 
     async def __aexit__(self, *args: object) -> None:
@@ -192,6 +238,22 @@ class MCPClient:
             await self._client.__aexit__(None, None, None)  # type: ignore[no-untyped-call]
         except Exception as e:  # noqa: BLE001
             logger.warning("Error during FastMCP client cleanup", error=e)
+
+    def _rebind_session_message_handler(self) -> None:
+        """Rebind the underlying session's message handler to wolfharness's.
+
+        ``SessionConnectionPool`` pre-connects stdio transports inside an
+        owner task *before* this ``MCPClient`` exists, so fastmcp reuses
+        that session and our ``MCPMessageHandler`` would otherwise never be
+        bound. mcp SDK sessions read ``_message_handler`` dynamically for
+        each notification, so setting it here takes effect immediately.
+        """
+        if not self._client.is_connected():
+            return
+        session = self._client.session
+        handler = self._get_message_handler()
+        if getattr(session, "_message_handler", None) is not handler:
+            session._message_handler = handler
 
     def get_resource_fs(self) -> MCPFileSystem:
         """Get a filesystem for accessing MCP resources."""
@@ -283,13 +345,7 @@ class MCPClient:
             oauth = config.auth.oauth
 
         # Create message handler if needed
-        msg_handler = self._message_handler or MCPMessageHandler(
-            self,
-            self._tool_change_callback,
-            self._prompt_change_callback,
-            self._resource_list_changed_callback,
-            self._resource_updated_callback,
-        )
+        msg_handler = self._get_message_handler()
 
         # Build client_info if client_name is provided
         client_info: Implementation | None = None
@@ -326,13 +382,7 @@ class MCPClient:
         import fastmcp
         from mcp.types import Icon, Implementation
 
-        msg_handler = self._message_handler or MCPMessageHandler(
-            self,
-            self._tool_change_callback,
-            self._prompt_change_callback,
-            self._resource_list_changed_callback,
-            self._resource_updated_callback,
-        )
+        msg_handler = self._get_message_handler()
 
         client_info: Implementation | None = None
         if self._client_name:

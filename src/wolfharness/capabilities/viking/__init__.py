@@ -106,6 +106,23 @@ class VikingCapability(AbstractCapability[Any]):
     multimodal_bridge: bool = False
     """Enable multimodal bridge — auto-upload binary content to Viking
     before sending to the model."""
+    support_vision: bool | None = None
+    """Result of ``viking_read`` for image URIs.
+
+    Tri-state control over how image resources are returned to the model:
+
+    - ``True`` — return image bytes (``BinaryImage``) regardless of model.
+    - ``False`` — return a text URI description, never image bytes.
+    - ``None`` (default) — auto-detect from ``model_capabilities.image_input``;
+      treated as text-only when capabilities are unknown (not injected or
+      field is ``None``).
+
+    Note: unlike ``ModalityFilterCapability._is_modality_supported``, which
+    treats ``capabilities=None`` as pass-through, this capability treats an
+    unset/model ``None`` capability as text-only (safe degradation) — it is
+    the *producer* of image content and must not emit ``BinaryImage`` it
+    cannot guarantee the model accepts.
+    """
     uploads_uri: str | None = None
     public_download_base_url: str | None = None
     enable_link: bool = False
@@ -1525,6 +1542,30 @@ class VikingCapability(AbstractCapability[Any]):
         if not modified:
             return request_context
         return replace(request_context, messages=new_messages)
+
+    def _should_return_image_bytes(self) -> bool:
+        """Whether ``viking_read`` should return image bytes for image URIs.
+
+        Decision order:
+
+        1. ``support_vision`` explicitly set — return its value.
+        2. ``model_capabilities`` injected — return ``image_input`` (``None``
+           counts as text-only).
+        3. Otherwise — text-only (safe degradation).
+
+        Note: unlike ``ModalityFilterCapability._is_modality_supported``
+        (which treats ``capabilities=None`` as pass-through), this treats an
+        unavailable capability as text-only: this capability *produces*
+        image content, so it must never emit ``BinaryImage`` it cannot
+        guarantee the model accepts.
+
+        Returns:
+            ``True`` when image bytes should be returned, ``False`` for text.
+        """
+        if self.support_vision is not None:
+            return self.support_vision
+        caps = self.model_capabilities
+        return bool(caps and caps.image_input)
 
     def _supports_modality(self, media_type: str) -> bool:
         """Check if the model supports the given media type.

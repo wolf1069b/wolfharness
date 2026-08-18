@@ -538,7 +538,7 @@ async def list_mcp_resources(state: StateDep) -> dict[str, McpResource]:
                     client_name = client.replace("/", "_")
                     resource_name = resource.name.replace("/", "_")
                     result[f"{client_name}:{resource_name}"] = McpResource(
-                        name=resource.name,
+                        name=resource.uri,
                         uri=resource.uri,
                         description=resource.description,
                         mime_type=resource.mime_type,

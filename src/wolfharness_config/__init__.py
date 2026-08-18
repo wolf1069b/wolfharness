@@ -10,6 +10,7 @@ from wolfharness_config.tools import ImportToolConfig, BaseToolConfig
 from wolfharness_config.wolfharness_tools import AgentpoolToolConfig
 from wolfharness_config.builtin_tools import BuiltinToolConfig
 
+from wolfharness_config.attachment import AttachmentImageConfig
 from wolfharness_config.capabilities import CapabilityConfig
 from wolfharness_config.forward_targets import ForwardingTarget
 from wolfharness_config.session import SessionQuery
@@ -85,6 +86,7 @@ __all__ = [
     "DEFAULT_SKILLS_PATHS",
     "ACPConfig",
     "AnyToolConfig",
+    "AttachmentImageConfig",
     "BaseEventHandlerConfig",
     "BaseHookConfig",
     "BaseMCPServerConfig",

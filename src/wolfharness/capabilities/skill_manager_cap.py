@@ -41,11 +41,15 @@ from pydantic_ai.toolsets import (
 
 from wolfharness.capabilities.combined_toolset import CombinedToolsetCapability
 from wolfharness.capabilities.resource_protocols import (
+    BlobResourceContent,
     ChangeObservable,
     CommandEntry,
     CommandResource,
+    ResourceAccess,
+    ResourceEntry,
     SkillEntry,
     SkillResource,
+    TextResourceContent,
 )
 from wolfharness.log import get_logger
 from wolfharness.skills.skill import Skill
@@ -203,6 +207,7 @@ class SkillManagerCap(
     CombinedToolsetCapability[AgentDepsT],
     SkillResource,
     CommandResource,
+    ResourceAccess,
     ChangeObservable,
 ):
     """Unified skill management capability.
@@ -696,6 +701,91 @@ class SkillManagerCap(
                 )
 
         return "\n\n".join(parts) if parts else None
+
+    # ---- ResourceAccess delegation (RFC-0058) ----
+
+    async def list_resources(self) -> Sequence[ResourceEntry]:
+        """List resources from all per-skill MCP children.
+
+        Delegates to every per-skill ``McpServerCap`` child implementing
+        :class:`ResourceAccess` and aggregates their ``ResourceEntry``
+        instances. A failing child is skipped so one broken MCP server
+        does not prevent resource listing from the others.
+
+        Returns:
+            Aggregated sequence of ``ResourceEntry`` descriptors.
+        """
+        entries: list[ResourceEntry] = []
+        for caps in self._skill_mcp_children.values():
+            for cap in caps:
+                if isinstance(cap, ResourceAccess):
+                    try:
+                        entries.extend(await cap.list_resources())
+                    except Exception:
+                        logger.warning(
+                            "Failed to list resources from per-skill MCP child",
+                            server=cap.name,
+                            exc_info=True,
+                        )
+                        continue
+        return entries
+
+    async def read_resource(
+        self, uri: str
+    ) -> list[TextResourceContent | BlobResourceContent] | None:
+        """Read an MCP resource by URI from per-skill MCP children.
+
+        Tries each per-skill ``McpServerCap`` child implementing
+        :class:`ResourceAccess` until one returns a non-``None`` result.
+        A failing child is skipped so a broken server does not abort the read.
+
+        Args:
+            uri: Resource URI to read.
+
+        Returns:
+            List of resource content instances, or ``None`` if no child
+            has the resource.
+        """
+        for caps in self._skill_mcp_children.values():
+            for cap in caps:
+                if isinstance(cap, ResourceAccess):
+                    try:
+                        result = await cap.read_resource(uri)
+                    except Exception:
+                        logger.warning(
+                            "Failed to read resource %r from per-skill MCP child",
+                            uri,
+                            exc_info=True,
+                        )
+                        continue
+                    if result is not None:
+                        return result
+        return None
+
+    async def resource_exists(self, uri: str) -> bool:
+        """Check if a resource URI exists in any per-skill MCP child.
+
+        Args:
+            uri: Resource URI to check.
+
+        Returns:
+            ``True`` if any per-skill ``McpServerCap`` child reports the
+            resource, ``False`` otherwise.
+        """
+        for caps in self._skill_mcp_children.values():
+            for cap in caps:
+                if isinstance(cap, ResourceAccess):
+                    try:
+                        if await cap.resource_exists(uri):
+                            return True
+                    except Exception:
+                        logger.warning(
+                            "Failed to check resource %r existence in per-skill MCP child",
+                            uri,
+                            exc_info=True,
+                        )
+                        continue
+        return False
 
     @property
     def has_wrap_node_run(self) -> bool:

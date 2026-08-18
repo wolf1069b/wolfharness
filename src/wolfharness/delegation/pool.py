@@ -685,6 +685,13 @@ class AgentPool[TPoolDeps = None]:
         # Register the new SkillManagerCap with ExtensionRegistry at POOL scope.
         self._extension_registry.register(cap, pool_scope)
 
+        # Register each top-level McpServerCap independently at POOL scope so
+        # they are directly discoverable via get_resource_access() for ``@``
+        # mention and ResourceCapability (RFC-0058). They no longer live only
+        # inside SkillManagerCap.children.
+        for provider in self.mcp.providers:
+            self._extension_registry.register(provider, pool_scope)
+
         logger.debug(
             "Rebuilt skill capabilities",
             count=len(self._skill_capabilities),

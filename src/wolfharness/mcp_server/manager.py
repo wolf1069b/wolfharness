@@ -236,6 +236,10 @@ class MCPManager:
         # Used by get_server_status() to report status="error" for failed
         # servers instead of silently dropping them.
         self._setup_errors: dict[str, str] = {}
+        # Model-visible tool prefixes in use, for display_name de-duplication
+        # (RFC-0058): two servers sharing a display_name get prefixes
+        # ``name``, ``name_2``, ...
+        self._used_tool_prefixes: set[str] = set()
 
     def add_server_config(self, cfg: MCPServerConfig | str) -> None:
         """Add a new MCP server to the manager."""
@@ -409,6 +413,16 @@ class MCPManager:
             )
             return None
 
+        # De-duplicate the model-visible tool prefix across servers sharing
+        # a display_name so prefixed tool names never collide (RFC-0058).
+        base_prefix = config.display_name
+        candidate = base_prefix
+        n = 2
+        while candidate in self._used_tool_prefixes:
+            candidate = f"{base_prefix}_{n}"
+            n += 1
+        self._used_tool_prefixes.add(candidate)
+
         from wolfharness.mcp_server.client import MCPClient
 
         try:
@@ -421,6 +435,7 @@ class MCPManager:
                 config=config,
                 name=f"{self.name}_{config.display_name}",
                 client=client,
+                tool_prefix=candidate,
             )
             provider = await self.exit_stack.enter_async_context(provider)
             self.providers.append(provider)
@@ -649,6 +664,8 @@ class MCPManager:
     async def get_capabilities(  # noqa: PLR0915
         self,
         session_id: str | None = None,
+        *,
+        exclude_global: bool = False,
     ) -> list[MCP]:
         """Return pydantic-ai MCP capabilities for all configured servers.
 
@@ -683,6 +700,10 @@ class MCPManager:
             session_id: Optional session identifier for per-session MCP
                 config isolation. When None, only global configs from
                 ``self.servers`` are processed.
+            exclude_global: When True, skip pool + agent global configs.
+                Used when top-level McpServerCap instances are injected
+                directly into the agent (RFC-0058); only session-scoped
+                configs (session + skill) are processed.
 
         Returns:
             A list of ``pydantic_ai.capabilities.MCP`` instances, one per
@@ -825,7 +846,8 @@ class MCPManager:
         ctx = self._session_contexts.get(session_id) if session_id is not None else None
 
         if ctx is not None and ctx.snapshot is not None:
-            await _process_global_configs(ctx.snapshot, self._toolset_cache)
+            if not exclude_global:
+                await _process_global_configs(ctx.snapshot, self._toolset_cache)
             if ctx.connection_pool is not None:
                 await _process_session_configs(
                     ctx.snapshot,
@@ -839,11 +861,13 @@ class MCPManager:
                     "falling back to global-only MCP capabilities.",
                     session_id,
                 )
-            for server in self.servers:
-                if not server.enabled or isinstance(server, AcpMCPServerConfig):
-                    continue
-                transport = await self._global_pool.get_transport(server)
-                capabilities.append(await _make_capability(server, transport, self._toolset_cache))
+            if not exclude_global:
+                for server in self.servers:
+                    if not server.enabled or isinstance(server, AcpMCPServerConfig):
+                        continue
+                    transport = await self._global_pool.get_transport(server)
+                    caps = await _make_capability(server, transport, self._toolset_cache)
+                    capabilities.append(caps)
 
         return capabilities
 

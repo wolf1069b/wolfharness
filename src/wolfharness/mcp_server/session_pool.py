@@ -83,6 +83,7 @@ def _create_transport(config: BaseMCPServerConfig) -> ClientTransport:
         SSEMCPServerConfig,
         StdioMCPServerConfig,
         StreamableHTTPMCPServerConfig,
+        _expand_headers,
     )
 
     match config:
@@ -94,7 +95,7 @@ def _create_transport(config: BaseMCPServerConfig) -> ClientTransport:
 
             return SSETransport(
                 url=str(url),
-                headers=headers,
+                headers=_expand_headers(headers),
                 httpx_client_factory=make_mcp_httpx_client_factory(read_timeout=config.timeout),
             )
         case StreamableHTTPMCPServerConfig(url=url, headers=headers):
@@ -102,7 +103,7 @@ def _create_transport(config: BaseMCPServerConfig) -> ClientTransport:
 
             return StreamableHttpTransport(
                 url=str(url),
-                headers=headers,
+                headers=_expand_headers(headers),
                 httpx_client_factory=make_mcp_httpx_client_factory(read_timeout=config.timeout),
             )
         case AcpMCPServerConfig():

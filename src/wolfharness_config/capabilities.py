@@ -189,6 +189,20 @@ class VikingCapabilityConfig(BaseModel):
     """Override for sessions URI. Default: viking://user/{user}/sessions/"""
     multimodal_bridge: bool = False
     """Enable multimodal bridge (Phase 6, not yet implemented)."""
+    support_vision: bool | None = None
+    """Result of viking_read for image URIs.
+
+    Tri-state control over how image resources are returned to the model:
+
+    - ``True`` — return image bytes (``BinaryImage``) regardless of model.
+    - ``False`` — return a text URI description, never image bytes.
+    - ``None`` (default) — auto-detect from resolved model capabilities
+      (``image_input``); text-only when unknown.
+
+    When forcing ``True`` on a model that does not actually accept image
+    input, configure ``type: modality_filter`` as a safety net so the
+    image is degraded before reaching the model API.
+    """
     uploads_uri: str | None = None
     """Override for uploads URI."""
     public_download_base_url: str | None = None

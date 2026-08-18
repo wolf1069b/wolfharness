@@ -6,7 +6,7 @@ skill resolution through pool, and provider registration.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Self
 
 import pytest
 from upathtools import UPath
@@ -350,3 +350,110 @@ class TestRegisterUnregisterSkillProvider:
         async with AgentPool(manifest_with_skills) as pool:
             pending = getattr(pool, "_pending_skill_providers", [])
             assert len(pending) == 0
+
+
+# =============================================================================
+# Test Class: TopLevelMcpRegistration (RFC-0058)
+# =============================================================================
+
+
+@pytest.mark.integration
+class TestTopLevelMcpPoolRegistration:
+    """Top-level McpServerCap instances are independently registered at POOL scope."""
+
+    @pytest.fixture
+    def manifest_with_mcp(self) -> AgentsManifest:
+        """Create a manifest with a top-level MCP server configured."""
+        from wolfharness_config.mcp_server import StreamableHTTPMCPServerConfig
+
+        agent_config = NativeAgentConfig(
+            name="test_agent",
+            model="test",
+            system_prompt="You are a test agent",
+        )
+        return AgentsManifest(
+            agents={"test_agent": agent_config},
+            mcp_servers=[
+                StreamableHTTPMCPServerConfig(
+                    url="http://127.0.0.1:1/mcp",
+                    name="kb",
+                )
+            ],
+        )
+
+    @staticmethod
+    def _attach_cap(pool: Any) -> None:
+        """Inject a provider directly for registration testing.
+
+        This avoids requiring a live MCP server connection.
+        """
+        from wolfharness.capabilities.mcp_server_cap import McpServerCap
+
+        cap = McpServerCap(
+            pool.mcp.servers[0],
+            name="pool_mcp_kb",
+            client=object(),
+        )
+        pool.mcp.providers.append(cap)
+
+    async def test_mcp_servers_registered_at_pool_scope(
+        self,
+        manifest_with_mcp: AgentsManifest,
+    ) -> None:
+        """The top-level McpServerCap is discoverable via get_resource_access()."""
+        from wolfharness.capabilities.extension_registry import Scope, ScopeLevel
+        from wolfharness.capabilities.mcp_server_cap import McpServerCap
+
+        async with AgentPool(manifest_with_mcp) as pool:
+            self._attach_cap(pool)
+            await pool._rebuild_skill_capabilities()
+            pool_scope = Scope(level=ScopeLevel.POOL)
+
+            visible = pool.extension_registry.get_resource_access(pool_scope)
+            mcp_caps = [c for c in visible if isinstance(c, McpServerCap)]
+
+            assert mcp_caps, "McpServerCap should be registered at POOL scope"
+
+    async def test_mcp_server_tool_prefix_de_duplicated(
+        self,
+        manifest_with_mcp: AgentsManifest,
+        monkeypatch: Any,
+    ) -> None:
+        """Two servers sharing a display_name get unique tool_prefix values."""
+        from wolfharness.mcp_server.manager import MCPManager
+        from wolfharness_config.mcp_server import StreamableHTTPMCPServerConfig
+
+        # Patch MCPClient so setup_server() proceeds without a live server.
+        class _FakeClient:
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                pass
+
+            async def __aenter__(self) -> Self:
+                return self
+
+            async def __aexit__(self, *args: object) -> None:
+                return None
+
+        monkeypatch.setattr(
+            "wolfharness.mcp_server.client.MCPClient",
+            _FakeClient,
+        )
+
+        manager = MCPManager(
+            name="pool_mcp",
+            servers=[
+                StreamableHTTPMCPServerConfig(
+                    url="http://127.0.0.1:1/mcp",
+                    name="kb",
+                ),
+                StreamableHTTPMCPServerConfig(
+                    url="http://127.0.0.1:2/mcp",
+                    name="kb",
+                ),
+            ],
+        )
+        async with manager:
+            prefixes = [p.tool_prefix for p in manager.providers]
+            assert len(prefixes) == 2
+            assert prefixes[0] == "kb"
+            assert prefixes[1] == "kb_2"

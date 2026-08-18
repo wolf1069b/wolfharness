@@ -378,6 +378,38 @@ def test_create_transport_acp_raises(acp_config: AcpMCPServerConfig) -> None:
         _create_transport(acp_config)
 
 
+@pytest.mark.unit
+def test_create_transport_sse_expands_env_in_headers(monkeypatch) -> None:
+    """_create_transport expands ${VAR} in SSE header values (repro for #365)."""
+    from fastmcp.client.transports import SSETransport
+
+    monkeypatch.setenv("VIKING_MCP_API_KEY", "actual-token")
+    config = SSEMCPServerConfig(
+        name="sse-srv",
+        url=HttpUrl("http://localhost:8080/sse"),
+        headers={"Authorization": "Bearer ${VIKING_MCP_API_KEY}"},
+    )
+    transport = _create_transport(config)
+    assert isinstance(transport, SSETransport)
+    assert transport.headers == {"Authorization": "Bearer actual-token"}
+
+
+@pytest.mark.unit
+def test_create_transport_http_expands_env_in_headers(monkeypatch) -> None:
+    """_create_transport expands ${VAR} in streamable-http header values (repro for #365)."""
+    from fastmcp.client.transports import StreamableHttpTransport
+
+    monkeypatch.setenv("VIKING_MCP_API_KEY", "actual-token")
+    config = StreamableHTTPMCPServerConfig(
+        name="http-srv",
+        url=HttpUrl("https://api.example.com/mcp"),
+        headers={"Authorization": "Bearer ${VIKING_MCP_API_KEY}"},
+    )
+    transport = _create_transport(config)
+    assert isinstance(transport, StreamableHttpTransport)
+    assert transport.headers == {"Authorization": "Bearer actual-token"}
+
+
 # ---------------------------------------------------------------------------
 # _stdio_owner_task
 # ---------------------------------------------------------------------------

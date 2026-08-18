@@ -10,14 +10,15 @@ from __future__ import annotations
 
 import asyncio
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import shutil
 import tempfile
 from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic_ai.messages import ToolReturn
+from pydantic_ai.messages import BinaryImage, ToolReturn
 from pydantic_ai.tools import RunContext  # noqa: TC002 - needed at runtime for get_type_hints()
 
+from wolfharness.capabilities.viking.constants import IMAGE_EXTENSIONS, IMAGE_MIME_TYPES
 from wolfharness.capabilities.viking.utils import (
     add_line_numbers,
     format_glob_results,
@@ -193,6 +194,29 @@ def _get_session_id(ctx: RunContext[Any]) -> str | None:
     if deps is not None and hasattr(deps, "session_id"):
         return str(deps.session_id)
     return None
+
+
+def _is_image_resource(uri: str) -> bool:
+    """Whether a URI points to an image resource by its file extension.
+
+    Matches the openviking server's extension-based image detection
+    (``IMAGE_EXTENSIONS``). SVG is deliberately excluded — it is a vector
+    format most vision APIs reject, so it never enters the byte path.
+    """
+    return PurePosixPath(uri).suffix.lower() in IMAGE_EXTENSIONS
+
+
+def _image_uri_hint(uri: str) -> str:
+    """Text hint for an image URI when image bytes are not returned.
+
+    Used when the model cannot consume image bytes (text-only) or bytes
+    are forced off. Mentions the URI so the model can still reference it.
+    """
+    return (
+        f"[Image resource: {uri}]\n"
+        f"The file is an image and cannot be shown as text. The image is "
+        f"stored at the URI above — reference it when discussing the content."
+    )
 
 
 def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
@@ -559,7 +583,36 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                 client = await cap._ensure_client()
                 uri_list = [uris] if isinstance(uris, str) else uris
                 sections: list[str] = []
+                image_parts: list[BinaryImage] = []
                 for u in uri_list:
+                    is_image = _is_image_resource(u)
+                    suffix = PurePosixPath(u).suffix.lower()
+                    # SVG is a vector format most vision APIs reject — it
+                    # never enters the byte path, always degrades to a text
+                    # hint, regardless of the support_vision / model caps.
+                    if is_image and (not cap._should_return_image_bytes() or suffix == ".svg"):
+                        # Image resource but the model can't consume image
+                        # bytes (or forced text / vector SVG) — text URI hint.
+                        if len(uri_list) > 1:
+                            sections.append(f"=== {u} ===\n{_image_uri_hint(u)}")
+                        else:
+                            sections.append(_image_uri_hint(u))
+                        continue
+
+                    if is_image:
+                        # Image resource and the model accepts image bytes.
+                        data = await client.download_bytes(u)
+                        media_type = IMAGE_MIME_TYPES.get(
+                            PurePosixPath(u).suffix.lower(), "application/octet-stream"
+                        )
+                        image_idx = len(image_parts) + 1  # 1-based, matches content order
+                        image_parts.append(BinaryImage(data=data, media_type=media_type))
+                        if len(uri_list) > 1:
+                            sections.append(f"=== {u} ===\n[Image #{image_idx}: {media_type}]")
+                        else:
+                            sections.append(f"[Image #{image_idx}: {media_type}]")
+                        continue
+
                     if level == "abstract":
                         content = await client.abstract(u)
                     elif level == "overview":
@@ -578,6 +631,16 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                         sections.append(f"=== {u} ===\n{numbered}")
                     else:
                         sections.append(numbered)
+
+                if image_parts:
+                    # Mixed content: text sections describe each file; image
+                    # bytes follow as BinaryImage parts the model can view.
+                    tool_content: list[Any] = ["\n\n".join(sections)]
+                    tool_content.extend(image_parts)
+                    return ToolReturn(
+                        return_value="\n\n".join(sections),
+                        content=tool_content,
+                    )
                 return ToolReturn(return_value="\n\n".join(sections))
             except Exception as e:
                 return ToolReturn(return_value=f"viking_read error: {e}")
