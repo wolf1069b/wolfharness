@@ -9,9 +9,12 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
+from pathlib import Path
+import tempfile
 from typing import Any, get_type_hints
 from unittest.mock import AsyncMock, MagicMock
 
+from openviking_sdk.errors import OpenVikingError
 from pydantic import ValidationError
 from pydantic_ai.models import ModelRequestContext, ModelRequestParameters
 from pydantic_ai.models.test import TestModel
@@ -862,10 +865,241 @@ class TestWriteTools:
         assert call_args[0] == "/local/file.txt"
         assert call_kwargs["to"] == "viking://user/alice/files/"
         assert call_kwargs["parent"] == "viking://user/alice/"
-        # processing_mode is NOT passed to SDK (not a supported kwarg)
-        assert "processing_mode" not in call_kwargs
+        assert call_kwargs["processing_mode"] == "auto"
+        assert call_kwargs["wait"] is False
         assert call_kwargs["watch_interval"] == 5.0
         assert "Added resource" in result.return_value
+
+    @pytest.mark.asyncio
+    async def test_viking_add_resource_wait_true(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """viking_add_resource passes wait=True through to the SDK."""
+        mock_client.add_resource = AsyncMock(return_value={"status": "ok"})
+        tools = build_tools(viking_cap)
+        add_tool = _get_tool(tools, "viking_add_resource")
+
+        ctx = _make_ctx()
+        await add_tool(
+            ctx,
+            path="/local/file.txt",
+            processing_mode="semantic_and_vectors",
+            wait=True,
+        )
+
+        assert mock_client.add_resource.call_args.kwargs["wait"] is True
+        assert (
+            mock_client.add_resource.call_args.kwargs["processing_mode"] == "semantic_and_vectors"
+        )
+
+    @pytest.mark.asyncio
+    async def test_viking_upload_tree_single_wait_true_call(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock, tmp_path: Path
+    ) -> None:
+        """viking_upload_tree uploads one temp tree, skips build dirs, cleans up."""
+        captured: dict[str, list[str]] = {}
+
+        async def fake_add_resource(path: str, **kwargs: Any) -> dict[str, Any]:
+            captured["children"] = sorted(p.name for p in Path(path).iterdir())
+            return {"status": "ok"}
+
+        mock_client.add_resource.side_effect = fake_add_resource
+        (tmp_path / "Fault" / "X").mkdir(parents=True)
+        (tmp_path / "Fault" / "X" / "e.md").write_text("# Entity", encoding="utf-8")
+        (tmp_path / "index").mkdir()
+        (tmp_path / "index" / "backlinks_index.json").write_text("{}", encoding="utf-8")
+        (tmp_path / "source_packets").mkdir()
+        (tmp_path / "source_packets" / "p.md").write_text("p", encoding="utf-8")
+        (tmp_path / ".hidden").mkdir()
+        (tmp_path / ".hidden" / "h.md").write_text("h", encoding="utf-8")
+        (tmp_path / "resource.json").write_text('{"v": 2}', encoding="utf-8")
+
+        tools = build_tools(viking_cap)
+        upload_tool = _get_tool(tools, "viking_upload_tree")
+        ctx = _make_ctx()
+        result = await upload_tool(ctx, path=str(tmp_path), to="viking://resources/test_ns")
+
+        mock_client.add_resource.assert_called_once()
+        args = mock_client.add_resource.call_args.kwargs
+        assert captured["children"] == ["Fault", "resource.json"]
+        assert args["wait"] is True
+        assert args["processing_mode"] == "semantic_and_vectors"
+        assert args["timeout"] == 900.0
+        assert "Uploaded tree" in result.return_value
+        leftovers = [
+            p for p in Path(tempfile.gettempdir()).iterdir() if p.name.startswith("ov_up_tree_")
+        ]
+        assert leftovers == []
+
+    @pytest.mark.asyncio
+    async def test_viking_upload_tree_error_cleans_up(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock, tmp_path: Path
+    ) -> None:
+        """viking_upload_tree surfaces add_resource failures and cleans the temp dir."""
+        mock_client.add_resource.side_effect = RuntimeError("boom")
+        (tmp_path / "Fault").mkdir()
+        (tmp_path / "Fault" / "e.md").write_text("# Entity", encoding="utf-8")
+
+        tools = build_tools(viking_cap)
+        upload_tool = _get_tool(tools, "viking_upload_tree")
+        ctx = _make_ctx()
+        result = await upload_tool(ctx, path=str(tmp_path), to="viking://resources/test_ns")
+
+        assert "viking_upload_tree error" in result.return_value
+        leftovers = [
+            p for p in Path(tempfile.gettempdir()).iterdir() if p.name.startswith("ov_up_tree_")
+        ]
+        assert leftovers == []
+
+    @pytest.mark.asyncio
+    async def test_viking_link_relations_bidirectional(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock, tmp_path: Path
+    ) -> None:
+        """viking_link_relations pushes both directions per backlink edge."""
+        rel = tmp_path / "backlinks_index.json"
+        rel.write_text(
+            '{"viking://resources/ns/Profile/A": '
+            '["viking://resources/ns/Fault/X", "viking://resources/ns/Fault/Y"], '
+            '"viking://resources/ns/Fault/X": ["viking://resources/ns/Component/Z"]}',
+            encoding="utf-8",
+        )
+        tools = build_tools(viking_cap)
+        link_tool = _get_tool(tools, "viking_link_relations")
+        ctx = _make_ctx()
+        result = await link_tool(
+            ctx,
+            relations_file=str(rel),
+            reason_prefix="wiki",
+            namespace_base="viking://resources/ns",
+        )
+
+        calls = [
+            (c.args[0], list(c.args[1]), c.kwargs.get("reason"))
+            for c in mock_client.link.call_args_list
+        ]
+        assert any(
+            frm == "viking://resources/ns/Profile/A"
+            and set(tos) == {"viking://resources/ns/Fault/X", "viking://resources/ns/Fault/Y"}
+            and reason == "wiki:referenced-by"
+            for frm, tos, reason in calls
+        )
+        assert (
+            "viking://resources/ns/Fault/Y",
+            ["viking://resources/ns/Profile/A"],
+            "wiki:references",
+        ) in calls
+        assert (
+            "viking://resources/ns/Component/Z",
+            ["viking://resources/ns/Fault/X"],
+            "wiki:references",
+        ) in calls
+        # Aggregated: A->[X,Y], X->[Z], Y->[A], Z->[X] (each node written once)
+        assert "linked=4, failed=0" in result.return_value
+
+    @pytest.mark.asyncio
+    async def test_viking_link_relations_skips_out_of_namespace(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock, tmp_path: Path
+    ) -> None:
+        """viking_link_relations never links URIs outside namespace_base."""
+        rel = tmp_path / "backlinks_index.json"
+        rel.write_text(
+            '{"viking://resources/ns/Profile/A": ["viking://resources/other/X"], '
+            '"viking://resources/other/Y": ["viking://resources/ns/Fault/X"]}',
+            encoding="utf-8",
+        )
+        tools = build_tools(viking_cap)
+        link_tool = _get_tool(tools, "viking_link_relations")
+        ctx = _make_ctx()
+        result = await link_tool(
+            ctx, relations_file=str(rel), namespace_base="viking://resources/ns"
+        )
+
+        assert mock_client.link.call_count == 0
+        assert "linked=0, failed=0" in result.return_value
+
+    @pytest.mark.asyncio
+    async def test_viking_link_relations_retries_on_busy(
+        self,
+        viking_cap: VikingCapability,
+        mock_client: AsyncMock,
+        tmp_path: Path,
+        monkeypatch: Any,
+    ) -> None:
+        """viking_link_relations retries busy rejections then succeeds."""
+        import wolfharness.capabilities.viking.tools as viking_tools
+
+        monkeypatch.setattr(viking_tools.asyncio, "sleep", AsyncMock())
+        rel = tmp_path / "backlinks_index.json"
+        rel.write_text(
+            '{"viking://resources/ns/Profile/A": ["viking://resources/ns/Fault/X"]}',
+            encoding="utf-8",
+        )
+        calls = {"n": 0}
+
+        async def flaky_link(from_uri: str, to_uris: Any, reason: str = "") -> None:
+            calls["n"] += 1
+            if calls["n"] <= 2:
+                raise OpenVikingError("resource busy", code="RESOURCE_BUSY")
+
+        mock_client.link.side_effect = flaky_link
+        tools = build_tools(viking_cap)
+        link_tool = _get_tool(tools, "viking_link_relations")
+        ctx = _make_ctx()
+        result = await link_tool(ctx, relations_file=str(rel))
+
+        # 2 busy failures + 1 success (target direction), then 1 success (source direction).
+        assert calls["n"] == 4
+        assert "linked=2, failed=0" in result.return_value
+
+    @pytest.mark.asyncio
+    async def test_viking_link_relations_resolves_md_wrapper(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock, tmp_path: Path
+    ) -> None:
+        """Links use the server's actual md-wrapper path when the literal URI is missing."""
+        rel = tmp_path / "backlinks_index.json"
+        rel.write_text(
+            '{"viking://resources/ns/Fault/X.md": ["viking://resources/ns/Fault/Y.md"]}',
+            encoding="utf-8",
+        )
+        wrapped = "viking://resources/ns/Fault/X/X.md"
+        other_wrapped = "viking://resources/ns/Fault/Y/Y.md"
+
+        async def fake_stat(uri: str) -> dict:
+            if uri in (wrapped, other_wrapped):
+                return {"uri": uri}
+            raise OpenVikingError("not found", code="NOT_FOUND")
+
+        mock_client.stat.side_effect = fake_stat
+        tools = build_tools(viking_cap)
+        link_tool = _get_tool(tools, "viking_link_relations")
+        result = await link_tool(ctx=_make_ctx(), relations_file=str(rel), namespace_base="viking://resources/ns")
+
+        assert "linked=2, failed=0, skipped=0" in result.return_value
+        calls = [(c.args[0], list(c.args[1])) for c in mock_client.link.call_args_list]
+        assert (wrapped, [other_wrapped]) in calls  # referenced-by at resolved target
+        assert (other_wrapped, [wrapped]) in calls  # references at resolved source
+
+    @pytest.mark.asyncio
+    async def test_viking_link_relations_skips_unresolvable(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock, tmp_path: Path
+    ) -> None:
+        """URIs that resolve to no server node are skipped, never linked."""
+        rel = tmp_path / "backlinks_index.json"
+        rel.write_text(
+            '{"viking://resources/ns/Fault/Ghost.md": ["viking://resources/ns/Fault/Other.md"]}',
+            encoding="utf-8",
+        )
+
+        async def fake_stat(uri: str) -> dict:
+            raise OpenVikingError("not found", code="NOT_FOUND")
+
+        mock_client.stat.side_effect = fake_stat
+        tools = build_tools(viking_cap)
+        link_tool = _get_tool(tools, "viking_link_relations")
+        result = await link_tool(ctx=_make_ctx(), relations_file=str(rel), namespace_base="viking://resources/ns")
+
+        assert "linked=0, failed=0, skipped=1" in result.return_value
+        mock_client.link.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_viking_forget(
@@ -1923,26 +2157,27 @@ class TestModeFiltering:
         names = {t.__name__ for t in tools}
         assert "viking_recall" in names
 
-    def test_write_mode_4_tools_default(self) -> None:
-        """Write mode exposes 4 tools (forget gated by enable_forget, remember by enable_memory)."""
+    def test_write_mode_5_tools_default(self) -> None:
+        """Write mode exposes 5 tools (forget gated by enable_forget, remember by enable_memory)."""
         cap = VikingCapability(mode="write")
         cap._client = AsyncMock()
         tools = build_tools(cap)
-        assert len(tools) == 4
+        assert len(tools) == 5
         names = {t.__name__ for t in tools}
         assert names == {
             "viking_write",
             "viking_edit",
             "viking_mkdir",
             "viking_add_resource",
+            "viking_upload_tree",
         }
 
-    def test_write_mode_6_tools_with_memory_and_forget(self) -> None:
-        """Write mode exposes 6 tools when enable_memory=True and enable_forget=True."""
+    def test_write_mode_7_tools_with_memory_and_forget(self) -> None:
+        """Write mode exposes 7 tools when enable_memory=True and enable_forget=True."""
         cap = VikingCapability(mode="write", enable_memory=True, enable_forget=True)
         cap._client = AsyncMock()
         tools = build_tools(cap)
-        assert len(tools) == 6
+        assert len(tools) == 7
         names = {t.__name__ for t in tools}
         assert "viking_remember" in names
         assert "viking_forget" in names
@@ -1956,28 +2191,28 @@ class TestModeFiltering:
         names = {t.__name__ for t in tools}
         assert names == {"viking_set_tags"}
 
-    def test_graph_mode_2_tools_with_link(self) -> None:
-        """Graph mode exposes 2 tools when enable_link=True."""
+    def test_graph_mode_3_tools_with_link(self) -> None:
+        """Graph mode exposes 3 tools when enable_link=True."""
         cap = VikingCapability(mode="graph", enable_link=True)
         cap._client = AsyncMock()
         tools = build_tools(cap)
-        assert len(tools) == 2
+        assert len(tools) == 3
         names = {t.__name__ for t in tools}
-        assert names == {"viking_link", "viking_set_tags"}
+        assert names == {"viking_link", "viking_link_relations", "viking_set_tags"}
 
-    def test_all_mode_12_tools_default(self) -> None:
-        """All mode exposes 12 tools by default (link, memory, and forget gated off)."""
+    def test_all_mode_13_tools_default(self) -> None:
+        """All mode exposes 13 tools by default (link_relations, memory, and forget gated off)."""
         cap = VikingCapability(mode="all")
         cap._client = AsyncMock()
         tools = build_tools(cap)
-        assert len(tools) == 12
+        assert len(tools) == 13
 
-    def test_all_mode_16_tools_with_flags(self) -> None:
-        """All mode exposes 16 tools when enable_link + enable_memory + enable_forget."""
+    def test_all_mode_18_tools_with_flags(self) -> None:
+        """All mode exposes 18 tools when enable_link + enable_memory + enable_forget."""
         cap = VikingCapability(mode="all", enable_link=True, enable_memory=True, enable_forget=True)
         cap._client = AsyncMock()
         tools = build_tools(cap)
-        assert len(tools) == 16
+        assert len(tools) == 18
 
     def test_get_toolset_retrieve(self) -> None:
         """get_toolset() returns a FunctionToolset with 7 tools for retrieve mode (default)."""
@@ -1992,7 +2227,7 @@ class TestModeFiltering:
         assert len(tool_names) == 7
 
     def test_get_toolset_write(self) -> None:
-        """get_toolset() returns a FunctionToolset with 4 tools for write mode (default)."""
+        """get_toolset() returns a FunctionToolset with 5 tools for write mode (default)."""
         from pydantic_ai.toolsets import FunctionToolset
 
         cap = VikingCapability(mode="write")
@@ -2001,7 +2236,7 @@ class TestModeFiltering:
         assert toolset is not None
         assert isinstance(toolset, FunctionToolset)
         tool_names = list(toolset.tools.keys())  # type: ignore[attr-defined]
-        assert len(tool_names) == 4
+        assert len(tool_names) == 5
 
     def test_get_toolset_graph(self) -> None:
         """get_toolset() returns a FunctionToolset with 1 tool for graph mode (default)."""
@@ -2016,7 +2251,7 @@ class TestModeFiltering:
         assert len(tool_names) == 1
 
     def test_get_toolset_all(self) -> None:
-        """get_toolset() returns a FunctionToolset with 12 tools for all mode (default)."""
+        """get_toolset() returns a FunctionToolset with 13 tools for all mode (default)."""
         from pydantic_ai.toolsets import FunctionToolset
 
         cap = VikingCapability(mode="all")
@@ -2025,7 +2260,7 @@ class TestModeFiltering:
         assert toolset is not None
         assert isinstance(toolset, FunctionToolset)
         tool_names = list(toolset.tools.keys())  # type: ignore[attr-defined]
-        assert len(tool_names) == 12
+        assert len(tool_names) == 13
 
     def test_get_toolset_id_is_viking(self) -> None:
         """get_toolset() returns a FunctionToolset with id='viking'."""

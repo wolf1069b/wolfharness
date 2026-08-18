@@ -67,6 +67,7 @@ Use `viking_glob` for filename discovery (which files exist under this path?).
 | Create new content | `viking_write` | New document at a specific URI |
 | Edit existing content | `viking_edit` | Replace a specific string within a document |
 | Ingest external files | `viking_add_resource` | Add local files or remote URLs to the Viking graph |
+| Upload an entire tree | `viking_upload_tree` | Upload a local directory tree in ONE `wait=True` call (embeddings built before return) |
 | Create directory | `viking_mkdir` | Organize content hierarchically |
 | Delete content | `viking_forget` | Remove a document or directory (irreversible — confirm before calling) |
 
@@ -80,6 +81,9 @@ Viking enforces path restrictions on write operations:
   - Example: `viking://resources/wiki/Device/SY215.md`
 - **`viking_add_resource`**: The `to` parameter must target a URI under
   `viking://resources/`.
+- **`viking_upload_tree`**: The `to` parameter must target a URI under
+  `viking://resources/`. Skipped at the top level: dot-prefixed names,
+  `index/`, `source_packets/`.
 - **`viking_link`**: Both `from_uri` and all `to_uris` must point to
   existing nodes. The backend rejects links to non-existent nodes.
   Create entities before linking them.
@@ -108,6 +112,10 @@ Use `viking_ls` to discover available URIs when unsure.
 - **`viking_link`**: Create typed links between nodes. Both source and
   target must exist. Use `reason` to label the relationship type
   (e.g., "depends-on", "references", "causes").
+- **`viking_link_relations`**: Push a local relations file
+  (`{target_uri: [source_uri, ...]}`) as bidirectional `link()` relations —
+  `{reason_prefix}:referenced-by` at each target, `{reason_prefix}:references`
+  at each source. URIs outside `namespace_base` are skipped.
 - **`viking_set_tags`**: Add `key=value` tags to nodes for categorization
   (e.g., `status=active`, `priority=high`). Use `recursive=True` to
   tag all children.
