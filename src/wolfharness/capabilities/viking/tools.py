@@ -114,6 +114,13 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                 client = await cap._ensure_client()
                 sid = _get_session_id(ctx)
                 sdk_filter: dict[str, Any] | None = {"level": level} if level else None
+                if cap.allowed_uri_prefixes:
+                    if target_uri:
+                        err = cap._check_uri_allowed(target_uri, tool_name="viking_search")
+                        if err:
+                            return ToolReturn(return_value=err)
+                    else:
+                        target_uri = cap.allowed_uri_prefixes[0]
                 result = await client.search(
                     query,
                     target_uri=target_uri,
@@ -152,6 +159,13 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
             try:
                 client = await cap._ensure_client()
                 sdk_filter: dict[str, Any] | None = {"level": level} if level else None
+                if cap.allowed_uri_prefixes:
+                    if target_uri:
+                        err = cap._check_uri_allowed(target_uri, tool_name="viking_find")
+                        if err:
+                            return ToolReturn(return_value=err)
+                    else:
+                        target_uri = cap.allowed_uri_prefixes[0]
                 result = await client.find(
                     query,
                     target_uri=target_uri,
@@ -255,6 +269,8 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
             """
             try:
                 client = await cap._ensure_client()
+                if err := cap._check_uri_allowed(uri, tool_name="viking_grep"):
+                    return ToolReturn(return_value=err)
                 patterns = [pattern] if isinstance(pattern, str) else pattern
 
                 async def _grep_one(p: str) -> list[dict[str, Any]]:
@@ -304,6 +320,8 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
             """
             try:
                 client = await cap._ensure_client()
+                if err := cap._check_uri_allowed(uri, tool_name="viking_glob"):
+                    return ToolReturn(return_value=err)
                 result = await client.glob(
                     pattern,
                     uri=uri,
@@ -339,6 +357,8 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
             """
             try:
                 client = await cap._ensure_client()
+                if err := cap._check_uri_allowed(uri, tool_name="viking_ls"):
+                    return ToolReturn(return_value=err)
                 entries = await client.ls(uri, simple=False, recursive=recursive)
                 entry_list = entries if isinstance(entries, list) else []
 
@@ -426,6 +446,9 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
             try:
                 client = await cap._ensure_client()
                 uri_list = [uris] if isinstance(uris, str) else uris
+                for u in uri_list:
+                    if err := cap._check_uri_allowed(u, tool_name="viking_read"):
+                        return ToolReturn(return_value=err)
                 sections: list[str] = []
                 image_parts: list[BinaryImage] = []
                 for u in uri_list:
@@ -509,6 +532,8 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
             """
             try:
                 client = await cap._ensure_client()
+                if err := cap._check_uri_allowed(uri, tool_name="viking_expand"):
+                    return ToolReturn(return_value=err)
                 content = await client.read(uri)
                 return ToolReturn(
                     return_value=str(content) if content else "No content found at URI."
@@ -586,6 +611,8 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
             """
             try:
                 client = await cap._ensure_client()
+                if err := cap._check_uri_allowed(uri, tool_name="viking_write"):
+                    return ToolReturn(return_value=err)
                 await client.write(uri, content, mode=mode)
                 return ToolReturn(
                     return_value=f"Wrote {len(content)} chars to {uri} (mode={mode})."
@@ -620,6 +647,8 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
             """
             try:
                 client = await cap._ensure_client()
+                if err := cap._check_uri_allowed(uri, tool_name="viking_edit"):
+                    return ToolReturn(return_value=err)
                 current = await client.read(uri)
                 count = current.count(old_string)
                 if count == 0:
@@ -658,6 +687,8 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
             """
             try:
                 client = await cap._ensure_client()
+                if err := cap._check_uri_allowed(uri, tool_name="viking_mkdir"):
+                    return ToolReturn(return_value=err)
                 await client.mkdir(uri, description=description)
                 return ToolReturn(return_value=f"Created directory {uri}.")
             except Exception as e:
@@ -690,6 +721,11 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
             """
             try:
                 client = await cap._ensure_client()
+                for target, label in ((to, "to"), (parent, "parent")):
+                    if target and (
+                        err := cap._check_uri_allowed(target, tool_name="viking_add_resource")
+                    ):
+                        return ToolReturn(return_value=f"{err} ({label})")
                 # SDK add_resource() does not accept processing_mode;
                 # pass only supported kwargs.
                 result = await client.add_resource(
@@ -718,6 +754,8 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
             """
             try:
                 client = await cap._ensure_client()
+                if err := cap._check_uri_allowed(uri, tool_name="viking_forget"):
+                    return ToolReturn(return_value=err)
                 await client.rm(uri, recursive=recursive)
                 return ToolReturn(return_value=f"Removed {uri}.")
             except Exception as e:
@@ -760,8 +798,13 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
             """
             try:
                 client = await cap._ensure_client()
-                await client.link(from_uri, to_uris, reason=reason)
+                if err := cap._check_uri_allowed(from_uri, tool_name="viking_link"):
+                    return ToolReturn(return_value=f"{err} (from_uri)")
                 targets = to_uris if isinstance(to_uris, list) else [to_uris]
+                for t in targets:
+                    if err := cap._check_uri_allowed(t, tool_name="viking_link"):
+                        return ToolReturn(return_value=f"{err} (to_uris)")
+                await client.link(from_uri, to_uris, reason=reason)
                 return ToolReturn(
                     return_value=f"Linked {from_uri} -> {', '.join(targets)} (reason: {reason!r})."
                 )
@@ -786,6 +829,8 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
             """
             try:
                 client = await cap._ensure_client()
+                if err := cap._check_uri_allowed(uri, tool_name="viking_set_tags"):
+                    return ToolReturn(return_value=err)
                 await client.set_tags(uri, tags, mode="replace", recursive=recursive)
                 return ToolReturn(return_value=f"Set {len(tags)} tag(s) on {uri}.")
             except Exception as e:

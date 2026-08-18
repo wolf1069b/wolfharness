@@ -691,6 +691,217 @@ async def test_l2_uri_guard_blocks_viking_uri_in_read_tool() -> None:
 
 
 # ---------------------------------------------------------------------------
+# 8.5 — L2: allowed_uri_prefixes config-based restriction
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_l2_allowed_uri_prefixes_block_read_outside_scope() -> None:
+    """L2: viking_read rejects URIs outside the configured prefix allowlist.
+
+    Given: a VikingCapability built from config with
+        allowed_uri_prefixes=["viking://resources/wiki/"].
+    When: viking_read is called with a URI under viking://resources/raw/.
+    Then: the tool returns an error string and the SDK read is NOT called.
+    """
+    client = _make_mock_client()
+    cfg = VikingCapabilityConfig(
+        mode="retrieve",
+        allowed_uri_prefixes=["viking://resources/wiki/"],
+    )
+    cap = _build_cap_from_config(cfg, client)
+    tools = build_tools(cap)
+    read_tool = next(t for t in tools if t.__name__ == "viking_read")
+
+    ctx = _make_run_context()
+    result = await read_tool(ctx, uris="viking://resources/raw/engine.md")
+
+    assert "outside the allowed prefixes" in result.return_value
+    client.read.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_l2_allowed_uri_prefixes_allow_read_in_scope() -> None:
+    """L2: viking_read succeeds for URIs within the configured prefix allowlist.
+
+    Given: a VikingCapability built from config with
+        allowed_uri_prefixes=["viking://resources/wiki/"].
+    When: viking_read is called with a URI under that prefix.
+    Then: the SDK read is called with the URI and content is returned.
+    """
+    client = _make_mock_client()
+    client.read = AsyncMock(return_value="wiki content")
+    cfg = VikingCapabilityConfig(
+        mode="retrieve",
+        allowed_uri_prefixes=["viking://resources/wiki/"],
+    )
+    cap = _build_cap_from_config(cfg, client)
+    tools = build_tools(cap)
+    read_tool = next(t for t in tools if t.__name__ == "viking_read")
+
+    ctx = _make_run_context()
+    result = await read_tool(ctx, uris="viking://resources/wiki/Device/SY215.md")
+
+    assert "1\u2502 wiki content" in result.return_value
+    assert client.read.call_args.args[0] == "viking://resources/wiki/Device/SY215.md"
+
+
+@pytest.mark.asyncio
+async def test_l2_allowed_uri_prefixes_search_scoped_when_no_target() -> None:
+    """L2: viking_search defaults target_uri to the first allowed prefix.
+
+    Given: allowed_uri_prefixes configured, no target_uri passed.
+    When: viking_search is called.
+    Then: the SDK search receives target_uri equal to the first allowed prefix.
+    """
+    client = _make_mock_client()
+    cfg = VikingCapabilityConfig(
+        mode="retrieve",
+        allowed_uri_prefixes=["viking://resources/wiki/"],
+    )
+    cap = _build_cap_from_config(cfg, client)
+    tools = build_tools(cap)
+    search_tool = next(t for t in tools if t.__name__ == "viking_search")
+
+    ctx = _make_run_context()
+    await search_tool(ctx, query="hydraulic")
+
+    assert client.search.call_args.kwargs["target_uri"] == "viking://resources/wiki/"
+
+
+@pytest.mark.asyncio
+async def test_l2_allowed_uri_prefixes_scopes_list_resources() -> None:
+    """L2: list_resources narrows the resources tree, own sessions pass through.
+
+    Given: allowed_uri_prefixes=["viking://resources/wiki/"].
+    When: list_resources() is called.
+    Then: resources entries come from the allowed prefix; the SDK ls is
+        never invoked on the whole viking://resources/ tree, and the
+        non-resources sessions tree is listed as-is.
+    """
+    client = _make_mock_client()
+    cfg = VikingCapabilityConfig(
+        mode="all",
+        allowed_uri_prefixes=["viking://resources/wiki/"],
+    )
+    cap = _build_cap_from_config(cfg, client)
+    cap._client = client
+
+    client.ls = AsyncMock(
+        return_value=[
+            {
+                "uri": "viking://resources/wiki/Device/SY215.md",
+                "name": "SY215.md",
+                "isDir": False,
+            },
+            {
+                "uri": "viking://resources/wiki/engine/torque.md",
+                "name": "torque.md",
+                "isDir": False,
+            },
+        ]
+    )
+    resources = await cap.list_resources()
+
+    assert [r.uri for r in resources] == [
+        "viking://resources/wiki/Device/SY215.md",
+        "viking://resources/wiki/engine/torque.md",
+    ]
+    ls_uris = [call.args[0] for call in client.ls.await_args_list]
+    assert set(ls_uris) == {
+        "viking://resources/wiki/",
+        "viking://user/default/sessions/",
+    }
+    assert "viking://resources/" not in ls_uris
+
+
+@pytest.mark.asyncio
+async def test_l2_allowed_uri_prefixes_config_roundtrip() -> None:
+    """L2: allowed_uri_prefixes propagates from YAML config to capability.
+
+    Given: an agent YAML fragment with allowed_uri_prefixes.
+    When: the manifest is loaded.
+    Then: the resulting VikingCapabilityConfig carries the prefixes.
+    """
+    from wolfharness import AgentsManifest
+
+    yaml_str = """
+agents:
+  test_agent:
+    type: native
+    model: test
+    capabilities:
+      - type: viking
+        mode: retrieve
+        allowed_uri_prefixes:
+          - viking://resources/wiki/
+          - viking://resources/raw/
+"""
+    d = yamling.load_yaml(yaml_str, verify_type=dict)
+    manifest = AgentsManifest.model_validate(d)
+    cap_configs = manifest.agents["test_agent"].capabilities
+    assert len(cap_configs) == 1
+    cfg = cap_configs[0]
+    assert isinstance(cfg, VikingCapabilityConfig)
+    assert cfg.allowed_uri_prefixes == [
+        "viking://resources/wiki/",
+        "viking://resources/raw/",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_l2_memory_features_implicitly_allowed_outside_prefixes() -> None:
+    """L2: memory features run even though memories URI is outside the allowlist.
+
+    Given: a VikingCapabilityConfig with auto_recall_enabled=True and an
+        allowlist covering only viking://resources/ sub-prefixes.
+    When: before_model_request is called with a user prompt.
+    Then: auto_recall fires — client.search() is called against the agent's
+        memories URI, since the allowlist only restricts the
+        viking://resources/ namespace.
+    """
+    client = _make_mock_client()
+    client.search = AsyncMock(
+        return_value={
+            "results": [
+                {
+                    "uri": "viking://user/alice/memories/doc.md",
+                    "score": 0.9,
+                    "content": "hydraulic diagnosis info",
+                    "context_type": "memory",
+                }
+            ]
+        }
+    )
+    identity = VikingIdentity(account_id="acct", user_id="alice", role="user")
+
+    cfg = VikingCapabilityConfig(
+        mode="all",
+        auto_recall_enabled=True,
+        auto_recall_method="search",
+        allowed_uri_prefixes=["viking://resources/wiki/"],
+    )
+    cap = _build_cap_from_config(cfg, client, identity)
+
+    msg = ModelRequest(parts=[UserPromptPart(content="hydraulic pressure issue")])
+    rc = _make_request_context([msg])
+    ctx = _make_run_context(session_id="sess-123")
+
+    result = await cap.before_model_request(ctx, rc)
+
+    client.search.assert_called_once()
+    assert "viking://user/alice/memories/" in client.search.call_args.kwargs["target_uri"]
+    assert result is not rc
+    assert any(
+        "<openviking-recall>" in part.content
+        for msg_ in result.messages
+        if isinstance(msg_, ModelRequest)
+        for part in msg_.parts
+        if isinstance(part, SystemPromptPart)
+    )
+
+
+# ---------------------------------------------------------------------------
 # 8.5 — L2: for_run() state isolation
 # ---------------------------------------------------------------------------
 

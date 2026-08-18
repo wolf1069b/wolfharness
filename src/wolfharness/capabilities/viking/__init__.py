@@ -192,6 +192,18 @@ class VikingCapability(AbstractCapability[Any]):
     )
     """Tool names protected by the URI guard. When ``uri_guard_enabled`` is
     ``True``, these tools are blocked from accessing ``viking://`` URIs."""
+    allowed_uri_prefixes: list[str] = field(default_factory=list)
+    """URI prefix allowlist for the ``viking://resources/`` namespace only.
+
+    When non-empty, knowledge-base access (all ``viking_*`` tools + the
+    @-mention flow) rejects ``viking://resources/...`` URIs outside the
+    listed prefixes. All other namespaces — ``viking://user/...``
+    (the agent's own memories, sessions, skills, and other users'
+    namespaces), ``viking://skills/``, etc. — are always allowed and
+    governed by their own feature flags. Skills discovery
+    (``list_skills``/``read_skill``/``skill_exists``) only lists the
+    skills URI, so it is unaffected by this allowlist.
+    Empty list (default) means unrestricted — backward compatible."""
     profile_enabled: bool = False
     """Enable first-turn profile injection from Viking memories. When True,
     the capability queries Viking for memory search results on the first
@@ -411,6 +423,50 @@ class VikingCapability(AbstractCapability[Any]):
         user_id = self._identity.user_id if self._identity is not None else (self.user or "default")
         return f"viking://user/{user_id}/skills/"
 
+    def _check_uri_allowed(self, uri: str, *, tool_name: str = "") -> str | None:
+        """Return an error message if ``uri`` is outside the allowed prefixes.
+
+        When ``allowed_uri_prefixes`` is empty (unrestricted), always returns
+        ``None``. The allowlist applies **only** to the
+        ``viking://resources/`` namespace: URIs in any other namespace
+        (``viking://user/...`` and everything else) are always allowed.
+        Within the resources namespace, ``uri`` is allowed only when it
+        starts with one of the listed prefixes.
+
+        Args:
+            uri: The ``viking://`` URI to validate.
+            tool_name: Optional tool name for the error message.
+
+        Returns:
+            ``None`` if allowed, otherwise a string suitable as a tool
+            return value.
+        """
+        if not self.allowed_uri_prefixes:
+            return None
+        if not uri or not uri.startswith("viking://resources/"):
+            return None
+        if any(uri.startswith(prefix) for prefix in self.allowed_uri_prefixes):
+            return None
+        name = tool_name or "viking"
+        return f"{name}: URI {uri!r} is outside the allowed prefixes ({self.allowed_uri_prefixes})."
+
+    def _allowed_prefix_for(self, uri: str) -> str | None:
+        """Return the allowed prefix matched by ``uri``, or ``None``.
+
+        Args:
+            uri: The ``viking://`` URI to match against the allowlist.
+
+        Returns:
+            The first allowed prefix that ``uri`` starts with, or ``None``
+            when the allowlist is empty or no prefix matches.
+        """
+        if not self.allowed_uri_prefixes:
+            return uri
+        for prefix in self.allowed_uri_prefixes:
+            if uri.startswith(prefix):
+                return prefix
+        return None
+
     async def __aenter__(self) -> Self:
         """Initialize the Viking SDK client.
 
@@ -547,6 +603,8 @@ class VikingCapability(AbstractCapability[Any]):
         try:
             client = await self._ensure_client()
             uri = self._resolve_skills_uri()
+            if self._check_uri_allowed(uri, tool_name="list_skills") is not None:
+                return []
             entries = await client.ls(uri)
             if not isinstance(entries, list):
                 return []
@@ -587,6 +645,8 @@ class VikingCapability(AbstractCapability[Any]):
         try:
             client = await self._ensure_client()
             uri = self._resolve_skills_uri()
+            if self._check_uri_allowed(uri, tool_name="read_skill") is not None:
+                return None
             content = await client.read(f"{uri}{name}.md")
             return str(content) if content else None
         except Exception:
@@ -605,6 +665,8 @@ class VikingCapability(AbstractCapability[Any]):
         try:
             client = await self._ensure_client()
             uri = self._resolve_skills_uri()
+            if self._check_uri_allowed(uri, tool_name="skill_exists") is not None:
+                return False
             entries = await client.ls(uri)
             if not isinstance(entries, list):
                 return False
@@ -745,6 +807,12 @@ class VikingCapability(AbstractCapability[Any]):
                 self._identity.user_id if self._identity is not None else (self.user or "default")
             )
             archive_uri = f"viking://user/{user_id}/memories/compacted/{uuid.uuid4().hex[:12]}.md"
+            if self._check_uri_allowed(archive_uri, tool_name="compaction") is not None:
+                logger.debug(
+                    "compaction: archive URI %s outside allowed prefixes — skipping",
+                    archive_uri,
+                )
+                return request_context
             await client.write(archive_uri, serialized, mode="create")
 
             # Replace old messages with summary + URI reference.
@@ -851,6 +919,11 @@ class VikingCapability(AbstractCapability[Any]):
         ``sessions_uri`` (user session content), merges and deduplicates
         by URI, then enriches descriptions with L0 abstracts.
 
+        When ``allowed_uri_prefixes`` is non-empty, only ``viking://resources/``
+        trees are restricted — a resources tree outside the allowlist is
+        narrowed to its allowed sub-prefixes. All other trees (own sessions,
+        override locations outside the resources namespace) are listed as-is.
+
         Files are what users @ mention — directories can't be read as
         content.
 
@@ -860,7 +933,23 @@ class VikingCapability(AbstractCapability[Any]):
         """
         try:
             client = await self._ensure_client()
-            uris = [self._resolve_resources_uri(), self._resolve_sessions_uri()]
+            candidates = [self._resolve_resources_uri(), self._resolve_sessions_uri()]
+            uris: list[str] = []
+            for u in candidates:
+                if not self.allowed_uri_prefixes or not u.startswith("viking://resources/"):
+                    uris.append(u)
+                    continue
+                if self._allowed_prefix_for(u) is not None:
+                    uris.append(u)
+                    continue
+                # Base tree outside the allowlist — list each allowed prefix
+                # that lives under this tree instead.
+                for prefix in self.allowed_uri_prefixes:
+                    if prefix.startswith(u) and prefix not in uris:
+                        uris.append(prefix)
+
+            if not uris:
+                return []
 
             # List from each URI tree in parallel
             results = await asyncio.gather(
@@ -901,6 +990,8 @@ class VikingCapability(AbstractCapability[Any]):
             A list containing a ``TextResourceContent`` with the resource
             content, or ``None`` if not found or on error.
         """
+        if self._check_uri_allowed(uri, tool_name="read_resource") is not None:
+            return None
         try:
             client = await self._ensure_client()
             # Use configured read level (L0/L1/L2), fallback to L2 if unavailable
@@ -945,6 +1036,8 @@ class VikingCapability(AbstractCapability[Any]):
         Returns:
             ``True`` if the resource exists, ``False`` otherwise or on error.
         """
+        if self._check_uri_allowed(uri, tool_name="resource_exists") is not None:
+            return False
         try:
             client = await self._ensure_client()
             parent = uri.rsplit("/", 1)[0] + "/"
@@ -965,7 +1058,7 @@ class VikingCapability(AbstractCapability[Any]):
 
     _FIRST_TURN_MAX_MESSAGES = 2
 
-    async def _handle_profile_inject(
+    async def _handle_profile_inject(  # noqa: PLR0911
         self,
         ctx: RunContext[Any],
         request_context: ModelRequestContext,
@@ -1008,6 +1101,13 @@ class VikingCapability(AbstractCapability[Any]):
             return request_context
 
         self._profile_injected = True
+
+        if (
+            self._check_uri_allowed(self._resolve_memories_uri(), tool_name="profile_inject")
+            is not None
+        ):
+            logger.debug("profile_inject: memories_uri outside allowed prefixes — skipping")
+            return request_context
 
         try:
             client = await self._ensure_client()
@@ -1508,6 +1608,13 @@ class VikingCapability(AbstractCapability[Any]):
             # text inside a .md container.
             uri = f"{uploads_uri}{uuid.uuid4().hex[:12]}.md"
 
+            if self._check_uri_allowed(uri, tool_name="multimodal_bridge") is not None:
+                logger.debug(
+                    "multimodal_bridge: upload URI %s outside allowed prefixes — skipping",
+                    uri,
+                )
+                return None
+
             # write() accepts text content; encode binary as base64
             import base64
 
@@ -1520,7 +1627,7 @@ class VikingCapability(AbstractCapability[Any]):
 
     # ---- Auto Semantic Recall ----
 
-    async def _handle_auto_recall(
+    async def _handle_auto_recall(  # noqa: PLR0911
         self,
         ctx: RunContext[Any],
         request_context: ModelRequestContext,
@@ -1560,6 +1667,14 @@ class VikingCapability(AbstractCapability[Any]):
         if not self.auto_recall_enabled:
             return request_context
 
+        memories_uri = self._resolve_memories_uri()
+        if self._check_uri_allowed(memories_uri, tool_name="auto_recall") is not None:
+            logger.debug(
+                "auto_recall: memories_uri %s outside allowed prefixes — skipping",
+                memories_uri,
+            )
+            return request_context
+
         # Extract the latest user prompt
         prompt = _extract_latest_user_prompt(request_context.messages)
         if prompt is None:
@@ -1570,8 +1685,6 @@ class VikingCapability(AbstractCapability[Any]):
         except Exception:
             logger.warning("auto_recall: failed to ensure client", exc_info=True)
             return request_context
-
-        memories_uri = self._resolve_memories_uri()
 
         # Extract session_id from ctx.deps if available
         from wolfharness.capabilities.viking.tools import _get_session_id

@@ -88,6 +88,16 @@ Viking enforces path restrictions on write operations:
 Always use **full** `viking://` URIs. Never use relative paths.
 Use `viking_ls` to discover available URIs when unsure.
 
+### Access Restrictions (URI Prefixes)
+
+This agent's Viking access may be restricted to a configured set of URI
+prefixes. URIs outside those prefixes are rejected by the tools with an
+error. When an access error appears, do not retry with modified URIs —
+use `viking_ls` on the allowed prefixes to see what is in scope, or use
+`viking_search`/`viking_find` without a `target_uri` (the search is
+scoped automatically). Never attempt to bypass the restriction by
+guessing paths.
+
 ### Memory Tools
 
 - **`viking_remember`**: Store the current conversation in Viking memory

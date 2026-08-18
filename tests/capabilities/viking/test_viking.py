@@ -4373,6 +4373,310 @@ class TestURIGuard:
 
 
 # ---------------------------------------------------------------------------
+# 9.0 — allowed_uri_prefixes tests
+# ---------------------------------------------------------------------------
+
+
+class TestAllowedUriPrefixes:
+    """Tests for the allowed_uri_prefixes access restriction."""
+
+    def test_default_unrestricted(self) -> None:
+        """Empty allowed_uri_prefixes means unrestricted."""
+        cap = VikingCapability()
+        assert cap.allowed_uri_prefixes == []
+        assert cap._check_uri_allowed("viking://resources/wiki/Device.md") is None
+        assert cap._check_uri_allowed("viking://user/alice/memories/x.md") is None
+
+    def test_matching_prefix_allowed(self) -> None:
+        """URI under an allowed prefix passes validation."""
+        cap = VikingCapability(allowed_uri_prefixes=["viking://resources/wiki/"])
+        assert cap._check_uri_allowed("viking://resources/wiki/Device/SY215.md") is None
+
+    def test_non_matching_prefix_blocked(self) -> None:
+        """URI outside allowed prefixes returns an error message."""
+        cap = VikingCapability(allowed_uri_prefixes=["viking://resources/wiki/"])
+        err = cap._check_uri_allowed("viking://resources/raw/engine.md")
+        assert err is not None
+        assert "outside the allowed prefixes" in err
+        assert "viking://resources/raw/engine.md" in err
+
+    def test_multiple_prefixes(self) -> None:
+        """Multiple allowed prefixes all pass; others are blocked."""
+        cap = VikingCapability(
+            allowed_uri_prefixes=["viking://resources/wiki/", "viking://resources/raw/"]
+        )
+        assert cap._check_uri_allowed("viking://resources/wiki/a.md") is None
+        assert cap._check_uri_allowed("viking://resources/raw/b.md") is None
+        assert cap._check_uri_allowed("viking://resources/docs/c.md") is not None
+
+    def test_empty_uri_allowed_when_restricted(self) -> None:
+        """Empty URI is allowed (nothing to restrict)."""
+        cap = VikingCapability(allowed_uri_prefixes=["viking://resources/wiki/"])
+        assert cap._check_uri_allowed("") is None
+
+    def test_tool_name_in_error(self) -> None:
+        """Tool name appears in the error message."""
+        cap = VikingCapability(allowed_uri_prefixes=["viking://resources/wiki/"])
+        err = cap._check_uri_allowed("viking://resources/raw/x.md", tool_name="viking_read")
+        assert err is not None
+        assert "viking_read" in err
+
+    def test_non_resources_namespace_always_allowed(self) -> None:
+        """Allowlist only applies to the viking://resources/ namespace."""
+        cap = VikingCapability(allowed_uri_prefixes=["viking://resources/wiki/"])
+        # Own user namespace (memories/sessions/skills) is not resources.
+        assert cap._check_uri_allowed("viking://user/alice/memories/x.md") is None
+        assert cap._check_uri_allowed("viking://user/alice/sessions/y.md") is None
+        assert cap._check_uri_allowed("viking://user/alice/skills/z.md") is None
+        # Other users' namespaces are also not restricted by this allowlist.
+        assert cap._check_uri_allowed("viking://user/bob/memories/x.md") is None
+        assert cap._check_uri_allowed("viking://skills/foo.md") is None
+        assert cap._check_uri_allowed("viking://resources/raw/engine.md") is not None
+
+    def test_prefixed_subtree_matches(self) -> None:
+        """Subtree under an allowed prefix passes validation."""
+        cap = VikingCapability(allowed_uri_prefixes=["viking://resources/wiki/"])
+        assert cap._check_uri_allowed("viking://resources/wiki/Device/SY215.md") is None
+        # A shorter namespace under resources but not in the allowlist is blocked.
+        assert cap._check_uri_allowed("viking://resources/fta-eval/x.md") is not None
+
+    def test_allowed_prefix_for(self) -> None:
+        """_allowed_prefix_for returns matched prefix or None."""
+        cap = VikingCapability(allowed_uri_prefixes=["viking://resources/wiki/"])
+        assert cap._allowed_prefix_for("viking://resources/wiki/a.md") == "viking://resources/wiki/"
+        assert cap._allowed_prefix_for("viking://resources/other/") is None
+
+    def test_allowed_prefix_for_unrestricted(self) -> None:
+        """_allowed_prefix_for returns the URI itself when unrestricted."""
+        cap = VikingCapability()
+        assert (
+            cap._allowed_prefix_for("viking://resources/wiki/a.md")
+            == "viking://resources/wiki/a.md"
+        )
+
+    @pytest.mark.asyncio
+    async def test_viking_read_blocks_outside_prefix(self, mock_client: AsyncMock) -> None:
+        """viking_read rejects URIs outside the allowed prefixes."""
+        cap = VikingCapability(mode="retrieve", allowed_uri_prefixes=["viking://resources/wiki/"])
+        cap._client = mock_client
+        tools = build_tools(cap)
+        read_tool = _get_tool(tools, "viking_read")
+
+        ctx = _make_ctx()
+        result = await read_tool(ctx, uris="viking://resources/raw/engine.md")
+
+        assert "outside the allowed prefixes" in result.return_value
+        mock_client.read.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_viking_read_allows_inside_prefix(self, mock_client: AsyncMock) -> None:
+        """viking_read reads URIs within the allowed prefixes."""
+        mock_client.read = AsyncMock(return_value="content")
+        cap = VikingCapability(mode="retrieve", allowed_uri_prefixes=["viking://resources/wiki/"])
+        cap._client = mock_client
+        tools = build_tools(cap)
+        read_tool = _get_tool(tools, "viking_read")
+
+        ctx = _make_ctx()
+        result = await read_tool(ctx, uris="viking://resources/wiki/Device/SY215.md")
+
+        assert "1\u2502 content" in result.return_value
+        assert mock_client.read.call_args.args[0] == "viking://resources/wiki/Device/SY215.md"
+
+    @pytest.mark.asyncio
+    async def test_viking_read_multi_uri_blocks_first_outside(self, mock_client: AsyncMock) -> None:
+        """viking_read rejects the batch if any URI is outside the prefixes."""
+        cap = VikingCapability(mode="retrieve", allowed_uri_prefixes=["viking://resources/wiki/"])
+        cap._client = mock_client
+        tools = build_tools(cap)
+        read_tool = _get_tool(tools, "viking_read")
+
+        ctx = _make_ctx()
+        result = await read_tool(
+            ctx, uris=["viking://resources/wiki/a.md", "viking://resources/raw/b.md"]
+        )
+
+        assert "outside the allowed prefixes" in result.return_value
+        mock_client.read.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_viking_write_blocks_outside_prefix(self, mock_client: AsyncMock) -> None:
+        """viking_write rejects URIs outside the allowed prefixes."""
+        cap = VikingCapability(mode="all", allowed_uri_prefixes=["viking://resources/wiki/"])
+        cap._client = mock_client
+        tools = build_tools(cap)
+        write_tool = _get_tool(tools, "viking_write")
+
+        ctx = _make_ctx()
+        result = await write_tool(ctx, uri="viking://resources/raw/note.md", content="hi")
+
+        assert "outside the allowed prefixes" in result.return_value
+        mock_client.write.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_viking_search_defaults_to_first_prefix(self, mock_client: AsyncMock) -> None:
+        """viking_search without target_uri scopes to the first allowed prefix."""
+        cap = VikingCapability(mode="retrieve", allowed_uri_prefixes=["viking://resources/wiki/"])
+        cap._client = mock_client
+        tools = build_tools(cap)
+        search_tool = _get_tool(tools, "viking_search")
+
+        ctx = _make_ctx()
+        await search_tool(ctx, query="hydraulic")
+
+        kwargs = mock_client.search.call_args.kwargs
+        assert kwargs["target_uri"] == "viking://resources/wiki/"
+
+    @pytest.mark.asyncio
+    async def test_viking_search_blocks_outside_target(self, mock_client: AsyncMock) -> None:
+        """viking_search rejects a target_uri outside the allowed prefixes."""
+        cap = VikingCapability(mode="retrieve", allowed_uri_prefixes=["viking://resources/wiki/"])
+        cap._client = mock_client
+        tools = build_tools(cap)
+        search_tool = _get_tool(tools, "viking_search")
+
+        ctx = _make_ctx()
+        result = await search_tool(ctx, query="hydraulic", target_uri="viking://resources/raw/")
+
+        assert "outside the allowed prefixes" in result.return_value
+        mock_client.search.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_list_resources_filters_by_prefix(self, mock_client: AsyncMock) -> None:
+        """list_resources narrows resources tree, non-resources trees pass through."""
+        cap = VikingCapability(
+            allowed_uri_prefixes=["viking://resources/wiki/"],
+            user="alice",
+        )
+        cap._client = mock_client
+        mock_client.ls = AsyncMock(return_value=[])
+        resources = await cap.list_resources()
+        assert resources == []
+        ls_uris = [call.args[0] for call in mock_client.ls.await_args_list]
+        assert set(ls_uris) == {
+            "viking://resources/wiki/",
+            "viking://user/alice/sessions/",
+        }
+
+    @pytest.mark.asyncio
+    async def test_list_resources_includes_own_sessions(self, mock_client: AsyncMock) -> None:
+        """list_resources includes the non-resources sessions tree as-is."""
+        cap = VikingCapability(
+            allowed_uri_prefixes=["viking://resources/wiki/"],
+            user="alice",
+        )
+        cap._client = mock_client
+        mock_client.ls = AsyncMock(
+            return_value=[
+                {
+                    "uri": "viking://user/alice/sessions/s1.md",
+                    "name": "s1.md",
+                    "isDir": False,
+                }
+            ]
+        )
+        resources = await cap.list_resources()
+        assert len(resources) == 1
+        assert resources[0].uri == "viking://user/alice/sessions/s1.md"
+
+    @pytest.mark.asyncio
+    async def test_list_resources_includes_allowed_tree(self, mock_client: AsyncMock) -> None:
+        """list_resources lists the allowed prefix tree when it matches."""
+        cap = VikingCapability(allowed_uri_prefixes=["viking://resources/wiki/"])
+        cap._client = mock_client
+        mock_client.ls = AsyncMock(
+            return_value=[
+                {
+                    "uri": "viking://resources/wiki/Device/SY215.md",
+                    "name": "SY215.md",
+                    "isDir": False,
+                }
+            ]
+        )
+        resources = await cap.list_resources()
+        assert len(resources) == 1
+        assert resources[0].uri == "viking://resources/wiki/Device/SY215.md"
+
+    @pytest.mark.asyncio
+    async def test_read_resource_blocks_outside_prefix(self, mock_client: AsyncMock) -> None:
+        """read_resource returns None for URIs outside the allowed prefixes."""
+        cap = VikingCapability(allowed_uri_prefixes=["viking://resources/wiki/"])
+        cap._client = mock_client
+        result = await cap.read_resource("viking://resources/raw/engine.md")
+        assert result is None
+        mock_client.read.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_read_resource_allows_inside_prefix(self, mock_client: AsyncMock) -> None:
+        """read_resource returns content for URIs within the allowed prefixes."""
+        mock_client.read = AsyncMock(return_value="content")
+        cap = VikingCapability(
+            allowed_uri_prefixes=["viking://resources/wiki/"],
+            resource_read_level="read",
+        )
+        cap._client = mock_client
+        result = await cap.read_resource("viking://resources/wiki/a.md")
+        assert result is not None
+        assert result[0].text == "content"
+
+    @pytest.mark.asyncio
+    async def test_resource_exists_blocks_outside_prefix(self, mock_client: AsyncMock) -> None:
+        """resource_exists returns False for URIs outside the allowed prefixes."""
+        cap = VikingCapability(allowed_uri_prefixes=["viking://resources/wiki/"])
+        cap._client = mock_client
+        assert await cap.resource_exists("viking://resources/raw/a.md") is False
+        mock_client.ls.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_for_run_preserves_allowed_prefixes(self, mock_client: AsyncMock) -> None:
+        """for_run() preserves the allowed_uri_prefixes field."""
+        cap = VikingCapability(allowed_uri_prefixes=["viking://resources/wiki/"])
+        cap._client = mock_client
+        ctx = _make_ctx()
+        copy_cap = await cap.for_run(ctx)
+        assert copy_cap.allowed_uri_prefixes == ["viking://resources/wiki/"]
+
+    @pytest.mark.asyncio
+    async def test_auto_recall_fires_when_memories_outside_prefixes(
+        self, mock_client: AsyncMock
+    ) -> None:
+        """auto_recall still fires when memories_uri is not in the allowlist.
+
+        The agent's own memory namespace is implicitly allowed — the
+        knowledge-base allowlist does not gate memory features.
+        """
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
+
+        mock_client.search = AsyncMock(
+            return_value={
+                "results": [
+                    {
+                        "uri": "viking://user/alice/memories/doc.md",
+                        "score": 0.9,
+                        "content": "hydraulic diagnosis info",
+                        "context_type": "memory",
+                    }
+                ]
+            }
+        )
+        cap = VikingCapability(
+            mode="retrieve",
+            auto_recall_enabled=True,
+            allowed_uri_prefixes=["viking://resources/wiki/"],
+        )
+        cap._client = mock_client
+        cap._identity = VikingIdentity(account_id="acct", user_id="alice", role="user")
+
+        ctx = _make_ctx()
+        rc = _make_request_context([ModelRequest(parts=[UserPromptPart(content="query")])])
+        result = await cap._handle_auto_recall(ctx, rc)
+
+        assert result is not rc
+        mock_client.search.assert_called_once()
+        assert mock_client.search.call_args.kwargs["target_uri"] == "viking://user/alice/memories/"
+
+
+# ---------------------------------------------------------------------------
 # 4.7 — viking_forget gating tests (Tasks 4.3-4.4)
 # ---------------------------------------------------------------------------
 

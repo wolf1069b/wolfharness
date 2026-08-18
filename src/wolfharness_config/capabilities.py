@@ -285,6 +285,19 @@ class VikingCapabilityConfig(BaseModel):
     """Tool names protected by the URI guard. When uri_guard_enabled is True,
     these tools are blocked from accessing viking:// URIs. Customize to add
     or remove tools from the protected list."""
+    allowed_uri_prefixes: list[str] = Field(default_factory=list)
+    """URI prefix allowlist covering all viking:// namespaces. When
+    non-empty:
+    - knowledge-base access (all ``viking_*`` tools + the @-mention flow)
+      rejects URIs outside the listed prefixes;
+    - memory paths — auto-recall, profile injection, compaction, and
+      multimodal-bridge uploads — are only active when their target URI
+      (e.g. ``viking://user/{user}/memories/``) is inside the list;
+    - skill discovery (``list_skills``/``read_skill``/``skill_exists``) is
+      only active when the skills URI is inside the list.
+    Since one list governs everything, include both the intended resource
+    prefixes and the memory/skill prefixes when those features are needed.
+    Empty list (default) means unrestricted — backward compatible."""
     compaction_enabled: bool = False
     """When True, archive old conversation messages to Viking before context
     overflow. Disabled by default."""
