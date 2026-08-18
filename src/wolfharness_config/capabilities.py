@@ -16,9 +16,10 @@ Three resolution paths:
 
 from __future__ import annotations
 
+import os
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 KNOWN_CAPABILITY_TYPES: frozenset[str] = frozenset({
@@ -178,6 +179,11 @@ class VikingCapabilityConfig(BaseModel):
     """Viking user ID. If None, SDK resolves from env vars."""
     timeout: float | None = None
     """Request timeout in seconds. If None, SDK uses default (60s)."""
+    tool_prefix: str | None = None
+    """Optional namespace prefix for Viking tool names.
+
+    When unset, legacy ``viking_*`` names are kept.
+    """
     skills_uri: str | None = None
     """Override for skills URI. Default: viking://user/{user or 'default'}/skills/"""
     resources_uri: str | None = None
@@ -202,6 +208,24 @@ class VikingCapabilityConfig(BaseModel):
     """
     uploads_uri: str | None = None
     """Override for uploads URI."""
+
+    @field_validator(
+        "url",
+        "api_key",
+        "account",
+        "user",
+        "skills_uri",
+        "resources_uri",
+        "sessions_uri",
+        "uploads_uri",
+        mode="before",
+    )
+    @classmethod
+    def expand_env_vars(cls, value: object) -> object:
+        """Expand shell-style environment variables in Viking string fields."""
+        if isinstance(value, str):
+            return os.path.expandvars(value)
+        return value
     public_download_base_url: str | None = None
     """Base URL for public download links."""
     enable_link: bool = False
