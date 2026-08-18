@@ -24,7 +24,6 @@ from pydantic_ai.models.function import (
     FunctionModel,
 )
 from pydantic_ai.models.openai import OpenAIChatModel, OpenAIResponsesModel
-from pydantic_ai.profiles.openai import OpenAIModelProfile
 from pydantic_ai.providers.openai import OpenAIProvider
 
 
@@ -37,11 +36,7 @@ if TYPE_CHECKING:
 
 
 def _get_openai_based_model(
-    model: str,
-    base_url: str | None = None,
-    api_key: str | None = None,
-    openai_supports_strict_tool_definition: bool | None = None,
-    openai_supports_tool_choice_required: bool | None = None,
+    model: str, base_url: str | None = None, api_key: str | None = None
 ) -> Model:
     """Get model instance with appropriate implementation based on environment."""
     model_name = model
@@ -50,15 +45,7 @@ def _get_openai_based_model(
         _, model_name = model.split(":", 1)
 
     provider = OpenAIProvider(base_url=base_url, api_key=api_key)
-    profile: OpenAIModelProfile | None = None
-    args = OpenAIModelProfile()
-    if openai_supports_strict_tool_definition is not None:
-        args["openai_supports_strict_tool_definition"] = openai_supports_strict_tool_definition
-    if openai_supports_tool_choice_required is not None:
-        args["openai_supports_tool_choice_required"] = openai_supports_tool_choice_required
-    if args:
-        profile = OpenAIModelProfile(**args)
-    return OpenAIChatModel(model_name=model_name, provider=provider, profile=profile)
+    return OpenAIChatModel(model_name=model_name, provider=provider)
 
 
 def infer_model(model: str | Model) -> Model:
