@@ -320,6 +320,18 @@ class StringModelConfig(BaseModelConfig):
     profile.
     """
 
+    openai_supports_tool_choice_required: bool | None = Field(
+        default=None,
+        title="Supports forced tool choice",
+    )
+    """Whether the endpoint supports forcing a tool (``tool_choice='required'``).
+
+    Some backends reject forcing tool use when it conflicts with their
+    grammar constraints (e.g. sglang/vLLM speculative decoding). When set
+    to ``False``, pydantic-ai falls back to ``tool_choice='auto'``.
+    ``None`` (default) defers to the provider profile.
+    """
+
     def get_model_settings(self) -> PyAIModelSettings:
         """Get model settings in pydantic-ai format."""
         from pydantic_ai.settings import ModelSettings
@@ -359,6 +371,7 @@ class StringModelConfig(BaseModelConfig):
                 base_url=self.base_url,
                 api_key=api_key,
                 openai_supports_strict_tool_definition=self.openai_supports_strict_tool_definition,
+                openai_supports_tool_choice_required=self.openai_supports_tool_choice_required,
             )
         return infer_model(self.identifier)
 

@@ -41,6 +41,7 @@ def _get_openai_based_model(
     base_url: str | None = None,
     api_key: str | None = None,
     openai_supports_strict_tool_definition: bool | None = None,
+    openai_supports_tool_choice_required: bool | None = None,
 ) -> Model:
     """Get model instance with appropriate implementation based on environment."""
     model_name = model
@@ -50,10 +51,13 @@ def _get_openai_based_model(
 
     provider = OpenAIProvider(base_url=base_url, api_key=api_key)
     profile: OpenAIModelProfile | None = None
+    args = OpenAIModelProfile()
     if openai_supports_strict_tool_definition is not None:
-        profile = OpenAIModelProfile(
-            openai_supports_strict_tool_definition=openai_supports_strict_tool_definition
-        )
+        args["openai_supports_strict_tool_definition"] = openai_supports_strict_tool_definition
+    if openai_supports_tool_choice_required is not None:
+        args["openai_supports_tool_choice_required"] = openai_supports_tool_choice_required
+    if args:
+        profile = OpenAIModelProfile(**args)
     return OpenAIChatModel(model_name=model_name, provider=provider, profile=profile)
 
 
