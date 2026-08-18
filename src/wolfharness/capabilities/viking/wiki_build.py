@@ -13,15 +13,28 @@ creation, role-based filtering, and first-turn index injection.
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+import re
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import logfire
 from pydantic import BaseModel
 from pydantic_ai.capabilities import AbstractCapability
 from pydantic_ai.toolsets import AgentToolset, FunctionToolset
+
+from wolfharness.capabilities.resource_protocols import (
+    BlobResourceContent,
+    CompletionArgument,
+    CompletionResult,
+    ResourceAccess,
+    ResourceEntry,
+    ResourceTemplateAccess,
+    ResourceTemplateEntry,
+    TextResourceContent,
+)
 
 # Re-export tool inventory and role types from wiki_build_tools so existing
 # imports from ``wiki_build`` keep working.
@@ -77,15 +90,39 @@ class WikiBuildConfig(BaseModel):
     mode."""
 
 
-class WikiBuildCapability(AbstractCapability[Any]):
+class WikiBuildCapability(
+    AbstractCapability[Any],
+    ResourceAccess,
+    ResourceTemplateAccess,
+):
     """Capability exposing wiki construction tools to an agent.
 
     Config fields mirror :class:`WikiBuildConfig` as constructor kwargs
     so the entry-point ``build()`` path (``cls(**args)``) can construct
     the capability directly from YAML ``args``.
+
+    Implements the ``ResourceAccess`` and ``ResourceTemplateAccess``
+    protocols so OPA/OPS/OPL wiki tickets surface as MCP resources —
+    they show up in resource listings and support ``@``-completion in
+    external agents (``ExtensionRegistry.get_resource_access``,
+    ``opencode_server`` resource endpoint).
     """
 
     _FIRST_TURN_MAX_MESSAGES = 2
+
+    #: URI template per ticket kind — matches the ``OP/`` storage layout.
+    _OP_TICKET_TEMPLATES: ClassVar[dict[str, str]] = {
+        "OPA": "viking://resources/{namespace}/OP/OpA/{id}",
+        "OPS": "viking://resources/{namespace}/OP/OpS/{id}",
+        "OPL": "viking://resources/{namespace}/OP/OpL/{id}",
+    }
+
+    _OP_TEMPLATE_RE = re.compile(
+        r"^viking://resources/\{namespace\}/OP/(OpA|OpS|OpL)/\{id\}$",
+    )
+
+    _LIST_RESOURCE_LIMIT = 50
+    _COMPLETION_LIMIT = 200
 
     def __init__(
         self,
@@ -161,6 +198,186 @@ class WikiBuildCapability(AbstractCapability[Any]):
         from wolfharness.capabilities.viking.wiki_build_tools import get_instructions
 
         return get_instructions(self._config.role)
+
+    # ---- ResourceAccess ----
+
+    async def list_resources(self) -> Sequence[ResourceEntry]:
+        """List OPA/OPS/OPL wiki tickets as MCP resources.
+
+        Returns:
+            Sequence of ``ResourceEntry`` descriptors — at most 50 per
+            ticket kind.
+        """
+        self._ensure_tools()
+        assert self._tools is not None
+        opas = await asyncio.to_thread(self._tools.get_opas, limit=self._LIST_RESOURCE_LIMIT)
+        ops = await asyncio.to_thread(self._tools.get_ops, limit=self._LIST_RESOURCE_LIMIT)
+        opls = await asyncio.to_thread(self._tools.get_opls, limit=self._LIST_RESOURCE_LIMIT)
+        return [
+            *[self._ticket_entry("OPA", record) for record in opas],
+            *[self._ticket_entry("OPS", record) for record in ops],
+            *[self._ticket_entry("OPL", record) for record in opls],
+        ]
+
+    async def read_resource(
+        self, uri: str
+    ) -> list[TextResourceContent | BlobResourceContent] | None:
+        """Read a wiki ticket by its ``viking://`` URI.
+
+        Delegates to ``WikiBuildTools.read_resource``, which resolves the
+        ``OP/`` subtree under the active wiki store.
+
+        Args:
+            uri: Resource URI to read (e.g. ``viking://resources/<ns>/OP/OpA/<id>.md``).
+
+        Returns:
+            List containing the ticket markdown as ``TextResourceContent``,
+            or ``None`` when the URI is not an existing ticket.
+        """
+        self._ensure_tools()
+        assert self._tools is not None
+        content = await asyncio.to_thread(self._tools.read_resource, uri)
+        if content is None:
+            return None
+        return [TextResourceContent(uri=uri, mime_type="text/markdown", text=content)]
+
+    async def resource_exists(self, uri: str) -> bool:
+        """Check whether a wiki ticket resource exists.
+
+        Args:
+            uri: Resource URI to check.
+
+        Returns:
+            ``True`` when the ticket is readable, ``False`` otherwise.
+        """
+        contents = await self.read_resource(uri)
+        return contents is not None
+
+    # ---- ResourceTemplateAccess ----
+
+    async def list_resource_templates(self) -> Sequence[ResourceTemplateEntry]:
+        """Declare the OPA/OPS/OPL ticket URI templates.
+
+        Returns:
+            Sequence of ``ResourceTemplateEntry`` descriptors, one per
+            ticket kind.
+        """
+        return [
+            ResourceTemplateEntry(
+                uri_template=template,
+                name="Wiki tickets",
+                title=f"{kind} ticket by id",
+                description=(
+                    f"{kind} wiki construction ticket under a namespace's "
+                    f"OP/{subdir}/ tree ({kind_label})."
+                ),
+                mime_type="text/markdown",
+            )
+            for template, (kind, subdir, kind_label) in (
+                (self._OP_TICKET_TEMPLATES["OPA"], ("OPA", "OpA", "working problem analysis")),
+                (self._OP_TICKET_TEMPLATES["OPS"], ("OPS", "OpS", "solution suggestion")),
+                (self._OP_TICKET_TEMPLATES["OPL"], ("OPL", "OpL", "knowledge proposal link")),
+            )
+        ]
+
+    async def complete_resource_template(
+        self,
+        uri_template: str,
+        argument: CompletionArgument,
+        context: dict[str, str] | None = None,
+    ) -> CompletionResult:
+        """Suggest ticket ids for a resource template's ``{id}`` argument.
+
+        Args:
+            uri_template: The URI template to complete.
+            argument: The argument being completed — must be ``id``.
+            context: Optional context arguments (may carry ``namespace``).
+
+        Returns:
+            ``CompletionResult`` with matching ``<id> <title>`` suggestions.
+
+        Raises:
+            NotImplementedError: If the template is unsupported or the
+                argument is not ``id``.
+        """
+        kind = self._template_kind(uri_template)
+        if kind is None or argument.name != "id":
+            raise NotImplementedError(
+                f"Completion not supported for template {uri_template!r}",
+            )
+        self._ensure_tools()
+        assert self._tools is not None
+        namespace = (context or {}).get("namespace", "")
+        if namespace and not namespace.startswith("viking://"):
+            namespace = f"viking://resources/{namespace}/"
+        if kind == "OPA":
+            rows = await asyncio.to_thread(
+                self._tools.get_opas,
+                status="pending",
+                limit=self._COMPLETION_LIMIT,
+            )
+            id_key = "opa_id"
+        elif kind == "OPS":
+            rows = await asyncio.to_thread(self._tools.get_ops, limit=self._COMPLETION_LIMIT)
+            id_key = "ops_id"
+        else:
+            rows = await asyncio.to_thread(self._tools.get_opls, limit=self._COMPLETION_LIMIT)
+            id_key = "opl_id"
+        needle = argument.value.strip().lower()
+        values: list[str] = []
+        for record in rows:
+            record_uri = str(record.get("uri", ""))
+            if namespace and not record_uri.startswith(namespace):
+                continue
+            record_id = str(record.get(id_key, ""))
+            title = str(record.get("title", ""))
+            if needle and needle not in record_id.lower() and needle not in title.lower():
+                continue
+            values.append(f"{record_id} {title}".strip())
+        return CompletionResult(values=values, total=len(values), has_more=False)
+
+    # ---- Helpers ----
+
+    @classmethod
+    def _template_kind(cls, uri_template: str) -> str | None:
+        """Map a supported ticket template to its kind (OPA/OPS/OPL).
+
+        Args:
+            uri_template: The URI template to classify.
+
+        Returns:
+            ``"OPA"`` / ``"OPS"`` / ``"OPL"``, or ``None`` when unsupported.
+        """
+        normalized = uri_template.replace("${", "{")
+        match = cls._OP_TEMPLATE_RE.match(normalized)
+        if match is None:
+            return None
+        return {"OpA": "OPA", "OpS": "OPS", "OpL": "OPL"}[match.group(1)]
+
+    @staticmethod
+    def _ticket_entry(kind: str, record: dict[str, object]) -> ResourceEntry:
+        """Map one OPA/OPS/OPL record dict to a resource descriptor.
+
+        Args:
+            kind: Ticket kind — ``"OPA"``, ``"OPS"`` or ``"OPL"``.
+            record: Record dict as returned by the ``get_*`` tools.
+
+        Returns:
+            The corresponding ``ResourceEntry``.
+        """
+        record_id = str(record.get(f"{kind.lower()}_id", ""))
+        title = str(record.get("title", ""))
+        name = f"{kind} {record_id}: {title}" if title else f"{kind} {record_id}"
+        detail = f"status={record.get('status', '')}"
+        category = str(record.get("category", ""))
+        if category:
+            detail = f"{detail}, category={category}"
+        return ResourceEntry(
+            uri=str(record.get("uri", "")),
+            name=name,
+            description=detail,
+            mime_type="text/markdown",
+        )
 
     def get_toolset(self) -> AgentToolset[Any] | None:
         from wolfharness.capabilities.viking.wiki_build_tools import (

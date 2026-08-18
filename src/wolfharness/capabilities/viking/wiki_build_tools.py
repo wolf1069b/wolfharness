@@ -66,7 +66,7 @@ ALL_WIKI_TOOLS: frozenset[str] = frozenset(
         "get_model_mappings",
         "model_mapping_report",
         "create_subdir",
-        "read_resource",
+        "wiki_read_resource",
         "entity_uri",
         "list_children",
         "get_backlinks",
@@ -145,7 +145,7 @@ _READ_TOOLS: frozenset[str] = frozenset(
         "next_chapter_window",
         "read_chapter",
         "read_chapters_batch",
-        "read_resource",
+        "wiki_read_resource",
         "entity_uri",
         "list_children",
         "get_related_resources",
@@ -294,7 +294,7 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
         frozenset(
             {
                 "list_chapters",
-                "read_resource",
+                "wiki_read_resource",
                 "entity_uri",
                 "list_children",
                 "get_related_resources",
@@ -324,7 +324,7 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
         frozenset(
             {
                 "browse",
-                "read_resource",
+                "wiki_read_resource",
                 "search_wiki",
                 "find_wiki",
                 "get_schema",
@@ -402,6 +402,15 @@ class RoleFilter:
 # ---------------------------------------------------------------------------
 
 
+# Tool name → bound method name. Some capability methods must keep their
+# ``ResourceAccess`` protocol name (e.g. ``read_resource``); the agent-facing
+# tool name is prefixed to avoid clashing with the generic ``resource_access``
+# toolset that a native agent may also host.
+_TOOL_NAME_BY_METHOD_NAME: dict[str, str] = {
+    "wiki_read_resource": "read_resource",
+}
+
+
 def _build_method_wrappers(
     tools: Any,
     *,
@@ -426,7 +435,8 @@ def _build_method_wrappers(
     tool_fns: list[Callable[..., Any]] = []
 
     for name in names:
-        attr: object = getattr(tools, name, None)
+        method_name = _TOOL_NAME_BY_METHOD_NAME.get(name, name)
+        attr: object = getattr(tools, method_name, None)
         if attr is None or not callable(attr):
             continue
         method: Callable[..., Any] = cast(Callable[..., Any], attr)
