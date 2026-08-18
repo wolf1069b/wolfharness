@@ -33,6 +33,7 @@ from wolfharness.capabilities.viking.wiki_build_tools import (  # noqa: F401
     _build_method_wrappers as _build_tool_fns,
 )
 from wolfharness.log import get_logger
+from wolfharness.tools.base import FunctionTool
 
 
 if TYPE_CHECKING:
@@ -40,8 +41,6 @@ if TYPE_CHECKING:
 
     from pydantic_ai.models import ModelRequestContext
     from pydantic_ai.tools import RunContext
-
-    from wolfharness.tools.base import FunctionTool
 
 logger = get_logger(__name__)
 

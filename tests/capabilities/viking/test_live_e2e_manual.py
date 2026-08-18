@@ -71,7 +71,9 @@ async def test_live_upload_tree_then_link_relations(allow_model_requests: None) 
         print("LIVE relations NoStart:", json.dumps(r1, ensure_ascii=False))
         print("LIVE relations Timeout:", json.dumps(r2, ensure_ascii=False))
         print("LIVE relations BlackSmoke:", json.dumps(r3, ensure_ascii=False))
-        assert r1 and r2 and r3, f"missing edges: r1={r1} r2={r2} r3={r3}"
+        assert r1, f"missing edges r1={r1}"
+        assert r2, f"missing edges r2={r2}"
+        assert r3, f"missing edges r3={r3}"
         assert "linked=3, failed=0" in lk_res.return_value, f"link failures: {lk_res.return_value}"
 
         await client.rm(f"viking://resources/{ns}", recursive=True)
