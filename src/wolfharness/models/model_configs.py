@@ -307,6 +307,19 @@ class StringModelConfig(BaseModelConfig):
     )
     """Constrains reasoning effort for OpenAI-compatible reasoning models."""
 
+    openai_supports_strict_tool_definition: bool | None = Field(
+        default=None,
+        title="Supports strict tool definitions",
+    )
+    """Whether the endpoint supports OpenAI strict tool definitions (``strict: true``).
+
+    Some OpenAI-compatible backends reject ``"strict": true`` in tool
+    definitions (e.g. sglang/vLLM speculative decoding with grammar
+    constraints). When set to ``False``, pydantic-ai skips sending
+    ``strict`` on tool schemas. ``None`` (default) defers to the provider
+    profile.
+    """
+
     def get_model_settings(self) -> PyAIModelSettings:
         """Get model settings in pydantic-ai format."""
         from pydantic_ai.settings import ModelSettings
@@ -345,6 +358,7 @@ class StringModelConfig(BaseModelConfig):
                 str(self.identifier),
                 base_url=self.base_url,
                 api_key=api_key,
+                openai_supports_strict_tool_definition=self.openai_supports_strict_tool_definition,
             )
         return infer_model(self.identifier)
 
