@@ -3,6 +3,7 @@
 Run explicitly (requires live server):
     uv run pytest tests/capabilities/viking/test_live_e2e_manual.py -q
 """
+
 import json
 import pathlib
 import tempfile
@@ -36,12 +37,12 @@ async def test_live_upload_tree_then_link_relations(allow_model_requests: None) 
     (root / "Fault" / "BlackSmoke.md").write_text("# 冒黑烟", encoding="utf-8")
     rel_file = root / "backlinks_index.json"
     rel_file.write_text(
-        json.dumps(
-            {
-                f"viking://resources/{ns}/Fault/NoStart.md": [f"viking://resources/{ns}/Fault/BlackSmoke.md"],
-                f"viking://resources/{ns}/Timeout.md": [f"viking://resources/{ns}/Fault/NoStart.md"],
-            }
-        ),
+        json.dumps({
+            f"viking://resources/{ns}/Fault/NoStart.md": [
+                f"viking://resources/{ns}/Fault/BlackSmoke.md"
+            ],
+            f"viking://resources/{ns}/Timeout.md": [f"viking://resources/{ns}/Fault/NoStart.md"],
+        }),
         encoding="utf-8",
     )
 
@@ -60,7 +61,9 @@ async def test_live_upload_tree_then_link_relations(allow_model_requests: None) 
         assert not up_res.return_value.lower().startswith("viking_upload_tree error")
 
         links = _get_tool(tools, "viking_link_relations")
-        lk_res = await links(_Ctx(), relations_file=str(rel_file), namespace_base=f"viking://resources/{ns}")
+        lk_res = await links(
+            _Ctx(), relations_file=str(rel_file), namespace_base=f"viking://resources/{ns}"
+        )
         print("LIVE link_relations FULL:", lk_res.return_value)
         assert not lk_res.return_value.lower().startswith("viking_link_relations error")
 

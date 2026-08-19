@@ -183,9 +183,7 @@ class SessionControllerRunsMixin:
             run = self._runs.get(session.current_run_id)
             if run is None or run.agent is None:
                 return
-            await run.agent.event_handler(
-                run.agent.get_context(run_ctx=run.run_ctx), event
-            )
+            await run.agent.event_handler(run.agent.get_context(run_ctx=run.run_ctx), event)
         except Exception:
             logger.debug(
                 "Failed to deliver event to agent event handler",

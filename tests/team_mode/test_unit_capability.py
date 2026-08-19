@@ -1022,6 +1022,28 @@ async def test_task_list_returns_tasks(tmp_path: Any) -> None:
 
 
 @pytest.mark.unit
+async def test_task_list_active_only_omits_terminal_history(tmp_path: Any) -> None:
+    """The compact board view must not rehydrate completed task history."""
+    _init_team(str(tmp_path))
+    ctx = _make_run_context(
+        metadata=_make_lead_metadata(),
+        base_dir=str(tmp_path),
+    )
+    config = _make_enabled_config(base_dir=str(tmp_path))
+    cap = TeamCommCapability(config, "coordinator", _make_lead_metadata())
+
+    completed = await cap.task_create(ctx, "Completed history", owner="translator_agent")
+    completed_id = completed.return_value.replace("Task created: ", "")
+    await cap.task_update(ctx, completed_id, status="completed")
+    await cap.task_create(ctx, "Active work", owner="translator_agent")
+
+    result = await cap.task_list(ctx, active_only=True)
+
+    assert "Active work" in result.return_value
+    assert "Completed history" not in result.return_value
+
+
+@pytest.mark.unit
 async def test_task_update_changes_status(tmp_path: Any) -> None:
     """Given: team session with an existing task.
 

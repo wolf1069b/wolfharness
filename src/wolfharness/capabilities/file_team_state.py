@@ -43,6 +43,7 @@ __all__ = [
 _KEY_PATTERN = re.compile(r"^[a-zA-Z0-9_/]+$")
 
 _MAX_TASKS = 100
+_TERMINAL_TASK_STATUSES = frozenset({"completed", "failed", "cancelled", "deleted", "dead_letter"})
 _DEFAULT_LEASE_SECONDS = 300
 _CONTROL_PLANE_COUNTERS = (
     "task_retry_count",
@@ -222,6 +223,23 @@ class FileTeamState:
     def _control_plane_path(self, team_id: str) -> Path:
         """Return the durable control-plane counter file for one team."""
         return self._team_dir(team_id) / "control_plane.json"
+
+    @staticmethod
+    def _active_task_count(tasks_dir: Path) -> int:
+        """Count only task records that still consume dispatch capacity.
+
+        Completed task files remain as an audit trail and must not make later
+        batches impossible to create.  Capacity is therefore a concurrency
+        guard over non-terminal work, not a retention limit over history.
+        """
+        if not tasks_dir.exists():
+            return 0
+        return sum(
+            1
+            for path in tasks_dir.glob("*.json")
+            if str(FileTeamState._read_json(path).get("status", "pending"))
+            not in _TERMINAL_TASK_STATUSES
+        )
 
     def record_control_plane_event(self, team_id: str, event: str) -> None:
         """Increment one runtime control-plane counter atomically."""
@@ -418,6 +436,11 @@ class FileTeamState:
                     if str(existing.get("intent_key", "")).strip() == intent_key:
                         self.record_control_plane_event(team_id, "duplicate_intent_count")
                         return str(existing.get("task_id", existing_path.stem))
+            if self._active_task_count(tasks_dir) >= _MAX_TASKS:
+                raise ValueError(
+                    f"Task board active capacity reached: {_MAX_TASKS} non-terminal tasks; "
+                    "complete, release, or repartition active work before dispatching more"
+                )
             task_id = f"task_{uuid.uuid4().hex[:8]}"
             task_data = {**task, "task_id": task_id}
             if "status" not in task_data:
@@ -486,11 +509,11 @@ class FileTeamState:
                 else:
                     symbolic_ids[sym_id] = i
 
-        existing_count = len(list(tasks_dir.glob("*.json")))
+        existing_count = self._active_task_count(tasks_dir)
         if existing_count + len(tasks) > _MAX_TASKS:
             errors.append(
                 f"Batch would exceed max tasks limit: "
-                f"{existing_count} existing + {len(tasks)} new > {_MAX_TASKS}"
+                f"{existing_count} active + {len(tasks)} new > {_MAX_TASKS}"
             )
 
         # Validate #N and symbolic references in blocked_by and parent_id.
@@ -537,9 +560,18 @@ class FileTeamState:
         # ------------------------------------------------------------------
         # Creation pass: write all task files within a FileLock
         # ------------------------------------------------------------------
-        lock_path = tasks_dir / ".batch.lock"
+        # Single and batch creation must share one lock.  Separate locks allow
+        # concurrent callers to both pass the capacity check and oversubscribe
+        # the board.
+        lock_path = tasks_dir / ".create.lock"
         lock = FileLock(str(lock_path))
         with lock:
+            existing_count = self._active_task_count(tasks_dir)
+            if existing_count + len(tasks) > _MAX_TASKS:
+                raise ValueError(
+                    f"Batch would exceed max tasks limit (active capacity): "
+                    f"{existing_count} non-terminal + {len(tasks)} new > {_MAX_TASKS}"
+                )
             existing_intents = {
                 str(self._read_json(path).get("intent_key", "")).strip()
                 for path in tasks_dir.glob("*.json")
@@ -729,9 +761,7 @@ class FileTeamState:
             original_owner = str(task.get("owner", ""))
             expires_at = self._parse_timestamp(task.get("lease_expires_at", ""))
             lease_active = (
-                bool(task.get("lease_token"))
-                and expires_at is not None
-                and expires_at > now
+                bool(task.get("lease_token")) and expires_at is not None and expires_at > now
             )
 
             if release_lease:

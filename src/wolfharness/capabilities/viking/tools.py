@@ -945,9 +945,7 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                     )
                 finally:
                     shutil.rmtree(temp_root, ignore_errors=True)
-                return ToolReturn(
-                    return_value=f"Uploaded tree {path} to {to}. Result: {result}"
-                )
+                return ToolReturn(return_value=f"Uploaded tree {path} to {to}. Result: {result}")
             except Exception as e:
                 return ToolReturn(return_value=f"viking_upload_tree error: {e}")
 
@@ -1081,9 +1079,7 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                         skipped += 1
                         continue
                     resolved_sources = []
-                    for s in (
-                        sources if isinstance(sources, list) else []
-                    ):
+                    for s in sources if isinstance(sources, list) else []:
                         if not isinstance(s, str) or not s.startswith(base):
                             continue
                         resolved = await _resolve_uri(client, s)

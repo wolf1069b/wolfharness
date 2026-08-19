@@ -782,28 +782,13 @@ class MCPManager:
                     raise
                 toolset_cache[client_id] = toolset
 
-            mcp = MCP(
+            return MCP(
                 url=_derive_url(server),
                 local=toolset,
                 native=False,
                 id=server.name or server.client_id,
                 allowed_tools=server.enabled_tools,
             )
-            prefix = f"{server.name or server.client_id}__"
-
-            if hasattr(mcp, "get_toolset"):
-                original_get_toolset = mcp.get_toolset
-
-                def _prefixed_get_toolset() -> Any:
-                    ts = original_get_toolset()
-                    if ts is None:
-                        return None
-                    from pydantic_ai.toolsets import PrefixedToolset
-
-                    return PrefixedToolset(wrapped=ts, prefix=prefix)
-
-                mcp.get_toolset = _prefixed_get_toolset  # type: ignore[method-assign]
-            return mcp
 
         async def _process_global_configs(
             snap: McpConfigSnapshot,

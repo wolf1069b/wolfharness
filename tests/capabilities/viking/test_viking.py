@@ -1377,7 +1377,9 @@ class TestWriteTools:
         mock_client.stat.side_effect = fake_stat
         tools = build_tools(viking_cap)
         link_tool = _get_tool(tools, "viking_link_relations")
-        result = await link_tool(ctx=_make_ctx(), relations_file=str(rel), namespace_base="viking://resources/ns")
+        result = await link_tool(
+            ctx=_make_ctx(), relations_file=str(rel), namespace_base="viking://resources/ns"
+        )
 
         assert "linked=2, failed=0, skipped=0" in result.return_value
         calls = [(c.args[0], list(c.args[1])) for c in mock_client.link.call_args_list]
@@ -1401,7 +1403,9 @@ class TestWriteTools:
         mock_client.stat.side_effect = fake_stat
         tools = build_tools(viking_cap)
         link_tool = _get_tool(tools, "viking_link_relations")
-        result = await link_tool(ctx=_make_ctx(), relations_file=str(rel), namespace_base="viking://resources/ns")
+        result = await link_tool(
+            ctx=_make_ctx(), relations_file=str(rel), namespace_base="viking://resources/ns"
+        )
 
         assert "linked=0, failed=0, skipped=1" in result.return_value
         mock_client.link.assert_not_called()
@@ -6674,9 +6678,7 @@ class TestIndexInjection:
         assert "notes.md" not in sys_parts[0].content
 
     @pytest.mark.asyncio
-    async def test_handle_index_inject_disabled_by_default(
-        self, mock_client: AsyncMock
-    ) -> None:
+    async def test_handle_index_inject_disabled_by_default(self, mock_client: AsyncMock) -> None:
         """_handle_index_inject is a no-op when index_enabled=False (default)."""
         cap = VikingCapability(mode="all")  # index_enabled defaults to False
         cap._client = mock_client
@@ -6717,9 +6719,7 @@ class TestIndexInjection:
         assert cap._index_injected is True
 
     @pytest.mark.asyncio
-    async def test_handle_index_inject_graceful_failure(
-        self, mock_client: AsyncMock
-    ) -> None:
+    async def test_handle_index_inject_graceful_failure(self, mock_client: AsyncMock) -> None:
         """_handle_index_inject handles ls() errors gracefully — no raise."""
         from pydantic_ai.messages import ModelRequest, UserPromptPart
 
@@ -6914,8 +6914,7 @@ class TestWikiBuildIndex:
     def test_format_index_block_token_budget(self) -> None:
         """_format_index_block truncates content exceeding token budget."""
         roots = [
-            (label, f"viking://resources/namespace-{label}")
-            for label in ("wiki", "raw", "bom")
+            (label, f"viking://resources/namespace-{label}") for label in ("wiki", "raw", "bom")
         ]
         block = _format_wiki_index_block(roots, max_tokens=10, limit=20)
         # max_tokens=10 → max_chars=40 budget

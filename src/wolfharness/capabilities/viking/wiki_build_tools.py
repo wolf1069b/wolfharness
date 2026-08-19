@@ -62,6 +62,8 @@ ALL_WIKI_TOOLS: frozenset[str] = frozenset(
         "get_bom_taxonomy",
         "register_bom_component",
         "register_bom_identity_batch",
+        "bom_enrichment_status",
+        "plan_bom_enrichment",
         "register_model_mapping",
         "get_model_mappings",
         "model_mapping_report",
@@ -86,8 +88,12 @@ ALL_WIKI_TOOLS: frozenset[str] = frozenset(
         "recover_build",
         "checkpoint_build",
         "preflight_build",
+        "plan_chapter_batches",
+        "plan_chapter_work",
         "get_source_ledger",
         "record_source_packet",
+        "plan_materialization_work",
+        "record_materialization_receipt",
         "plan_relation_work",
         "plan_relation_shards",
         "build_relation_closure",
@@ -237,10 +243,14 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
                 "get_bom_taxonomy",
                 "register_bom_component",
                 "register_bom_identity_batch",
+                "bom_enrichment_status",
+                "plan_bom_enrichment",
                 "register_model_mapping",
                 "get_model_mappings",
                 "model_mapping_report",
                 "record_source_packet",
+                "plan_materialization_work",
+                "record_materialization_receipt",
                 "plan_relation_work",
                 "plan_relation_shards",
                 "register_no_entity_chapters",
@@ -249,6 +259,8 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
                 "diff_entity",
                 "checkpoint_build",
                 "preflight_build",
+                "plan_chapter_batches",
+                "plan_chapter_work",
             },
         )
     ),
@@ -261,7 +273,7 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
         | _OPS_READ_TOOLS
         | _OPL_READ_TOOLS
         | _OP_FLOW_READ_TOOLS
-        | frozenset({"record_source_packet"})
+        | frozenset({"record_source_packet", "record_materialization_receipt"})
         | frozenset({"get_model_mappings", "model_mapping_report"})
     ),
     "wiki_relation_worker": (

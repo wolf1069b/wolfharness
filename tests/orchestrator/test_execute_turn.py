@@ -180,7 +180,7 @@ async def test_execute_turn_dispatches_to_agent_event_handler() -> None:
         run_ctx=MagicMock(),
     )
 
-    events = [
+    _ = [
         event
         async for event in handle._execute_turn(mock_agent, None, _make_mock_session(), ["test"])
     ]

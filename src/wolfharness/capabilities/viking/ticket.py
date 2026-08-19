@@ -407,6 +407,72 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
             ops_uri=ops_uri,
         )
 
+    async def update_ops_ticket(
+        ctx: RunContext[Any],
+        *,
+        ops_uri: str,
+        title: str = "",
+        analysis: str = "",
+        solution: str = "",
+        evidence_uris: list[str] | None = None,
+        related_uris: list[str] | None = None,
+        candidate_content: str = "",
+        candidate_operations: list[dict[str, object]] | None = None,
+        expected_sha256: str = "",
+        status: str = "",
+        reviewed_by: str = "",
+        review_notes: str = "",
+    ) -> dict[str, Any]:
+        """Patch one OPS ticket in place, leaving untouched fields intact.
+
+        A true patch, unlike ``create_ops_ticket`` with ``ops_uri`` (which
+        rewrites the record from the full ``suggestion`` text). Only the
+        fields you pass are changed; every omitted field keeps its current
+        value. This is the capability's external-facing update surface,
+        mirroring the engine's ``update_ops``.
+
+        Pass ``status`` to transition the draft — ``unconfirmed`` |
+        ``confirmed`` | ``rejected``; confirming or rejecting requires
+        ``reviewed_by``. Use ``get_ticket_status`` to read the current
+        record before patching.
+
+        Args:
+            ops_uri: ``viking://`` URI of the existing OPS ticket.
+            title: New short title (kept when omitted).
+            analysis: New analysis body (kept when omitted).
+            solution: New expert solution text (kept when omitted).
+            evidence_uris: New ``viking://`` evidence references.
+            related_uris: New ``viking://`` related references.
+            candidate_content: New full replacement markdown candidate.
+            candidate_operations: New deterministic patch operations.
+            expected_sha256: New locked-content SHA-256 for apply-time
+                optimistic locking.
+            status: New status — ``unconfirmed`` | ``confirmed`` |
+                ``rejected``.
+            reviewed_by: Reviewer identifier; required to confirm/reject.
+            review_notes: Notes recorded with a status transition.
+
+        Returns:
+            Dict with ``ops_id``, ``uri``, ``parent_opa``, ``target_uri``,
+            ``status``. Keep the returned ``uri`` for further patches.
+        """
+        ops_id = _record_id(ops_uri, "ops")
+        return await asyncio.to_thread(
+            tools.update_ops,
+            ops_id,
+            title=title or None,
+            analysis=analysis or None,
+            solution=solution or None,
+            evidence_uris=evidence_uris,
+            related_uris=related_uris,
+            candidate_content=candidate_content or None,
+            candidate_operations=candidate_operations,
+            expected_sha256=expected_sha256 or None,
+            status=status or None,
+            reviewed_by=reviewed_by,
+            review_notes=review_notes,
+        )
+
     async def create_opl_ticket(
         ctx: RunContext[Any],
         *,
@@ -709,6 +775,7 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
     return [
         create_opa_ticket,
         create_ops_ticket,
+        update_ops_ticket,
         create_opl_ticket,
         apply_opl_ticket,
         get_ticket_status,
@@ -741,7 +808,7 @@ def get_ticket_instructions() -> str:
     """Return guidance for an agent using the ticket surface.
 
     Returns:
-        A multi-line instruction block describing the six ticket tools
+        A multi-line instruction block describing the seven ticket tools
         and the recommended OPA → OPS → OPL → apply flow.
     """
     return (
@@ -760,7 +827,10 @@ def get_ticket_instructions() -> str:
         "2. create_ops_ticket — attach an expert recommendation (OPS) to an "
         "OPA: suggestion text + related URIs. Pass ops_uri to revise the "
         "same recommendation until accepted.\n"
-        "3. create_opl_ticket — integrate one OPA + its OPS into an OPL "
+        "3. update_ops_ticket — patch an existing OPS in place (only the "
+        "fields you pass change). Pass status to confirm or reject the "
+        "draft, with reviewed_by.\n"
+        "4. create_opl_ticket — integrate one OPA + its OPS into an OPL "
         "proposal. Provide candidate_content (full replacement markdown) "
         "and expected_sha256 (SHA-256 of current page content, computed "
         "from read_resource output) when the patch is machine-applicable.\n"

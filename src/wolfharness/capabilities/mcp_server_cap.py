@@ -266,10 +266,7 @@ class McpServerCap(
             from wolfharness.tools.tool_wrapping import wrap_tool_for_pydantic_ai
 
             if self._config.needs_tool_filtering():
-                tools = [
-                    t for t in tools
-                    if self._config.is_tool_allowed(t.name)
-                ]
+                tools = [t for t in tools if self._config.is_tool_allowed(t.name)]
             converted = [client.convert_tool(t) for t in tools]
             pydantic_tools = [wrap_tool_for_pydantic_ai(tool) for tool in converted]
             toolsets: list[AbstractToolset[Any]] = [

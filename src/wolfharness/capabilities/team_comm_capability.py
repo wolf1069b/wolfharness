@@ -1101,9 +1101,7 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             if blocked_by:
                 blocked_str = f" (blocked by: {', '.join(str(ref) for ref in blocked_by)})"
             subject = str(task.get("subject", "?")).strip()
-            notifications.setdefault(owner, []).append(
-                f"- [{task_id}] {subject}{blocked_str}"
-            )
+            notifications.setdefault(owner, []).append(f"- [{task_id}] {subject}{blocked_str}")
 
         delivery_lines: list[str] = []
         for owner, task_lines in notifications.items():
@@ -1162,6 +1160,13 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             bool,
             Field(description="If True, show only tasks owned by you"),
         ] = False,
+        active_only: Annotated[
+            bool,
+            Field(
+                description="If True, omit terminal tasks from the response; "
+                "use task_get for completed-task audit details"
+            ),
+        ] = False,
     ) -> ToolReturn:
         """List tasks on the shared task board.
 
@@ -1193,8 +1198,16 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             return ToolReturn(return_value="Not in a team session")
 
         all_tasks = team_state.list_tasks(team_id)
+        if active_only:
+            all_tasks = [
+                task
+                for task in all_tasks
+                if task.get("status")
+                not in {"completed", "failed", "cancelled", "deleted", "dead_letter"}
+            ]
         if not all_tasks:
-            return ToolReturn(return_value="<task_list>(empty)</task_list>")
+            suffix = " active tasks" if active_only else " tasks"
+            return ToolReturn(return_value=f"<task_list>(empty)</task_list>\n0{suffix}")
 
         # Filter to mine_only if requested.
         if mine_only:
@@ -1496,10 +1509,9 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                 return ToolReturn(return_value="TASK_LEASE_INVALID")
 
         try:
-            lease_expired = (
-                existing_task.get("status") == "in_progress"
-                and not self._task_lease_active(existing_task)
-            )
+            lease_expired = existing_task.get(
+                "status"
+            ) == "in_progress" and not self._task_lease_active(existing_task)
             claiming = (
                 role != "lead"
                 and existing_task.get("owner", "") in {"", current_member}
@@ -2870,8 +2882,7 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         active = [task for task in unfinished if task.get("status") == "in_progress"]
         if active:
             active_tasks = ", ".join(
-                f"'{task.get('subject', '?')}' (id={task.get('task_id', '?')})"
-                for task in active
+                f"'{task.get('subject', '?')}' (id={task.get('task_id', '?')})" for task in active
             )
             return ToolReturn(
                 return_value=(
@@ -3182,8 +3193,7 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         return [
             t
             for t in all_tasks
-            if t.get("owner") == member_name
-            and t.get("status") in ("pending", "in_progress")
+            if t.get("owner") == member_name and t.get("status") in ("pending", "in_progress")
         ]
 
     @staticmethod

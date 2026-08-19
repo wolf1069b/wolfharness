@@ -192,6 +192,26 @@ def test_batch_exceeding_max_tasks_atomic_failure(
         )
 
 
+def test_terminal_tasks_do_not_consume_dispatch_capacity(
+    initialized_team: FileTeamState,
+) -> None:
+    """Completed task history must not block a later dispatch batch."""
+    from wolfharness.capabilities.file_team_state import _MAX_TASKS
+
+    task_ids = [
+        initialized_team.create_task("team-1", {"subject": f"Work {i}"}) for i in range(_MAX_TASKS)
+    ]
+    for task_id in task_ids[:10]:
+        initialized_team.update_task("team-1", task_id, {"status": "completed"})
+
+    new_ids = initialized_team.create_tasks_batch(
+        "team-1",
+        [{"subject": "Follow-up A"}, {"subject": "Follow-up B"}],
+    )
+
+    assert len(new_ids) == 2
+
+
 def test_batch_with_progress_total(initialized_team: FileTeamState) -> None:
     """Given: initialized team.
 

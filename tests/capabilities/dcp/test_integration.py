@@ -1760,9 +1760,9 @@ async def test_auto_compact_critical_rearms_after_pressure_drops() -> None:
     conversation1 = MagicMock()
     conversation1.get_history.return_value = []
     ctx1.deps.native_agent.conversation = conversation1
-    req_ctx1 = _make_request_context(
-        [_make_request([UserPromptPart(content="Prompt")]) for _ in range(60)]
-    )
+    req_ctx1 = _make_request_context([
+        _make_request([UserPromptPart(content="Prompt")]) for _ in range(60)
+    ])
     await cap.before_model_request(ctx1, req_ctx1)
     state = _get_dcp_state(cap, ctx1)
     assert state.watermark_level >= WatermarkLevel.CRITICAL
@@ -1789,9 +1789,9 @@ async def test_auto_compact_critical_rearms_after_pressure_drops() -> None:
     conversation3 = MagicMock()
     conversation3.get_history.return_value = []
     ctx3.deps.native_agent.conversation = conversation3
-    req_ctx3 = _make_request_context(
-        [_make_request([UserPromptPart(content="Prompt")]) for _ in range(60)]
-    )
+    req_ctx3 = _make_request_context([
+        _make_request([UserPromptPart(content="Prompt")]) for _ in range(60)
+    ])
     await cap.before_model_request(ctx3, req_ctx3)
     assert state.watermark_level >= WatermarkLevel.CRITICAL
     assert state.critical_compacted is True
@@ -1853,4 +1853,3 @@ async def test_auto_compact_critical_skipped_without_manifest_pipeline() -> None
     state = _get_dcp_state(cap, ctx)
     assert state.critical_compacted is False
     assert isinstance(result, ModelRequestContext)
-
