@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -16,7 +17,10 @@ from acp.schema import (
     UserMessageChunk,
 )
 from wolfharness_server.acp_server.handler import _content_items_to_text
-from wolfharness_server.acp_server.viking_archive import ACPVikingEventArchive
+from wolfharness_server.acp_server.viking_archive import (
+    ACPVikingEventArchive,
+    ACPVikingProtocolObserver,
+)
 
 
 def test_content_items_to_text_keeps_text_prompt_for_capability_metadata() -> None:
@@ -134,7 +138,86 @@ async def test_viking_archive_turn_complete_flushes_pending_events() -> None:
         event_id="evt-done",
         update=TurnCompleteUpdate(stop_reason="end_turn"),
     )
-    await archive.flush_all()
+    await asyncio.sleep(0)
 
     assert "acp-session-1" not in archive._pending
     assert client.write.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_viking_protocol_observer_records_raw_frontend_prompt_and_response() -> None:
+    archive = ACPVikingEventArchive(enabled=True, batch_size=100)
+    observer = ACPVikingProtocolObserver(archive)
+
+    observer(
+        SimpleNamespace(
+            direction="incoming",
+            message={
+                "jsonrpc": "2.0",
+                "id": 7,
+                "method": "session/prompt",
+                "params": {
+                    "sessionId": "ses-front-1",
+                    "prompt": [{"type": "text", "text": "/fta-eval report.md"}],
+                },
+            },
+        )
+    )
+    observer(
+        SimpleNamespace(
+            direction="outgoing",
+            message={
+                "jsonrpc": "2.0",
+                "id": 7,
+                "result": {"stopReason": "end_turn"},
+            },
+        )
+    )
+    await asyncio.sleep(0)
+
+    records = archive._pending["ses-front-1"]
+    assert [record["event_type"] for record in records] == ["rpc_request", "rpc_response"]
+    assert records[0]["direction"] == "incoming"
+    assert records[0]["method"] == "session/prompt"
+    assert records[0]["protocol"]["params"]["prompt"][0]["text"] == "/fta-eval report.md"
+    assert records[1]["direction"] == "outgoing"
+    assert records[1]["method"] == "session/prompt"
+
+
+@pytest.mark.asyncio
+async def test_viking_protocol_observer_records_client_bound_elicitation_response() -> None:
+    archive = ACPVikingEventArchive(enabled=True, batch_size=100)
+    observer = ACPVikingProtocolObserver(archive)
+
+    observer(
+        SimpleNamespace(
+            direction="outgoing",
+            message={
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "elicitation/create",
+                "params": {
+                    "sessionId": "ses-front-2",
+                    "message": "请选择是否继续检查",
+                },
+            },
+        )
+    )
+    observer(
+        SimpleNamespace(
+            direction="incoming",
+            message={
+                "jsonrpc": "2.0",
+                "id": 3,
+                "result": {"action": "accept", "content": {"confirmed": True}},
+            },
+        )
+    )
+    await archive.flush_all()
+
+    records = archive._pending["ses-front-2"]
+    assert [record["event_type"] for record in records] == ["rpc_request", "rpc_response"]
+    assert records[0]["direction"] == "outgoing"
+    assert records[0]["method"] == "elicitation/create"
+    assert records[1]["direction"] == "incoming"
+    assert records[1]["protocol"]["result"]["content"]["confirmed"] is True

@@ -97,6 +97,75 @@ class ACPVikingEventArchive:
         except _ERROR_TYPES:
             logger.warning("ACP Viking archive record failed", exc_info=True)
 
+    async def record_protocol_frame(
+        self,
+        *,
+        session_id: str,
+        direction: str,
+        message: dict[str, Any],
+        request_method: str = "",
+    ) -> None:
+        """Buffer a raw ACP JSON-RPC frame for complete frontend interaction audit."""
+        if not self.enabled:
+            return
+        try:
+            rpc_id = message.get("id")
+            method = str(message.get("method") or request_method or "")
+            event_type = _protocol_event_type(message)
+            effective_session_id = session_id or _extract_session_id(message) or "connection"
+            async with self._lock:
+                seq = self._sequence.get(effective_session_id, 0) + 1
+                self._sequence[effective_session_id] = seq
+                event_id = (
+                    f"rpc:{direction}:{rpc_id}" if rpc_id is not None else f"rpc:{direction}"
+                )
+                record = {
+                    "sequence": seq,
+                    "created_at": datetime.now(UTC).isoformat(),
+                    "session_id": effective_session_id,
+                    "event_id": event_id,
+                    "event_type": event_type,
+                    "direction": direction,
+                    "rpc_id": rpc_id,
+                    "method": method,
+                    "message_id": _extract_message_id(message),
+                    "tool_call_id": _extract_tool_call_id(message),
+                    "protocol": message,
+                }
+                pending = self._pending.setdefault(effective_session_id, [])
+                pending.append(record)
+                should_flush = len(pending) >= self.batch_size or (
+                    self.flush_on_turn_complete
+                    and method == "session/prompt"
+                    and event_type == "rpc_response"
+                )
+            if should_flush:
+                self.schedule_flush(effective_session_id)
+        except _ERROR_TYPES:
+            logger.warning("ACP Viking protocol archive record failed", exc_info=True)
+
+    def schedule_protocol_frame(
+        self,
+        *,
+        session_id: str,
+        direction: str,
+        message: dict[str, Any],
+        request_method: str = "",
+    ) -> None:
+        """Schedule raw protocol frame recording without blocking JSON-RPC handling."""
+        if not self.enabled:
+            return
+        task = asyncio.create_task(
+            self.record_protocol_frame(
+                session_id=session_id,
+                direction=direction,
+                message=message,
+                request_method=request_method,
+            )
+        )
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+
     def schedule_flush(self, session_id: str) -> None:
         """Schedule a background flush for one session."""
         if not self.enabled:
@@ -189,3 +258,108 @@ def _dump_update(update: Any) -> dict[str, Any]:
     if isinstance(update, dict):
         return update
     return {"value": str(update)}
+
+
+class ACPVikingProtocolObserver:
+    """Connection stream observer that archives raw ACP JSON-RPC frames."""
+
+    def __init__(self, archive: ACPVikingEventArchive) -> None:
+        self.archive = archive
+        self._pending_requests: dict[tuple[str, Any], tuple[str, str]] = {}
+
+    def __call__(self, event: Any) -> None:
+        """Record a raw incoming/outgoing JSON-RPC frame."""
+        if not self.archive.enabled:
+            return
+        message = getattr(event, "message", None)
+        direction = getattr(event, "direction", "")
+        if not isinstance(message, dict) or direction not in ("incoming", "outgoing"):
+            return
+
+        rpc_id = message.get("id")
+        method = message.get("method")
+        if isinstance(method, str):
+            session_id = _extract_session_id(message)
+            if rpc_id is not None:
+                self._pending_requests[(direction, rpc_id)] = (method, session_id)
+            self.archive.schedule_protocol_frame(
+                session_id=session_id,
+                direction=direction,
+                message=message,
+                request_method=method,
+            )
+            return
+
+        if rpc_id is None:
+            self.archive.schedule_protocol_frame(
+                session_id=_extract_session_id(message),
+                direction=direction,
+                message=message,
+            )
+            return
+
+        request_direction = "outgoing" if direction == "incoming" else "incoming"
+        request_method, request_session_id = self._pending_requests.pop(
+            (request_direction, rpc_id),
+            ("", ""),
+        )
+        session_id = request_session_id or _extract_session_id(message)
+        self.archive.schedule_protocol_frame(
+            session_id=session_id,
+            direction=direction,
+            message=message,
+            request_method=request_method,
+        )
+
+
+def _protocol_event_type(message: dict[str, Any]) -> str:
+    if "method" in message and "id" in message:
+        return "rpc_request"
+    if "method" in message:
+        return "rpc_notification"
+    if "error" in message:
+        return "rpc_error"
+    return "rpc_response"
+
+
+def _extract_session_id(value: Any) -> str:
+    if not isinstance(value, dict):
+        return ""
+    for key in ("sessionId", "session_id"):
+        item = value.get(key)
+        if isinstance(item, str) and item.strip():
+            return item.strip()
+    for key in ("params", "result"):
+        nested = value.get(key)
+        if isinstance(nested, dict):
+            found = _extract_session_id(nested)
+            if found:
+                return found
+    return ""
+
+
+def _extract_message_id(value: Any) -> str | None:
+    item = _extract_nested_value(value, ("messageId", "message_id"))
+    return item if isinstance(item, str) else None
+
+
+def _extract_tool_call_id(value: Any) -> str | None:
+    item = _extract_nested_value(value, ("toolCallId", "tool_call_id"))
+    return item if isinstance(item, str) else None
+
+
+def _extract_nested_value(value: Any, keys: tuple[str, ...]) -> Any:
+    if isinstance(value, dict):
+        for key in keys:
+            if key in value:
+                return value[key]
+        for item in value.values():
+            found = _extract_nested_value(item, keys)
+            if found is not None:
+                return found
+    if isinstance(value, list):
+        for item in value:
+            found = _extract_nested_value(item, keys)
+            if found is not None:
+                return found
+    return None

@@ -89,6 +89,7 @@ class ACPProtocolHandler(ProtocolEventConsumerMixin):
         client: Client,
         client_capabilities: ClientCapabilities | None = None,
         acp_agent: Any = None,
+        viking_archive: ACPVikingEventArchive | None = None,
     ) -> None:
         """Initialize the protocol handler."""
         super().__init__()
@@ -101,10 +102,17 @@ class ACPProtocolHandler(ProtocolEventConsumerMixin):
         self._parent_of: dict[str, str] = {}
         self.acp_agent = acp_agent
         self._elicitation_tasks: dict[str, set[asyncio.Task[Any]]] = {}
-        session_pool_config = getattr(getattr(host_context, "manifest", None), "session_pool", None)
-        self._viking_archive = ACPVikingEventArchive.from_config(
-            getattr(session_pool_config, "acp_viking_archive", None)
-        )
+        if viking_archive is not None:
+            self._viking_archive = viking_archive
+        else:
+            session_pool_config = getattr(
+                getattr(host_context, "manifest", None),
+                "session_pool",
+                None,
+            )
+            self._viking_archive = ACPVikingEventArchive.from_config(
+                getattr(session_pool_config, "acp_viking_archive", None)
+            )
 
     @property
     def event_bus(self) -> EventBus:

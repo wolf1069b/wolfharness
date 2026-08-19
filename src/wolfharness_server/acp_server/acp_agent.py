@@ -244,6 +244,9 @@ class AgentPoolACPAgent(ACPAgent):
     ``close_all_sessions_for_connection()``.
     """
 
+    viking_archive: Any | None = None
+    """Shared ACP Viking archive for raw protocol frames and session updates."""
+
     _mcp_manager: AcpMcpConnectionManager = field(init=False)
     """Manager for MCP-over-ACP connection lifecycle."""
 
@@ -300,6 +303,7 @@ class AgentPoolACPAgent(ACPAgent):
                 ),
                 client=self.client,
                 client_capabilities=self.client_capabilities,
+                viking_archive=self.viking_archive,
             )
             logger.info("ACPProtocolHandler initialized for SessionPool mode")
 
