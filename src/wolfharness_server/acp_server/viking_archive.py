@@ -136,8 +136,7 @@ class ACPVikingEventArchive:
                 pending.append(record)
                 should_flush = len(pending) >= self.batch_size or (
                     self.flush_on_turn_complete
-                    and method == "session/prompt"
-                    and event_type == "rpc_response"
+                    and _should_flush_protocol_event(method, event_type)
                 )
             if should_flush:
                 self.schedule_flush(effective_session_id)
@@ -320,6 +319,15 @@ def _protocol_event_type(message: dict[str, Any]) -> str:
     if "error" in message:
         return "rpc_error"
     return "rpc_response"
+
+
+def _should_flush_protocol_event(method: str, event_type: str) -> bool:
+    """Flush when a frontend interaction reaches a natural protocol boundary."""
+    if not method:
+        return False
+    if event_type in ("rpc_response", "rpc_error"):
+        return method.startswith(("session/", "elicitation/", "terminal/", "fs/"))
+    return event_type == "rpc_notification" and method.startswith("session/")
 
 
 def _extract_session_id(value: Any) -> str:

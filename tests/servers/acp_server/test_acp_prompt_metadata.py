@@ -23,6 +23,13 @@ from wolfharness_server.acp_server.viking_archive import (
 )
 
 
+async def _drain_archive_tasks(archive: ACPVikingEventArchive) -> None:
+    for _ in range(5):
+        if not archive._tasks:
+            return
+        await asyncio.sleep(0)
+
+
 def test_content_items_to_text_keeps_text_prompt_for_capability_metadata() -> None:
     text = _content_items_to_text([
         "/systematic-troubleshooting cy215c 动臂吊臂",
@@ -138,7 +145,7 @@ async def test_viking_archive_turn_complete_flushes_pending_events() -> None:
         event_id="evt-done",
         update=TurnCompleteUpdate(stop_reason="end_turn"),
     )
-    await asyncio.sleep(0)
+    await _drain_archive_tasks(archive)
 
     assert "acp-session-1" not in archive._pending
     assert client.write.call_count == 2
@@ -146,7 +153,9 @@ async def test_viking_archive_turn_complete_flushes_pending_events() -> None:
 
 @pytest.mark.asyncio
 async def test_viking_protocol_observer_records_raw_frontend_prompt_and_response() -> None:
+    client = AsyncMock()
     archive = ACPVikingEventArchive(enabled=True, batch_size=100)
+    archive._client = client
     observer = ACPVikingProtocolObserver(archive)
 
     observer(
@@ -173,9 +182,11 @@ async def test_viking_protocol_observer_records_raw_frontend_prompt_and_response
             },
         )
     )
-    await asyncio.sleep(0)
+    await _drain_archive_tasks(archive)
 
-    records = archive._pending["ses-front-1"]
+    assert "ses-front-1" not in archive._pending
+    assert client.write.call_count == 2
+    records = [json.loads(line) for line in client.write.call_args_list[0].args[1].splitlines()]
     assert [record["event_type"] for record in records] == ["rpc_request", "rpc_response"]
     assert records[0]["direction"] == "incoming"
     assert records[0]["method"] == "session/prompt"
@@ -185,8 +196,55 @@ async def test_viking_protocol_observer_records_raw_frontend_prompt_and_response
 
 
 @pytest.mark.asyncio
-async def test_viking_protocol_observer_records_client_bound_elicitation_response() -> None:
+async def test_viking_protocol_observer_flushes_prompt_error_response() -> None:
+    client = AsyncMock()
     archive = ACPVikingEventArchive(enabled=True, batch_size=100)
+    archive._client = client
+    observer = ACPVikingProtocolObserver(archive)
+
+    observer(
+        SimpleNamespace(
+            direction="incoming",
+            message={
+                "jsonrpc": "2.0",
+                "id": 8,
+                "method": "session/prompt",
+                "params": {
+                    "sessionId": "ses-front-error",
+                    "prompt": [{"type": "text", "text": "测试 prompt"}],
+                },
+            },
+        )
+    )
+    observer(
+        SimpleNamespace(
+            direction="outgoing",
+            message={
+                "jsonrpc": "2.0",
+                "id": 8,
+                "error": {
+                    "code": -32603,
+                    "message": "Internal error",
+                    "data": {"details": "prompt_cache_retention is not supported on this model"},
+                },
+            },
+        )
+    )
+    await _drain_archive_tasks(archive)
+
+    assert "ses-front-error" not in archive._pending
+    assert client.write.call_count == 2
+    event_record = json.loads(client.write.call_args_list[0].args[1].splitlines()[-1])
+    assert event_record["event_type"] == "rpc_error"
+    assert event_record["method"] == "session/prompt"
+    assert "prompt_cache_retention" in event_record["protocol"]["error"]["data"]["details"]
+
+
+@pytest.mark.asyncio
+async def test_viking_protocol_observer_records_client_bound_elicitation_response() -> None:
+    client = AsyncMock()
+    archive = ACPVikingEventArchive(enabled=True, batch_size=100)
+    archive._client = client
     observer = ACPVikingProtocolObserver(archive)
 
     observer(
@@ -213,9 +271,11 @@ async def test_viking_protocol_observer_records_client_bound_elicitation_respons
             },
         )
     )
-    await archive.flush_all()
+    await _drain_archive_tasks(archive)
 
-    records = archive._pending["ses-front-2"]
+    assert "ses-front-2" not in archive._pending
+    assert client.write.call_count == 2
+    records = [json.loads(line) for line in client.write.call_args_list[0].args[1].splitlines()]
     assert [record["event_type"] for record in records] == ["rpc_request", "rpc_response"]
     assert records[0]["direction"] == "outgoing"
     assert records[0]["method"] == "elicitation/create"
