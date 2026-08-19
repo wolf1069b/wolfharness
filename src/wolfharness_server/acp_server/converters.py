@@ -56,18 +56,6 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-_DOCUMENT_FORMATS: dict[str, str] = {
-    "application/pdf": "pdf",
-    "text/plain": "txt",
-    "text/csv": "csv",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
-    "text/html": "html",
-    "text/markdown": "md",
-    "application/msword": "doc",
-    "application/vnd.ms-excel": "xls",
-}
-
 
 @overload
 def convert_acp_mcp_server_to_config(
@@ -185,12 +173,13 @@ def resource_to_content(resource: ResourceContents) -> str | BinaryImage | Binar
             return format_uri_as_link(uri) + f'\n<context ref="{uri}">\n{text}\n</context>'
         case BlobResourceContents(blob=blob, mime_type=mime_type):
             binary_data = base64.b64decode(blob)
-            if mime_type and mime_type.startswith("image/"):
-                return BinaryImage(data=binary_data, media_type=mime_type)
-            if (mime_type and mime_type.startswith("audio/")) or mime_type in _DOCUMENT_FORMATS:
-                return BinaryContent(data=binary_data, media_type=mime_type)
-            formatted_uri = format_uri_as_link(resource.uri)
-            return f"Binary Resource: {formatted_uri}"
+            mime = mime_type or "application/octet-stream"
+            # Image resources stay BinaryImage; everything else passes as
+            # BinaryContent. Unsupported modalities are filtered downstream by
+            # ModalityFilterCapability, not dropped here.
+            if mime.startswith("image/"):
+                return BinaryImage(data=binary_data, media_type=mime)
+            return BinaryContent(data=binary_data, media_type=mime)
         case _ as unreachable:
             assert_never(unreachable)
 

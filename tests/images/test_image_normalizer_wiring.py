@@ -205,6 +205,78 @@ def test_from_acp_content_no_normalizer_passthrough() -> None:
     assert result.data == data
 
 
+def test_from_acp_content_embedded_blob_unknown_mime_passes_through() -> None:
+    """Embedded blob with a mime outside the old whitelist reaches the model.
+
+    A generic binary (e.g. application/json, text/yaml) must become
+    ``BinaryContent`` with its mime preserved instead of a text placeholder.
+    """
+    from pydantic_ai import BinaryContent
+
+    from acp.schema import (
+        BlobResourceContents,
+        EmbeddedResourceContentBlock,
+    )
+
+    data = b'{"key": "value"}'
+    block = EmbeddedResourceContentBlock(
+        resource=BlobResourceContents(
+            uri="acp://inner/config.json",
+            blob=base64.b64encode(data).decode("ascii"),
+            mime_type="application/json",
+        )
+    )
+
+    result = _from_acp(block, None)
+
+    assert isinstance(result, BinaryContent)
+    assert result.data == data
+    assert result.media_type == "application/json"
+
+
+def test_from_acp_content_embedded_blob_missing_mime_uses_octet_stream() -> None:
+    """Embedded blob without mime falls back to application/octet-stream."""
+    from pydantic_ai import BinaryContent
+
+    from acp.schema import BlobResourceContents, EmbeddedResourceContentBlock
+
+    data = b"\x00\x01\x02"
+    block = EmbeddedResourceContentBlock(
+        resource=BlobResourceContents(
+            uri="acp://inner/raw.bin",
+            blob=base64.b64encode(data).decode("ascii"),
+        )
+    )
+
+    result = _from_acp(block, None)
+
+    assert isinstance(result, BinaryContent)
+    assert result.data == data
+    assert result.media_type == "application/octet-stream"
+
+
+def test_from_acp_content_embedded_blob_image_is_binary_image() -> None:
+    """Embedded image blob stays BinaryImage, not generic BinaryContent."""
+    from pydantic_ai import BinaryImage
+
+    from acp.schema import BlobResourceContents, EmbeddedResourceContentBlock
+
+    data = _noisy_png_bytes(64, 64)
+    block = EmbeddedResourceContentBlock(
+        resource=BlobResourceContents(
+            uri="acp://inner/photo.png",
+            blob=base64.b64encode(data).decode("ascii"),
+            mime_type="image/png",
+        )
+    )
+
+    result = _from_acp(block, None)
+
+    assert isinstance(result, BinaryImage)
+    assert result.data == data
+    assert result.media_type == "image/png"
+
+
 # =============================================================================
 # functional run_agent: image_url normalization
 # =============================================================================
