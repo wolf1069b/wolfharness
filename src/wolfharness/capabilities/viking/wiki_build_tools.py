@@ -126,6 +126,7 @@ ALL_WIKI_TOOLS: frozenset[str] = frozenset(
         "read_chapter_map",
         "read_raw_resource",
         "source_snapshot",
+        "migrate_source_uri_references",
     },
 )
 
@@ -192,6 +193,7 @@ _FILE_OP_TOOLS: frozenset[str] = frozenset(
         "plan_component_classification",
         "create_subdir",
         "prune_stale_index_entries",
+        "migrate_source_uri_references",
     },
 )
 
@@ -267,6 +269,7 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
                 "preflight_build",
                 "plan_chapter_batches",
                 "plan_chapter_work",
+                "migrate_source_uri_references",
             },
         )
     ),
