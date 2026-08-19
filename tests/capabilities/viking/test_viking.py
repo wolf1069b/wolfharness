@@ -1827,7 +1827,7 @@ class TestErrorHandling:
         tools = build_tools(viking_cap)
         ctx = _make_ctx()
         result = await _get_tool(tools, "viking_search")(ctx, query="test")
-        assert "viking_search error: connection failed" in result.return_value
+        assert "viking_search error (RuntimeError): connection failed" in result.return_value
 
     @pytest.mark.asyncio
     async def test_find_error(self, viking_cap: VikingCapability, mock_client: AsyncMock) -> None:
@@ -1835,7 +1835,7 @@ class TestErrorHandling:
         tools = build_tools(viking_cap)
         ctx = _make_ctx()
         result = await _get_tool(tools, "viking_find")(ctx, query="test")
-        assert "viking_find error: timeout" in result.return_value
+        assert "viking_find error (RuntimeError): timeout" in result.return_value
 
     @pytest.mark.asyncio
     async def test_recall_error(self, viking_cap: VikingCapability, mock_client: AsyncMock) -> None:
@@ -1843,7 +1843,7 @@ class TestErrorHandling:
         tools = build_tools(viking_cap)
         ctx = _make_ctx()
         result = await _get_tool(tools, "viking_recall")(ctx, query="test")
-        assert "viking_recall error: server error" in result.return_value
+        assert "viking_recall error (RuntimeError): server error" in result.return_value
 
     @pytest.mark.asyncio
     async def test_grep_error(self, viking_cap: VikingCapability, mock_client: AsyncMock) -> None:
@@ -1861,7 +1861,7 @@ class TestErrorHandling:
         tools = build_tools(viking_cap)
         ctx = _make_ctx()
         result = await _get_tool(tools, "viking_glob")(ctx, pattern="**/*.md")
-        assert "viking_glob error: error" in result.return_value
+        assert "viking_glob error (RuntimeError): error" in result.return_value
 
     @pytest.mark.asyncio
     async def test_ls_error(self, viking_cap: VikingCapability, mock_client: AsyncMock) -> None:
@@ -1869,7 +1869,7 @@ class TestErrorHandling:
         tools = build_tools(viking_cap)
         ctx = _make_ctx()
         result = await _get_tool(tools, "viking_ls")(ctx, uri="viking://missing/")
-        assert "viking_ls error: not found" in result.return_value
+        assert "viking_ls error (RuntimeError): not found" in result.return_value
 
     @pytest.mark.asyncio
     async def test_read_error(self, viking_cap: VikingCapability, mock_client: AsyncMock) -> None:
@@ -1877,7 +1877,7 @@ class TestErrorHandling:
         tools = build_tools(viking_cap)
         ctx = _make_ctx()
         result = await _get_tool(tools, "viking_read")(ctx, uris="viking://secret.md")
-        assert "viking_read error: permission denied" in result.return_value
+        assert "viking_read error (RuntimeError): permission denied" in result.return_value
 
     @pytest.mark.asyncio
     async def test_write_error(self, viking_cap: VikingCapability, mock_client: AsyncMock) -> None:
@@ -1885,7 +1885,7 @@ class TestErrorHandling:
         tools = build_tools(viking_cap)
         ctx = _make_ctx()
         result = await _get_tool(tools, "viking_write")(ctx, uri="viking://doc.md", content="data")
-        assert "viking_write error: disk full" in result.return_value
+        assert "viking_write error (RuntimeError): disk full" in result.return_value
 
     @pytest.mark.asyncio
     async def test_edit_error(self, viking_cap: VikingCapability, mock_client: AsyncMock) -> None:
@@ -1895,7 +1895,7 @@ class TestErrorHandling:
         result = await _get_tool(tools, "viking_edit")(
             ctx, uri="viking://doc.md", old_string="a", new_string="b"
         )
-        assert "viking_edit error: network error" in result.return_value
+        assert "viking_edit error (RuntimeError): network error" in result.return_value
 
     @pytest.mark.asyncio
     async def test_mkdir_error(self, viking_cap: VikingCapability, mock_client: AsyncMock) -> None:
@@ -1903,7 +1903,7 @@ class TestErrorHandling:
         tools = build_tools(viking_cap)
         ctx = _make_ctx()
         result = await _get_tool(tools, "viking_mkdir")(ctx, uri="viking://exists/")
-        assert "viking_mkdir error: exists" in result.return_value
+        assert "viking_mkdir error (RuntimeError): exists" in result.return_value
 
     @pytest.mark.asyncio
     async def test_add_resource_error(
@@ -1913,7 +1913,7 @@ class TestErrorHandling:
         tools = build_tools(viking_cap)
         ctx = _make_ctx()
         result = await _get_tool(tools, "viking_add_resource")(ctx, path="/bad/path")
-        assert "viking_add_resource error: invalid path" in result.return_value
+        assert "viking_add_resource error (RuntimeError): invalid path" in result.return_value
 
     @pytest.mark.asyncio
     async def test_forget_error(self, viking_cap: VikingCapability, mock_client: AsyncMock) -> None:
@@ -1921,7 +1921,7 @@ class TestErrorHandling:
         tools = build_tools(viking_cap)
         ctx = _make_ctx()
         result = await _get_tool(tools, "viking_forget")(ctx, uri="viking://protected.md")
-        assert "viking_forget error: protected" in result.return_value
+        assert "viking_forget error (RuntimeError): protected" in result.return_value
 
     @pytest.mark.asyncio
     async def test_link_error(self, viking_cap: VikingCapability, mock_client: AsyncMock) -> None:
@@ -1931,7 +1931,7 @@ class TestErrorHandling:
         result = await _get_tool(tools, "viking_link")(
             ctx, from_uri="viking://a.md", to_uris="viking://b.md"
         )
-        assert "viking_link error: cycle detected" in result.return_value
+        assert "viking_link error (RuntimeError): cycle detected" in result.return_value
 
     @pytest.mark.asyncio
     async def test_set_tags_error(
@@ -1941,7 +1941,7 @@ class TestErrorHandling:
         tools = build_tools(viking_cap)
         ctx = _make_ctx()
         result = await _get_tool(tools, "viking_set_tags")(ctx, uri="viking://doc.md", tags=["bad"])
-        assert "viking_set_tags error: invalid tag" in result.return_value
+        assert "viking_set_tags error (RuntimeError): invalid tag" in result.return_value
 
     @pytest.mark.asyncio
     async def test_ensure_client_lazy_init(self) -> None:
@@ -2235,6 +2235,36 @@ class TestModeFiltering:
         tools = build_tools(cap)
         assert len(tools) == 16
 
+    def test_disabled_tools_excludes_search_find(self) -> None:
+        """disabled_tools blacklist removes viking_search and viking_find."""
+        cap = VikingCapability(
+            mode="retrieve",
+            disabled_tools=["viking_search", "viking_find"],
+        )
+        cap._client = AsyncMock()
+        tools = build_tools(cap)
+        names = {t.__name__ for t in tools}
+        assert "viking_search" not in names
+        assert "viking_find" not in names
+        assert "viking_read" in names
+        assert "viking_grep" in names
+
+    def test_enabled_tools_whitelist(self) -> None:
+        """enabled_tools whitelist keeps only the listed tools."""
+        cap = VikingCapability(mode="retrieve", enabled_tools=["viking_ls", "viking_read"])
+        cap._client = AsyncMock()
+        tools = build_tools(cap)
+        names = {t.__name__ for t in tools}
+        assert names == {"viking_ls", "viking_read"}
+
+    def test_enabled_tools_unknown_names_ignored(self) -> None:
+        """enabled_tools entries that don't match any tool are ignored."""
+        cap = VikingCapability(mode="retrieve", enabled_tools=["viking_ls", "nope_tool"])
+        cap._client = AsyncMock()
+        tools = build_tools(cap)
+        names = {t.__name__ for t in tools}
+        assert names == {"viking_ls"}
+
     def test_get_toolset_retrieve(self) -> None:
         """get_toolset() returns a FunctionToolset with 7 tools for retrieve mode (default)."""
         from pydantic_ai.toolsets import FunctionToolset
@@ -2357,6 +2387,31 @@ class TestGetInstructions:
         cap_all = VikingCapability(mode="all")
         cap_retrieve = VikingCapability(mode="retrieve")
         assert cap_all.get_instructions() == cap_retrieve.get_instructions()
+
+    def test_instructions_no_prefix_block_when_unrestricted(self) -> None:
+        """get_instructions() omits the allowed-prefix block when unrestricted."""
+        cap = VikingCapability(mode="all")
+        instructions = cap.get_instructions()
+        assert instructions is not None
+        assert "Allowed URI Prefixes" not in instructions
+
+    def test_instructions_include_prefix_block_when_restricted(self) -> None:
+        """get_instructions() lists the allowed prefixes.
+
+        So the model can pass a target_uri and skip discovery probing.
+        """
+        cap = VikingCapability(
+            mode="all",
+            allowed_uri_prefixes=[
+                "viking://resources/wiki/",
+                "viking://resources/raw/",
+            ],
+        )
+        instructions = cap.get_instructions()
+        assert instructions is not None
+        assert "Allowed URI Prefixes" in instructions
+        assert "viking://resources/wiki/" in instructions
+        assert "viking://resources/raw/" in instructions
 
     def test_on_change_returns_none(self) -> None:
         """on_change() returns None."""
@@ -2963,7 +3018,7 @@ class TestTieredLoadingVikingRead:
         ctx = _make_ctx()
         result = await read_tool(ctx, uris="viking://doc.md", level="abstract")
 
-        assert "viking_read error: not available" in result.return_value
+        assert "viking_read error (RuntimeError): not available" in result.return_value
 
 
 class TestTieredLoadingReadResource:
@@ -4515,7 +4570,11 @@ class TestAllowedUriPrefixes:
 
     @pytest.mark.asyncio
     async def test_viking_search_defaults_to_first_prefix(self, mock_client: AsyncMock) -> None:
-        """viking_search without target_uri scopes to the first allowed prefix."""
+        """viking_search passes the single allowed prefix as a one-element list.
+
+        A list is the SDK's multi-prefix scoping contract, so a single
+        prefix is passed as a one-element list rather than a bare string.
+        """
         cap = VikingCapability(mode="retrieve", allowed_uri_prefixes=["viking://resources/wiki/"])
         cap._client = mock_client
         tools = build_tools(cap)
@@ -4525,7 +4584,52 @@ class TestAllowedUriPrefixes:
         await search_tool(ctx, query="hydraulic")
 
         kwargs = mock_client.search.call_args.kwargs
-        assert kwargs["target_uri"] == "viking://resources/wiki/"
+        assert kwargs["target_uri"] == ["viking://resources/wiki/"]
+
+    @pytest.mark.asyncio
+    async def test_viking_search_multi_prefix_defaults_to_all(self, mock_client: AsyncMock) -> None:
+        """viking_search without target_uri passes ALL allowed prefixes to the SDK.
+
+        The SDK's target_uri accepts a list and the server searches each
+        prefix — the old behavior of silently using only the first prefix
+        dropped results from the other allowed trees.
+        """
+        cap = VikingCapability(
+            mode="retrieve",
+            allowed_uri_prefixes=["viking://resources/wiki/", "viking://resources/raw/"],
+        )
+        cap._client = mock_client
+        tools = build_tools(cap)
+        search_tool = _get_tool(tools, "viking_search")
+
+        ctx = _make_ctx()
+        await search_tool(ctx, query="hydraulic")
+
+        kwargs = mock_client.search.call_args.kwargs
+        assert kwargs["target_uri"] == [
+            "viking://resources/wiki/",
+            "viking://resources/raw/",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_viking_find_multi_prefix_defaults_to_all(self, mock_client: AsyncMock) -> None:
+        """viking_find without target_uri passes ALL allowed prefixes to the SDK."""
+        cap = VikingCapability(
+            mode="retrieve",
+            allowed_uri_prefixes=["viking://resources/wiki/", "viking://resources/raw/"],
+        )
+        cap._client = mock_client
+        tools = build_tools(cap)
+        find_tool = _get_tool(tools, "viking_find")
+
+        ctx = _make_ctx()
+        await find_tool(ctx, query="hydraulic")
+
+        kwargs = mock_client.find.call_args.kwargs
+        assert kwargs["target_uri"] == [
+            "viking://resources/wiki/",
+            "viking://resources/raw/",
+        ]
 
     @pytest.mark.asyncio
     async def test_viking_search_blocks_outside_target(self, mock_client: AsyncMock) -> None:
@@ -5147,7 +5251,7 @@ class TestCompaction:
         ctx = _make_ctx()
         result = await expand_tool(ctx, uri="viking://missing.md")
 
-        assert "viking_expand error: not found" in result.return_value
+        assert "viking_expand error (RuntimeError): not found" in result.return_value
 
     @pytest.mark.asyncio
     async def test_viking_expand_tool_empty_content(self, mock_client: AsyncMock) -> None:

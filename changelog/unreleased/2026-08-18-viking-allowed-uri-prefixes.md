@@ -19,4 +19,20 @@ single subtree such as `viking://resources/wiki/` without also allowing
 
 Empty list (the default) preserves unrestricted behavior for backward
 compatibility. `viking_search`/`viking_find` without a `target_uri`
-automatically scope to the first allowed prefix when a allowlist is set.
+automatically scope to the configured allowlist when one is set (see below).
+
+## Search scoping covers all allowed prefixes (2026-08-19)
+
+When a `target_uri` is omitted, `viking_search`/`viking_find` previously
+scoped to only the **first** allowed prefix, silently dropping results from
+the other allowed trees. `target_uri` now accepts a list, and both tools pass
+**every** allowed prefix to the SDK — the server searches each tree and the
+result set covers the full allowlist. Explicit `str` targets are still
+validated against the allowlist as before; explicit `list` targets are
+validated element-wise.
+
+Alongside this, `get_instructions()` now renders a dynamic **Allowed URI
+Prefixes** section listing the exact prefixes when the allowlist is
+configured. The model sees the scoping boundary up front, so it can pass the
+most specific `target_uri` directly and skip discovery probing (`viking_ls`),
+which also avoids the slower whole-allowlist search.

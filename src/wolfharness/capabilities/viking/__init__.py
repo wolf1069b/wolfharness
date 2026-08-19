@@ -217,6 +217,14 @@ class VikingCapability(AbstractCapability[Any]):
     """When True (default), profile injection runs only on the first turn
     of a session. When False, injection runs on every ``before_model_request``
     call (not recommended — expensive and static)."""
+    enabled_tools: list[str] | None = None
+    """If set, only these tools are exposed (whitelist). Mutually exclusive
+    with ``disabled_tools``."""
+    disabled_tools: list[str] | None = None
+    """Tools to exclude from the exposed set (blacklist). Mutually exclusive
+    with ``enabled_tools``. For example, disable a slow semantic-search
+    backend while keeping deterministic tools:
+    ``["viking_search", "viking_find"]``."""
     compaction_enabled: bool = False
     """When True, archive old conversation messages to Viking before
     context overflow. Disabled by default."""
@@ -545,12 +553,21 @@ class VikingCapability(AbstractCapability[Any]):
     def get_instructions(self) -> str | None:
         """Return the Viking workflow instructions.
 
+        When ``allowed_uri_prefixes`` is configured, appends a dynamic
+        block listing the allowed prefixes so the model can pass a
+        ``target_uri`` and skip discovery probing.
+
         Returns:
             The instruction string from ``instructions.py``.
         """
-        from wolfharness.capabilities.viking.instructions import _VIKING_INSTRUCTIONS
+        from wolfharness.capabilities.viking.instructions import (
+            _VIKING_INSTRUCTIONS,
+            format_allowed_prefixes_block,
+        )
 
-        return _VIKING_INSTRUCTIONS
+        if not self.allowed_uri_prefixes:
+            return _VIKING_INSTRUCTIONS
+        return _VIKING_INSTRUCTIONS + format_allowed_prefixes_block(self.allowed_uri_prefixes)
 
     def get_toolset(self) -> AgentToolset[Any] | None:
         """Build a ``FunctionToolset`` from tools filtered by ``self.mode``.

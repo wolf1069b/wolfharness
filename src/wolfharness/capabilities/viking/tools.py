@@ -93,7 +93,7 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
             limit: int = 10,
             min_score: float = 0.35,
             level: list[int] | None = None,
-            target_uri: str = "",
+            target_uri: str | list[str] = "",
         ) -> ToolReturn:
             """Search the Viking knowledge graph semantically.
 
@@ -105,7 +105,8 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                 limit: Maximum number of results to return.
                 min_score: Minimum relevance score (0.0 to 1.0).
                 level: Filter by content level (e.g. [0, 1, 2] for L0-L2).
-                target_uri: Restrict search to a specific URI subtree.
+                target_uri: Restrict search to specific URI subtrees — a
+                    single ``viking://`` URI or a list of them.
 
             Returns:
                 Formatted search results grouped by context type.
@@ -115,12 +116,22 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                 sid = _get_session_id(ctx)
                 sdk_filter: dict[str, Any] | None = {"level": level} if level else None
                 if cap.allowed_uri_prefixes:
-                    if target_uri:
-                        err = cap._check_uri_allowed(target_uri, tool_name="viking_search")
-                        if err:
-                            return ToolReturn(return_value=err)
+                    if isinstance(target_uri, str):
+                        if target_uri:
+                            err = cap._check_uri_allowed(target_uri, tool_name="viking_search")
+                            if err:
+                                return ToolReturn(return_value=err)
                     else:
-                        target_uri = cap.allowed_uri_prefixes[0]
+                        for u in target_uri:
+                            err = cap._check_uri_allowed(u, tool_name="viking_search")
+                            if err:
+                                return ToolReturn(return_value=err)
+                    if not target_uri:
+                        # SDK target_uri accepts a list — the server searches
+                        # every allowed prefix. The old default used only the
+                        # first prefix, silently dropping the other allowed
+                        # trees.
+                        target_uri = cap.allowed_uri_prefixes
                 result = await client.search(
                     query,
                     target_uri=target_uri,
@@ -131,7 +142,7 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                 )
                 return ToolReturn(return_value=format_search_results(result))
             except Exception as e:
-                return ToolReturn(return_value=f"viking_search error: {e}")
+                return ToolReturn(return_value=f"viking_search error ({type(e).__name__}): {e}")
 
         async def viking_find(
             ctx: RunContext[Any],
@@ -139,7 +150,7 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
             limit: int = 10,
             min_score: float = 0.35,
             level: list[int] | None = None,
-            target_uri: str = "",
+            target_uri: str | list[str] = "",
         ) -> ToolReturn:
             """Find content in Viking, deduplicating results.
 
@@ -151,7 +162,8 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                 limit: Maximum number of results to return.
                 min_score: Minimum relevance score (0.0 to 1.0).
                 level: Filter by content level (e.g. [0, 1, 2] for L0-L2).
-                target_uri: Restrict search to a specific URI subtree.
+                target_uri: Restrict search to specific URI subtrees — a
+                    single ``viking://`` URI or a list of them.
 
             Returns:
                 Formatted search results grouped by context type.
@@ -160,12 +172,20 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                 client = await cap._ensure_client()
                 sdk_filter: dict[str, Any] | None = {"level": level} if level else None
                 if cap.allowed_uri_prefixes:
-                    if target_uri:
-                        err = cap._check_uri_allowed(target_uri, tool_name="viking_find")
-                        if err:
-                            return ToolReturn(return_value=err)
+                    if isinstance(target_uri, str):
+                        if target_uri:
+                            err = cap._check_uri_allowed(target_uri, tool_name="viking_find")
+                            if err:
+                                return ToolReturn(return_value=err)
                     else:
-                        target_uri = cap.allowed_uri_prefixes[0]
+                        for u in target_uri:
+                            err = cap._check_uri_allowed(u, tool_name="viking_find")
+                            if err:
+                                return ToolReturn(return_value=err)
+                    if not target_uri:
+                        # See viking_search: SDK target_uri accepts a list so we
+                        # search every allowed prefix, not just the first.
+                        target_uri = cap.allowed_uri_prefixes
                 result = await client.find(
                     query,
                     target_uri=target_uri,
@@ -175,7 +195,7 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                 )
                 return ToolReturn(return_value=format_search_results(result))
             except Exception as e:
-                return ToolReturn(return_value=f"viking_find error: {e}")
+                return ToolReturn(return_value=f"viking_find error ({type(e).__name__}): {e}")
 
         async def viking_recall(
             ctx: RunContext[Any],
@@ -243,7 +263,7 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                 merged = "\n\n".join(sections)
                 return ToolReturn(return_value=truncate_text(merged, max_chars))
             except Exception as e:
-                return ToolReturn(return_value=f"viking_recall error: {e}")
+                return ToolReturn(return_value=f"viking_recall error ({type(e).__name__}): {e}")
 
         async def viking_grep(
             ctx: RunContext[Any],
@@ -300,7 +320,7 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
 
                 return ToolReturn(return_value=format_grep_results(all_matches, patterns))
             except Exception as e:
-                return ToolReturn(return_value=f"viking_grep error: {e}")
+                return ToolReturn(return_value=f"viking_grep error ({type(e).__name__}): {e}")
 
         async def viking_glob(
             ctx: RunContext[Any],
@@ -333,7 +353,7 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                     uris = result if isinstance(result, list) else []
                 return ToolReturn(return_value=format_glob_results([str(u) for u in uris], pattern))
             except Exception as e:
-                return ToolReturn(return_value=f"viking_glob error: {e}")
+                return ToolReturn(return_value=f"viking_glob error ({type(e).__name__}): {e}")
 
         async def viking_ls(
             ctx: RunContext[Any],
@@ -416,7 +436,7 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
 
                 return ToolReturn(return_value=format_ls_entries(entry_list))
             except Exception as e:
-                return ToolReturn(return_value=f"viking_ls error: {e}")
+                return ToolReturn(return_value=f"viking_ls error ({type(e).__name__}): {e}")
 
         async def viking_read(
             ctx: RunContext[Any],
@@ -510,7 +530,7 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                     )
                 return ToolReturn(return_value="\n\n".join(sections))
             except Exception as e:
-                return ToolReturn(return_value=f"viking_read error: {e}")
+                return ToolReturn(return_value=f"viking_read error ({type(e).__name__}): {e}")
 
         async def viking_expand(
             ctx: RunContext[Any],
@@ -539,7 +559,7 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                     return_value=str(content) if content else "No content found at URI."
                 )
             except Exception as e:
-                return ToolReturn(return_value=f"viking_expand error: {e}")
+                return ToolReturn(return_value=f"viking_expand error ({type(e).__name__}): {e}")
 
         retrieve_tools: list[Callable[..., Awaitable[ToolReturn]]] = [
             viking_search,
@@ -618,7 +638,7 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                     return_value=f"Wrote {len(content)} chars to {uri} (mode={mode})."
                 )
             except Exception as e:
-                return ToolReturn(return_value=f"viking_write error: {e}")
+                return ToolReturn(return_value=f"viking_write error ({type(e).__name__}): {e}")
 
         async def viking_edit(
             ctx: RunContext[Any],
@@ -669,7 +689,7 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                 await client.write(uri, modified, mode="replace")
                 return ToolReturn(return_value=f"Replaced {count} occurrence(s) in {uri}.")
             except Exception as e:
-                return ToolReturn(return_value=f"viking_edit error: {e}")
+                return ToolReturn(return_value=f"viking_edit error ({type(e).__name__}): {e}")
 
         async def viking_mkdir(
             ctx: RunContext[Any],
@@ -692,7 +712,7 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                 await client.mkdir(uri, description=description)
                 return ToolReturn(return_value=f"Created directory {uri}.")
             except Exception as e:
-                return ToolReturn(return_value=f"viking_mkdir error: {e}")
+                return ToolReturn(return_value=f"viking_mkdir error ({type(e).__name__}): {e}")
 
         async def viking_add_resource(
             ctx: RunContext[Any],
@@ -736,7 +756,9 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                 )
                 return ToolReturn(return_value=f"Added resource {path} to Viking. Result: {result}")
             except Exception as e:
-                return ToolReturn(return_value=f"viking_add_resource error: {e}")
+                return ToolReturn(
+                    return_value=f"viking_add_resource error ({type(e).__name__}): {e}"
+                )
 
         async def viking_forget(
             ctx: RunContext[Any],
@@ -759,7 +781,7 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                 await client.rm(uri, recursive=recursive)
                 return ToolReturn(return_value=f"Removed {uri}.")
             except Exception as e:
-                return ToolReturn(return_value=f"viking_forget error: {e}")
+                return ToolReturn(return_value=f"viking_forget error ({type(e).__name__}): {e}")
 
         write_tools: list[Callable[..., Awaitable[ToolReturn]]] = [
             viking_write,
@@ -809,7 +831,7 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                     return_value=f"Linked {from_uri} -> {', '.join(targets)} (reason: {reason!r})."
                 )
             except Exception as e:
-                return ToolReturn(return_value=f"viking_link error: {e}")
+                return ToolReturn(return_value=f"viking_link error ({type(e).__name__}): {e}")
 
         async def viking_set_tags(
             ctx: RunContext[Any],
@@ -834,11 +856,18 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                 await client.set_tags(uri, tags, mode="replace", recursive=recursive)
                 return ToolReturn(return_value=f"Set {len(tags)} tag(s) on {uri}.")
             except Exception as e:
-                return ToolReturn(return_value=f"viking_set_tags error: {e}")
+                return ToolReturn(return_value=f"viking_set_tags error ({type(e).__name__}): {e}")
 
         graph_tools: list[Callable[..., Awaitable[ToolReturn]]] = [viking_set_tags]
         if cap.enable_link:
             graph_tools.append(viking_link)
         tools.extend(graph_tools)
+
+    if cap.enabled_tools is not None:
+        names = {getattr(fn, "__name__", "") for fn in tools}
+        allowed = {n for n in cap.enabled_tools if n in names}
+        tools = [fn for fn in tools if getattr(fn, "__name__", "") in allowed]
+    elif cap.disabled_tools is not None:
+        tools = [fn for fn in tools if getattr(fn, "__name__", "") not in set(cap.disabled_tools)]
 
     return tools
