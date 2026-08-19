@@ -65,7 +65,7 @@ def test_describe_binary_content_document() -> None:
 
 @pytest.mark.unit
 def test_describe_binary_content_identifier_included() -> None:
-    """BinaryContent with an identifier emits the file reference (RFC-0061)."""
+    """BinaryContent with a path identifier emits the file reference (RFC-0061)."""
     img = BinaryImage(
         data=b"\x89PNG\r\n\x1a\n",
         media_type="image/png",
@@ -74,6 +74,32 @@ def test_describe_binary_content_identifier_included() -> None:
     result = describe_multimodal_content(img)
     assert "/tmp/screenshot.png" in result
     assert "vision-capable subagent or file tool" in result
+
+
+@pytest.mark.unit
+def test_describe_binary_content_hash_identifier_suppressed() -> None:
+    """A hash-shaped identifier is not a retrievable reference and is suppressed."""
+    img = BinaryImage(
+        data=b"\x89PNG\r\n\x1a\n",
+        media_type="image/png",
+        identifier="a1b2c3d4e5f6",
+    )
+    result = describe_multimodal_content(img)
+    assert "a1b2c3d4e5f6" not in result
+    assert "no file reference available" in result
+
+
+@pytest.mark.unit
+def test_describe_binary_content_sha1_hash_identifier_suppressed() -> None:
+    """pydantic-ai's sha1[:6] fallback identifier shape is suppressed."""
+    img = BinaryImage(
+        data=b"\x89PNG\r\n\x1a\n",
+        media_type="image/png",
+        identifier="1a2b3c",
+    )
+    result = describe_multimodal_content(img)
+    assert "1a2b3c" not in result
+    assert "no file reference available" in result
 
 
 @pytest.mark.unit

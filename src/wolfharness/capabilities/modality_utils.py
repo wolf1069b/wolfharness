@@ -28,6 +28,11 @@ type BinaryCategory = Literal["image", "audio", "video", "document", "unknown"]
 # filename were interpolated verbatim (RFC-0061 Security considerations).
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 
+# pydantic-ai falls back to a short content hash (sha1[:6]) when no explicit
+# identifier is available.  A bare hash is not a retrievable reference, so it
+# must not be presented to the model as a "File:" it could open.
+_HASH_IDENTIFIER = re.compile(r"^[0-9a-fA-F]{4,64}$")
+
 
 def _safe_ref(value: str) -> str:
     r"""Sanitize a caller-influenced identifier (filename/path) for interpolation.
@@ -50,11 +55,12 @@ def _describe_binary(binary: BinaryImage | BinaryContent) -> str:
     caller explicitly provided one (e.g. the tool that produced the bytes
     knew the source path). The public ``.identifier`` property is avoided
     because it falls back to a content hash that is not a retrievable
-    reference.
+    reference. Hash-shaped identifiers are likewise suppressed — a bare
+    digest is not a path the model could open.
     """
     media = binary.media_type
     identifier = binary._identifier
-    if identifier:
+    if identifier and not _HASH_IDENTIFIER.fullmatch(identifier):
         safe_id = _safe_ref(identifier)
         return (
             f"[User supplied {media} — direct model processing is "
