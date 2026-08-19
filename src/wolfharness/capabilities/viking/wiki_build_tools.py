@@ -360,8 +360,8 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
                 "get_opls",
                 "get_expert_authority",
                 "get_wiki_change_events",
-                "op_flow_status",
                 "diff_entity",
+                "plan_entity_move",
             },
         )
     ),
@@ -560,9 +560,13 @@ def build_tools(cap: WikiBuildCapability) -> list[Callable[..., Any]]:
     if role == "wiki_external_expert":
         from wolfharness.capabilities.viking.ticket import build_ticket_tools
 
+        read_names = ROLE_TOOLS["wiki_external_expert"]
+        if cap.config.tool_names:
+            # tool_names 白名单收窄只读工具集；ticket 写工具始终保留。
+            read_names = read_names & frozenset(cap.config.tool_names)
         read_tools = _build_method_wrappers(
             tools,
-            tool_names=ROLE_TOOLS["wiki_external_expert"],
+            tool_names=read_names,
             include_helpers=True,
         )
         return read_tools + build_ticket_tools(cap)

@@ -22,6 +22,7 @@ features that no longer exist:
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import ANY, AsyncMock, MagicMock
 
@@ -50,6 +51,46 @@ from wolfharness.orchestrator.turn import Turn
 
 
 pytestmark = pytest.mark.unit
+
+
+def test_get_live_run_clears_stale_current_run_id() -> None:
+    """A missing run handle must not leave a session permanently busy."""
+    controller = SessionController(pool=MagicMock())
+    session = SessionState(session_id="stale-session", agent_name="test_agent")
+    session.current_run_id = "missing-run"
+    controller._sessions[session.session_id] = session
+
+    assert controller.get_live_run(session.session_id) is None
+    assert session.current_run_id is None
+
+
+def test_get_live_run_returns_only_an_incomplete_registered_run() -> None:
+    """A registered incomplete handle is the only authoritative busy state."""
+    controller = SessionController(pool=MagicMock())
+    session = SessionState(session_id="live-session", agent_name="test_agent")
+    session.current_run_id = "live-run"
+    controller._sessions[session.session_id] = session
+    run = SimpleNamespace(complete_event=asyncio.Event())
+    controller._runs["live-run"] = run
+
+    assert controller.get_live_run(session.session_id) is run
+
+    run.complete_event.set()
+    assert controller.get_live_run(session.session_id) is None
+    assert session.current_run_id is None
+
+
+def test_session_pool_active_run_lookup_repairs_stale_pointer() -> None:
+    """SessionPool routing must not wait on a completed or missing run."""
+    controller = SessionController(pool=MagicMock())
+    session = SessionState(session_id="stale-pool-session", agent_name="test_agent")
+    session.current_run_id = "missing-run"
+    controller._sessions[session.session_id] = session
+    session_pool = SessionPool.__new__(SessionPool)
+    session_pool.sessions = controller
+
+    assert session_pool._get_active_run_handle(session.session_id) is None
+    assert session.current_run_id is None
 
 
 # ---------------------------------------------------------------------------

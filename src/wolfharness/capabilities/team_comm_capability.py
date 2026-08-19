@@ -385,6 +385,30 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         return FileTeamState(self._get_team_base_dir(agent_ctx))
 
     @staticmethod
+    def _session_has_live_run(session_pool: Any, session_id: str) -> bool:
+        """Return runtime busy state from the live run registry.
+
+        ``current_run_id`` can outlive its ``RunHandle`` during cancellation
+        cleanup. Prefer the controller's repair-capable lookup and retain a
+        conservative fallback for lightweight test doubles.
+        """
+        sessions = getattr(session_pool, "sessions", None)
+        get_live_run = getattr(sessions, "get_live_run", None)
+        if callable(get_live_run):
+            return get_live_run(session_id) is not None
+        session = sessions.get_session(session_id) if sessions is not None else None
+        if session is None:
+            return False
+        run_id = getattr(session, "current_run_id", None)
+        if run_id is None:
+            return False
+        get_run = getattr(session_pool, "get_run", None)
+        if callable(get_run):
+            run = get_run(run_id)
+            return run is not None and not run.complete_event.is_set()
+        return True
+
+    @staticmethod
     def _task_lease_active(task: dict[str, Any]) -> bool:
         """Return whether a task currently has a live lease."""
         token = str(task.get("lease_token", "")).strip()
@@ -2071,7 +2095,7 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                     runtime_status = "offline"
                 elif member_session.closing or member_session.is_closing:
                     runtime_status = "closing"
-                elif member_session.current_run_id is not None:
+                elif self._session_has_live_run(session_pool, sid):
                     runtime_status = "busy"
                 else:
                     runtime_status = "idle"

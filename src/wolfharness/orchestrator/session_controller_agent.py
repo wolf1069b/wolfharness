@@ -448,7 +448,7 @@ class SessionControllerAgentMixin:
                 created_at=s.created_at,
                 last_active_at=s.last_active_at,
                 is_per_session_agent=s.is_per_session_agent,
-                status="busy" if s.current_run_id is not None else "idle",
+                status="busy" if self.get_live_run(s.session_id) is not None else "idle",
             )
             for s in self._sessions.values()
         ]

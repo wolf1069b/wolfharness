@@ -56,10 +56,7 @@ class SessionPoolRunsMixin:
         Returns:
             The RunHandle, or None if no active run exists.
         """
-        session = self.sessions.get_session(session_id)
-        if session is None or session.current_run_id is None:
-            return None
-        return self.sessions._runs.get(session.current_run_id)
+        return self.sessions.get_live_run(session_id)
 
     def _create_run_handle(
         self,
@@ -114,11 +111,11 @@ class SessionPoolRunsMixin:
         """
         from wolfharness.orchestrator.session_controller import SessionBusyError
 
-        # Staleness check: prevent silently overwriting an active run.
-        if session.current_run_id is not None and session.current_run_id in self.sessions._runs:
-            existing = self.sessions._runs[session.current_run_id]
-            if not existing.complete_event.is_set():
-                raise SessionBusyError(session_id, session.current_run_id)
+        # Staleness check: prevent silently overwriting an active run while
+        # clearing a completed or missing run pointer.
+        existing = self.sessions.get_live_run(session_id)
+        if existing is not None:
+            raise SessionBusyError(session_id, existing.run_id)
 
         event_bus = self.event_bus
         run_ctx = AgentRunContext(session_id=session_id, event_bus=event_bus, deps=deps)
@@ -310,12 +307,10 @@ class SessionPoolRunsMixin:
             case _:
                 content = flatten_prompts(prompts)
 
-        run_id = session.current_run_id
-        if run_id is not None:
+        run_handle = self._get_active_run_handle(session_id)
+        if run_handle is not None:
             # Active run — steer and use EventBus
-            run_handle = self.sessions._runs.get(run_id)
-            if run_handle is not None:
-                run_handle.steer(content)
+            run_handle.steer(content)
             queue = await self.event_bus.subscribe(session_id, scope=scope)
             try:
                 while True:
@@ -338,11 +333,10 @@ class SessionPoolRunsMixin:
         async with session._request_lock:
             # Re-check current_run_id inside the lock — another caller
             # may have created a run while we waited.
-            if session.current_run_id is not None:
+            run_handle = self._get_active_run_handle(session_id)
+            if run_handle is not None:
                 # Active run appeared — steer and use EventBus
-                run_handle = self.sessions._runs.get(session.current_run_id)
-                if run_handle is not None:
-                    run_handle.steer(content)
+                run_handle.steer(content)
                 queue = await self.event_bus.subscribe(session_id, scope=scope)
                 try:
                     while True:

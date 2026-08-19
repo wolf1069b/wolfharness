@@ -140,6 +140,7 @@ class WikiBuildCapability(
         index_limit: int = 20,
         build_log_dir: str | None = None,
         sync_after_apply: bool = False,
+        tool_names: tuple[str, ...] = (),
     ) -> None:
         self._config = config or WikiBuildConfig(
             wiki_root=wiki_root,
@@ -154,6 +155,7 @@ class WikiBuildCapability(
             index_limit=index_limit,
             build_log_dir=build_log_dir,
             sync_after_apply=sync_after_apply,
+            tool_names=tool_names,
         )
         self._tools: Any | None = None
         self._build_logger: Any | None = None

@@ -47,6 +47,9 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+# Viking metadata files that are not real entity pages.
+_OP_METADATA_FILENAMES = frozenset({".overview.md", ".abstract.md", "entities.json"})
+
 # ---------------------------------------------------------------------------
 # Ticket inventory
 # ---------------------------------------------------------------------------
@@ -487,9 +490,25 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
             evidence_uris: New ``viking://`` evidence references.
             related_uris: New ``viking://`` related references.
             candidate_content: New full replacement markdown candidate.
-            candidate_operations: New deterministic patch operations.
+            candidate_operations: List of deterministic patch operations. Each
+                is a dict with an ``op`` key; supported ops:
+                - Content patch ops (mutually exclusive with
+                  ``candidate_content``): ``line_replace``/``line_insert``/
+                  ``line_delete``, ``section_replace``/``section_insert_after``,
+                  ``fm_append``/``fm_set``/``fm_set_list``.
+                - Storage relocation op ``move_entity``:
+                  ``{"op": "move_entity", "dst_class_name": "...",
+                  "dst_object_name": "..."}``. Relocates the target entity file
+                  to ``Component/<dst_class_name>/<dst_object_name>.md``
+                  (omitted values carry over the current class/name). The
+                  target file is physically moved (neither
+                  ``candidate_content`` nor ``expected_sha256`` is used); an
+                  emptied source class directory is pruned, and the old URI is
+                  kept via a redirect. Use this for class/prefix (BOM 归类)
+                  changes, not content edits.
             expected_sha256: New locked-content SHA-256 for apply-time
-                optimistic locking.
+                optimistic locking (required for content patches on an
+                existing target; not needed for a pure ``move_entity``).
             status: New status — ``unconfirmed`` | ``confirmed`` |
                 ``rejected``.
             reviewed_by: Reviewer identifier; required to confirm/reject.
@@ -562,9 +581,24 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
             related_uris: ``viking://`` related URIs.
             target_uri: Must match the OPA's ``target_uri`` when given.
             candidate_content: Optional full replacement page markdown.
-            candidate_operations: Optional deterministic patch operations.
+            candidate_operations: Optional list of deterministic patch
+                operations. Each is a dict with an ``op`` key; supported ops:
+                - Content patch ops (mutually exclusive with
+                  ``candidate_content``): ``line_replace``/``line_insert``/
+                  ``line_delete``, ``section_replace``/``section_insert_after``,
+                  ``fm_append``/``fm_set``/``fm_set_list``.
+                - Storage relocation op ``move_entity``:
+                  ``{"op": "move_entity", "dst_class_name": "...",
+                  "dst_object_name": "..."}``. Physically relocates the target
+                  entity file to ``Component/<dst_class_name>/<dst_object_name>.md``
+                  (omitted values carry over the current class/name); the
+                  emptied source class directory is pruned and the old URI kept
+                  via a redirect. Use this for class/prefix (BOM 归类) changes,
+                  not content edits. A pure ``move_entity`` carries no
+                  ``candidate_content`` and needs no ``expected_sha256``.
             expected_sha256: SHA-256 hex of current target content (for
-                optimistic locking at apply time).
+                optimistic locking at apply time; required for content patches
+                on an existing target, not needed for a pure ``move_entity``).
             expert_id: Expert identifier (also the OPS reviewer).
             expert_name: Expert display name.
             opl_uri: ``viking://`` URI of an existing OPL to revise.
@@ -834,6 +868,63 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
             "tickets": records,
         }
 
+    async def find_op(
+        ctx: RunContext[Any],
+        *,
+        query: str = "",
+        prefix: str = "",
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """Fast precise lookup over ticket & component identifiers in the wiki store.
+
+        Ticket-domain search — directly uses the OpenViking client grep
+        primitive against the configured wiki root, NOT the slower semantic
+        ``find_wiki``. Resolves a ``bom_path`` prefix, an ``object_name``, a
+        class keep, or a ``OP/`` ticket id before assembling a candidate.
+        Each match carries the matched line content (e.g. the full
+        ``bom_path: ...`` value) and its URI.
+        """
+        if not query and not prefix:
+            return {"entries": [], "error": "find_op requires query or prefix"}
+        _fs = getattr(getattr(tools, "store", None), "_fs", None)
+        if _fs is None:
+            return {"entries": [], "error": "wiki store not available"}
+        client = getattr(_fs, "_client", None)
+        target = str(getattr(_fs, "root_uri", "") or "").rstrip("/")
+        entries: list[dict[str, object]] = []
+
+        if client is not None:
+            result = await asyncio.to_thread(
+                client.grep,
+                target or "",
+                query or prefix,
+                node_limit=limit,
+            )
+            for match in (result or {}).get("matches", []) or []:
+                uri = str(match.get("uri", "")) if isinstance(match, dict) else ""
+                if not uri or not uri.startswith(target + "/"):
+                    continue
+                leaf = uri.rsplit("/", 1)[-1]
+                if leaf in _OP_METADATA_FILENAMES:
+                    continue
+                entries.append(
+                    {
+                        "uri": uri,
+                        "content": match.get("content", "") if isinstance(match, dict) else "",
+                    },
+                )
+                if len(entries) >= limit:
+                    break
+            return {"entries": entries}
+        keys = await asyncio.to_thread(_fs.list_dir, target, recursive=True)
+        for key in keys:
+            if prefix and not str(key).startswith(prefix):
+                continue
+            entries.append({"key": str(key), "uri": f"{target}/{key}"})
+            if len(entries) >= limit:
+                break
+        return {"entries": entries}
+
     return [
         create_opa_ticket,
         create_ops_ticket,
@@ -842,6 +933,7 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
         apply_opl_ticket,
         get_ticket_status,
         submit_eval_payload,
+        find_op,
     ]
 
 
@@ -900,7 +992,13 @@ def get_ticket_instructions() -> str:
         "4. create_opl_ticket — integrate one OPA + its OPS into an OPL "
         "proposal. Provide candidate_content (full replacement markdown) "
         "and expected_sha256 (SHA-256 of current page content, computed "
-        "from read_resource output) when the patch is machine-applicable.\n"
+        "from read_resource output) when the patch is machine-applicable. "
+        "For a class/prefix (BOM 归类) change, pass candidate_operations "
+        "instead: [{'op': 'move_entity', 'dst_class_name': '...', "
+        "'dst_object_name': '...'}] to physically relocate the target file "
+        "to Component/<dst_class_name>/<dst_object_name>.md (no "
+        "candidate_content/expected_sha256; emptied source dir pruned, old "
+        "URI kept via redirect).\n"
         "5. apply_opl_ticket — merge the OPL candidate into the target page, "
         "activate scoped expert authority, emit a durable event, notify the "
         "current agent, and close the ticket chain.\n"
@@ -908,7 +1006,12 @@ def get_ticket_instructions() -> str:
         "and durable event state.\n"
         "7. submit_eval_payload — ingest a full eval revision payload "
         "({eval, round, entity_uri, revisions: [...]}) and materialize "
-        "OPA/OPS tickets from it.\n"
+        "OPA/OPS tickets from it. Per revision: target.entity_uri → OPA "
+        "target_uri, content_snippet → OPA problem description, "
+        "suggested_resolution → OPA recommendation and OPS suggestion, "
+        "cited_references[].uri + evidence → OPA/OPS evidence_uris, "
+        "expert_opinion → fallback description. An empty "
+        "suggested_resolution leaves the ticket OPA-only (no OPS).\n"
         "\n"
         "Typical flow:\n"
         "  find_wiki → read_resource(target) → create_opa_ticket → "

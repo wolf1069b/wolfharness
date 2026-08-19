@@ -62,6 +62,28 @@ class SessionControllerRunsMixin:
 
     def get_session(self, session_id: str) -> SessionState | None: ...
 
+    def get_live_run(self, session_id: str) -> RunHandle | None:
+        """Return the live run for a session and repair stale run metadata.
+
+        ``SessionState.current_run_id`` is a pointer, not the run registry.
+        A cancelled or failed background task can leave that pointer behind
+        briefly, so callers that use it as the busy signal can strand a team
+        member forever.  The registered handle and its completion event are
+        the authoritative runtime state.
+        """
+        session = self._sessions.get(session_id)
+        if session is None:
+            return None
+        run_id = session.current_run_id
+        if run_id is None:
+            return None
+        run = self._runs.get(run_id)
+        if run is not None and not run.complete_event.is_set():
+            return run
+        if session.current_run_id == run_id:
+            session.set_current_run_id(None)
+        return None
+
     async def _emit_user_message_inserted(
         self,
         session_id: str,
@@ -570,10 +592,7 @@ class SessionControllerRunsMixin:
                 return None
             # Stale-run detection: if current_run_id points to a missing
             # or completed run, clear it and start a new run.
-            if session.current_run_id is not None:
-                existing_run = self._runs.get(session.current_run_id)
-                if existing_run is None or existing_run.complete_event.is_set():
-                    session.set_current_run_id(None)
+            self.get_live_run(session_id)
             if session.current_run_id is None:
                 # Idle session — initial delivery.
                 inferred_delivery = delivery or "initial"
