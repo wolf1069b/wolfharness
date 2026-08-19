@@ -126,7 +126,8 @@ async def test_tool_image_text_only_model_receives_placeholder() -> None:
     )
     # The tool result should be a text placeholder, not a BinaryImage.
     assert isinstance(result, str)
-    assert result == "[image/png]"
+    assert "image/png" in result
+    assert "unsupported" in result
 
 
 # ---------------------------------------------------------------------------
@@ -201,8 +202,10 @@ async def test_fallback_model_intersection_injects_filter() -> None:
     # Verify image content is degraded by this capability.
     # None is treated as unsupported via ``is True`` check → text-only behavior.
     img = _binary_image()
-    degraded = filter_caps[0]._filter_tool_result(img)
-    assert degraded == "[image/png]"
+    degraded = filter_caps[0]._filter_tool_result(None, img)  # type: ignore[arg-type]
+    assert isinstance(degraded, str)
+    assert "image/png" in degraded
+    assert "unsupported" in degraded
 
 
 # ---------------------------------------------------------------------------
@@ -240,7 +243,8 @@ async def test_history_tool_return_image_degraded_for_text_only() -> None:
     assert isinstance(new_msg, ModelResponse)
     new_part = new_msg.parts[0]
     assert isinstance(new_part, ToolReturnPart)
-    assert new_part.content == "[image/png]"
+    assert "image/png" in new_part.content
+    assert "unsupported" in new_part.content
 
 
 # ---------------------------------------------------------------------------
@@ -367,7 +371,8 @@ async def test_before_model_request_does_not_mutate_original() -> None:
     assert result.messages is not ctx.messages
     new_part = result.messages[0].parts[0]  # type: ignore[union-attr]
     assert isinstance(new_part, ToolReturnPart)
-    assert new_part.content == "[image/png]"
+    assert "image/png" in new_part.content
+    assert "unsupported" in new_part.content
     assert new_part.content is not original_content
 
 

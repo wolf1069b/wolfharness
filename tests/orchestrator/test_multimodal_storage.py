@@ -95,18 +95,20 @@ def test_extract_text_from_messages_empty() -> None:
 
 @pytest.mark.unit
 def test_summarize_binary_image() -> None:
-    """BinaryImage produces '[image/png]' placeholder."""
+    """BinaryImage produces an information-preserving placeholder."""
     img = BinaryImage(data=b"\x89PNG\r\n\x1a\n", media_type="image/png")
     result = _summarize_content_block(img)
-    assert result == "[image/png]"
+    assert "image/png" in result
+    assert "unsupported" in result
 
 
 @pytest.mark.unit
 def test_summarize_binary_content() -> None:
-    """BinaryContent produces '[audio/wav]' placeholder."""
+    """BinaryContent produces an information-preserving placeholder."""
     audio = BinaryContent(data=b"RIFF....", media_type="audio/wav")
     result = _summarize_content_block(audio)
-    assert result == "[audio/wav]"
+    assert "audio/wav" in result
+    assert "unsupported" in result
 
 
 @pytest.mark.unit
@@ -285,7 +287,8 @@ def test_prompt_text_uses_summarize_content_block() -> None:
     assert "b'\\x89PNG" not in prompt_text
     assert "\\x89PNG" not in prompt_text
     # Should contain the meaningful placeholder
-    assert "[image/png]" in prompt_text
+    assert "image/png" in prompt_text
+    assert "unsupported" in prompt_text
     assert "hello" in prompt_text
     assert "describe this" in prompt_text
 
@@ -306,7 +309,8 @@ def test_opencode_converter_uses_summarize_content_block() -> None:
 
     assert "text before image" in text
     assert "text after image" in text
-    assert "[image/png]" in text
+    assert "image/png" in text
+    assert "unsupported" in text
     assert "BinaryContent" not in text
     assert "b'\\x89PNG" not in text
 
@@ -330,7 +334,8 @@ def test_compaction_extract_text_content_uses_summarize() -> None:
 
     result = _extract_text_content(msg)
     assert "describe this" in result
-    assert "[image/png]" in result
+    assert "image/png" in result
+    assert "unsupported" in result
     assert "BinaryContent" not in result
 
 

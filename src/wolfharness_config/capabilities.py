@@ -151,13 +151,13 @@ class ModalityFilterCapabilityConfig(BaseModel):
     """
 
     type: Literal["modality_filter"] = "modality_filter"
-    image_strategy: Literal["describe", "drop", "pass"] = "describe"
+    image_strategy: Literal["describe", "reference", "drop", "pass"] = "describe"
     """Degradation strategy for unsupported image content."""
-    audio_strategy: Literal["describe", "drop", "pass"] = "describe"
+    audio_strategy: Literal["describe", "reference", "drop", "pass"] = "describe"
     """Degradation strategy for unsupported audio content."""
-    video_strategy: Literal["describe", "drop", "pass"] = "describe"
+    video_strategy: Literal["describe", "reference", "drop", "pass"] = "describe"
     """Degradation strategy for unsupported video content."""
-    document_strategy: Literal["describe", "drop", "pass"] = "describe"
+    document_strategy: Literal["describe", "reference", "drop", "pass"] = "describe"
     """Degradation strategy for unsupported document content."""
 
 
