@@ -16,9 +16,9 @@ Three resolution paths:
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 KNOWN_CAPABILITY_TYPES: frozenset[str] = frozenset({
@@ -323,6 +323,30 @@ class VikingCapabilityConfig(BaseModel):
     """When True (default), profile injection runs only on the first turn
     of a session (message count <= 2). When False, injection runs on every
     before_model_request call where _profile_injected is False."""
+    enabled_tools: list[str] | None = Field(
+        default=None,
+        examples=[["viking_ls", "viking_read", "viking_grep"]],
+        title="Enabled tools",
+    )
+    """If set, only these tools will be available (whitelist).
+    Mutually exclusive with disabled_tools."""
+
+    disabled_tools: list[str] | None = Field(
+        default=None,
+        examples=[["viking_search", "viking_find"]],
+        title="Disabled tools",
+    )
+    """Tools to exclude from this capability (blacklist). Mutually exclusive
+    with enabled_tools. For example, disable a slow knowledge-graph semantic
+    search backend while keeping the deterministic tools:
+    ``disabled_tools: ["viking_search", "viking_find"]``."""
+
+    @model_validator(mode="after")
+    def _validate_tool_filters(self) -> Self:
+        """Validate that enabled_tools and disabled_tools are mutually exclusive."""
+        if self.enabled_tools is not None and self.disabled_tools is not None:
+            raise ValueError("Cannot specify both 'enabled_tools' and 'disabled_tools'")
+        return self
 
 
 # ---------------------------------------------------------------------------

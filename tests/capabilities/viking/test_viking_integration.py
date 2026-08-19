@@ -139,6 +139,49 @@ agents:
     assert cfg.mode == "retrieve"
 
 
+def test_yaml_config_loading_viking_disabled_tools() -> None:
+    """YAML config with disabled_tools excludes the listed tools."""
+    from wolfharness import AgentsManifest
+
+    yaml_str = """
+agents:
+  test_agent:
+    type: native
+    model: test
+    capabilities:
+      - type: viking
+        mode: retrieve
+        disabled_tools: ["viking_search", "viking_find"]
+"""
+    d = yamling.load_yaml(yaml_str, verify_type=dict)
+    manifest = AgentsManifest.model_validate(d)
+    cfg = manifest.agents["test_agent"].capabilities[0]
+    assert isinstance(cfg, VikingCapabilityConfig)
+    assert cfg.disabled_tools == ["viking_search", "viking_find"]
+    cap = build_capability(cfg)
+    from wolfharness.capabilities.viking.tools import build_tools
+
+    names = {t.__name__ for t in build_tools(cap)}
+    assert "viking_search" not in names
+    assert "viking_find" not in names
+    assert "viking_read" in names
+
+
+def test_viking_config_enabled_disabled_mutually_exclusive() -> None:
+    """enabled_tools and disabled_tools together raise a validation error."""
+    import pytest
+
+    from wolfharness_config.capabilities import VikingCapabilityConfig
+
+    with pytest.raises(ValueError, match="Cannot specify both"):
+        VikingCapabilityConfig(
+            type="viking",
+            mode="retrieve",
+            enabled_tools=["viking_ls"],
+            disabled_tools=["viking_search"],
+        )
+
+
 def test_yaml_config_loading_viking_with_fields() -> None:
     """YAML config with all fields populated parses correctly."""
     from wolfharness import AgentsManifest
@@ -363,7 +406,7 @@ async def test_network_error_graceful() -> None:
     ctx.deps.session_id = "test"
 
     result = await search_tool(ctx, query="test")
-    assert "viking_search error: network down" in result.return_value
+    assert "viking_search error (ConnectionError): network down" in result.return_value
     assert isinstance(result, ToolReturn)
 
 
@@ -385,7 +428,7 @@ async def test_invalid_uri_graceful() -> None:
     ctx.deps.session_id = "test"
 
     result = await read_tool(ctx, uris="not-a-valid-uri")
-    assert "viking_read error: invalid URI format" in result.return_value
+    assert "viking_read error (ValueError): invalid URI format" in result.return_value
 
 
 @pytest.mark.asyncio
@@ -406,7 +449,7 @@ async def test_permission_error_graceful() -> None:
     ctx.deps.session_id = "test"
 
     result = await write_tool(ctx, uri="viking://protected/doc.md", content="data")
-    assert "viking_write error: access denied" in result.return_value
+    assert "viking_write error (PermissionError): access denied" in result.return_value
 
 
 @pytest.mark.asyncio
@@ -427,7 +470,33 @@ async def test_timeout_error_graceful() -> None:
     ctx.deps.session_id = "test"
 
     result = await search_tool(ctx, query="slow query")
-    assert "viking_search error: request timed out" in result.return_value
+    assert "viking_search error (TimeoutError): request timed out" in result.return_value
+
+
+@pytest.mark.asyncio
+async def test_empty_message_error_graceful() -> None:
+    """Exceptions with empty messages still surface the exception type.
+
+    e.g. httpcore raises ``ReadTimeout('')`` — an empty-message exception
+    that would otherwise render as ``viking_search error:`` with no context.
+    """
+    cap = VikingCapability(mode="all")
+    mock_client = AsyncMock()
+    mock_client.search = AsyncMock(side_effect=RuntimeError(""))
+    cap._client = mock_client
+
+    tools = build_tools(cap)
+    search_tool = next(t for t in tools if t.__name__ == "viking_search")
+
+    from unittest.mock import MagicMock
+
+    ctx = MagicMock()
+    ctx.deps = MagicMock()
+    ctx.deps.session_id = "test"
+
+    result = await search_tool(ctx, query="slow query")
+    assert "viking_search error (RuntimeError): " in result.return_value
+    assert result.return_value.strip().endswith("(RuntimeError):")
 
 
 @pytest.mark.asyncio
@@ -448,7 +517,7 @@ async def test_generic_exception_graceful() -> None:
     ctx.deps.session_id = "test"
 
     result = await ls_tool(ctx, uri="viking://broken/")
-    assert "viking_ls error: unexpected error" in result.return_value
+    assert "viking_ls error (Exception): unexpected error" in result.return_value
 
 
 @pytest.mark.asyncio
@@ -748,11 +817,12 @@ async def test_l2_allowed_uri_prefixes_allow_read_in_scope() -> None:
 
 @pytest.mark.asyncio
 async def test_l2_allowed_uri_prefixes_search_scoped_when_no_target() -> None:
-    """L2: viking_search defaults target_uri to the first allowed prefix.
+    """L2: viking_search scopes to the allowed prefix when no target is given.
 
     Given: allowed_uri_prefixes configured, no target_uri passed.
     When: viking_search is called.
-    Then: the SDK search receives target_uri equal to the first allowed prefix.
+    Then: the SDK search receives target_uri as a one-element list of the
+        allowed prefixes (list is the SDK's multi-prefix contract).
     """
     client = _make_mock_client()
     cfg = VikingCapabilityConfig(
@@ -766,7 +836,7 @@ async def test_l2_allowed_uri_prefixes_search_scoped_when_no_target() -> None:
     ctx = _make_run_context()
     await search_tool(ctx, query="hydraulic")
 
-    assert client.search.call_args.kwargs["target_uri"] == "viking://resources/wiki/"
+    assert client.search.call_args.kwargs["target_uri"] == ["viking://resources/wiki/"]
 
 
 @pytest.mark.asyncio
