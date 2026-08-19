@@ -269,7 +269,7 @@ class McpServerCap(
             if not toolsets:
                 return None
             combined = CombinedToolset(toolsets)
-            prefix = self._tool_prefix
+            prefix = self._tool_prefix or self._config.tool_prefix
             if not prefix:
                 return combined
             return PrefixedToolset(wrapped=combined, prefix=prefix)

@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import logfire
 from pydantic_ai.capabilities import AbstractCapability
-from pydantic_ai.toolsets import AgentToolset, FunctionToolset
+from pydantic_ai.toolsets import AgentToolset, FunctionToolset, PrefixedToolset
 
 from wolfharness.capabilities.viking.identity import VikingIdentity, _try_decode_api_key
 from wolfharness.capabilities.viking.ingest import (
@@ -97,6 +97,8 @@ class VikingCapability(AbstractCapability[Any]):
     account: str | None = None
     user: str | None = None
     timeout: float | None = None
+    tool_prefix: str | None = None
+    """Optional namespace prefix for exposed Viking tool names."""
     skills_uri: str | None = None
     resources_uri: str | None = None
     sessions_uri: str | None = None
@@ -566,7 +568,10 @@ class VikingCapability(AbstractCapability[Any]):
         tool_fns = build_tools(self)
         if not tool_fns:
             return None
-        return FunctionToolset(tool_fns, id="viking")
+        toolset = FunctionToolset(tool_fns, id="viking")
+        if self.tool_prefix:
+            return PrefixedToolset(toolset, self.tool_prefix)
+        return toolset
 
     async def get_tools(self) -> Sequence[Any]:
         """Return tools as ``Tool`` objects for listing endpoints.
