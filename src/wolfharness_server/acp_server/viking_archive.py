@@ -1,0 +1,191 @@
+"""Viking archive for ACP session updates."""
+
+from __future__ import annotations
+
+import asyncio
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+import json
+import os
+import re
+from typing import Any
+
+from wolfharness.log import get_logger
+
+
+logger = get_logger(__name__)
+
+_ERROR_TYPES = (RuntimeError, OSError, TimeoutError, ValueError, TypeError, ImportError)
+
+
+@dataclass
+class ACPVikingEventArchive:
+    """Asynchronous best-effort archive for ACP ``SessionUpdate`` payloads."""
+
+    enabled: bool = False
+    url: str | None = None
+    api_key: str | None = None
+    user: str | None = None
+    session_prefix: str = "iroot-acp-session"
+    batch_size: int = 25
+    flush_on_turn_complete: bool = True
+    _client: Any = field(default=None, init=False, repr=False)
+    _pending: dict[str, list[dict[str, Any]]] = field(default_factory=dict, init=False, repr=False)
+    _sequence: dict[str, int] = field(default_factory=dict, init=False, repr=False)
+    _tasks: set[asyncio.Task[None]] = field(default_factory=set, init=False, repr=False)
+    _lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
+
+    @classmethod
+    def from_config(cls, config: Any) -> ACPVikingEventArchive:
+        """Build an archive from manifest config, expanding env vars lazily."""
+        if config is None or not bool(getattr(config, "enabled", False)):
+            return cls(enabled=False)
+        api_key = _expand(getattr(config, "api_key", None) or os.getenv("VIKING_MCP_API_KEY"))
+        url = _expand(
+            getattr(config, "url", None)
+            or os.getenv("VIKING_MCP_URL")
+            or "http://viking.ai.rootcloud.info"
+        )
+        user = _expand(getattr(config, "user", None) or os.getenv("VIKING_MCP_USER"))
+        return cls(
+            enabled=True,
+            url=url,
+            api_key=api_key,
+            user=user,
+            session_prefix=str(getattr(config, "session_prefix", "iroot-acp-session")),
+            batch_size=int(getattr(config, "batch_size", 25)),
+            flush_on_turn_complete=bool(getattr(config, "flush_on_turn_complete", True)),
+        )
+
+    async def record_update(
+        self,
+        *,
+        consumer_session_id: str,
+        source_session_id: str,
+        event_id: Any,
+        update: Any,
+    ) -> None:
+        """Buffer an ACP update and schedule archive writes when needed."""
+        if not self.enabled:
+            return
+        try:
+            payload = _dump_update(update)
+            event_type = str(payload.get("sessionUpdate") or payload.get("session_update") or "")
+            session_id = source_session_id or consumer_session_id
+            async with self._lock:
+                seq = self._sequence.get(session_id, 0) + 1
+                self._sequence[session_id] = seq
+                record = {
+                    "sequence": seq,
+                    "created_at": datetime.now(UTC).isoformat(),
+                    "session_id": session_id,
+                    "consumer_session_id": consumer_session_id,
+                    "source_session_id": source_session_id,
+                    "event_id": str(event_id),
+                    "event_type": event_type,
+                    "message_id": payload.get("messageId") or payload.get("message_id"),
+                    "tool_call_id": payload.get("toolCallId") or payload.get("tool_call_id"),
+                    "update": payload,
+                }
+                pending = self._pending.setdefault(session_id, [])
+                pending.append(record)
+                should_flush = len(pending) >= self.batch_size or (
+                    self.flush_on_turn_complete and event_type == "turn_complete"
+                )
+            if should_flush:
+                self.schedule_flush(session_id)
+        except _ERROR_TYPES:
+            logger.warning("ACP Viking archive record failed", exc_info=True)
+
+    def schedule_flush(self, session_id: str) -> None:
+        """Schedule a background flush for one session."""
+        if not self.enabled:
+            return
+        task = asyncio.create_task(self.flush_session(session_id))
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+
+    async def flush_session(self, session_id: str) -> None:
+        """Flush buffered events for one session to Viking."""
+        async with self._lock:
+            records = self._pending.pop(session_id, [])
+        if not records:
+            return
+        try:
+            client = await self._ensure_client()
+            uri = self._events_uri(session_id)
+            content = "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records)
+            await client.write(uri, content, mode="append", wait=False, processing_mode="raw")
+            await client.write(
+                self._memory_context_uri(session_id),
+                json.dumps(
+                    {
+                        "session_id": session_id,
+                        "archive_session_id": self._archive_session_id(session_id),
+                        "events_uri": uri,
+                        "last_event_sequence": records[-1]["sequence"],
+                        "last_event_type": records[-1]["event_type"],
+                        "updated_at": datetime.now(UTC).isoformat(),
+                        "memory_policy": "archive-all-events-memory-selected-transcript",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                mode="replace",
+                wait=False,
+                processing_mode="raw",
+            )
+        except _ERROR_TYPES:
+            logger.warning("ACP Viking archive flush failed", session_id=session_id, exc_info=True)
+
+    async def flush_all(self) -> None:
+        """Flush all buffered events and await in-flight writes."""
+        session_ids = set(self._pending)
+        await asyncio.gather(*(self.flush_session(session_id) for session_id in session_ids))
+        if self._tasks:
+            await asyncio.gather(*self._tasks, return_exceptions=True)
+
+    async def close(self) -> None:
+        """Flush buffered events and close the Viking client."""
+        await self.flush_all()
+        if self._client is not None:
+            close = getattr(self._client, "close", None)
+            if close is not None:
+                await close()
+            self._client = None
+
+    async def _ensure_client(self) -> Any:
+        if self._client is not None:
+            return self._client
+        from openviking_sdk import AsyncHTTPClient
+
+        client = AsyncHTTPClient(url=self.url, api_key=self.api_key, user=self.user)
+        await client.initialize()
+        self._client = client
+        return client
+
+    def _events_uri(self, session_id: str) -> str:
+        return f"viking://sessions/{self._archive_session_id(session_id)}/events.jsonl"
+
+    def _memory_context_uri(self, session_id: str) -> str:
+        return f"viking://sessions/{self._archive_session_id(session_id)}/memory_context.json"
+
+    def _archive_session_id(self, session_id: str) -> str:
+        return f"{self.session_prefix}-{_safe_identifier(session_id)}"
+
+
+def _expand(value: str | None) -> str | None:
+    return os.path.expandvars(value) if isinstance(value, str) else value
+
+
+def _safe_identifier(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", str(value)).strip("-") or "unknown"
+
+
+def _dump_update(update: Any) -> dict[str, Any]:
+    if hasattr(update, "model_dump"):
+        dumped = update.model_dump(mode="json", by_alias=True, exclude_none=True)
+        return dumped if isinstance(dumped, dict) else {"value": dumped}
+    if isinstance(update, dict):
+        return update
+    return {"value": str(update)}
