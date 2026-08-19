@@ -27,6 +27,7 @@ class _Ctx:
 
 
 @pytest.mark.asyncio
+@pytest.mark.real_mcp
 async def test_live_upload_tree_then_link_relations(allow_model_requests: None) -> None:
     conf = json.loads(pathlib.Path.home().joinpath(".openviking/ovcli.conf").read_text())
     ns = f"e2e_live_{uuid.uuid4().hex[:6]}"
