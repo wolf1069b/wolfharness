@@ -562,7 +562,7 @@ def build_tools(cap: WikiBuildCapability) -> list[Callable[..., Any]]:
 
         read_names = ROLE_TOOLS["wiki_external_expert"]
         if cap.config.tool_names:
-            # tool_names 白名单收窄只读工具集；ticket 写工具始终保留。
+            # tool_names 白名单收窄只读工具集, ticket 写工具始终保留。
             read_names = read_names & frozenset(cap.config.tool_names)
         read_tools = _build_method_wrappers(
             tools,
