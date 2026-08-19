@@ -132,6 +132,49 @@ def _record_id(value: str, prefix: str) -> str:
     return token if token.startswith(prefix + "-") else value
 
 
+async def _notify_opl_applied(ctx: RunContext[Any], result: dict[str, Any]) -> dict[str, str]:
+    """Best-effort steer notification backed by the durable event ledger."""
+    event = result.get("event")
+    if (
+        result.get("apply_status") != "applied"
+        or result.get("idempotent") is True
+        or not isinstance(event, dict)
+    ):
+        return {"status": "skipped", "reason": "no_applied_event"}
+    from wolfharness.capabilities.viking.tools import _get_session_id
+
+    session_id = _get_session_id(ctx)
+    try:
+        session_pool = ctx.deps.node.host_context.session_pool
+    except AttributeError:
+        session_pool = None
+    if session_pool is None or session_id is None:
+        return {"status": "unavailable", "event_id": str(event.get("event_id", ""))}
+    message = (
+        "Wiki expert update applied: "
+        f"event={event.get('event_id', '')}, target={event.get('target_uri', '')}, "
+        f"opl={event.get('opl_uri', '')}, scopes={event.get('authority_scopes', [])}. "
+        f"Continue from change-event cursor {event.get('sequence', 0)}."
+    )
+    try:
+        message_id = await asyncio.wait_for(
+            session_pool.steer_from_background_task(session_id, message),
+            timeout=5,
+        )
+    except (TimeoutError, RuntimeError) as error:
+        logger.warning("OPL apply notification failed: %s", error)
+        return {
+            "status": "failed",
+            "event_id": str(event.get("event_id", "")),
+            "error": str(error),
+        }
+    return {
+        "status": "delivered" if message_id is not None else "queued",
+        "event_id": str(event.get("event_id", "")),
+        "message_id": str(message_id or ""),
+    }
+
+
 def _title_from_text(text: str, fallback: str) -> str:
     first_line = next(
         (line.strip() for line in text.strip().splitlines() if line.strip()),
@@ -592,8 +635,9 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
 
         Merges the stored ``candidate_content`` / ``candidate_operations``
         into the target entity (ownership enforced by the engine), resolves
-        the parent OPA as ``closed``, and — when the capability was built
-        with ``sync_after_apply`` — pushes the patched page and OPL to
+        the parent OPA as ``closed``, persists a cursor-addressable change
+        event, notifies the current agent session when available, and — when
+        the capability was built with ``sync_after_apply`` — pushes the patched page and OPL to
         remote Viking.  Returns the terminal status for the caller.
 
         Args:
@@ -607,8 +651,8 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
 
         Returns:
             Dict with ``opl_id``, ``status``, ``apply_status``,
-            ``entity_uri``, ``opa`` (closed record) and — when sync ran —
-            ``sync``.
+            ``entity_uri``, ``opa`` (closed record), ``event``,
+            ``notification`` and — when sync ran — ``sync``.
         """
         opl_id = _record_id(opl_uri, "opl")
         result: dict[str, Any] = await asyncio.to_thread(tools.apply_opl, opl_id)
@@ -630,6 +674,7 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
                         closure_status="closed",
                         closure_reason="applied via ticket OPL",
                     )
+        result["notification"] = await _notify_opl_applied(ctx, result)
         if sync_after_apply and result.get("apply_status") == "applied":
             entity_uri = str(result.get("entity_uri", "")) or (
                 str(opl_row.get("target_uri", "")) if opl_row else ""
@@ -670,7 +715,24 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
         ops = await asyncio.to_thread(tools.get_ops, parent_opa=parent_opa, limit=limit)
         opls = await asyncio.to_thread(tools.get_opls, parent_opa=parent_opa, limit=limit)
         op_flow = await asyncio.to_thread(tools.op_flow_status, limit=limit)
-        return {"opas": opas, "ops": ops, "opls": opls, "op_flow": op_flow}
+        authority = await asyncio.to_thread(
+            tools.get_expert_authority,
+            target_uri=target_uri,
+            limit=limit,
+        )
+        events = await asyncio.to_thread(
+            tools.get_wiki_change_events,
+            target_uri=target_uri,
+            limit=limit,
+        )
+        return {
+            "opas": opas,
+            "ops": ops,
+            "opls": opls,
+            "op_flow": op_flow,
+            "expert_authority": authority,
+            "events": events,
+        }
 
     async def submit_eval_payload(
         ctx: RunContext[Any],
@@ -819,7 +881,12 @@ def get_ticket_instructions() -> str:
         "- read_resource(uri) / find_wiki(query) — locate the target entity "
         "page and cited source chapters.\n"
         "- get_ticket_status(target_uri=...) — check existing OPA/OPS/OPL "
-        "tickets before submitting new ones.\n"
+        "tickets, expert authority claims, and recent apply events before "
+        "submitting new ones.\n"
+        "- get_expert_authority(target_uri=...) — inspect sections/fields "
+        "protected by confirmed or applied expert knowledge.\n"
+        "- get_wiki_change_events(after_sequence=...) — consume durable "
+        "apply notifications after reconnect/restart.\n"
         "\n"
         "Ticket tools:\n"
         "1. create_opa_ticket — file a problem/feedback ticket (OPA) with a "
@@ -834,9 +901,12 @@ def get_ticket_instructions() -> str:
         "proposal. Provide candidate_content (full replacement markdown) "
         "and expected_sha256 (SHA-256 of current page content, computed "
         "from read_resource output) when the patch is machine-applicable.\n"
-        "4. apply_opl_ticket — merge the OPL candidate into the target page "
-        "and close the ticket chain. Returns the terminal status.\n"
-        "5. submit_eval_payload — ingest a full eval revision payload "
+        "5. apply_opl_ticket — merge the OPL candidate into the target page, "
+        "activate scoped expert authority, emit a durable event, notify the "
+        "current agent, and close the ticket chain.\n"
+        "6. get_ticket_status — read OPS/OPL lifecycle state plus authority "
+        "and durable event state.\n"
+        "7. submit_eval_payload — ingest a full eval revision payload "
         "({eval, round, entity_uri, revisions: [...]}) and materialize "
         "OPA/OPS tickets from it.\n"
         "\n"

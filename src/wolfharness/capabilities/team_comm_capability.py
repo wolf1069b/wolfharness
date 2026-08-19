@@ -58,7 +58,7 @@ import hashlib
 import json
 import re
 import tempfile
-from typing import TYPE_CHECKING, Annotated, Any, override
+from typing import TYPE_CHECKING, Annotated, Any, NotRequired, TypedDict, override
 import uuid
 
 from pydantic.fields import Field
@@ -87,6 +87,18 @@ logger = get_logger(__name__)
 # Strong references to cleanup tasks so asyncio does not garbage-collect them
 # while they are awaiting ``RunHandle.complete_event``.
 _cleanup_tasks: set[asyncio.Task[Any]] = set()
+
+
+class InitialMemberTask(TypedDict):
+    """Task persisted atomically before a newly added member is awakened."""
+
+    subject: str
+    description: NotRequired[str]
+    blocked_by: NotRequired[list[str]]
+    parent_id: NotRequired[str]
+    progress_total: NotRequired[int]
+    write_scope: NotRequired[str]
+    write_set: NotRequired[list[str]]
 
 
 class TeamCommCapability(FunctionToolsetCapability[Any]):
@@ -2599,6 +2611,22 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                 "member's system prompt"
             ),
         ] = None,
+        initial_task: Annotated[
+            InitialMemberTask | None,
+            Field(
+                description="Optional authoritative task to persist and assign "
+                "to the new member before its first run. Use this for dynamic "
+                "workers so mine_only is never temporarily empty"
+            ),
+        ] = None,
+        initial_task_id: Annotated[
+            str,
+            Field(
+                description="Optional existing pending task ID to assign to "
+                "the new member before its first run. Use this for atomic "
+                "worker replacement; mutually exclusive with initial_task"
+            ),
+        ] = "",
     ) -> ToolReturn:
         """Add a new member to an existing team (lead-only).
 
@@ -2655,6 +2683,90 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         if session_pool is None:
             return ToolReturn(return_value="SessionPool not available")
 
+        normalized_initial_task_id = initial_task_id.strip()
+        if initial_task is not None and normalized_initial_task_id:
+            return ToolReturn(
+                return_value="initial_task and initial_task_id are mutually exclusive",
+            )
+
+        initial_task_record: dict[str, Any] | None = None
+        existing_initial_task: dict[str, Any] | None = None
+        if normalized_initial_task_id:
+            existing_initial_task = team_state.get_task(
+                team_id,
+                normalized_initial_task_id,
+            )
+            if existing_initial_task is None:
+                return ToolReturn(
+                    return_value=f"Initial task not found: {normalized_initial_task_id}",
+                )
+            existing_status = str(existing_initial_task.get("status", ""))
+            existing_owner = str(existing_initial_task.get("owner", "")).strip()
+            if existing_status not in {"pending", "blocked"}:
+                return ToolReturn(
+                    return_value=(
+                        f"Initial task {normalized_initial_task_id} has status "
+                        f"{existing_status!r}; only pending/blocked tasks can be "
+                        "bound to a new member"
+                    ),
+                )
+            if existing_owner not in {"", name}:
+                return ToolReturn(
+                    return_value=(
+                        f"Initial task {normalized_initial_task_id} is still owned by "
+                        f"{existing_owner!r}; release it before worker replacement"
+                    ),
+                )
+        if initial_task is not None:
+            subject = str(initial_task.get("subject", "")).strip()
+            if not subject:
+                return ToolReturn(return_value="initial_task.subject must not be empty")
+            description = str(initial_task.get("description", ""))
+            parent_id = str(initial_task.get("parent_id", "")).strip() or None
+            if parent_id is not None and team_state.get_task(team_id, parent_id) is None:
+                return ToolReturn(return_value=f"Parent task not found: {parent_id}")
+            write_set = initial_task.get("write_set")
+            existing_task_id = self._find_existing_idempotent_task(
+                team_state,
+                team_id,
+                subject,
+                description,
+                parent_id,
+                write_set,
+            )
+            if existing_task_id:
+                return ToolReturn(
+                    return_value=(
+                        "Initial task already exists (idempotent retry): "
+                        f"{existing_task_id}. Reassign that task instead of "
+                        "creating another member."
+                    ),
+                )
+            initial_task_record = {
+                "subject": subject,
+                "description": description,
+                "blocked_by": list(initial_task.get("blocked_by", [])),
+                "owner": name,
+            }
+            if parent_id is not None:
+                initial_task_record["parent_id"] = parent_id
+            write_scope = str(initial_task.get("write_scope", "")).strip()
+            if write_scope:
+                initial_task_record["write_scope"] = write_scope
+            if write_set:
+                initial_task_record["write_set"] = list(write_set)
+            progress_total = initial_task.get("progress_total")
+            if progress_total is not None:
+                initial_task_record["progress_total"] = progress_total
+            intent_key = self._task_idempotency_key(
+                subject,
+                description,
+                parent_id,
+                write_set,
+            )
+            if intent_key:
+                initial_task_record["intent_key"] = intent_key
+
         lead_session_id: str = agent_ctx.session.session_id
 
         # Create child session for the new member.
@@ -2693,6 +2805,24 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         if member_agent is not None:
             member_agent._display_name = name
 
+        assigned_task_id = normalized_initial_task_id
+        if initial_task_record is not None:
+            try:
+                assigned_task_id = team_state.create_task(team_id, initial_task_record)
+            except (OSError, ValueError) as exc:
+                await session_pool.close_session(member_session_id)
+                return ToolReturn(return_value=f"Failed to create initial task: {exc}")
+        elif existing_initial_task is not None:
+            try:
+                existing_initial_task = team_state.update_task(
+                    team_id,
+                    assigned_task_id,
+                    {"owner": name},
+                )
+            except (OSError, ValueError) as exc:
+                await session_pool.close_session(member_session_id)
+                return ToolReturn(return_value=f"Failed to bind initial task: {exc}")
+
         # Register member in team state.
         team_state.register_member(
             team_id,
@@ -2723,12 +2853,29 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             role_label = "lead" if m_name == lead_member_name else "member"
             work = work_summaries.get(m_name, "No active work")
             roster_lines.append(f"  - `{m_name}` (agent=`{m_agent}`, role=`{role_label}`) — {work}")
-        roster_lines.append(f"  - `{name}` (agent=`{agent}`, role=`member`) — No active work")
+        assigned_task = initial_task_record or existing_initial_task
+        initial_subject = str(assigned_task.get("subject", "")) if assigned_task else ""
+        new_member_work = (
+            f"Assigned: {initial_subject}" if initial_subject else "No active work"
+        )
+        roster_lines.append(
+            f"  - `{name}` (agent=`{agent}`, role=`member`) — {new_member_work}",
+        )
         roster = "\n".join(roster_lines)
         initial_prompt = f"{base_prompt}\n\n## Team Members\n{roster}"
-        if prompt:
+        if assigned_task_id and assigned_task is not None:
             initial_prompt += (
-                f"\n\n## Task\n{prompt}"
+                "\n\n## Authoritative Initial Task\n"
+                f"- [{assigned_task_id}] {initial_subject}\n"
+                f"{assigned_task.get('description', '')}\n\n"
+                "The task already exists on the shared board and is owned by you. "
+                "Call task_list(mine_only=True, active_only=True), then claim this "
+                'exact task with task_update(status="in_progress") before work.'
+            )
+        if prompt:
+            prompt_heading = "Additional Context" if assigned_task_id else "Task"
+            initial_prompt += (
+                f"\n\n## {prompt_heading}\n{prompt}"
                 "\n\nRemember to report progress regularly using "
                 '`task_update(technical_note="...")`.'
             )
@@ -2821,7 +2968,10 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         team_member_sessions.append(member_session_id)
         agent_ctx.session.metadata["team_member_sessions"] = team_member_sessions
 
-        return ToolReturn(return_value=f"Member '{name}' added to team (lifecycle={lifecycle})")
+        result = f"Member '{name}' added to team (lifecycle={lifecycle})"
+        if assigned_task_id:
+            result += f" with initial task {assigned_task_id} (persisted before wakeup)"
+        return ToolReturn(return_value=result)
 
     async def shutdown_request(  # noqa: PLR0911
         self,

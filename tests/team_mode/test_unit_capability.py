@@ -2367,6 +2367,96 @@ async def test_team_add_member_ephemeral(tmp_path: Any) -> None:
 
 
 @pytest.mark.unit
+async def test_team_add_member_persists_initial_task_before_member_wakeup(
+    tmp_path: Any,
+) -> None:
+    """A new worker must never run before its authoritative task is visible."""
+    cap, ctx, mock_pool, _mock_delegation, _mock_registry = _make_add_member_setup(
+        tmp_path,
+    )
+    from wolfharness.capabilities.file_team_state import FileTeamState
+
+    state = FileTeamState(str(tmp_path))
+    visible_tasks_at_wakeup: list[list[dict[str, Any]]] = []
+
+    async def capture_wakeup(*args: Any, **kwargs: Any) -> str:
+        visible_tasks_at_wakeup.append(state.list_tasks("team_123"))
+        return "msg_id"
+
+    mock_pool.send_message.side_effect = capture_wakeup
+
+    result = await cap.team_add_member(
+        ctx,
+        "atomic_worker",
+        "editor",
+        lifecycle="persistent",
+        initial_task={
+            "subject": "Extract one chapter",
+            "description": "packet_id=chapter_01 phase=1A",
+            "write_scope": "chapter_01",
+        },
+    )
+
+    owned = [
+        task
+        for task in state.list_tasks("team_123")
+        if task.get("owner") == "atomic_worker"
+    ]
+    assert len(owned) == 1
+    assert owned[0]["status"] == "pending"
+    assert visible_tasks_at_wakeup
+    assert any(
+        task.get("task_id") == owned[0]["task_id"]
+        for task in visible_tasks_at_wakeup[0]
+    )
+    assert str(owned[0]["task_id"]) in result.return_value
+
+
+@pytest.mark.unit
+async def test_team_add_member_binds_released_task_before_replacement_wakeup(
+    tmp_path: Any,
+) -> None:
+    """Recovery reuses the released task ID without an unowned wakeup gap."""
+    cap, ctx, mock_pool, _mock_delegation, _mock_registry = _make_add_member_setup(
+        tmp_path,
+    )
+    from wolfharness.capabilities.file_team_state import FileTeamState
+
+    state = FileTeamState(str(tmp_path))
+    task_id = state.create_task(
+        "team_123",
+        {
+            "subject": "Resume relation shard",
+            "description": "packet_id=relation_01 phase=2.1",
+            "status": "pending",
+            "owner": "",
+        },
+    )
+    visible_owner_at_wakeup: list[str] = []
+
+    async def capture_wakeup(*args: Any, **kwargs: Any) -> str:
+        task = state.get_task("team_123", task_id)
+        visible_owner_at_wakeup.append(str(task.get("owner", "")) if task else "")
+        return "msg_id"
+
+    mock_pool.send_message.side_effect = capture_wakeup
+
+    result = await cap.team_add_member(
+        ctx,
+        "relation_replacement",
+        "editor",
+        lifecycle="persistent",
+        initial_task_id=task_id,
+    )
+
+    task = state.get_task("team_123", task_id)
+    assert task is not None
+    assert task["owner"] == "relation_replacement"
+    assert visible_owner_at_wakeup[0] == "relation_replacement"
+    assert task_id in result.return_value
+
+
+@pytest.mark.unit
 async def test_shutdown_request_removes_member(tmp_path: Any) -> None:
     """Given: lead agent with initialized team.
 

@@ -109,6 +109,8 @@ ALL_WIKI_TOOLS: frozenset[str] = frozenset(
         "ingest_external_opl",
         "apply_opl",
         "get_opls",
+        "get_expert_authority",
+        "get_wiki_change_events",
         "op_flow_status",
         "op_flow_report",
         "discover_opa",
@@ -218,6 +220,9 @@ _OPA_WRITE_TOOLS: frozenset[str] = frozenset({"create_opa"})
 _OPS_READ_TOOLS: frozenset[str] = frozenset({"get_ops"})
 _OPS_WRITE_TOOLS: frozenset[str] = frozenset({"create_ops"})
 _OPL_READ_TOOLS: frozenset[str] = frozenset({"get_opls"})
+_OP_AUTHORITY_READ_TOOLS: frozenset[str] = frozenset(
+    {"get_expert_authority", "get_wiki_change_events"},
+)
 _OP_FLOW_READ_TOOLS: frozenset[str] = frozenset({"op_flow_status", "op_flow_report"})
 _OPA_DISCOVERY_TOOLS: frozenset[str] = frozenset({"discover_opa"})
 _OPA_RESOLVE_TOOLS: frozenset[str] = frozenset({"resolve_opa"})
@@ -236,6 +241,7 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
         | _OPA_DISCOVERY_TOOLS
         | _OPS_READ_TOOLS
         | _OPL_READ_TOOLS
+        | _OP_AUTHORITY_READ_TOOLS
         | _OP_FLOW_READ_TOOLS
         | _OPS_DISPATCH_TOOLS
         | frozenset(
@@ -272,6 +278,7 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
         | _OPA_READ_TOOLS
         | _OPS_READ_TOOLS
         | _OPL_READ_TOOLS
+        | _OP_AUTHORITY_READ_TOOLS
         | _OP_FLOW_READ_TOOLS
         | frozenset({"record_source_packet", "record_materialization_receipt"})
         | frozenset({"get_model_mappings", "model_mapping_report"})
@@ -281,6 +288,7 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
         | _DIFF_TOOLS
         | _OPA_WRITE_TOOLS
         | _OPA_READ_TOOLS
+        | _OP_AUTHORITY_READ_TOOLS
         | frozenset(
             {
                 "get_backlinks",
@@ -290,7 +298,12 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
         )
     ),
     "wiki_opa_worker": (
-        _READ_TOOLS | _OPA_WRITE_TOOLS | _OPA_READ_TOOLS | _OPS_READ_TOOLS | _OPL_READ_TOOLS
+        _READ_TOOLS
+        | _OPA_WRITE_TOOLS
+        | _OPA_READ_TOOLS
+        | _OPS_READ_TOOLS
+        | _OPL_READ_TOOLS
+        | _OP_AUTHORITY_READ_TOOLS
     ),
     "wiki_ops_worker": (
         _READ_TOOLS
@@ -298,6 +311,7 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
         | _OPS_READ_TOOLS
         | _OPS_WRITE_TOOLS
         | _OPL_READ_TOOLS
+        | _OP_AUTHORITY_READ_TOOLS
         | _OPA_REFINE_TOOLS
         | _OPA_RESOLVE_TOOLS
         | _OPS_RESOLVE_WRITE_TOOLS
@@ -324,6 +338,7 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
         | _OPA_WRITE_TOOLS
         | _OPA_RESOLVE_TOOLS
         | _OPA_APPLY_TOOLS
+        | _OP_AUTHORITY_READ_TOOLS
         | frozenset(
             {
                 "auto_repair",
@@ -343,7 +358,10 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
                 "get_opas",
                 "get_ops",
                 "get_opls",
+                "get_expert_authority",
+                "get_wiki_change_events",
                 "op_flow_status",
+                "diff_entity",
             },
         )
     ),
