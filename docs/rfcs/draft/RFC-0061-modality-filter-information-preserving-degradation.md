@@ -5,7 +5,7 @@ status: DRAFT
 author: pinjun.mo
 reviewers: []
 created: 2026-08-18
-last_updated: 2026-08-18
+last_updated: 2026-08-19
 decision_date:
 related_rfcs:
   - RFC-0059 (Image Attachment Normalization: Resize and Re-encode Oversized Images Before Provider Requests)
@@ -57,7 +57,7 @@ The degradation is applied in two places:
 1. **`before_model_request`** — scans `ModelRequest` / `ModelResponse` messages and rewrites unsupported content in `UserPromptPart` and `ToolReturnPart` via `dataclasses.replace()`.
 2. **`wrap_tool_execute`** — filters multimodal content in tool results.
 
-The placeholder itself comes from `describe_multimodal_content()` in `src/wolfharness/capabilities/modality_utils.py`:
+The placeholder comes from `describe_multimodal_content()` in `src/wolfharness/capabilities/modality_utils.py`. As this RFC was being authored, the original bare placeholder was:
 
 ```python
 case BinaryImage(media_type=media) | BinaryContent(media_type=media):
@@ -120,6 +120,18 @@ The same defect affects `describe` degradation in every modality category (image
 - Support the realistic working pattern: **text-only primary model + vision-capable subagent or tool** consuming the degraded content via AgentPool's existing delegation / tool infrastructure.
 - Make the degradation **explicit and honest**: signal "this content exists but was not directly read" rather than pretending it was.
 - Keep the change contained to the `modality_filter` capability layer; no protocol server rewrites.
+
+  > **Status (2026-08-19): superseded.** Landing `reference` + mime integrity required minimal
+  > converter-layer changes so binary content actually reaches the model intact. Specifically:
+  > - `src/wolfharness/mcp_server/conversions.py`: pass `BlobResourceContents.mimeType` through
+  >   to `BinaryContent` instead of hardcoding `application/octet-stream`.
+  > - `src/wolfharness_server/acp_server/converters.py`: drop the `_DOCUMENT_FORMATS` whitelist
+  >   gate in `resource_to_content` so arbitrary-mime embedded blobs surface as `BinaryContent`
+  >   (with octet-stream fallback), deferring modality decisions to `ModalityFilterCapability`.
+  >   This is consistent with the filter treating `"unknown"` mime as pass-through.
+  >
+  > The principle still holds: capability-layer degradation is the decision point; converters
+  > only stop destroying the data before it gets there.
 
 ### Non-Goals
 
@@ -426,6 +438,10 @@ ModalityFilterCapability.reference_strategy(...)      # persists + emits referen
 ## Decision Record
 
 - **2026-08-18**: RFC opened as DRAFT by pinjun.mo. Problem identified while debugging a real deployment (`glm52`/kimi-k2, a text-only model, failing on pasted images via the opencode server). Three opencode-codebase investigations (HEAD `040b856`) support the problem framing. No decision made yet.
+- **2026-08-19**: Option 4 (hybrid) landed as the working direction. Implementation commits on this branch:
+  - `d06514464` — information-preserving `describe` (honest metadata placeholder) + opt-in `reference` strategy (session-scoped scratch persistence under `tempfile`).
+  - `115ca7784` — converter-layer mime integrity: `BlobResourceContents.mimeType` passthrough in MCP conversions, removal of the `_DOCUMENT_FORMATS` whitelist in ACP `resource_to_content` (see Goals & Non-Goals status note). Both changes were necessary so binary content reaches `ModalityFilterCapability` intact; the filter remains the single decision point for unsupported modalities.
+  - Remaining open items carried forward unchanged: storage backend/TTL for `reference` (see [Open Questions](#open-questions)), surfaced degradation signal to the caller.
 
 ---
 
