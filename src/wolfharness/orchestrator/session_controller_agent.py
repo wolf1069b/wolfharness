@@ -17,6 +17,7 @@ from wolfharness_server.opencode_server.models.session_info import SessionInfo
 
 if TYPE_CHECKING:
     import asyncio
+    from collections.abc import Callable
 
     from wolfharness.agents.base_agent import BaseAgent
     from wolfharness.delegation import AgentPool
@@ -60,7 +61,10 @@ class SessionControllerAgentMixin:
 
     def _increment_mcp_count(self, _agent: Any) -> None: ...
 
-    def get_live_run(self, session_id: str) -> RunHandle | None: ...
+    # Attribute annotation, NOT a method stub: this mixin precedes
+    # SessionControllerRunsMixin in the MRO, so a stub body would shadow
+    # the real get_live_run and silently return None at runtime.
+    get_live_run: Callable[[str], RunHandle | None]
 
     async def get_or_create_session(
         self,
