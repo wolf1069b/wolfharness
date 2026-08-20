@@ -16,12 +16,12 @@ from unittest.mock import AsyncMock, MagicMock
 from pydantic_ai.messages import (
     ModelRequest,
     ModelResponse,
+    SystemPromptPart,
     UserPromptPart,
     TextPart,
     ToolCallPart,
     ToolReturn,
     ToolReturnPart,
-    UserPromptPart,
 )
 from pydantic_ai.models import ModelRequestContext, ModelRequestParameters
 from pydantic_ai.models.test import TestModel
