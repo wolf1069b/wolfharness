@@ -1017,6 +1017,55 @@ class VikingCapability(AbstractCapability[Any]):
             return None
         try:
             client = await self._ensure_client()
+
+            # Image resources are served as decoded blob bytes (with their
+            # MIME type) so vision-capable models can consume them directly —
+            # mirrors ``viking_read``. SVG stays on the text path: most vision
+            # APIs reject the vector format.
+            from pathlib import PurePosixPath
+
+            from wolfharness.capabilities.viking.constants import (
+                IMAGE_BLOB_MAX_BYTES,
+                IMAGE_EXTENSIONS,
+                IMAGE_MIME_TYPES,
+            )
+            from wolfharness.capabilities.resource_protocols import (
+                TextResourceContent,
+            )
+
+            suffix = PurePosixPath(uri).suffix.lower()
+            if (
+                suffix in IMAGE_EXTENSIONS
+                and suffix != ".svg"
+                and uri.startswith("viking://")
+                and self._should_return_image_bytes()
+            ):
+                data = await client.download_bytes(uri)
+                if len(data) > IMAGE_BLOB_MAX_BYTES:
+                    from wolfharness.capabilities.viking.tools import _image_uri_hint
+
+                    return [
+                        TextResourceContent(
+                            uri=uri,
+                            mime_type="text/plain",
+                            text=_image_uri_hint(uri),
+                        )
+                    ]
+                import base64
+
+                mime_type = IMAGE_MIME_TYPES.get(suffix, "application/octet-stream")
+                from wolfharness.capabilities.resource_protocols import (
+                    BlobResourceContent,
+                )
+
+                return [
+                    BlobResourceContent(
+                        uri=uri,
+                        mime_type=mime_type,
+                        blob=base64.b64encode(data).decode("ascii"),
+                    )
+                ]
+
             # Use configured read level (L0/L1/L2), fallback to L2 if unavailable
             content: str | None = None
             if self.resource_read_level == "abstract":
@@ -1034,10 +1083,6 @@ class VikingCapability(AbstractCapability[Any]):
 
             if not content:
                 return None
-
-            from wolfharness.capabilities.resource_protocols import (
-                TextResourceContent,
-            )
 
             return [
                 TextResourceContent(

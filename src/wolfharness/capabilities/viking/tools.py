@@ -15,7 +15,11 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic_ai.messages import BinaryImage, ToolReturn
 from pydantic_ai.tools import RunContext  # noqa: TC002 - needed at runtime for get_type_hints()
 
-from wolfharness.capabilities.viking.constants import IMAGE_EXTENSIONS, IMAGE_MIME_TYPES
+from wolfharness.capabilities.viking.constants import (
+    IMAGE_BLOB_MAX_BYTES,
+    IMAGE_EXTENSIONS,
+    IMAGE_MIME_TYPES,
+)
 from wolfharness.capabilities.viking.utils import (
     add_line_numbers,
     format_glob_results,
@@ -489,6 +493,12 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                     if is_image:
                         # Image resource and the model accepts image bytes.
                         data = await client.download_bytes(u)
+                        if len(data) > IMAGE_BLOB_MAX_BYTES:
+                            if len(uri_list) > 1:
+                                sections.append(f"=== {u} ===\n{_image_uri_hint(u)}")
+                            else:
+                                sections.append(_image_uri_hint(u))
+                            continue
                         media_type = IMAGE_MIME_TYPES.get(
                             PurePosixPath(u).suffix.lower(), "application/octet-stream"
                         )

@@ -42,6 +42,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from pydantic_ai.capabilities import AbstractCapability
+from pydantic_ai.messages import ToolReturn
 
 
 if TYPE_CHECKING:
@@ -93,12 +94,36 @@ class ToolOutputBudgetCapability(AbstractCapability[Any]):
         match result:
             case str():
                 return self._truncate(result)
+            case ToolReturn():
+                return self._truncate_tool_return(result)
             case list():
                 return [self._truncate(item) if isinstance(item, str) else item for item in result]
             case _:
                 # Non-string, non-list results: serialize to JSON for length check.
                 return self._truncate_non_string(result)
         return result
+
+    def _truncate_tool_return(self, result: ToolReturn[Any]) -> Any:
+        """Truncate a ``ToolReturn`` without destroying binary content.
+
+        ``ToolReturn.return_value`` and string ``content`` items are
+        budget-checked; binary items (``BinaryImage`` etc.) pass through
+        untouched — serializing the whole dataclass via ``default=str``
+        would reduce images to bytes repr text and erase them.
+        """
+        if self.max_output_chars <= 0:
+            return result
+        from dataclasses import replace
+
+        return_value = result.return_value
+        if isinstance(return_value, str):
+            return_value = self._truncate(return_value)
+        content = result.content
+        if isinstance(content, str):
+            content = self._truncate(content)
+        elif content is not None:
+            content = [self._truncate(item) if isinstance(item, str) else item for item in content]
+        return replace(result, return_value=return_value, content=content)
 
     def _truncate(self, text: str) -> str:
         if self.max_output_chars <= 0:

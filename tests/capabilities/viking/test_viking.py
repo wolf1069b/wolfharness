@@ -732,6 +732,25 @@ class TestRetrieveTools:
         assert img.media_type == "image/png"
 
     @pytest.mark.asyncio
+    async def test_viking_read_image_oversize_degrades_to_hint(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """Oversize image degrades to a text hint, no BinaryImage emitted."""
+        from wolfharness.capabilities.viking.constants import IMAGE_BLOB_MAX_BYTES
+
+        viking_cap.support_vision = True
+        mock_client.download_bytes = AsyncMock(return_value=b"\x00" * (IMAGE_BLOB_MAX_BYTES + 1))
+        tools = build_tools(viking_cap)
+        read_tool = _get_tool(tools, "viking_read")
+
+        ctx = _make_ctx()
+        result = await read_tool(ctx, uris="viking://huge.jpg")
+
+        mock_client.download_bytes.assert_called_once_with("viking://huge.jpg")
+        assert result.content is None
+        assert "Image resource" in result.return_value
+
+    @pytest.mark.asyncio
     async def test_viking_read_image_support_vision_false(
         self, viking_cap: VikingCapability, mock_client: AsyncMock
     ) -> None:
@@ -2624,6 +2643,67 @@ class TestResourceAccessProtocol:
         mock_client.read = AsyncMock(side_effect=RuntimeError("not found"))
         result = await viking_cap.read_resource("viking://resources/missing.md")
         assert result is None
+
+    async def test_read_resource_image_returns_blob(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """Image resources are served as base64 blob bytes + MIME for vision models."""
+        import base64
+
+        viking_cap.support_vision = True
+        mock_client.download_bytes = AsyncMock(return_value=b"\x89PNG-fake")
+        result = await viking_cap.read_resource("viking://resources/photo.png")
+        assert result is not None
+        assert result[0].mime_type == "image/png"
+        assert result[0].blob == base64.b64encode(b"\x89PNG-fake").decode("ascii")
+        mock_client.download_bytes.assert_called_once_with("viking://resources/photo.png")
+        mock_client.overview.assert_not_called()
+
+    async def test_read_resource_image_text_only_model_no_bytes(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """Text-only model (default) never downloads image bytes — text path."""
+        mock_client.download_bytes = AsyncMock(return_value=b"\x89PNG-fake")
+        mock_client.overview = AsyncMock(return_value="overview content")
+        result = await viking_cap.read_resource("viking://resources/photo.png")
+        assert result is not None
+        assert result[0].text == "overview content"
+        mock_client.download_bytes.assert_not_called()
+
+    async def test_read_resource_oversize_image_degrades_to_hint(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """Oversize images degrade to a text hint even for vision models."""
+        from wolfharness.capabilities.viking.constants import IMAGE_BLOB_MAX_BYTES
+
+        viking_cap.support_vision = True
+        mock_client.download_bytes = AsyncMock(return_value=b"\x00" * (IMAGE_BLOB_MAX_BYTES + 1))
+        result = await viking_cap.read_resource("viking://resources/huge.jpg")
+        assert result is not None
+        assert result[0].text is not None
+        assert "Image resource" in result[0].text
+        mock_client.download_bytes.assert_called_once_with("viking://resources/huge.jpg")
+
+    async def test_read_resource_non_viking_scheme_stays_text(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """http(s) URLs never enter the image byte path even with vision on."""
+        viking_cap.support_vision = True
+        result = await viking_cap.read_resource("https://example.com/photo.png")
+        assert result is not None
+        assert result[0].text is not None
+        mock_client.download_bytes.assert_not_called()
+
+    async def test_read_resource_svg_stays_text(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """SVG is vector text, not blob bytes — text path with a URI hint kept."""
+        mock_client.overview = AsyncMock(return_value="<svg/>")
+        result = await viking_cap.read_resource("viking://resources/diagram.svg")
+        assert result is not None
+        assert result[0].text == "<svg/>"
+        mock_client.overview.assert_called_once_with("viking://resources/diagram.svg")
+        mock_client.download_bytes.assert_not_called()
 
     async def test_resource_exists_true(
         self, viking_cap: VikingCapability, mock_client: AsyncMock
