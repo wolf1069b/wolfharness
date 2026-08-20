@@ -9,9 +9,12 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
-from typing import Any
+from pathlib import Path
+import tempfile
+from typing import Any, get_type_hints
 from unittest.mock import AsyncMock, MagicMock
 
+from openviking_sdk.errors import OpenVikingError
 from pydantic import ValidationError
 from pydantic_ai.messages import BinaryImage
 from pydantic_ai.models import ModelRequestContext, ModelRequestParameters
@@ -20,6 +23,7 @@ import pytest
 
 from wolfharness.capabilities.viking import VikingCapability, _normalize_search_results
 from wolfharness.capabilities.viking.identity import VikingIdentity, _try_decode_api_key
+from wolfharness.capabilities.viking.index import _format_index_block
 from wolfharness.capabilities.viking.profile import (
     _derive_context_hint,
     _format_profile_block,
@@ -37,6 +41,10 @@ from wolfharness.capabilities.viking.utils import (
     format_search_results,
     is_viking_uri,
     truncate_text,
+)
+from wolfharness.capabilities.viking.wiki_build import WikiBuildCapability, _build_tool_fns
+from wolfharness.capabilities.viking.wiki_index import (
+    _format_index_block as _format_wiki_index_block,
 )
 from wolfharness_config.capabilities import VikingCapabilityConfig, build_capability
 
@@ -190,6 +198,50 @@ class TestVikingCapabilityConfig:
         union_type = typing.get_args(BuiltinCapabilityConfig)[0]
         member_types = typing.get_args(union_type)
         assert VikingCapabilityConfig in member_types
+
+    def test_index_config_defaults(self) -> None:
+        """Index fields default to disabled state in VikingCapabilityConfig."""
+        cfg = VikingCapabilityConfig()
+        assert cfg.index_enabled is False
+        assert cfg.index_max_tokens == 1000
+        assert cfg.index_limit == 20
+        assert cfg.index_uri is None
+
+    def test_index_config_populated(self) -> None:
+        """All four index fields can be set via the config model."""
+        cfg = VikingCapabilityConfig(
+            index_enabled=True,
+            index_max_tokens=500,
+            index_limit=5,
+            index_uri="viking://resources/custom/",
+        )
+        assert cfg.index_enabled is True
+        assert cfg.index_max_tokens == 500
+        assert cfg.index_limit == 5
+        assert cfg.index_uri == "viking://resources/custom/"
+
+    def test_index_config_reaches_capability(self) -> None:
+        """Index config survives the config → capability build (no silent drop).
+
+        Regression for the yaml ``viking_kb_capability.index_enabled`` wiring:
+        the config model must declare the index fields so ``build_capability``
+        passes them to ``VikingCapability`` instead of dropping them at parse.
+        """
+        from wolfharness_config.capabilities import build_capability
+
+        cfg = VikingCapabilityConfig(
+            mode="all",
+            index_enabled=True,
+            index_max_tokens=500,
+            index_limit=5,
+            index_uri="viking://resources/custom/",
+        )
+        cap = build_capability(cfg)
+        assert isinstance(cap, VikingCapability)
+        assert cap.index_enabled is True
+        assert cap.index_max_tokens == 500
+        assert cap.index_limit == 5
+        assert cap.index_uri == "viking://resources/custom/"
 
 
 # ---------------------------------------------------------------------------
@@ -1118,10 +1170,245 @@ class TestWriteTools:
         assert call_args[0] == "/local/file.txt"
         assert call_kwargs["to"] == "viking://user/alice/files/"
         assert call_kwargs["parent"] == "viking://user/alice/"
-        # processing_mode is NOT passed to SDK (not a supported kwarg)
-        assert "processing_mode" not in call_kwargs
+        assert call_kwargs["processing_mode"] == "auto"
+        assert call_kwargs["wait"] is False
         assert call_kwargs["watch_interval"] == 5.0
         assert "Added resource" in result.return_value
+
+    @pytest.mark.asyncio
+    async def test_viking_add_resource_wait_true(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """viking_add_resource passes wait=True through to the SDK."""
+        mock_client.add_resource = AsyncMock(return_value={"status": "ok"})
+        tools = build_tools(viking_cap)
+        add_tool = _get_tool(tools, "viking_add_resource")
+
+        ctx = _make_ctx()
+        await add_tool(
+            ctx,
+            path="/local/file.txt",
+            processing_mode="semantic_and_vectors",
+            wait=True,
+        )
+
+        assert mock_client.add_resource.call_args.kwargs["wait"] is True
+        assert (
+            mock_client.add_resource.call_args.kwargs["processing_mode"] == "semantic_and_vectors"
+        )
+
+    @pytest.mark.asyncio
+    async def test_viking_upload_tree_single_wait_true_call(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock, tmp_path: Path
+    ) -> None:
+        """viking_upload_tree uploads one temp tree, skips build dirs, cleans up."""
+        captured: dict[str, list[str]] = {}
+
+        async def fake_add_resource(path: str, **kwargs: Any) -> dict[str, Any]:
+            captured["children"] = sorted(p.name for p in Path(path).iterdir())
+            return {"status": "ok"}
+
+        mock_client.add_resource.side_effect = fake_add_resource
+        (tmp_path / "Fault" / "X").mkdir(parents=True)
+        (tmp_path / "Fault" / "X" / "e.md").write_text("# Entity", encoding="utf-8")
+        (tmp_path / "index").mkdir()
+        (tmp_path / "index" / "backlinks_index.json").write_text("{}", encoding="utf-8")
+        (tmp_path / "source_packets").mkdir()
+        (tmp_path / "source_packets" / "p.md").write_text("p", encoding="utf-8")
+        (tmp_path / ".hidden").mkdir()
+        (tmp_path / ".hidden" / "h.md").write_text("h", encoding="utf-8")
+        (tmp_path / "resource.json").write_text('{"v": 2}', encoding="utf-8")
+
+        tools = build_tools(viking_cap)
+        upload_tool = _get_tool(tools, "viking_upload_tree")
+        ctx = _make_ctx()
+        result = await upload_tool(ctx, path=str(tmp_path), to="viking://resources/test_ns")
+
+        mock_client.add_resource.assert_called_once()
+        args = mock_client.add_resource.call_args.kwargs
+        assert captured["children"] == ["Fault", "resource.json"]
+        assert args["wait"] is True
+        assert args["processing_mode"] == "semantic_and_vectors"
+        assert args["timeout"] == 900.0
+        assert "Uploaded tree" in result.return_value
+        leftovers = [
+            p for p in Path(tempfile.gettempdir()).iterdir() if p.name.startswith("ov_up_tree_")
+        ]
+        assert leftovers == []
+
+    @pytest.mark.asyncio
+    async def test_viking_upload_tree_error_cleans_up(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock, tmp_path: Path
+    ) -> None:
+        """viking_upload_tree surfaces add_resource failures and cleans the temp dir."""
+        mock_client.add_resource.side_effect = RuntimeError("boom")
+        (tmp_path / "Fault").mkdir()
+        (tmp_path / "Fault" / "e.md").write_text("# Entity", encoding="utf-8")
+
+        tools = build_tools(viking_cap)
+        upload_tool = _get_tool(tools, "viking_upload_tree")
+        ctx = _make_ctx()
+        result = await upload_tool(ctx, path=str(tmp_path), to="viking://resources/test_ns")
+
+        assert "viking_upload_tree error" in result.return_value
+        leftovers = [
+            p for p in Path(tempfile.gettempdir()).iterdir() if p.name.startswith("ov_up_tree_")
+        ]
+        assert leftovers == []
+
+    @pytest.mark.asyncio
+    async def test_viking_link_relations_bidirectional(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock, tmp_path: Path
+    ) -> None:
+        """viking_link_relations pushes both directions per backlink edge."""
+        rel = tmp_path / "backlinks_index.json"
+        rel.write_text(
+            '{"viking://resources/ns/Profile/A": '
+            '["viking://resources/ns/Fault/X", "viking://resources/ns/Fault/Y"], '
+            '"viking://resources/ns/Fault/X": ["viking://resources/ns/Component/Z"]}',
+            encoding="utf-8",
+        )
+        tools = build_tools(viking_cap)
+        link_tool = _get_tool(tools, "viking_link_relations")
+        ctx = _make_ctx()
+        result = await link_tool(
+            ctx,
+            relations_file=str(rel),
+            reason_prefix="wiki",
+            namespace_base="viking://resources/ns",
+        )
+
+        calls = [
+            (c.args[0], list(c.args[1]), c.kwargs.get("reason"))
+            for c in mock_client.link.call_args_list
+        ]
+        assert any(
+            frm == "viking://resources/ns/Profile/A"
+            and set(tos) == {"viking://resources/ns/Fault/X", "viking://resources/ns/Fault/Y"}
+            and reason == "wiki:referenced-by"
+            for frm, tos, reason in calls
+        )
+        assert (
+            "viking://resources/ns/Fault/Y",
+            ["viking://resources/ns/Profile/A"],
+            "wiki:references",
+        ) in calls
+        assert (
+            "viking://resources/ns/Component/Z",
+            ["viking://resources/ns/Fault/X"],
+            "wiki:references",
+        ) in calls
+        # Aggregated: A->[X,Y], X->[Z], Y->[A], Z->[X] (each node written once)
+        assert "linked=4, failed=0" in result.return_value
+
+    @pytest.mark.asyncio
+    async def test_viking_link_relations_skips_out_of_namespace(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock, tmp_path: Path
+    ) -> None:
+        """viking_link_relations never links URIs outside namespace_base."""
+        rel = tmp_path / "backlinks_index.json"
+        rel.write_text(
+            '{"viking://resources/ns/Profile/A": ["viking://resources/other/X"], '
+            '"viking://resources/other/Y": ["viking://resources/ns/Fault/X"]}',
+            encoding="utf-8",
+        )
+        tools = build_tools(viking_cap)
+        link_tool = _get_tool(tools, "viking_link_relations")
+        ctx = _make_ctx()
+        result = await link_tool(
+            ctx, relations_file=str(rel), namespace_base="viking://resources/ns"
+        )
+
+        assert mock_client.link.call_count == 0
+        assert "linked=0, failed=0" in result.return_value
+
+    @pytest.mark.asyncio
+    async def test_viking_link_relations_retries_on_busy(
+        self,
+        viking_cap: VikingCapability,
+        mock_client: AsyncMock,
+        tmp_path: Path,
+        monkeypatch: Any,
+    ) -> None:
+        """viking_link_relations retries busy rejections then succeeds."""
+        import wolfharness.capabilities.viking.tools as viking_tools
+
+        monkeypatch.setattr(viking_tools.asyncio, "sleep", AsyncMock())
+        rel = tmp_path / "backlinks_index.json"
+        rel.write_text(
+            '{"viking://resources/ns/Profile/A": ["viking://resources/ns/Fault/X"]}',
+            encoding="utf-8",
+        )
+        calls = {"n": 0}
+
+        async def flaky_link(from_uri: str, to_uris: Any, reason: str = "") -> None:
+            calls["n"] += 1
+            if calls["n"] <= 2:
+                raise OpenVikingError("resource busy", code="RESOURCE_BUSY")
+
+        mock_client.link.side_effect = flaky_link
+        tools = build_tools(viking_cap)
+        link_tool = _get_tool(tools, "viking_link_relations")
+        ctx = _make_ctx()
+        result = await link_tool(ctx, relations_file=str(rel))
+
+        # 2 busy failures + 1 success (target direction), then 1 success (source direction).
+        assert calls["n"] == 4
+        assert "linked=2, failed=0" in result.return_value
+
+    @pytest.mark.asyncio
+    async def test_viking_link_relations_resolves_md_wrapper(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock, tmp_path: Path
+    ) -> None:
+        """Links use the server's actual md-wrapper path when the literal URI is missing."""
+        rel = tmp_path / "backlinks_index.json"
+        rel.write_text(
+            '{"viking://resources/ns/Fault/X.md": ["viking://resources/ns/Fault/Y.md"]}',
+            encoding="utf-8",
+        )
+        wrapped = "viking://resources/ns/Fault/X/X.md"
+        other_wrapped = "viking://resources/ns/Fault/Y/Y.md"
+
+        async def fake_stat(uri: str) -> dict:
+            if uri in (wrapped, other_wrapped):
+                return {"uri": uri}
+            raise OpenVikingError("not found", code="NOT_FOUND")
+
+        mock_client.stat.side_effect = fake_stat
+        tools = build_tools(viking_cap)
+        link_tool = _get_tool(tools, "viking_link_relations")
+        result = await link_tool(
+            ctx=_make_ctx(), relations_file=str(rel), namespace_base="viking://resources/ns"
+        )
+
+        assert "linked=2, failed=0, skipped=0" in result.return_value
+        calls = [(c.args[0], list(c.args[1])) for c in mock_client.link.call_args_list]
+        assert (wrapped, [other_wrapped]) in calls  # referenced-by at resolved target
+        assert (other_wrapped, [wrapped]) in calls  # references at resolved source
+
+    @pytest.mark.asyncio
+    async def test_viking_link_relations_skips_unresolvable(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock, tmp_path: Path
+    ) -> None:
+        """URIs that resolve to no server node are skipped, never linked."""
+        rel = tmp_path / "backlinks_index.json"
+        rel.write_text(
+            '{"viking://resources/ns/Fault/Ghost.md": ["viking://resources/ns/Fault/Other.md"]}',
+            encoding="utf-8",
+        )
+
+        async def fake_stat(uri: str) -> dict:
+            raise OpenVikingError("not found", code="NOT_FOUND")
+
+        mock_client.stat.side_effect = fake_stat
+        tools = build_tools(viking_cap)
+        link_tool = _get_tool(tools, "viking_link_relations")
+        result = await link_tool(
+            ctx=_make_ctx(), relations_file=str(rel), namespace_base="viking://resources/ns"
+        )
+
+        assert "linked=0, failed=0, skipped=1" in result.return_value
+        mock_client.link.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_viking_forget(
@@ -2179,26 +2466,27 @@ class TestModeFiltering:
         names = {t.__name__ for t in tools}
         assert "viking_recall" in names
 
-    def test_write_mode_4_tools_default(self) -> None:
-        """Write mode exposes 4 tools (forget gated by enable_forget, remember by enable_memory)."""
+    def test_write_mode_5_tools_default(self) -> None:
+        """Write mode exposes 5 tools (forget gated by enable_forget, remember by enable_memory)."""
         cap = VikingCapability(mode="write")
         cap._client = AsyncMock()
         tools = build_tools(cap)
-        assert len(tools) == 4
+        assert len(tools) == 5
         names = {t.__name__ for t in tools}
         assert names == {
             "viking_write",
             "viking_edit",
             "viking_mkdir",
             "viking_add_resource",
+            "viking_upload_tree",
         }
 
-    def test_write_mode_6_tools_with_memory_and_forget(self) -> None:
-        """Write mode exposes 6 tools when enable_memory=True and enable_forget=True."""
+    def test_write_mode_7_tools_with_memory_and_forget(self) -> None:
+        """Write mode exposes 7 tools when enable_memory=True and enable_forget=True."""
         cap = VikingCapability(mode="write", enable_memory=True, enable_forget=True)
         cap._client = AsyncMock()
         tools = build_tools(cap)
-        assert len(tools) == 6
+        assert len(tools) == 7
         names = {t.__name__ for t in tools}
         assert "viking_remember" in names
         assert "viking_forget" in names
@@ -2212,28 +2500,28 @@ class TestModeFiltering:
         names = {t.__name__ for t in tools}
         assert names == {"viking_set_tags"}
 
-    def test_graph_mode_2_tools_with_link(self) -> None:
-        """Graph mode exposes 2 tools when enable_link=True."""
+    def test_graph_mode_3_tools_with_link(self) -> None:
+        """Graph mode exposes 3 tools when enable_link=True."""
         cap = VikingCapability(mode="graph", enable_link=True)
         cap._client = AsyncMock()
         tools = build_tools(cap)
-        assert len(tools) == 2
+        assert len(tools) == 3
         names = {t.__name__ for t in tools}
-        assert names == {"viking_link", "viking_set_tags"}
+        assert names == {"viking_link", "viking_link_relations", "viking_set_tags"}
 
-    def test_all_mode_12_tools_default(self) -> None:
-        """All mode exposes 12 tools by default (link, memory, and forget gated off)."""
+    def test_all_mode_13_tools_default(self) -> None:
+        """All mode exposes 13 tools by default (link_relations, memory, and forget gated off)."""
         cap = VikingCapability(mode="all")
         cap._client = AsyncMock()
         tools = build_tools(cap)
-        assert len(tools) == 12
+        assert len(tools) == 13
 
-    def test_all_mode_16_tools_with_flags(self) -> None:
-        """All mode exposes 16 tools when enable_link + enable_memory + enable_forget."""
+    def test_all_mode_18_tools_with_flags(self) -> None:
+        """All mode exposes 18 tools when enable_link + enable_memory + enable_forget."""
         cap = VikingCapability(mode="all", enable_link=True, enable_memory=True, enable_forget=True)
         cap._client = AsyncMock()
         tools = build_tools(cap)
-        assert len(tools) == 16
+        assert len(tools) == 18
 
     def test_disabled_tools_excludes_search_find(self) -> None:
         """disabled_tools blacklist removes viking_search and viking_find."""
@@ -2278,7 +2566,7 @@ class TestModeFiltering:
         assert len(tool_names) == 7
 
     def test_get_toolset_write(self) -> None:
-        """get_toolset() returns a FunctionToolset with 4 tools for write mode (default)."""
+        """get_toolset() returns a FunctionToolset with 5 tools for write mode (default)."""
         from pydantic_ai.toolsets import FunctionToolset
 
         cap = VikingCapability(mode="write")
@@ -2287,7 +2575,7 @@ class TestModeFiltering:
         assert toolset is not None
         assert isinstance(toolset, FunctionToolset)
         tool_names = list(toolset.tools.keys())  # type: ignore[attr-defined]
-        assert len(tool_names) == 4
+        assert len(tool_names) == 5
 
     def test_get_toolset_graph(self) -> None:
         """get_toolset() returns a FunctionToolset with 1 tool for graph mode (default)."""
@@ -2302,7 +2590,7 @@ class TestModeFiltering:
         assert len(tool_names) == 1
 
     def test_get_toolset_all(self) -> None:
-        """get_toolset() returns a FunctionToolset with 12 tools for all mode (default)."""
+        """get_toolset() returns a FunctionToolset with 13 tools for all mode (default)."""
         from pydantic_ai.toolsets import FunctionToolset
 
         cap = VikingCapability(mode="all")
@@ -2311,7 +2599,7 @@ class TestModeFiltering:
         assert toolset is not None
         assert isinstance(toolset, FunctionToolset)
         tool_names = list(toolset.tools.keys())  # type: ignore[attr-defined]
-        assert len(tool_names) == 12
+        assert len(tool_names) == 13
 
     def test_get_toolset_id_is_viking(self) -> None:
         """get_toolset() returns a FunctionToolset with id='viking'."""
@@ -6409,6 +6697,558 @@ class TestProfileInjection:
         assert copy_cap.profile_max_tokens == 500
         assert copy_cap.profile_limit == 10
         assert copy_cap.profile_first_turn_only is False
+
+
+# ---------------------------------------------------------------------------
+# 6.8 — Test Index Injection (Dynamic Namespaces)
+# ---------------------------------------------------------------------------
+
+
+class TestIndexInjection:
+    """Tests for dynamic resource-namespace index injection.
+
+    Covers _format_index_block, _handle_index_inject, config fields,
+    and for_run() reset.
+    """
+
+    # ---- _format_index_block (pure function) ----
+
+    def test_format_index_block_exact_format(self) -> None:
+        """_format_index_block renders the exact <openviking-index> block."""
+        block = _format_index_block(["wiki", "raw", "730"], max_tokens=1000, limit=20)
+        assert block == (
+            "<openviking-index>\n"
+            "Viking resources are addressed by viking:// URIs. Live resource "
+            "namespaces under viking://resources/:\n"
+            "wiki, raw, 730\n"
+            'Use viking_ls("<uri>") to enumerate deeper, '
+            "viking_search/viking_find to locate content, "
+            "viking_read to fetch.\n"
+            "</openviking-index>"
+        )
+
+    def test_format_index_block_limit(self) -> None:
+        """_format_index_block keeps at most `limit` namespace names."""
+        namespaces = [f"ns{i}" for i in range(10)]
+        block = _format_index_block(namespaces, max_tokens=1000, limit=3)
+        assert "ns0, ns1, ns2" in block
+        assert "ns3" not in block
+
+    def test_format_index_block_empty(self) -> None:
+        """_format_index_block returns empty string for empty namespaces."""
+        assert _format_index_block([], max_tokens=1000, limit=20) == ""
+
+    def test_format_index_block_token_budget(self) -> None:
+        """_format_index_block truncates content exceeding token budget."""
+        namespaces = [f"namespace-{i}" for i in range(200)]
+        block = _format_index_block(namespaces, max_tokens=50, limit=20)
+        # max_tokens=50 → max_chars=200 budget
+        assert "truncated" in block
+        assert len(block) > 200
+
+    # ---- _handle_index_inject (using mock_client + _make_request_context) ----
+
+    @pytest.mark.asyncio
+    async def test_handle_index_inject_first_turn(self, mock_client: AsyncMock) -> None:
+        """_handle_index_inject injects an index block on the first turn."""
+        from pydantic_ai.messages import ModelRequest, SystemPromptPart, UserPromptPart
+
+        mock_client.ls = AsyncMock(
+            return_value=[
+                {"uri": "viking://resources/wiki", "name": "wiki", "isDir": True},
+                {"uri": "viking://resources/raw", "name": "raw", "isDir": True},
+                {"uri": "viking://resources/notes.md", "name": "notes.md", "isDir": False},
+            ]
+        )
+        cap = VikingCapability(mode="all", index_enabled=True)
+        cap._client = mock_client
+
+        ctx = _make_ctx()
+        msg = ModelRequest(parts=[UserPromptPart(content="hello")])
+        rc = _make_request_context([msg])
+
+        result = await cap._handle_index_inject(ctx, rc)
+
+        assert cap._index_injected is True
+        mock_client.ls.assert_called_once_with("viking://resources/")
+        # Only isDir entries are included; files are skipped
+        assert len(result.messages) == 2
+        first_msg = result.messages[0]
+        assert isinstance(first_msg, ModelRequest)
+        sys_parts = [p for p in first_msg.parts if isinstance(p, SystemPromptPart)]
+        assert len(sys_parts) == 1
+        assert "<openviking-index>" in sys_parts[0].content
+        assert "wiki, raw" in sys_parts[0].content
+        assert "notes.md" not in sys_parts[0].content
+
+    @pytest.mark.asyncio
+    async def test_handle_index_inject_disabled_by_default(self, mock_client: AsyncMock) -> None:
+        """_handle_index_inject is a no-op when index_enabled=False (default)."""
+        cap = VikingCapability(mode="all")  # index_enabled defaults to False
+        cap._client = mock_client
+
+        ctx = _make_ctx()
+        rc = _make_request_context([])
+
+        result = await cap._handle_index_inject(ctx, rc)
+
+        mock_client.ls.assert_not_called()
+        assert result is rc
+        assert cap._index_injected is False
+
+    @pytest.mark.asyncio
+    async def test_handle_index_inject_second_turn_no_reinjection(
+        self, mock_client: AsyncMock
+    ) -> None:
+        """_handle_index_inject skips on subsequent turns (no re-injection)."""
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
+
+        cap = VikingCapability(mode="all", index_enabled=True)
+        cap._client = mock_client
+
+        ctx = _make_ctx()
+        # 3 messages = subsequent turn
+        messages = [
+            ModelRequest(parts=[UserPromptPart(content="msg1")]),
+            ModelRequest(parts=[UserPromptPart(content="msg2")]),
+            ModelRequest(parts=[UserPromptPart(content="msg3")]),
+        ]
+        rc = _make_request_context(messages)
+
+        result = await cap._handle_index_inject(ctx, rc)
+
+        mock_client.ls.assert_not_called()
+        assert result is rc
+        # _index_injected set to True to prevent future attempts
+        assert cap._index_injected is True
+
+    @pytest.mark.asyncio
+    async def test_handle_index_inject_graceful_failure(self, mock_client: AsyncMock) -> None:
+        """_handle_index_inject handles ls() errors gracefully — no raise."""
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
+
+        mock_client.ls = AsyncMock(side_effect=RuntimeError("server unreachable"))
+        cap = VikingCapability(mode="all", index_enabled=True)
+        cap._client = mock_client
+
+        ctx = _make_ctx()
+        msg = ModelRequest(parts=[UserPromptPart(content="hello")])
+        rc = _make_request_context([msg])
+
+        result = await cap._handle_index_inject(ctx, rc)
+
+        # Should return original context, not raise
+        assert result is rc
+        # _index_injected should be True (set before the try block, no retry)
+        assert cap._index_injected is True
+
+    @pytest.mark.asyncio
+    async def test_handle_index_inject_limit_truncates_namespaces(
+        self, mock_client: AsyncMock
+    ) -> None:
+        """_handle_index_inject truncates the namespace list to index_limit."""
+        from pydantic_ai.messages import ModelRequest, SystemPromptPart, UserPromptPart
+
+        mock_client.ls = AsyncMock(
+            return_value=[
+                {"uri": f"viking://resources/ns{i}", "name": f"ns{i}", "isDir": True}
+                for i in range(30)
+            ]
+        )
+        cap = VikingCapability(mode="all", index_enabled=True, index_limit=5)
+        cap._client = mock_client
+
+        ctx = _make_ctx()
+        msg = ModelRequest(parts=[UserPromptPart(content="hello")])
+        rc = _make_request_context([msg])
+
+        result = await cap._handle_index_inject(ctx, rc)
+
+        first_msg = result.messages[0]
+        sys_parts = [p for p in first_msg.parts if isinstance(p, SystemPromptPart)]
+        content = sys_parts[0].content
+        assert "ns0, ns1, ns2, ns3, ns4" in content
+        assert "ns5" not in content
+
+    @pytest.mark.asyncio
+    async def test_handle_index_inject_custom_uri(self, mock_client: AsyncMock) -> None:
+        """_handle_index_inject uses index_uri override when set."""
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
+
+        mock_client.ls = AsyncMock(return_value=[])
+        cap = VikingCapability(
+            mode="all",
+            index_enabled=True,
+            index_uri="viking://resources/custom/",
+        )
+        cap._client = mock_client
+
+        ctx = _make_ctx()
+        msg = ModelRequest(parts=[UserPromptPart(content="hello")])
+        rc = _make_request_context([msg])
+
+        await cap._handle_index_inject(ctx, rc)
+
+        mock_client.ls.assert_called_once_with("viking://resources/custom/")
+
+    # ---- Config fields ----
+
+    def test_config_index_enabled_default_false(self) -> None:
+        """VikingCapability has index_enabled=False by default."""
+        cap = VikingCapability(mode="all")
+        assert cap.index_enabled is False
+
+    def test_config_index_fields_defaults(self) -> None:
+        """VikingCapability has index defaults (max_tokens, limit, uri)."""
+        cap = VikingCapability(mode="all")
+        assert cap.index_max_tokens == 1000
+        assert cap.index_limit == 20
+        assert cap.index_uri is None
+
+    # ---- for_run() reset ----
+
+    @pytest.mark.asyncio
+    async def test_for_run_resets_index_injected(self, mock_client: AsyncMock) -> None:
+        """for_run() resets _index_injected to False."""
+        cap = VikingCapability(mode="all", index_enabled=True)
+        cap._client = mock_client
+        cap._index_injected = True  # Simulate after first turn
+
+        ctx = _make_ctx()
+        copy_cap = await cap.for_run(ctx)
+
+        assert copy_cap._index_injected is False
+        # Original is unchanged
+        assert cap._index_injected is True
+
+    @pytest.mark.asyncio
+    async def test_for_run_preserves_index_config(self, mock_client: AsyncMock) -> None:
+        """for_run() preserves index config fields."""
+        cap = VikingCapability(
+            mode="all",
+            index_enabled=True,
+            index_max_tokens=500,
+            index_limit=5,
+            index_uri="viking://resources/custom/",
+        )
+        cap._client = mock_client
+
+        ctx = _make_ctx()
+        copy_cap = await cap.for_run(ctx)
+
+        assert copy_cap.index_enabled is True
+        assert copy_cap.index_max_tokens == 500
+        assert copy_cap.index_limit == 5
+        assert copy_cap.index_uri == "viking://resources/custom/"
+
+
+# ---------------------------------------------------------------------------
+# 6.9 — Test Wiki Build Index Injection (B-scheme: config roots)
+# ---------------------------------------------------------------------------
+
+
+class TestWikiBuildIndex:
+    """Tests for WikiBuildCapability's config-driven index injection.
+
+    Covers _format_index_block, _resolve_index_roots (through injection),
+    before_model_request first-turn injection, config defaults, and
+    for_run() reset.
+    """
+
+    def test_wrapped_host_tool_preserves_resolved_parameter_types(self) -> None:
+        """Host annotations must reach the model schema instead of degrading to ``Any``."""
+
+        class HostTools:
+            def record_source_packet(
+                self,
+                packet_id: str,
+                *,
+                evidence_count: int = 0,
+                packet_body: dict[str, object] | None = None,
+            ) -> tuple[str, int, dict[str, object] | None]:
+                return packet_id, evidence_count, packet_body
+
+        wrapped = _build_tool_fns(
+            HostTools(),
+            tool_names=frozenset({"record_source_packet"}),
+        )[0]
+        hints = get_type_hints(wrapped)
+
+        assert hints["packet_id"] is str
+        assert hints["evidence_count"] is int
+        assert hints["packet_body"] == dict[str, object] | None
+
+    # ---- _format_index_block (pure function) ----
+
+    def test_format_index_block_exact_format(self) -> None:
+        """_format_index_block renders the exact <openviking-index> block."""
+        block = _format_wiki_index_block(
+            [
+                ("wiki", "viking://resources/810test"),
+                ("raw", "viking://resources/raw"),
+                ("bom", "viking://resources/bom"),
+            ],
+            max_tokens=1000,
+            limit=20,
+        )
+        assert block == (
+            "<openviking-index>\n"
+            "Wiki resources are addressed by viking:// URIs. Active build "
+            "roots for this session:\n"
+            "- wiki:  viking://resources/810test\n"
+            "- raw:  viking://resources/raw\n"
+            "- bom:  viking://resources/bom\n"
+            "Use list_children / get_resource / read_resource to navigate "
+            "and never guess or splice namespaces.\n"
+            "</openviking-index>"
+        )
+
+    def test_format_index_block_limit(self) -> None:
+        """_format_index_block keeps at most `limit` root pairs."""
+        roots = [(label, f"viking://resources/{label}") for label in ("wiki", "raw", "bom")]
+        block = _format_wiki_index_block(roots, max_tokens=1000, limit=2)
+        assert "- wiki:  viking://resources/wiki" in block
+        assert "- raw:  viking://resources/raw" in block
+        assert "- bom:  viking://resources/bom" not in block
+
+    def test_format_index_block_empty(self) -> None:
+        """_format_index_block returns empty string for empty roots."""
+        assert _format_wiki_index_block([], max_tokens=1000, limit=20) == ""
+
+    def test_format_index_block_token_budget(self) -> None:
+        """_format_index_block truncates content exceeding token budget."""
+        roots = [
+            (label, f"viking://resources/namespace-{label}") for label in ("wiki", "raw", "bom")
+        ]
+        block = _format_wiki_index_block(roots, max_tokens=10, limit=20)
+        # max_tokens=10 → max_chars=40 budget
+        assert "truncated" in block
+        assert len(block) > 40
+
+    # ---- before_model_request injection ----
+
+    @pytest.mark.asyncio
+    async def test_before_model_request_first_turn_injects_index(self) -> None:
+        """before_model_request injects a block with resolved config roots."""
+        from pydantic_ai.messages import ModelRequest, SystemPromptPart, UserPromptPart
+
+        cap = WikiBuildCapability(
+            wiki_root="viking://resources/810test",
+            library_root="viking://resources/raw",
+            bom_root="viking://resources/bom",
+            index_enabled=True,
+        )
+        ctx = _make_ctx()
+        msg = ModelRequest(parts=[UserPromptPart(content="hello")])
+        rc = _make_request_context([msg])
+
+        result = await cap.before_model_request(ctx, rc)
+
+        assert cap._index_injected is True
+        assert len(result.messages) == 2
+        first_msg = result.messages[0]
+        assert isinstance(first_msg, ModelRequest)
+        sys_parts = [p for p in first_msg.parts if isinstance(p, SystemPromptPart)]
+        assert len(sys_parts) == 1
+        assert "<openviking-index>" in sys_parts[0].content
+        assert "- wiki:  viking://resources/810test" in sys_parts[0].content
+        assert "- raw:  viking://resources/raw" in sys_parts[0].content
+        assert "- bom:  viking://resources/bom" in sys_parts[0].content
+
+    @pytest.mark.asyncio
+    async def test_before_model_request_filters_non_viking_and_missing_roots(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Only viking:// roots are listed; missing and local roots are omitted.
+
+        With no namespace env vars set, a local root cannot be mapped to a
+        remote wiki, so it is filtered out (local backend semantics).
+        """
+        from pydantic_ai.messages import ModelRequest, SystemPromptPart, UserPromptPart
+
+        monkeypatch.delenv("VIKING_NAMESPACE", raising=False)
+        monkeypatch.delenv("VIKING_RAW_NAMESPACE", raising=False)
+
+        cap = WikiBuildCapability(
+            wiki_root="viking://resources/810test",
+            library_root="output/library",  # local path — must be filtered out
+            index_enabled=True,
+            # bom_root omitted entirely
+        )
+        ctx = _make_ctx()
+        msg = ModelRequest(parts=[UserPromptPart(content="hello")])
+        rc = _make_request_context([msg])
+
+        result = await cap.before_model_request(ctx, rc)
+
+        first_msg = result.messages[0]
+        sys_parts = [p for p in first_msg.parts if isinstance(p, SystemPromptPart)]
+        content = sys_parts[0].content
+        assert "- wiki:  viking://resources/810test" in content
+        assert "output/library" not in content
+        assert "- raw:" not in content
+        assert "- bom:" not in content
+
+    @pytest.mark.asyncio
+    async def test_before_model_request_maps_local_roots_when_namespace_set(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Local roots map to namespace URIs when viking backend + namespaces."""
+        from pydantic_ai.messages import ModelRequest, SystemPromptPart, UserPromptPart
+
+        monkeypatch.setenv("WIKI_STORAGE_BACKEND", "viking")
+        monkeypatch.setenv("VIKING_NAMESPACE", "810test")
+        monkeypatch.setenv("VIKING_RAW_NAMESPACE", "raw/vikingtest")
+
+        cap = WikiBuildCapability(
+            wiki_root="output/wiki_newbuild",  # local path — mapped to wiki ns
+            library_root="output/raw/repairmenu",  # local path — mapped to raw ns
+            index_enabled=True,
+            # bom_root omitted entirely
+        )
+        ctx = _make_ctx()
+        msg = ModelRequest(parts=[UserPromptPart(content="hello")])
+        rc = _make_request_context([msg])
+
+        result = await cap.before_model_request(ctx, rc)
+
+        first_msg = result.messages[0]
+        sys_parts = [p for p in first_msg.parts if isinstance(p, SystemPromptPart)]
+        content = sys_parts[0].content
+        assert "- wiki:  viking://resources/810test" in content
+        assert "- raw:  viking://resources/raw/vikingtest" in content
+        assert "output/wiki_newbuild" not in content
+        assert "output/raw/repairmenu" not in content
+        assert "- bom:" not in content
+
+    @pytest.mark.asyncio
+    async def test_before_model_request_local_backend_keeps_local_filter(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Local roots stay filtered even with namespaces when backend=local."""
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
+
+        monkeypatch.setenv("WIKI_STORAGE_BACKEND", "local")
+        monkeypatch.setenv("VIKING_NAMESPACE", "810test")
+        monkeypatch.setenv("VIKING_RAW_NAMESPACE", "raw/vikingtest")
+
+        cap = WikiBuildCapability(
+            wiki_root="output/wiki_newbuild",
+            library_root="output/raw/repairmenu",
+            index_enabled=True,
+        )
+        ctx = _make_ctx()
+        msg = ModelRequest(parts=[UserPromptPart(content="hello")])
+        rc = _make_request_context([msg])
+
+        result = await cap.before_model_request(ctx, rc)
+
+        # No viking:// roots resolve under the local backend, so the block is
+        # empty and injection is skipped entirely.
+        assert result is rc
+
+    @pytest.mark.asyncio
+    async def test_before_model_request_disabled_by_default(self) -> None:
+        """before_model_request is a no-op when index_enabled=False (default)."""
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
+
+        cap = WikiBuildCapability(wiki_root="viking://resources/810test")
+        ctx = _make_ctx()
+        msg = ModelRequest(parts=[UserPromptPart(content="hello")])
+        rc = _make_request_context([msg])
+
+        result = await cap.before_model_request(ctx, rc)
+
+        assert result is rc
+        assert cap._index_injected is False
+
+    @pytest.mark.asyncio
+    async def test_before_model_request_second_turn_no_reinjection(self) -> None:
+        """before_model_request skips on subsequent turns (no re-injection)."""
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
+
+        cap = WikiBuildCapability(
+            wiki_root="viking://resources/810test",
+            index_enabled=True,
+        )
+        ctx = _make_ctx()
+        # 3 messages = subsequent turn
+        messages = [
+            ModelRequest(parts=[UserPromptPart(content="msg1")]),
+            ModelRequest(parts=[UserPromptPart(content="msg2")]),
+            ModelRequest(parts=[UserPromptPart(content="msg3")]),
+        ]
+        rc = _make_request_context(messages)
+
+        result = await cap.before_model_request(ctx, rc)
+
+        assert result is rc
+        # _index_injected set to True to prevent future attempts
+        assert cap._index_injected is True
+
+    @pytest.mark.asyncio
+    async def test_before_model_request_exception_returns_unchanged(self) -> None:
+        """before_model_request handles errors gracefully — no raise."""
+        from unittest.mock import MagicMock, patch
+
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
+
+        cap = WikiBuildCapability(
+            wiki_root="viking://resources/810test",
+            index_enabled=True,
+        )
+        ctx = _make_ctx()
+        msg = ModelRequest(parts=[UserPromptPart(content="hello")])
+        rc = _make_request_context([msg])
+
+        with patch.object(
+            cap,
+            "_resolve_index_roots",
+            MagicMock(side_effect=RuntimeError("boom")),
+        ):
+            result = await cap.before_model_request(ctx, rc)
+
+        # Should return original context, not raise
+        assert result is rc
+        # _index_injected should be True (set before the try block, no retry)
+        assert cap._index_injected is True
+
+    # ---- Config fields ----
+
+    def test_config_index_defaults(self) -> None:
+        """WikiBuildConfig has index defaults (disabled, 1000, 20)."""
+        cap = WikiBuildCapability()
+        assert cap._config.index_enabled is False
+        assert cap._config.index_max_tokens == 1000
+        assert cap._config.index_limit == 20
+
+    def test_config_index_kwargs_roundtrip(self) -> None:
+        """__init__ kwargs flow through to WikiBuildConfig."""
+        cap = WikiBuildCapability(index_enabled=True, index_max_tokens=500, index_limit=3)
+        assert cap._config.index_enabled is True
+        assert cap._config.index_max_tokens == 500
+        assert cap._config.index_limit == 3
+
+    # ---- for_run() reset ----
+
+    @pytest.mark.asyncio
+    async def test_for_run_resets_index_injected(self) -> None:
+        """for_run() resets _index_injected to False."""
+        cap = WikiBuildCapability(
+            wiki_root="viking://resources/810test",
+            index_enabled=True,
+        )
+        cap._index_injected = True  # Simulate after first turn
+
+        ctx = _make_ctx()
+        run_cap = await cap.for_run(ctx)
+
+        assert run_cap._index_injected is False
+        # Original is unchanged
+        assert cap._index_injected is True
 
 
 # ---------------------------------------------------------------------------

@@ -42,6 +42,8 @@ Your role is: {role}.
 2. Use `task_create` and `task_create_batch` to track work items.
 3. Use `read_blackboard` and `write_blackboard` to share context.
 4. Use `team_status` to check the status of all members.
+   To see all work assigned to you, use `task_list(mine_only=True)`;
+   this includes subtasks under another member's parent task.
 5. If you are the lead, you may use `team_create` and `team_delete`.
 
 ## Communication Channels
@@ -50,8 +52,14 @@ Your role is: {role}.
 
 - Use `task_create` and `task_create_batch` to define work items with clear \
 deliverables.
+- A worker must start by calling `task_list(mine_only=True)` and use the exact \
+returned task ID for `task_get`/`task_update`; do not infer IDs from a message \
+or from another worker's status snapshot.
 - Use `task_update(status=...)` to change task lifecycle state only \
 (pending → in_progress → completed/failed).
+- The first `task_update(status="in_progress")` claims a server-side lease. \
+Keep the returned `lease_token` for completion; technical-note/progress updates \
+renew the lease, and stale tokens are rejected.
 - Use `task_update(technical_note=...)` ONLY for technical notes that future \
 readers of the task need. Do NOT use task notes for progress chatter.
 - Use `task_update(progress_current=..., progress_total=...)` to report \
@@ -78,6 +86,10 @@ blockers, coordinating handoffs, notifying completion.
 - Messages are ephemeral — they arrive as notifications but are NOT persisted \
 in team state. If the information needs to be durable, write it to the \
 blackboard instead (or use `persist_to_blackboard` parameter).
+- Every message carries a `sent_at` timestamp. Treat status claims as an \
+observation made at that time, not as current truth. Before reassigning work, \
+shutting down a member, or taking another destructive coordination action, \
+re-read `task_list`/`team_status` and prefer the newer authoritative state.
 - Use `message_type` to categorize: "question", "escalation", "handoff", \
 "notification".
 """
@@ -248,6 +260,19 @@ class TeamModeConfig(Schema):
     broadcast_on_create: bool = Field(
         default=True,
         title="Auto-broadcast on member creation",
+    )
+    member_can_create_subtasks: bool = Field(
+        default=True,
+        title="Allow members to create subtasks",
+        description=(
+            "Whether non-lead members may create child tasks. Disable this "
+            "for workflows whose conductor owns the task graph."
+        ),
+    )
+    lease_ttl_seconds: int = Field(
+        default=300,
+        ge=1,
+        title="Task lease TTL (seconds)",
     )
     max_watch_timeout: int = Field(
         default=120,

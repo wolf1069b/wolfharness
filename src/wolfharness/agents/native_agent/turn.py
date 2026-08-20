@@ -159,6 +159,12 @@ class NativeTurn(HookAwareTurn, Turn):
         ):
             from wolfharness.observability.trace import get_trace_id
 
+            # Sanitize any inbound history (restored sessions can carry
+            # poisoned tool call args that make the first model request fail
+            # with HTTP 400 before this turn's own CallToolsNode path runs).
+            if self._message_history_input:
+                sanitize_tool_call_args_in_messages(self._message_history_input)
+
             logfire.info(
                 "Turn started",
                 trace_id=get_trace_id(),

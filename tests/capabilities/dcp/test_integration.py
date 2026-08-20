@@ -1677,3 +1677,179 @@ async def test_dcp_disabled_returns_request_context_unchanged() -> None:
     state_before = cap._fallback_state.current_turn
     await cap.before_run(ctx)
     assert cap._fallback_state.current_turn == state_before
+
+
+# =============================================================================
+# Phase 5 — auto-compact on CRITICAL watermark
+# =============================================================================
+
+
+async def test_auto_compact_critical_compacts_persistent_conversation() -> None:
+    """Auto-compaction runs the manifest pipeline on the persistent conversation.
+
+    Given: auto_compact_on_critical=True, a manifest compaction pipeline,
+           and a native agent conversation attached to the run context.
+    When: before_model_request reaches CRITICAL watermark.
+    Then: compact_conversation is invoked on the agent conversation and the
+          critical_compacted flag is set (fires only once).
+    """
+    from wolfharness.messaging.compaction import KeepLastMessages
+
+    cap = _make_capability(
+        auto_compact_on_critical=True,
+        max_context_tokens=100,
+        info_threshold=0.10,
+        warning_threshold=0.20,
+        critical_threshold=0.50,
+    )
+
+    session_pool = MagicMock()
+    ctx = _make_run_context(session_data=_make_session_data(), session_pool=session_pool)
+    manifest = MagicMock()
+    manifest.get_compaction_pipeline.return_value = KeepLastMessages(count=2)
+    ctx.deps.node.host_context.manifest = manifest
+    conversation = MagicMock()
+    conversation.get_history.return_value = []
+    ctx.deps.native_agent.conversation = conversation
+
+    messages = [_make_request([UserPromptPart(content="Prompt")]) for _ in range(60)]
+    req_ctx = _make_request_context(messages)
+
+    result = await cap.before_model_request(ctx, req_ctx)
+
+    state = _get_dcp_state(cap, ctx)
+    assert state.watermark_level >= WatermarkLevel.CRITICAL
+    assert state.critical_compacted is True
+    conversation.get_history.assert_called()
+    assert isinstance(result, ModelRequestContext)
+
+
+async def test_auto_compact_critical_rearms_after_pressure_drops() -> None:
+    """Auto-compaction re-arms once pressure falls below CRITICAL.
+
+    Given: auto_compact_on_critical=True and a CRITICAL watermark that
+           fires a compaction.
+    When: a later turn's watermark drops below CRITICAL.
+    Then: critical_compacted resets to False, so a second CRITICAL episode
+          compacts again (fixes compact-only-once-per-session).
+    """
+    from wolfharness.messaging.compaction import KeepLastMessages
+
+    cap = _make_capability(
+        auto_compact_on_critical=True,
+        max_context_tokens=100,
+        info_threshold=0.10,
+        warning_threshold=0.20,
+        critical_threshold=0.50,
+    )
+
+    session_pool = MagicMock()
+    manifest = MagicMock()
+    manifest.get_compaction_pipeline.return_value = KeepLastMessages(count=2)
+
+    # One shared SessionData keeps the per-session DCPState across turns.
+    session_data = _make_session_data()
+
+    # Turn 1: cumulative usage 60/100 -> CRITICAL -> compacts, flag set.
+    ctx1 = _make_run_context(
+        session_data=session_data,
+        session_pool=session_pool,
+        usage_input_tokens=60,
+    )
+    ctx1.deps.node.host_context.manifest = manifest
+    conversation1 = MagicMock()
+    conversation1.get_history.return_value = []
+    ctx1.deps.native_agent.conversation = conversation1
+    req_ctx1 = _make_request_context([
+        _make_request([UserPromptPart(content="Prompt")]) for _ in range(60)
+    ])
+    await cap.before_model_request(ctx1, req_ctx1)
+    state = _get_dcp_state(cap, ctx1)
+    assert state.watermark_level >= WatermarkLevel.CRITICAL
+    assert state.critical_compacted is True
+
+    # Turn 2: cumulative usage drops to 10/100 -> NORMAL -> re-arms.
+    ctx2 = _make_run_context(
+        session_data=session_data,
+        session_pool=session_pool,
+        usage_input_tokens=10,
+    )
+    req_ctx2 = _make_request_context([_make_request([UserPromptPart(content="Prompt")])])
+    await cap.before_model_request(ctx2, req_ctx2)
+    assert state.watermark_level < WatermarkLevel.CRITICAL
+    assert state.critical_compacted is False
+
+    # Turn 3: cumulative usage back to 60/100 -> CRITICAL -> compacts again.
+    ctx3 = _make_run_context(
+        session_data=session_data,
+        session_pool=session_pool,
+        usage_input_tokens=70,
+    )
+    ctx3.deps.node.host_context.manifest = manifest
+    conversation3 = MagicMock()
+    conversation3.get_history.return_value = []
+    ctx3.deps.native_agent.conversation = conversation3
+    req_ctx3 = _make_request_context([
+        _make_request([UserPromptPart(content="Prompt")]) for _ in range(60)
+    ])
+    await cap.before_model_request(ctx3, req_ctx3)
+    assert state.watermark_level >= WatermarkLevel.CRITICAL
+    assert state.critical_compacted is True
+    conversation3.get_history.assert_called()
+
+
+async def test_auto_compact_critical_skipped_when_disabled() -> None:
+    """Auto-compaction does not fire when auto_compact_on_critical=False (default).
+
+    Given: a CRITICAL watermark but auto_compact_on_critical not enabled.
+    When: before_model_request runs.
+    Then: the manifest pipeline is never fetched and critical_compacted stays False.
+    """
+    cap = _make_capability(
+        max_context_tokens=100,
+        info_threshold=0.10,
+        warning_threshold=0.20,
+        critical_threshold=0.50,
+    )
+
+    ctx = _make_run_context(session_data=_make_session_data(), session_pool=MagicMock())
+    ctx.deps.node.host_context.manifest = MagicMock()
+
+    messages = [_make_request([UserPromptPart(content="Prompt")]) for _ in range(60)]
+    req_ctx = _make_request_context(messages)
+
+    await cap.before_model_request(ctx, req_ctx)
+
+    state = _get_dcp_state(cap, ctx)
+    assert state.watermark_level >= WatermarkLevel.CRITICAL
+    assert state.critical_compacted is False
+
+
+async def test_auto_compact_critical_skipped_without_manifest_pipeline() -> None:
+    """Auto-compaction is skipped when the manifest has no compaction pipeline.
+
+    Given: auto_compact_on_critical=True at CRITICAL watermark but no manifest
+           compaction pipeline configured.
+    When: before_model_request runs.
+    Then: no crash, critical_compacted stays False.
+    """
+    cap = _make_capability(
+        auto_compact_on_critical=True,
+        max_context_tokens=100,
+        info_threshold=0.10,
+        warning_threshold=0.20,
+        critical_threshold=0.50,
+    )
+
+    ctx = _make_run_context(session_data=_make_session_data(), session_pool=MagicMock())
+    ctx.deps.node.host_context.manifest = MagicMock()
+    ctx.deps.node.host_context.manifest.get_compaction_pipeline.return_value = None
+
+    messages = [_make_request([UserPromptPart(content="Prompt")]) for _ in range(60)]
+    req_ctx = _make_request_context(messages)
+
+    result = await cap.before_model_request(ctx, req_ctx)
+
+    state = _get_dcp_state(cap, ctx)
+    assert state.critical_compacted is False
+    assert isinstance(result, ModelRequestContext)

@@ -229,6 +229,20 @@ class VikingCapability(AbstractCapability[Any]):
     """When True (default), profile injection runs only on the first turn
     of a session. When False, injection runs on every ``before_model_request``
     call (not recommended — expensive and static)."""
+    index_enabled: bool = False
+    """Enable first-turn resource-namespace index injection. When True,
+    the capability lists live ``viking://resources/<namespace>``
+    namespaces on the first turn and injects them as an
+    ``<openviking-index>`` XML block, eliminating hard-coded namespace
+    knowledge."""
+    index_max_tokens: int = 1000
+    """Maximum token budget for the injected index block. Content is
+    truncated if it exceeds this budget (chars-to-tokens 4:1 heuristic)."""
+    index_limit: int = 20
+    """Maximum number of namespace names to include in the index block."""
+    index_uri: str | None = None
+    """Namespace URI to list. When ``None``, resolves to
+    ``viking://resources/``."""
     enabled_tools: list[str] | None = None
     """If set, only these tools are exposed (whitelist). Mutually exclusive
     with ``disabled_tools``."""
@@ -270,6 +284,9 @@ class VikingCapability(AbstractCapability[Any]):
     client initialization. Shared across per-run copies via ``for_run()``."""
     _profile_injected: bool = field(default=False, repr=False)
     """Flag tracking whether profile injection has already run for this
+    session. Reset to ``False`` in ``for_run()`` so each run starts fresh."""
+    _index_injected: bool = field(default=False, repr=False)
+    """Flag tracking whether index injection has already run for this
     session. Reset to ``False`` in ``for_run()`` so each run starts fresh."""
     _last_ingested_idx: int = field(default=0, repr=False)
     """Cursor tracking the last message index ingested to Viking.
@@ -566,6 +583,7 @@ class VikingCapability(AbstractCapability[Any]):
             _owns_client=False,
             _identity=self._identity,
             _profile_injected=False,
+            _index_injected=False,
             _last_ingested_idx=0,
             _remember_pending=[],
             _remember_drain_failures=0,
@@ -1202,6 +1220,96 @@ class VikingCapability(AbstractCapability[Any]):
             logger.warning("Profile injection failed", exc_info=True)
             return request_context
 
+    # ---- Index Injection (Dynamic Namespaces) ----
+
+    async def _handle_index_inject(
+        self,
+        ctx: RunContext[Any],
+        request_context: ModelRequestContext,
+    ) -> ModelRequestContext:
+        """Inject a live resource-namespace index block on the first turn.
+
+        When ``index_enabled`` is ``True`` and this is the first
+        ``before_model_request`` call for the session (``_index_injected``
+        is ``False`` and message count is <= 2), the method:
+
+        1. Lists namespaces under the index URI (``viking://resources/``
+           by default, non-recursive) via ``client.ls()``.
+        2. Collects entry names where ``isDir`` is truthy.
+        3. Formats them as an ``<openviking-index>`` XML block.
+        4. Injects it as a ``SystemPromptPart`` before the latest user
+           message using ``dataclasses.replace()``.
+        5. Sets ``_index_injected = True``.
+
+        On any error, logs a warning and returns the original
+        ``request_context`` unchanged (flag already set, no retry).
+
+        Args:
+            ctx: The pydantic-ai run context.
+            request_context: The model request context containing messages.
+
+        Returns:
+            The (possibly modified) model request context.
+        """
+        if not self.index_enabled or self._index_injected:
+            return request_context
+
+        if len(request_context.messages) > self._FIRST_TURN_MAX_MESSAGES:
+            self._index_injected = True
+            return request_context
+
+        self._index_injected = True
+
+        try:
+            client = await self._ensure_client()
+            from wolfharness.capabilities.viking.index import _format_index_block
+
+            uri = self.index_uri if self.index_uri is not None else "viking://resources/"
+            entries = await client.ls(uri)
+            namespaces: list[str] = []
+            if isinstance(entries, list):
+                for entry in entries:
+                    if isinstance(entry, dict) and entry.get("isDir"):
+                        name = str(entry.get("name") or "")
+                        if name:
+                            namespaces.append(name)
+
+            index_block = _format_index_block(
+                namespaces,
+                max_tokens=self.index_max_tokens,
+                limit=self.index_limit,
+            )
+            if not index_block.strip():
+                return request_context
+
+            from dataclasses import replace
+
+            from pydantic_ai.messages import (
+                ModelRequest,
+                SystemPromptPart,
+                UserPromptPart,
+            )
+
+            messages = list(request_context.messages)
+            insert_idx: int | None = None
+            for i in range(len(messages) - 1, -1, -1):
+                msg = messages[i]
+                if isinstance(msg, ModelRequest) and any(
+                    isinstance(p, UserPromptPart) for p in msg.parts
+                ):
+                    insert_idx = i
+                    break
+
+            if insert_idx is None:
+                return request_context
+
+            system_msg = ModelRequest(parts=[SystemPromptPart(content=index_block)])
+            new_messages = [*messages[:insert_idx], system_msg, *messages[insert_idx:]]
+            return replace(request_context, messages=new_messages)
+        except Exception:
+            logger.warning("Index injection failed", exc_info=True)
+            return request_context
+
     # ---- Multimodal Bridge (Phase 6) ----
 
     async def before_model_request(
@@ -1216,9 +1324,10 @@ class VikingCapability(AbstractCapability[Any]):
         0. Remember drain (capture deferred ``viking_remember`` intents)
         1. Auto-ingest (process previous turn, fire-and-forget)
         2. Profile injection (add static profile, first turn only)
-        3. Auto-recall (add dynamic recalled memories)
-        4. Compaction archive (reduce context if too large)
-        5. Multimodal bridge (handle binary content)
+        3. Index injection (add live resource namespaces, first turn only)
+        4. Auto-recall (add dynamic recalled memories)
+        5. Compaction archive (reduce context if too large)
+        6. Multimodal bridge (handle binary content)
 
         Each handler checks its own enabled flag and returns early if
         disabled (D14). Handlers receive the output of the previous
@@ -1241,6 +1350,7 @@ class VikingCapability(AbstractCapability[Any]):
             request_context = await self._handle_remember_drain(ctx, request_context)
             request_context = await self._handle_auto_ingest(ctx, request_context)
             request_context = await self._handle_profile_inject(ctx, request_context)
+            request_context = await self._handle_index_inject(ctx, request_context)
             request_context = await self._handle_auto_recall(ctx, request_context)
             request_context = await self._handle_compaction(ctx, request_context)
             return await self._handle_multimodal_bridge(ctx, request_context)

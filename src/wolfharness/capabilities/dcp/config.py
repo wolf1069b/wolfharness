@@ -44,6 +44,10 @@ class DCPConfig(BaseModel):
         meta_tool_retention: How many recent meta-tool returns to keep.
         clear_thinking_enabled: Whether the ``clear_thinking`` parameter
             on the prune tool is active.
+        auto_compact_on_critical: When True and the watermark reaches
+            CRITICAL, run the manifest ``compaction`` pipeline on the
+            persistent conversation (falls back to the request snapshot
+            when the agent is unavailable). Off by default.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -67,6 +71,7 @@ class DCPConfig(BaseModel):
     protected_tools: set[str] = Field(default_factory=set)
     meta_tool_retention: int = 1
     clear_thinking_enabled: bool = False
+    auto_compact_on_critical: bool = False
 
     @field_validator("auto_strategy_threshold", mode="before")
     @classmethod

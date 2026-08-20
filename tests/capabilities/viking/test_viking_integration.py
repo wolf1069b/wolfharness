@@ -327,7 +327,8 @@ async def test_mode_tool_exposure_write() -> None:
     assert toolset is not None
     tool_names = list(toolset.tools.keys())  # type: ignore[attr-defined]
     # 4 write tools (remember gated by enable_memory, forget by enable_forget)
-    assert len(tool_names) == 4
+    # + viking_upload_tree (tree upload from capability)
+    assert len(tool_names) == 5
 
 
 @pytest.mark.asyncio
@@ -359,7 +360,7 @@ async def test_mode_tool_exposure_all() -> None:
     toolset = cap.get_toolset()
     assert toolset is not None
     tool_names = list(toolset.tools.keys())  # type: ignore[attr-defined]
-    assert len(tool_names) == 12  # 7 retrieve + 4 write + 1 graph (expand included in retrieve)
+    assert len(tool_names) == 13  # 7 retrieve + 5 write + 1 graph (expand included in retrieve)
 
 
 @pytest.mark.asyncio
@@ -383,7 +384,7 @@ async def test_mode_tool_exposure_with_config_fields() -> None:
     toolset = cap.get_toolset()
     assert toolset is not None
     tool_names = list(toolset.tools.keys())  # type: ignore[attr-defined]
-    assert len(tool_names) == 12  # default flags: enable_link=False, enable_memory=False
+    assert len(tool_names) == 13  # default flags: enable_link=False, enable_memory=False
 
 
 # ---------------------------------------------------------------------------
