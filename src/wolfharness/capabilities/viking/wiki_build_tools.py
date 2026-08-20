@@ -93,6 +93,7 @@ ALL_WIKI_TOOLS: frozenset[str] = frozenset(
         "get_source_ledger",
         "record_source_packet",
         "plan_materialization_work",
+        "materialize_template_batch",
         "record_materialization_receipt",
         "plan_relation_work",
         "plan_relation_shards",
@@ -127,6 +128,7 @@ ALL_WIKI_TOOLS: frozenset[str] = frozenset(
         "read_raw_resource",
         "source_snapshot",
         "migrate_source_uri_references",
+        "sync_device_system_chapters",
     },
 )
 
@@ -194,6 +196,7 @@ _FILE_OP_TOOLS: frozenset[str] = frozenset(
         "create_subdir",
         "prune_stale_index_entries",
         "migrate_source_uri_references",
+        "sync_device_system_chapters",
     },
 )
 
@@ -258,6 +261,7 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
                 "model_mapping_report",
                 "record_source_packet",
                 "plan_materialization_work",
+                "materialize_template_batch",
                 "record_materialization_receipt",
                 "plan_relation_work",
                 "plan_relation_shards",
@@ -270,6 +274,7 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
                 "plan_chapter_batches",
                 "plan_chapter_work",
                 "migrate_source_uri_references",
+                "sync_device_system_chapters",
             },
         )
     ),
@@ -284,6 +289,7 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
         | _OP_AUTHORITY_READ_TOOLS
         | _OP_FLOW_READ_TOOLS
         | frozenset({"record_source_packet", "record_materialization_receipt"})
+        | frozenset({"read_source_packet"})
         | frozenset({"get_model_mappings", "model_mapping_report"})
     ),
     "wiki_relation_worker": (
