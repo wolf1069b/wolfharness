@@ -236,7 +236,7 @@ def _append_text_part(
     if not stripped:
         return
     if parts and parts[-1].get("type") == "text" and parts[-1].get("subtype") == subtype:
-        parts[-1]["text"] = f'{parts[-1].get("text", "")}\n{stripped}'
+        parts[-1]["text"] = f"{parts[-1].get('text', '')}\n{stripped}"
         return
     part: dict[str, Any] = {"type": "text", "text": stripped}
     if subtype is not None:

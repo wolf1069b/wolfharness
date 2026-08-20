@@ -1874,15 +1874,13 @@ class VikingCapability(AbstractCapability[Any]):
             except Exception:
                 if self._last_ingested_idx == current_count:
                     self._last_ingested_idx = previous_idx
-                self._failed_ingest_batches.append(
-                    (
-                        list(pairs),
-                        session_id,
-                        self.auto_ingest_source_type,
-                        self.auto_ingest_keep_recent_turns,
-                        current_count,
-                    )
-                )
+                self._failed_ingest_batches.append((
+                    list(pairs),
+                    session_id,
+                    self.auto_ingest_source_type,
+                    self.auto_ingest_keep_recent_turns,
+                    current_count,
+                ))
                 logger.warning("auto_ingest: ingestion failed", exc_info=True)
 
         if self.auto_ingest_mode == "sync":
@@ -1956,9 +1954,13 @@ class VikingCapability(AbstractCapability[Any]):
                 )
                 self._last_ingested_idx = max(self._last_ingested_idx, cursor_after)
             except Exception:
-                self._failed_ingest_batches.append(
-                    (pairs, session_id, source_type, keep_recent_turns, cursor_after)
-                )
+                self._failed_ingest_batches.append((
+                    pairs,
+                    session_id,
+                    source_type,
+                    keep_recent_turns,
+                    cursor_after,
+                ))
                 logger.warning("auto_ingest: retry failed", exc_info=True)
 
     async def _flush_tail(self, ctx: RunContext[Any]) -> None:

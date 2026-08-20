@@ -5498,8 +5498,8 @@ class TestAutoIngest:
         assert result[4]["content"] == "Q3"
         assert result[5]["content"] == "A3"
 
-    def test_extract_conversation_pairs_skips_non_text_content(self) -> None:
-        """Skips UserPromptPart with list (multimodal) content."""
+    def test_extract_conversation_pairs_extracts_list_user_text(self) -> None:
+        """Extracts text from structured/list user content."""
         from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
         from wolfharness.capabilities.viking.ingest import _extract_conversation_pairs
@@ -5510,10 +5510,10 @@ class TestAutoIngest:
             ModelRequest(parts=[UserPromptPart(content="plain text")]),
         ]
         result = _extract_conversation_pairs(messages, start_idx=0)
-        # First user prompt is skipped (list content), assistant text is included
-        assert len(result) == 2
-        assert result[0] == {"role": "assistant", "content": "response"}
-        assert result[1] == {"role": "user", "content": "plain text"}
+        assert len(result) == 3
+        assert result[0] == {"role": "user", "content": "image_data\ntext"}
+        assert result[1] == {"role": "assistant", "content": "response"}
+        assert result[2] == {"role": "user", "content": "plain text"}
 
     def test_extract_conversation_pairs_empty_messages(self) -> None:
         """Empty messages list returns empty list."""
@@ -5747,7 +5747,7 @@ class TestAutoIngest:
 
     @pytest.mark.asyncio
     async def test_handle_auto_ingest_graceful_failure(self, mock_client: AsyncMock) -> None:
-        """Ingestion failure does not block and still updates cursor."""
+        """Ingestion failure does not block and keeps the batch retryable."""
         from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
         mock_client.create_session = AsyncMock(side_effect=RuntimeError("server unreachable"))
@@ -5769,8 +5769,8 @@ class TestAutoIngest:
         # Should not raise
         result = await cap._handle_auto_ingest(ctx, rc)
 
-        # Cursor should still be updated (to avoid retrying)
-        assert cap._last_ingested_idx == 2
+        assert cap._last_ingested_idx == 0
+        assert len(cap._failed_ingest_batches) == 1
         # Result should be unchanged
         assert result is rc
 
