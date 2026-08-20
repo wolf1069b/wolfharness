@@ -414,8 +414,9 @@ class MCPManager:
             return None
 
         # De-duplicate the model-visible tool prefix across servers sharing
-        # a display_name so prefixed tool names never collide (RFC-0058).
-        base_prefix = config.display_name
+        # a configured prefix/display_name so prefixed tool names never collide
+        # (RFC-0058).
+        base_prefix = config.tool_prefix or config.display_name
         candidate = base_prefix
         n = 2
         while candidate in self._used_tool_prefixes:

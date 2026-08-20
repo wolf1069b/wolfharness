@@ -546,7 +546,6 @@ class VikingCapability(AbstractCapability[Any]):
             _owns_client=False,
             _identity=self._identity,
             _profile_injected=False,
-            _last_ingested_idx=0,
             _remember_pending=[],
             _remember_drain_failures=0,
             _pending_tasks=set(),

@@ -226,6 +226,7 @@ class VikingCapabilityConfig(BaseModel):
         if isinstance(value, str):
             return os.path.expandvars(value)
         return value
+
     public_download_base_url: str | None = None
     """Base URL for public download links."""
     enable_link: bool = False
