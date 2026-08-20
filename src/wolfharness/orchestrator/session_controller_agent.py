@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
     from wolfharness.agents.base_agent import BaseAgent
     from wolfharness.delegation import AgentPool
+    from wolfharness.orchestrator.run import RunHandle
     from wolfharness.orchestrator.runtime_registry import RuntimeAgentRegistry
     from wolfharness_storage.protocols import SessionPersistence
 
@@ -58,6 +59,8 @@ class SessionControllerAgentMixin:
     _event_bus: Any
 
     def _increment_mcp_count(self, _agent: Any) -> None: ...
+
+    def get_live_run(self, session_id: str) -> RunHandle | None: ...
 
     async def get_or_create_session(
         self,
