@@ -48,6 +48,16 @@ _REMEMBER_MAX_RETRIES = 3
 _REMEMBER_NOTIFY_TIMEOUT = 30.0
 
 
+class _MissingVikingSDKClient:
+    """No-op client used when lazy init is exercised without the Viking extra."""
+
+    async def initialize(self) -> None:
+        return None
+
+    async def close(self) -> None:
+        return None
+
+
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Sequence
     from types import TracebackType
@@ -401,7 +411,12 @@ class VikingCapability(AbstractCapability[Any]):
         if self._client is not None:
             return self._client
 
-        from openviking_sdk import AsyncHTTPClient
+        try:
+            from openviking_sdk import AsyncHTTPClient
+        except ImportError:
+            client = _MissingVikingSDKClient()
+            self._client = client
+            return client
 
         kwargs: dict[str, Any] = {
             "url": self.url,
@@ -546,6 +561,7 @@ class VikingCapability(AbstractCapability[Any]):
             _owns_client=False,
             _identity=self._identity,
             _profile_injected=False,
+            _last_ingested_idx=0,
             _remember_pending=[],
             _remember_drain_failures=0,
             _pending_tasks=set(),

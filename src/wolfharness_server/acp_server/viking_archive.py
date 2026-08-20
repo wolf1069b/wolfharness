@@ -50,7 +50,7 @@ class ACPVikingEventArchive:
     @classmethod
     def from_config(cls, config: Any) -> ACPVikingEventArchive:
         """Build an archive from manifest config, expanding env vars lazily."""
-        if config is None or not bool(getattr(config, "enabled", False)):
+        if config is None or getattr(config, "enabled", False) is not True:
             return cls(enabled=False)
         api_key = _expand(getattr(config, "api_key", None) or os.getenv("VIKING_MCP_API_KEY"))
         url = _expand(
