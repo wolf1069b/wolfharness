@@ -10,7 +10,9 @@ from unittest.mock import AsyncMock
 import pytest
 
 from acp.schema import (
+    AgentMessageChunk,
     AgentThoughtChunk,
+    TextContentBlock,
     ToolCallProgress,
     ToolCallStart,
     TurnCompleteUpdate,
@@ -88,7 +90,12 @@ async def test_viking_archive_serializes_acp_user_thought_and_tool_updates() -> 
 @pytest.mark.asyncio
 async def test_viking_archive_appends_events_and_writes_memory_context() -> None:
     client = AsyncMock()
-    archive = ACPVikingEventArchive(enabled=True, session_prefix="iroot-acp-session")
+    client.commit_session = AsyncMock(return_value={"archive_uri": "viking://archive/001"})
+    archive = ACPVikingEventArchive(
+        enabled=True,
+        session_prefix="iroot-acp-session",
+        user="bin.chen",
+    )
     archive._client = client
 
     await archive.record_update(
@@ -102,16 +109,89 @@ async def test_viking_archive_appends_events_and_writes_memory_context() -> None
     assert client.write.call_count == 2
     events_call = client.write.call_args_list[0]
     context_call = client.write.call_args_list[1]
-    assert events_call.args[0] == "viking://sessions/iroot-acp-session-session-with-spaces/events.jsonl"
+    assert events_call.args[0] == (
+        "viking://user/bin.chen/sessions/iroot-acp-session-session-with-spaces/events.jsonl"
+    )
     event_record = json.loads(events_call.args[1].splitlines()[0])
     assert event_record["event_id"] == "123"
     assert event_record["event_type"] == "user_message_chunk"
     assert events_call.kwargs["mode"] == "append"
     assert events_call.kwargs["processing_mode"] == "raw"
     assert context_call.args[0] == (
-        "viking://sessions/iroot-acp-session-session-with-spaces/memory_context.json"
+        "viking://user/bin.chen/sessions/iroot-acp-session-session-with-spaces/memory_context.json"
     )
     assert context_call.kwargs["mode"] == "replace"
+    assert context_call.kwargs["processing_mode"] == "raw"
+    client.create_session.assert_awaited_once_with(
+        session_id="iroot-acp-session-session-with-spaces",
+        source_type="iroot-acp-session",
+    )
+    client.add_message.assert_awaited_once_with(
+        "iroot-acp-session-session-with-spaces",
+        "user",
+        parts=[{"type": "text", "text": "/systematic-troubleshooting cy215c 动臂吊臂"}],
+    )
+    client.commit_session.assert_awaited_once_with(
+        "iroot-acp-session-session-with-spaces",
+        keep_recent_count=10,
+    )
+
+
+@pytest.mark.asyncio
+async def test_viking_archive_writes_readable_transcript_with_merged_chunks() -> None:
+    client = AsyncMock()
+    client.commit_session = AsyncMock(return_value={"archive_uri": "viking://archive/001"})
+    archive = ACPVikingEventArchive(enabled=True, user="bin.chen")
+    archive._client = client
+
+    await archive.record_update(
+        consumer_session_id="acp-session-1",
+        source_session_id="acp-session-1",
+        event_id="evt-user-1",
+        update=UserMessageChunk.text("发动机", message_id="msg-user"),
+    )
+    await archive.record_update(
+        consumer_session_id="acp-session-1",
+        source_session_id="acp-session-1",
+        event_id="evt-user-2",
+        update=UserMessageChunk.text("无法启动", message_id="msg-user"),
+    )
+    await archive.record_update(
+        consumer_session_id="acp-session-1",
+        source_session_id="acp-session-1",
+        event_id="evt-assistant-1",
+        update=AgentMessageChunk(
+            content=TextContentBlock(text="先检查"),
+            message_id="msg-agent",
+        ),
+    )
+    await archive.record_update(
+        consumer_session_id="acp-session-1",
+        source_session_id="acp-session-1",
+        event_id="evt-assistant-2",
+        update=AgentMessageChunk(
+            content=TextContentBlock(text="蓄电池电压"),
+            message_id="msg-agent",
+        ),
+    )
+
+    await archive.flush_session("acp-session-1")
+
+    assert client.add_message.await_count == 2
+    assert client.add_message.await_args_list[0].args == (
+        "iroot-acp-session-acp-session-1",
+        "user",
+    )
+    assert client.add_message.await_args_list[0].kwargs["parts"] == [
+        {"type": "text", "text": "发动机无法启动"}
+    ]
+    assert client.add_message.await_args_list[1].args == (
+        "iroot-acp-session-acp-session-1",
+        "assistant",
+    )
+    assert client.add_message.await_args_list[1].kwargs["parts"] == [
+        {"type": "text", "text": "先检查蓄电池电压"}
+    ]
 
 
 @pytest.mark.asyncio
@@ -131,6 +211,21 @@ async def test_viking_archive_flush_failure_is_non_blocking() -> None:
     await archive.flush_session("acp-session-1")
 
     client.write.assert_awaited_once()
+    assert len(archive._pending["acp-session-1"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_viking_archive_resolves_user_from_health_for_user_scoped_uri() -> None:
+    client = AsyncMock()
+    response = SimpleNamespace(json=lambda: {"user_id": "bin.chen"})
+    client._request = AsyncMock(return_value=response)
+
+    archive = ACPVikingEventArchive(enabled=True)
+    await archive._resolve_user_from_health(client)
+
+    assert archive._events_uri("session/with spaces") == (
+        "viking://user/bin.chen/sessions/iroot-acp-session-session-with-spaces/events.jsonl"
+    )
 
 
 @pytest.mark.asyncio

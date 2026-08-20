@@ -32,6 +32,16 @@ class ACPVikingArchiveConfig(Schema):
     flush_on_turn_complete: bool = Field(default=True, title="Flush on turn complete")
     """Whether to flush pending events when a turn_complete update is observed."""
 
+    transcript_enabled: bool = Field(default=True, title="Enable ACP transcript archive")
+    """Whether ACP session updates are also written as readable Viking session messages."""
+
+    transcript_keep_recent_count: int = Field(
+        default=10,
+        ge=0,
+        title="Transcript keep recent count",
+    )
+    """Recent transcript messages retained in the live session after commit."""
+
     model_config = ConfigDict(frozen=True)
 
 

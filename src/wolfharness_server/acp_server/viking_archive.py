@@ -29,8 +29,20 @@ class ACPVikingEventArchive:
     session_prefix: str = "iroot-acp-session"
     batch_size: int = 25
     flush_on_turn_complete: bool = True
+    transcript_enabled: bool = True
+    transcript_keep_recent_count: int = 10
     _client: Any = field(default=None, init=False, repr=False)
     _pending: dict[str, list[dict[str, Any]]] = field(default_factory=dict, init=False, repr=False)
+    _transcript_pending: dict[str, list[dict[str, Any]]] = field(
+        default_factory=dict,
+        init=False,
+        repr=False,
+    )
+    _chunk_buffers: dict[str, dict[tuple[str, str], dict[str, Any]]] = field(
+        default_factory=dict,
+        init=False,
+        repr=False,
+    )
     _sequence: dict[str, int] = field(default_factory=dict, init=False, repr=False)
     _tasks: set[asyncio.Task[None]] = field(default_factory=set, init=False, repr=False)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
@@ -55,6 +67,8 @@ class ACPVikingEventArchive:
             session_prefix=str(getattr(config, "session_prefix", "iroot-acp-session")),
             batch_size=int(getattr(config, "batch_size", 25)),
             flush_on_turn_complete=bool(getattr(config, "flush_on_turn_complete", True)),
+            transcript_enabled=bool(getattr(config, "transcript_enabled", True)),
+            transcript_keep_recent_count=int(getattr(config, "transcript_keep_recent_count", 10)),
         )
 
     async def record_update(
@@ -89,6 +103,8 @@ class ACPVikingEventArchive:
                 }
                 pending = self._pending.setdefault(session_id, [])
                 pending.append(record)
+                if self.transcript_enabled:
+                    self._buffer_transcript_update_locked(session_id, payload, event_type)
                 should_flush = len(pending) >= self.batch_size or (
                     self.flush_on_turn_complete and event_type == "turn_complete"
                 )
@@ -177,13 +193,24 @@ class ACPVikingEventArchive:
         """Flush buffered events for one session to Viking."""
         async with self._lock:
             records = self._pending.pop(session_id, [])
-        if not records:
+            transcript_messages = self._pop_transcript_locked(session_id)
+        if not records and not transcript_messages:
             return
         try:
             client = await self._ensure_client()
             uri = self._events_uri(session_id)
-            content = "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records)
-            await client.write(uri, content, mode="append", wait=False, processing_mode="raw")
+            if records:
+                content = "".join(
+                    json.dumps(record, ensure_ascii=False) + "\n" for record in records
+                )
+                await client.write(uri, content, mode="append", wait=False, processing_mode="raw")
+            transcript_commit = None
+            if transcript_messages:
+                transcript_commit = await self._write_transcript(
+                    client,
+                    session_id,
+                    transcript_messages,
+                )
             await client.write(
                 self._memory_context_uri(session_id),
                 json.dumps(
@@ -191,10 +218,12 @@ class ACPVikingEventArchive:
                         "session_id": session_id,
                         "archive_session_id": self._archive_session_id(session_id),
                         "events_uri": uri,
-                        "last_event_sequence": records[-1]["sequence"],
-                        "last_event_type": records[-1]["event_type"],
+                        "last_event_sequence": records[-1]["sequence"] if records else None,
+                        "last_event_type": records[-1]["event_type"] if records else None,
+                        "transcript_message_count": len(transcript_messages),
+                        "transcript_commit": transcript_commit,
                         "updated_at": datetime.now(UTC).isoformat(),
-                        "memory_policy": "archive-all-events-memory-selected-transcript",
+                        "memory_policy": "archive-all-events-and-readable-transcript",
                     },
                     ensure_ascii=False,
                     indent=2,
@@ -204,6 +233,13 @@ class ACPVikingEventArchive:
                 processing_mode="raw",
             )
         except _ERROR_TYPES:
+            async with self._lock:
+                if records:
+                    self._pending.setdefault(session_id, records[:0])[:0] = records
+                if transcript_messages:
+                    self._transcript_pending.setdefault(session_id, transcript_messages[:0])[
+                        :0
+                    ] = transcript_messages
             logger.warning("ACP Viking archive flush failed", session_id=session_id, exc_info=True)
 
     async def flush_all(self) -> None:
@@ -230,16 +266,150 @@ class ACPVikingEventArchive:
         client = AsyncHTTPClient(url=self.url, api_key=self.api_key, user=self.user)
         await client.initialize()
         self._client = client
+        if self.user is None:
+            await self._resolve_user_from_health(client)
         return client
 
+    async def _resolve_user_from_health(self, client: Any) -> None:
+        """Best-effort user resolution for user-scoped archive URIs."""
+        try:
+            response = await client._request("GET", "/health")
+            data = response.json() if hasattr(response, "json") else response
+            if isinstance(data, dict):
+                user_id = data.get("user_id")
+                if isinstance(user_id, str) and user_id.strip():
+                    self.user = user_id.strip()
+        except _ERROR_TYPES:
+            logger.debug("ACP Viking archive user resolution failed", exc_info=True)
+
     def _events_uri(self, session_id: str) -> str:
-        return f"viking://sessions/{self._archive_session_id(session_id)}/events.jsonl"
+        return f"{self._archive_base_uri(session_id)}/events.jsonl"
 
     def _memory_context_uri(self, session_id: str) -> str:
-        return f"viking://sessions/{self._archive_session_id(session_id)}/memory_context.json"
+        return f"{self._archive_base_uri(session_id)}/memory_context.json"
 
     def _archive_session_id(self, session_id: str) -> str:
         return f"{self.session_prefix}-{_safe_identifier(session_id)}"
+
+    def _archive_base_uri(self, session_id: str) -> str:
+        user_id = _safe_identifier(self.user or "default")
+        return f"viking://user/{user_id}/sessions/{self._archive_session_id(session_id)}"
+
+    def _buffer_transcript_update_locked(
+        self,
+        session_id: str,
+        payload: dict[str, Any],
+        event_type: str,
+    ) -> None:
+        text = _content_text(payload)
+        message_id = str(
+            payload.get("messageId")
+            or payload.get("message_id")
+            or f"{event_type}:{self._sequence.get(session_id, 0)}"
+        )
+        if event_type == "user_message_chunk":
+            self._append_chunk_locked(session_id, "user", message_id, text)
+            return
+        if event_type in ("agent_message_chunk", "agent_thought_chunk"):
+            self._append_chunk_locked(session_id, "assistant", message_id, text)
+            return
+        if event_type in ("tool_call", "tool_call_update"):
+            self._flush_chunk_buffers_locked(session_id)
+            tool_part = _tool_part_from_update(payload)
+            if tool_part:
+                self._append_transcript_locked(session_id, "assistant", [tool_part])
+            return
+        if event_type == "turn_complete":
+            self._flush_chunk_buffers_locked(session_id)
+
+    def _append_chunk_locked(
+        self,
+        session_id: str,
+        role: str,
+        message_id: str,
+        text: str,
+    ) -> None:
+        if not text:
+            return
+        buffers = self._chunk_buffers.setdefault(session_id, {})
+        key = (role, message_id)
+        buffer = buffers.get(key)
+        if buffer is None:
+            buffer = {"role": role, "parts": [{"type": "text", "text": ""}]}
+            buffers[key] = buffer
+        buffer["parts"][0]["text"] += text
+
+    def _flush_chunk_buffers_locked(self, session_id: str) -> None:
+        buffers = self._chunk_buffers.pop(session_id, {})
+        for message in buffers.values():
+            parts = message.get("parts")
+            if isinstance(parts, list) and parts:
+                text = parts[0].get("text") if isinstance(parts[0], dict) else ""
+                if isinstance(text, str) and text.strip():
+                    self._transcript_pending.setdefault(session_id, []).append(message)
+
+    def _append_transcript_locked(
+        self,
+        session_id: str,
+        role: str,
+        parts: list[dict[str, Any]],
+    ) -> None:
+        if parts:
+            self._transcript_pending.setdefault(session_id, []).append({
+                "role": role,
+                "parts": parts,
+            })
+
+    def _pop_transcript_locked(self, session_id: str) -> list[dict[str, Any]]:
+        self._flush_chunk_buffers_locked(session_id)
+        return self._transcript_pending.pop(session_id, [])
+
+    async def _write_transcript(
+        self,
+        client: Any,
+        session_id: str,
+        messages: list[dict[str, Any]],
+    ) -> Any:
+        archive_session_id = self._archive_session_id(session_id)
+        try:
+            await client.create_session(
+                session_id=archive_session_id,
+                source_type=self.session_prefix,
+            )
+        except TypeError:
+            try:
+                await client.create_session(session_id=archive_session_id)
+            except _ERROR_TYPES:
+                logger.debug(
+                    "ACP Viking transcript create_session skipped",
+                    session_id=archive_session_id,
+                    exc_info=True,
+                )
+        except _ERROR_TYPES:
+            logger.debug(
+                "ACP Viking transcript create_session skipped",
+                session_id=archive_session_id,
+                exc_info=True,
+            )
+
+        for message in messages:
+            if "parts" in message:
+                await client.add_message(
+                    archive_session_id,
+                    message["role"],
+                    parts=message["parts"],
+                )
+            else:
+                await client.add_message(
+                    archive_session_id,
+                    message["role"],
+                    content=str(message.get("content", "")),
+                )
+
+        commit_kwargs: dict[str, Any] = {}
+        if self.transcript_keep_recent_count > 0:
+            commit_kwargs["keep_recent_count"] = self.transcript_keep_recent_count
+        return await client.commit_session(archive_session_id, **commit_kwargs)
 
 
 def _expand(value: str | None) -> str | None:
@@ -257,6 +427,46 @@ def _dump_update(update: Any) -> dict[str, Any]:
     if isinstance(update, dict):
         return update
     return {"value": str(update)}
+
+
+def _content_text(payload: dict[str, Any]) -> str:
+    content = payload.get("content")
+    if isinstance(content, dict):
+        text = content.get("text")
+        return text if isinstance(text, str) else ""
+    text = payload.get("text")
+    return text if isinstance(text, str) else ""
+
+
+def _tool_part_from_update(payload: dict[str, Any]) -> dict[str, Any]:
+    tool_id = payload.get("toolCallId") or payload.get("tool_call_id")
+    tool_name = payload.get("toolName") or payload.get("tool_name") or payload.get("title")
+    if not isinstance(tool_name, str) or not tool_name.strip():
+        kind = payload.get("kind")
+        tool_name = kind if isinstance(kind, str) and kind.strip() else "tool"
+
+    part: dict[str, Any] = {
+        "type": "tool",
+        "tool_name": tool_name,
+        "tool_status": _tool_status(payload.get("status")),
+    }
+    if isinstance(tool_id, str) and tool_id.strip():
+        part["tool_id"] = tool_id
+    raw_input = payload.get("rawInput") or payload.get("raw_input")
+    if raw_input is not None:
+        part["tool_input"] = raw_input
+    raw_output = payload.get("rawOutput") or payload.get("raw_output")
+    if raw_output is not None:
+        part["tool_output"] = raw_output
+    return part
+
+
+def _tool_status(status: Any) -> str:
+    if status in ("completed", "success", "succeeded"):
+        return "completed"
+    if status in ("failed", "error"):
+        return "error"
+    return "running"
 
 
 class ACPVikingProtocolObserver:
@@ -327,7 +537,7 @@ def _should_flush_protocol_event(method: str, event_type: str) -> bool:
         return False
     if event_type in ("rpc_response", "rpc_error"):
         return method.startswith(("session/", "elicitation/", "terminal/", "fs/"))
-    return event_type == "rpc_notification" and method.startswith("session/")
+    return False
 
 
 def _extract_session_id(value: Any) -> str:
