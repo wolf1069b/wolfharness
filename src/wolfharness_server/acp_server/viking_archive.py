@@ -132,9 +132,7 @@ class ACPVikingEventArchive:
             async with self._lock:
                 seq = self._sequence.get(effective_session_id, 0) + 1
                 self._sequence[effective_session_id] = seq
-                event_id = (
-                    f"rpc:{direction}:{rpc_id}" if rpc_id is not None else f"rpc:{direction}"
-                )
+                event_id = f"rpc:{direction}:{rpc_id}" if rpc_id is not None else f"rpc:{direction}"
                 record = {
                     "sequence": seq,
                     "created_at": datetime.now(UTC).isoformat(),
@@ -151,8 +149,7 @@ class ACPVikingEventArchive:
                 pending = self._pending.setdefault(effective_session_id, [])
                 pending.append(record)
                 should_flush = len(pending) >= self.batch_size or (
-                    self.flush_on_turn_complete
-                    and _should_flush_protocol_event(method, event_type)
+                    self.flush_on_turn_complete and _should_flush_protocol_event(method, event_type)
                 )
             if should_flush:
                 self.schedule_flush(effective_session_id)
@@ -237,9 +234,9 @@ class ACPVikingEventArchive:
                 if records:
                     self._pending.setdefault(session_id, records[:0])[:0] = records
                 if transcript_messages:
-                    self._transcript_pending.setdefault(session_id, transcript_messages[:0])[
-                        :0
-                    ] = transcript_messages
+                    self._transcript_pending.setdefault(session_id, transcript_messages[:0])[:0] = (
+                        transcript_messages
+                    )
             logger.warning("ACP Viking archive flush failed", session_id=session_id, exc_info=True)
 
     async def flush_all(self) -> None:

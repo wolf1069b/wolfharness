@@ -785,13 +785,13 @@ class MCPManager:
                 toolset_cache[client_id] = toolset
 
             local_toolset = (
-                PrefixedToolset(toolset, server.tool_prefix)
-                if server.tool_prefix
-                else toolset
+                PrefixedToolset(toolset, server.tool_prefix) if server.tool_prefix else toolset
             )
             return MCP(
                 url=_derive_url(server),
-                local=local_toolset,
+                # pydantic-ai accepts AbstractToolset at runtime, but MCP.__init__
+                # currently types local= more narrowly than NativeOrLocalTool.
+                local=local_toolset,  # type: ignore[arg-type]
                 native=False,
                 id=server.name or server.client_id,
                 allowed_tools=(
