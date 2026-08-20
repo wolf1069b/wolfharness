@@ -16,6 +16,7 @@ Tools exposed:
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Annotated
 
 import logfire
@@ -29,6 +30,8 @@ from wolfharness.capabilities.extension_registry import Scope, ScopeLevel
 from wolfharness.capabilities.resource_protocols import (
     CompletionArgument,
     CompletionResult,
+    ResourceEntry,
+    ResourceTemplateEntry,
 )
 
 
@@ -43,6 +46,11 @@ _HEADER_LINE_COUNT = 2
 _DEFAULT_LIST_LIMIT = 50
 _DEFAULT_READ_TEXT_LIMIT = 10_000
 _MAX_COMPLETION_SUGGESTIONS = 100
+
+# Max wall-clock time a single provider may take to answer a listing request.
+# Providers that time out are skipped with a warning instead of blocking the
+# whole listing.
+_LIST_PROVIDER_TIMEOUT = 10.0  # seconds
 
 
 class ResourceCapability(AbstractCapability[AgentDepsT]):
@@ -88,8 +96,9 @@ class ResourceCapability(AbstractCapability[AgentDepsT]):
             "You have access to resource management tools:\n"
             "- list_resources: List available resources from connected MCP "
             "servers and local files (paginated, use offset to page through)\n"
-            "- read_resource: Read content from a resource by URI (supports "
-            "text and binary content; large text is truncated)\n"
+            "- read_resource: Read content from a resource URI (e.g. mcp://, "
+            "file://, viking://, optionally http(s) for servers that use web "
+            "URIs; web pages are usually better read with a web fetch tool)\n"
             "- resource_exists: Check if a resource exists\n"
             "- list_resource_templates: List URI templates for dynamic "
             "resource discovery (paginated, use offset to page through)\n"
@@ -208,45 +217,52 @@ class ResourceCapability(AbstractCapability[AgentDepsT]):
             return "No resources available."
 
         scope = self._make_scope(agent_ctx)
-        rows: list[str] = []
-
-        # ResourceAccess providers
-        for resource_cap in registry.get_resource_access(scope):
-            source = type(resource_cap).__name__
-            try:
-                resource_entries = await resource_cap.list_resources()
-            except Exception:  # noqa: BLE001
-                logfire.warning(
-                    "Failed to list resources from {source}",
-                    source=source,
-                )
-                continue
-            rows.extend(
-                f"{source:<25} {entry.uri:<45} {entry.name:<20} "
-                f"{entry.description:<30} {entry.mime_type:<15}"
-                for entry in resource_entries
-            )
-
-        if not rows:
+        provider_caps = registry.get_resource_access(scope)
+        if not provider_caps:
             return "No resources available."
 
-        total = len(rows)
-        paginated = rows[offset : offset + limit]
+        # Query all providers concurrently; a slow or unreachable provider
+        # must not block the rest. Per-provider timeout bounds the total wait.
+        gathered = await asyncio.gather(
+            *[
+                asyncio.wait_for(cap.list_resources(), timeout=_LIST_PROVIDER_TIMEOUT)
+                for cap in provider_caps
+            ],
+            return_exceptions=True,
+        )
 
-        if not paginated:
+        source_entries: list[tuple[str, ResourceEntry]] = []
+        for cap, result in zip(provider_caps, gathered, strict=True):
+            if isinstance(result, BaseException):
+                logfire.warning(
+                    "Failed to list resources from {source}",
+                    source=type(cap).__name__,
+                )
+                continue
+            source = type(cap).__name__
+            source_entries.extend((source, entry) for entry in result)
+
+        total = len(source_entries)
+        page = source_entries[offset : offset + limit]
+
+        if not page:
             if offset > 0:
                 return f"No resources at offset {offset}. Total: {total} resource(s)."
             return "No resources available."
 
         header = f"{'Source':<25} {'URI':<45} {'Name':<20} {'Description':<30} {'MIME Type':<15}"
         lines = [header, "-" * len(header)]
-        lines.extend(paginated)
+        lines.extend(
+            f"{source:<25} {entry.uri:<45} {entry.name:<20} "
+            f"{entry.description:<30} {entry.mime_type:<15}"
+            for source, entry in page
+        )
 
-        remaining = total - offset - len(paginated)
+        remaining = total - offset - len(page)
         if remaining > 0:
             lines.append(
                 f"\n... {remaining} more resources. "
-                f"Call list_resources with offset={offset + len(paginated)} to see more."
+                f"Call list_resources with offset={offset + len(page)} to see more."
             )
 
         return "\n".join(lines)
@@ -389,42 +405,53 @@ class ResourceCapability(AbstractCapability[AgentDepsT]):
             return "No resource templates available."
 
         scope = self._make_scope(agent_ctx)
-        rows: list[str] = []
-
-        for cap in registry.get_resource_template_access(scope):
-            source = type(cap).__name__
-            try:
-                entries = await cap.list_resource_templates()
-            except Exception:  # noqa: BLE001
-                logfire.warning(
-                    "Failed to list resource templates from {source}",
-                    source=source,
-                )
-                continue
-            rows.extend(
-                f"{source:<25} {entry.uri_template:<40} {entry.name:<20} "
-                f"{entry.title:<15} {entry.description:<30} {entry.mime_type:<15}"
-                for entry in entries
-            )
-
-        if not rows:
+        provider_caps = registry.get_resource_template_access(scope)
+        if not provider_caps:
             return "No resource templates available."
 
-        total = len(rows)
-        paginated = rows[offset : offset + limit]
+        gathered = await asyncio.gather(
+            *[
+                asyncio.wait_for(cap.list_resource_templates(), timeout=_LIST_PROVIDER_TIMEOUT)
+                for cap in provider_caps
+            ],
+            return_exceptions=True,
+        )
+
+        source_entries: list[tuple[str, ResourceTemplateEntry]] = []
+        for cap, result in zip(provider_caps, gathered, strict=True):
+            if isinstance(result, BaseException):
+                logfire.warning(
+                    "Failed to list resource templates from {source}",
+                    source=type(cap).__name__,
+                )
+                continue
+            source = type(cap).__name__
+            source_entries.extend((source, entry) for entry in result)
+
+        total = len(source_entries)
+        page = source_entries[offset : offset + limit]
+
+        if not page:
+            if offset > 0:
+                return f"No resource templates at offset {offset}. Total: {total} template(s)."
+            return "No resource templates available."
 
         header = (
             f"{'Source':<25} {'URI Template':<40} {'Name':<20} "
             f"{'Title':<15} {'Description':<30} {'MIME Type':<15}"
         )
         lines = [header, "-" * len(header)]
-        lines.extend(paginated)
+        lines.extend(
+            f"{source:<25} {entry.uri_template:<40} {entry.name:<20} "
+            f"{entry.title:<15} {entry.description:<30} {entry.mime_type:<15}"
+            for source, entry in page
+        )
 
-        remaining = total - offset - len(paginated)
+        remaining = total - offset - len(page)
         if remaining > 0:
             lines.append(
                 f"\n... {remaining} more templates. "
-                f"Call list_resource_templates with offset={offset + len(paginated)} to see more."
+                f"Call list_resource_templates with offset={offset + len(page)} to see more."
             )
 
         return "\n".join(lines)

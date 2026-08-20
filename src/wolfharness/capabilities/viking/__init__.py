@@ -878,18 +878,24 @@ class VikingCapability(AbstractCapability[Any]):
         if not isinstance(top_entries, list):
             return []
 
-        all_entries: list[dict[str, Any]] = []
-        for entry in top_entries:
-            if not isinstance(entry, dict):
-                continue
-            if entry.get("isDir"):
-                sub_uri = str(entry.get("uri") or "")
-                if sub_uri:
-                    sub_entries = await client.ls(sub_uri, recursive=True, node_limit=5000)
-                    if isinstance(sub_entries, list):
-                        all_entries.extend(e for e in sub_entries if isinstance(e, dict))
-            else:
-                all_entries.append(entry)
+        sub_uris = [
+            str(entry.get("uri"))
+            for entry in top_entries
+            if isinstance(entry, dict) and entry.get("isDir") and entry.get("uri")
+        ]
+        # Per-directory recursive ls in parallel; a slow directory must not
+        # serialize the rest.
+        sub_results = await asyncio.gather(
+            *[client.ls(sub_uri, recursive=True, node_limit=5000) for sub_uri in sub_uris],
+            return_exceptions=True,
+        )
+
+        all_entries: list[dict[str, Any]] = [
+            entry for entry in top_entries if isinstance(entry, dict) and not entry.get("isDir")
+        ]
+        for result in sub_results:
+            if isinstance(result, list):
+                all_entries.extend(e for e in result if isinstance(e, dict))
 
         resources: list[ResourceEntry] = []
         for entry in all_entries:

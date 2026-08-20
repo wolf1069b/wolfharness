@@ -16,7 +16,7 @@ import asyncio
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import mcp.types
 from pydantic import AnyUrl
@@ -366,6 +366,45 @@ async def test_list_resources_delegation() -> None:
     assert result[0].name == "res1"
     assert result[0].description == "Resource 1"
     assert result[0].mime_type == "text/plain"
+
+
+class FlakySessionPool(FakeSessionPool):
+    """Session pool that fails the first connection attempt, then succeeds."""
+
+    def __init__(self, client: FakeMCPClient) -> None:
+        super().__init__(client)
+        self.fail_first = True
+
+    async def get_client(self, config: Any, skill_name: str | None = None) -> FakeMCPClient:
+        if self.fail_first:
+            self.fail_first = False
+            raise RuntimeError("connection refused")
+        return await super().get_client(config, skill_name=skill_name)
+
+
+@pytest.mark.anyio
+async def test_reconnect_clears_cached_resources() -> None:
+    """Cache from a previous connection is dropped after a reconnect.
+
+    A restarted server never sends ``resources/list_changed``; serving the
+    old listing would keep ``resource_exists`` returning stale answers.
+    """
+    from wolfharness.capabilities import mcp_server_cap as msc
+
+    client = FakeMCPClient(_resources=[_make_resource("file:///path1", "res1")])
+    cap = McpServerCap(config=_make_config(), session_pool=FlakySessionPool(client))
+
+    resources = await cap.list_resources()
+    assert len(resources) == 1
+    # Force a reconnect by simulating a dropped connection.
+    cap._client = None
+    cap._resources_cache = resources
+
+    with patch.object(msc.asyncio, "sleep", AsyncMock()):
+        await cap._ensure_client()
+
+    assert cap._resources_cache is None
+    assert cap._resource_templates_cache is None
 
 
 @pytest.mark.anyio
