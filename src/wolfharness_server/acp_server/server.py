@@ -20,10 +20,7 @@ from wolfharness_config.pool_server import ACPPoolServerConfig
 from wolfharness_server import BaseServer
 from wolfharness_server.acp_server.acp_agent import AgentPoolACPAgent
 from wolfharness_server.acp_server.session_manager import ACPSessionManager
-from wolfharness_server.acp_server.viking_archive import (
-    ACPVikingEventArchive,
-    ACPVikingProtocolObserver,
-)
+from wolfharness_server.acp_server.viking_archive import ACPVikingEventArchive
 
 
 if TYPE_CHECKING:
@@ -332,8 +329,6 @@ class ACPServer(BaseServer):
         observers = []
         if self.show_events or self.show_events_detailed:
             observers.append(_acp_event_observer(show_detailed=self.show_events_detailed))
-        if viking_archive.enabled:
-            observers.append(ACPVikingProtocolObserver(viking_archive))
         self.log.info("ACP server started")
         try:
             await serve(

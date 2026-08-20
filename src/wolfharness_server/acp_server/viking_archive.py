@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
-import json
 import os
 import re
 from typing import Any
+
+import logfire
 
 from wolfharness.log import get_logger
 
@@ -16,6 +16,14 @@ from wolfharness.log import get_logger
 logger = get_logger(__name__)
 
 _ERROR_TYPES = (RuntimeError, OSError, TimeoutError, ValueError, TypeError, ImportError)
+_MIN_SIGNAL_CJK_CHARS = 4
+_MIN_SIGNAL_ALNUM_CHARS = 6
+_MIN_SIGNAL_TOTAL_CHARS = 12
+_ACK_RE = re.compile(
+    r"^(?:ok|okay|k|yes|yep|no|nope|thanks|thank you|thx|done|"
+    r"收到|好的|好|嗯|可以|继续|不用|不需要|没了|好了)[.!?\u3002\uff01\uff1f\s]*$",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -30,9 +38,9 @@ class ACPVikingEventArchive:
     batch_size: int = 25
     flush_on_turn_complete: bool = True
     transcript_enabled: bool = True
-    transcript_keep_recent_count: int = 10
+    transcript_keep_recent_count: int = 0
     _client: Any = field(default=None, init=False, repr=False)
-    _pending: dict[str, list[dict[str, Any]]] = field(default_factory=dict, init=False, repr=False)
+    _pending_update_count: dict[str, int] = field(default_factory=dict, init=False, repr=False)
     _transcript_pending: dict[str, list[dict[str, Any]]] = field(
         default_factory=dict,
         init=False,
@@ -43,7 +51,6 @@ class ACPVikingEventArchive:
         init=False,
         repr=False,
     )
-    _sequence: dict[str, int] = field(default_factory=dict, init=False, repr=False)
     _tasks: set[asyncio.Task[None]] = field(default_factory=set, init=False, repr=False)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
 
@@ -53,11 +60,10 @@ class ACPVikingEventArchive:
         if config is None or getattr(config, "enabled", False) is not True:
             return cls(enabled=False)
         api_key = _expand(getattr(config, "api_key", None) or os.getenv("VIKING_MCP_API_KEY"))
-        url = _expand(
-            getattr(config, "url", None)
-            or os.getenv("VIKING_MCP_URL")
-            or "http://viking.ai.rootcloud.info"
-        )
+        url = _expand(getattr(config, "url", None) or os.getenv("VIKING_MCP_URL"))
+        if not url:
+            logger.warning("ACP Viking archive disabled: missing Viking URL")
+            return cls(enabled=False)
         user = _expand(getattr(config, "user", None) or os.getenv("VIKING_MCP_USER"))
         return cls(
             enabled=True,
@@ -68,7 +74,7 @@ class ACPVikingEventArchive:
             batch_size=int(getattr(config, "batch_size", 25)),
             flush_on_turn_complete=bool(getattr(config, "flush_on_turn_complete", True)),
             transcript_enabled=bool(getattr(config, "transcript_enabled", True)),
-            transcript_keep_recent_count=int(getattr(config, "transcript_keep_recent_count", 10)),
+            transcript_keep_recent_count=int(getattr(config, "transcript_keep_recent_count", 0)),
         )
 
     async def record_update(
@@ -79,33 +85,20 @@ class ACPVikingEventArchive:
         event_id: Any,
         update: Any,
     ) -> None:
-        """Buffer an ACP update and schedule archive writes when needed."""
+        """Buffer an ACP update for readable transcript archival."""
         if not self.enabled:
             return
+        _ = event_id
         try:
             payload = _dump_update(update)
             event_type = str(payload.get("sessionUpdate") or payload.get("session_update") or "")
             session_id = source_session_id or consumer_session_id
             async with self._lock:
-                seq = self._sequence.get(session_id, 0) + 1
-                self._sequence[session_id] = seq
-                record = {
-                    "sequence": seq,
-                    "created_at": datetime.now(UTC).isoformat(),
-                    "session_id": session_id,
-                    "consumer_session_id": consumer_session_id,
-                    "source_session_id": source_session_id,
-                    "event_id": str(event_id),
-                    "event_type": event_type,
-                    "message_id": payload.get("messageId") or payload.get("message_id"),
-                    "tool_call_id": payload.get("toolCallId") or payload.get("tool_call_id"),
-                    "update": payload,
-                }
-                pending = self._pending.setdefault(session_id, [])
-                pending.append(record)
                 if self.transcript_enabled:
                     self._buffer_transcript_update_locked(session_id, payload, event_type)
-                should_flush = len(pending) >= self.batch_size or (
+                pending_count = self._pending_update_count.get(session_id, 0) + 1
+                self._pending_update_count[session_id] = pending_count
+                should_flush = pending_count >= self.batch_size or (
                     self.flush_on_turn_complete and event_type == "turn_complete"
                 )
             if should_flush:
@@ -113,126 +106,38 @@ class ACPVikingEventArchive:
         except _ERROR_TYPES:
             logger.warning("ACP Viking archive record failed", exc_info=True)
 
-    async def record_protocol_frame(
-        self,
-        *,
-        session_id: str,
-        direction: str,
-        message: dict[str, Any],
-        request_method: str = "",
-    ) -> None:
-        """Buffer a raw ACP JSON-RPC frame for complete frontend interaction audit."""
-        if not self.enabled:
-            return
-        try:
-            rpc_id = message.get("id")
-            method = str(message.get("method") or request_method or "")
-            event_type = _protocol_event_type(message)
-            effective_session_id = session_id or _extract_session_id(message) or "connection"
-            async with self._lock:
-                seq = self._sequence.get(effective_session_id, 0) + 1
-                self._sequence[effective_session_id] = seq
-                event_id = f"rpc:{direction}:{rpc_id}" if rpc_id is not None else f"rpc:{direction}"
-                record = {
-                    "sequence": seq,
-                    "created_at": datetime.now(UTC).isoformat(),
-                    "session_id": effective_session_id,
-                    "event_id": event_id,
-                    "event_type": event_type,
-                    "direction": direction,
-                    "rpc_id": rpc_id,
-                    "method": method,
-                    "message_id": _extract_message_id(message),
-                    "tool_call_id": _extract_tool_call_id(message),
-                    "protocol": message,
-                }
-                pending = self._pending.setdefault(effective_session_id, [])
-                pending.append(record)
-                should_flush = len(pending) >= self.batch_size or (
-                    self.flush_on_turn_complete and _should_flush_protocol_event(method, event_type)
-                )
-            if should_flush:
-                self.schedule_flush(effective_session_id)
-        except _ERROR_TYPES:
-            logger.warning("ACP Viking protocol archive record failed", exc_info=True)
-
-    def schedule_protocol_frame(
-        self,
-        *,
-        session_id: str,
-        direction: str,
-        message: dict[str, Any],
-        request_method: str = "",
-    ) -> None:
-        """Schedule raw protocol frame recording without blocking JSON-RPC handling."""
-        if not self.enabled:
-            return
-        task = asyncio.create_task(
-            self.record_protocol_frame(
-                session_id=session_id,
-                direction=direction,
-                message=message,
-                request_method=request_method,
-            )
-        )
-        self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
-
     def schedule_flush(self, session_id: str) -> None:
         """Schedule a background flush for one session."""
         if not self.enabled:
             return
-        task = asyncio.create_task(self.flush_session(session_id))
+        task = asyncio.create_task(self._flush_session_with_span(session_id))
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
+    async def _flush_session_with_span(self, session_id: str) -> None:
+        with logfire.span("acp_viking_archive.flush_session", session_id=session_id):
+            await self.flush_session(session_id)
+
     async def flush_session(self, session_id: str) -> None:
-        """Flush buffered events for one session to Viking."""
+        """Flush buffered transcript messages for one session to Viking."""
         async with self._lock:
-            records = self._pending.pop(session_id, [])
+            pending_count = self._pending_update_count.pop(session_id, 0)
             transcript_messages = self._pop_transcript_locked(session_id)
-        if not records and not transcript_messages:
+        if not transcript_messages:
             return
         try:
             client = await self._ensure_client()
-            uri = self._events_uri(session_id)
-            if records:
-                content = "".join(
-                    json.dumps(record, ensure_ascii=False) + "\n" for record in records
-                )
-                await client.write(uri, content, mode="append", wait=False, processing_mode="raw")
-            transcript_commit = None
-            if transcript_messages:
-                transcript_commit = await self._write_transcript(
-                    client,
-                    session_id,
-                    transcript_messages,
-                )
-            await client.write(
-                self._memory_context_uri(session_id),
-                json.dumps(
-                    {
-                        "session_id": session_id,
-                        "archive_session_id": self._archive_session_id(session_id),
-                        "events_uri": uri,
-                        "last_event_sequence": records[-1]["sequence"] if records else None,
-                        "last_event_type": records[-1]["event_type"] if records else None,
-                        "transcript_message_count": len(transcript_messages),
-                        "transcript_commit": transcript_commit,
-                        "updated_at": datetime.now(UTC).isoformat(),
-                        "memory_policy": "archive-all-events-and-readable-transcript",
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-                mode="replace",
-                wait=False,
-                processing_mode="raw",
+            await self._write_transcript(
+                client,
+                session_id,
+                transcript_messages,
             )
         except _ERROR_TYPES:
             async with self._lock:
-                if records:
-                    self._pending.setdefault(session_id, records[:0])[:0] = records
+                if pending_count:
+                    self._pending_update_count[session_id] = (
+                        self._pending_update_count.get(session_id, 0) + pending_count
+                    )
                 if transcript_messages:
                     self._transcript_pending.setdefault(session_id, transcript_messages[:0])[:0] = (
                         transcript_messages
@@ -241,7 +146,7 @@ class ACPVikingEventArchive:
 
     async def flush_all(self) -> None:
         """Flush all buffered events and await in-flight writes."""
-        session_ids = set(self._pending)
+        session_ids = set(self._pending_update_count) | set(self._transcript_pending)
         await asyncio.gather(*(self.flush_session(session_id) for session_id in session_ids))
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
@@ -279,12 +184,6 @@ class ACPVikingEventArchive:
         except _ERROR_TYPES:
             logger.debug("ACP Viking archive user resolution failed", exc_info=True)
 
-    def _events_uri(self, session_id: str) -> str:
-        return f"{self._archive_base_uri(session_id)}/events.jsonl"
-
-    def _memory_context_uri(self, session_id: str) -> str:
-        return f"{self._archive_base_uri(session_id)}/memory_context.json"
-
     def _archive_session_id(self, session_id: str) -> str:
         return f"{self.session_prefix}-{_safe_identifier(session_id)}"
 
@@ -302,7 +201,7 @@ class ACPVikingEventArchive:
         message_id = str(
             payload.get("messageId")
             or payload.get("message_id")
-            or f"{event_type}:{self._sequence.get(session_id, 0)}"
+            or f"{event_type}:{self._pending_update_count.get(session_id, 0)}"
         )
         if event_type == "user_message_chunk":
             self._append_chunk_locked(session_id, "user", message_id, text)
@@ -342,7 +241,7 @@ class ACPVikingEventArchive:
             parts = message.get("parts")
             if isinstance(parts, list) and parts:
                 text = parts[0].get("text") if isinstance(parts[0], dict) else ""
-                if isinstance(text, str) and text.strip():
+                if isinstance(text, str) and _should_capture_text(text):
                     self._transcript_pending.setdefault(session_id, []).append(message)
 
     def _append_transcript_locked(
@@ -435,6 +334,25 @@ def _content_text(payload: dict[str, Any]) -> str:
     return text if isinstance(text, str) else ""
 
 
+def _should_capture_text(text: str) -> bool:
+    compact = re.sub(r"\s+", " ", str(text or "")).strip()
+    if not compact:
+        return False
+    if compact.lower().startswith("[openviking-memory]"):
+        return False
+    if _ACK_RE.match(compact):
+        return False
+    if not re.search(r"[a-z0-9\u3400-\u9fff]", compact, re.IGNORECASE):
+        return False
+    cjk = len(re.findall(r"[\u3400-\u9fff]", compact))
+    alnum = len(re.findall(r"[a-z0-9]", compact, re.IGNORECASE))
+    return (
+        cjk >= _MIN_SIGNAL_CJK_CHARS
+        or alnum >= _MIN_SIGNAL_ALNUM_CHARS
+        or len(compact) >= _MIN_SIGNAL_TOTAL_CHARS
+    )
+
+
 def _tool_part_from_update(payload: dict[str, Any]) -> dict[str, Any]:
     tool_id = payload.get("toolCallId") or payload.get("tool_call_id")
     tool_name = payload.get("toolName") or payload.get("tool_name") or payload.get("title")
@@ -464,117 +382,3 @@ def _tool_status(status: Any) -> str:
     if status in ("failed", "error"):
         return "error"
     return "running"
-
-
-class ACPVikingProtocolObserver:
-    """Connection stream observer that archives raw ACP JSON-RPC frames."""
-
-    def __init__(self, archive: ACPVikingEventArchive) -> None:
-        self.archive = archive
-        self._pending_requests: dict[tuple[str, Any], tuple[str, str]] = {}
-
-    def __call__(self, event: Any) -> None:
-        """Record a raw incoming/outgoing JSON-RPC frame."""
-        if not self.archive.enabled:
-            return
-        message = getattr(event, "message", None)
-        direction = getattr(event, "direction", "")
-        if not isinstance(message, dict) or direction not in ("incoming", "outgoing"):
-            return
-
-        rpc_id = message.get("id")
-        method = message.get("method")
-        if isinstance(method, str):
-            session_id = _extract_session_id(message)
-            if rpc_id is not None:
-                self._pending_requests[(direction, rpc_id)] = (method, session_id)
-            self.archive.schedule_protocol_frame(
-                session_id=session_id,
-                direction=direction,
-                message=message,
-                request_method=method,
-            )
-            return
-
-        if rpc_id is None:
-            self.archive.schedule_protocol_frame(
-                session_id=_extract_session_id(message),
-                direction=direction,
-                message=message,
-            )
-            return
-
-        request_direction = "outgoing" if direction == "incoming" else "incoming"
-        request_method, request_session_id = self._pending_requests.pop(
-            (request_direction, rpc_id),
-            ("", ""),
-        )
-        session_id = request_session_id or _extract_session_id(message)
-        self.archive.schedule_protocol_frame(
-            session_id=session_id,
-            direction=direction,
-            message=message,
-            request_method=request_method,
-        )
-
-
-def _protocol_event_type(message: dict[str, Any]) -> str:
-    if "method" in message and "id" in message:
-        return "rpc_request"
-    if "method" in message:
-        return "rpc_notification"
-    if "error" in message:
-        return "rpc_error"
-    return "rpc_response"
-
-
-def _should_flush_protocol_event(method: str, event_type: str) -> bool:
-    """Flush when a frontend interaction reaches a natural protocol boundary."""
-    if not method:
-        return False
-    if event_type in ("rpc_response", "rpc_error"):
-        return method.startswith(("session/", "elicitation/", "terminal/", "fs/"))
-    return False
-
-
-def _extract_session_id(value: Any) -> str:
-    if not isinstance(value, dict):
-        return ""
-    for key in ("sessionId", "session_id"):
-        item = value.get(key)
-        if isinstance(item, str) and item.strip():
-            return item.strip()
-    for key in ("params", "result"):
-        nested = value.get(key)
-        if isinstance(nested, dict):
-            found = _extract_session_id(nested)
-            if found:
-                return found
-    return ""
-
-
-def _extract_message_id(value: Any) -> str | None:
-    item = _extract_nested_value(value, ("messageId", "message_id"))
-    return item if isinstance(item, str) else None
-
-
-def _extract_tool_call_id(value: Any) -> str | None:
-    item = _extract_nested_value(value, ("toolCallId", "tool_call_id"))
-    return item if isinstance(item, str) else None
-
-
-def _extract_nested_value(value: Any, keys: tuple[str, ...]) -> Any:
-    if isinstance(value, dict):
-        for key in keys:
-            if key in value:
-                return value[key]
-        for item in value.values():
-            found = _extract_nested_value(item, keys)
-            if found is not None:
-                return found
-    if isinstance(value, list):
-        for item in value:
-            found = _extract_nested_value(item, keys)
-            if found is not None:
-                return found
-    return None

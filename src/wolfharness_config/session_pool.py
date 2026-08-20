@@ -15,7 +15,7 @@ class ACPVikingArchiveConfig(Schema):
     """Whether ACP session updates are archived to Viking."""
 
     url: str | None = Field(default=None, title="Viking URL")
-    """Viking server URL. Falls back to ``VIKING_MCP_URL`` or the public IROOT Viking URL."""
+    """Viking server URL. Falls back to ``VIKING_MCP_URL``."""
 
     api_key: str | None = Field(default=None, title="Viking API key")
     """Viking API key. Environment variables are expanded at runtime."""
@@ -36,11 +36,11 @@ class ACPVikingArchiveConfig(Schema):
     """Whether ACP session updates are also written as readable Viking session messages."""
 
     transcript_keep_recent_count: int = Field(
-        default=10,
+        default=0,
         ge=0,
         title="Transcript keep recent count",
     )
-    """Recent transcript messages retained in the live session after commit."""
+    """Recent transcript messages retained in the live session after commit. 0 keeps all."""
 
     model_config = ConfigDict(frozen=True)
 

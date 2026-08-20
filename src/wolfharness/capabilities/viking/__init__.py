@@ -286,6 +286,11 @@ class VikingCapability(AbstractCapability[Any]):
     _pending_tasks: set[asyncio.Task[None]] = field(default_factory=set, repr=False)
     """References to fire-and-forget ingestion tasks. Prevents GC and
     enables ``after_run()`` to await them before client teardown."""
+    _failed_ingest_batches: list[tuple[list[dict[str, Any]], str, str, int, int]] = field(
+        default_factory=list,
+        repr=False,
+    )
+    """Auto-ingest batches that already lost their source cursor but still need retry."""
 
     @property
     def has_wrap_node_run(self) -> bool:
@@ -565,6 +570,7 @@ class VikingCapability(AbstractCapability[Any]):
             _remember_pending=[],
             _remember_drain_failures=0,
             _pending_tasks=set(),
+            _failed_ingest_batches=[],
         )
 
     def get_instructions(self) -> str | None:
@@ -1723,10 +1729,7 @@ class VikingCapability(AbstractCapability[Any]):
             logger.warning("auto_recall: failed to ensure client", exc_info=True)
             return request_context
 
-        # Extract session_id from ctx.deps if available
-        from wolfharness.capabilities.viking.tools import _get_session_id
-
-        session_id = _get_session_id(ctx)
+        session_id = self._resolve_recall_session_id(ctx)
 
         try:
             session_context: dict[str, Any] | None = None
@@ -1787,6 +1790,12 @@ class VikingCapability(AbstractCapability[Any]):
             logger.warning("auto_recall: recall failed", exc_info=True)
             return request_context
 
+    def _resolve_recall_session_id(self, ctx: RunContext[Any]) -> str | None:
+        """Return the Viking session id used for session-aware recall."""
+        from wolfharness.capabilities.viking.tools import _get_session_id
+
+        return _get_session_id(ctx)
+
     # ---- Auto Conversation Ingestion ----
 
     async def _handle_auto_ingest(
@@ -1799,8 +1808,8 @@ class VikingCapability(AbstractCapability[Any]):
         Called from ``before_model_request`` (wired in Group 7). Extracts
         new messages since ``_last_ingested_idx``, sanitizes them, and
         fires-and-forget an ``asyncio.create_task`` to write them to a
-        new Viking session. Updates the ingestion cursor regardless of
-        success or failure (to avoid retrying on every subsequent turn).
+        new Viking session. Failed batches are retained for retry so
+        compaction cannot erase the only copy of an uncommitted turn.
 
         When ``auto_ingest_mode`` is ``"sync"``, awaits the ingestion
         directly instead of spawning a background task.
@@ -1820,6 +1829,17 @@ class VikingCapability(AbstractCapability[Any]):
         current_count = len(messages)
 
         # No new messages since last ingestion
+        if current_count <= self._last_ingested_idx and not self._failed_ingest_batches:
+            return request_context
+
+        try:
+            client = await self._ensure_client()
+        except Exception:
+            logger.warning("auto_ingest: failed to ensure client", exc_info=True)
+            return request_context
+
+        await self._retry_failed_ingest_batches(client)
+
         if current_count <= self._last_ingested_idx:
             return request_context
 
@@ -1834,14 +1854,10 @@ class VikingCapability(AbstractCapability[Any]):
         if self.auto_ingest_sanitize:
             pairs = [{"role": p["role"], "content": _sanitize_message(p["content"])} for p in pairs]
 
-        # Update cursor BEFORE ingestion to prevent retries on failure
+        previous_idx = self._last_ingested_idx
+        # Claim the range before scheduling to avoid duplicate concurrent ingestion.
+        # If the commit fails, the task rolls this back so the next boundary retries.
         self._last_ingested_idx = current_count
-
-        try:
-            client = await self._ensure_client()
-        except Exception:
-            logger.warning("auto_ingest: failed to ensure client", exc_info=True)
-            return request_context
 
         # Generate a unique session ID for this ingestion
         session_id = f"ingest-{uuid.uuid4().hex[:12]}"
@@ -1856,6 +1872,17 @@ class VikingCapability(AbstractCapability[Any]):
                     keep_recent_turns=self.auto_ingest_keep_recent_turns,
                 )
             except Exception:
+                if self._last_ingested_idx == current_count:
+                    self._last_ingested_idx = previous_idx
+                self._failed_ingest_batches.append(
+                    (
+                        list(pairs),
+                        session_id,
+                        self.auto_ingest_source_type,
+                        self.auto_ingest_keep_recent_turns,
+                        current_count,
+                    )
+                )
                 logger.warning("auto_ingest: ingestion failed", exc_info=True)
 
         if self.auto_ingest_mode == "sync":
@@ -1912,6 +1939,28 @@ class VikingCapability(AbstractCapability[Any]):
             logger.warning("remember: tail-flush failed", exc_info=True)
         return result
 
+    async def _retry_failed_ingest_batches(self, client: Any) -> None:
+        """Retry captured auto-ingest batches whose source messages may be gone."""
+        if not self._failed_ingest_batches:
+            return
+        pending = self._failed_ingest_batches
+        self._failed_ingest_batches = []
+        for pairs, session_id, source_type, keep_recent_turns, cursor_after in pending:
+            try:
+                await _ingest_conversation(
+                    client,
+                    pairs,
+                    session_id=session_id,
+                    source_type=source_type,
+                    keep_recent_turns=keep_recent_turns,
+                )
+                self._last_ingested_idx = max(self._last_ingested_idx, cursor_after)
+            except Exception:
+                self._failed_ingest_batches.append(
+                    (pairs, session_id, source_type, keep_recent_turns, cursor_after)
+                )
+                logger.warning("auto_ingest: retry failed", exc_info=True)
+
     async def _flush_tail(self, ctx: RunContext[Any]) -> None:
         """Flush pending remember intent and trailing messages at run end.
 
@@ -1929,11 +1978,17 @@ class VikingCapability(AbstractCapability[Any]):
         Args:
             ctx: The pydantic-ai run context.
         """
-        if not self.auto_ingest_enabled and not self._remember_pending:
+        if (
+            not self.auto_ingest_enabled
+            and not self._remember_pending
+            and not self._failed_ingest_batches
+        ):
             return
 
         messages = ctx.messages
         current_count = len(messages)
+        client = await self._ensure_client()
+        await self._retry_failed_ingest_batches(client)
         if current_count <= self._last_ingested_idx and not self._remember_pending:
             return
 
@@ -1950,7 +2005,6 @@ class VikingCapability(AbstractCapability[Any]):
                     "content": _MEMORY_INTENT_TEMPLATE.format(reason=reason),
                 })
 
-        client = await self._ensure_client()
         session_id = f"remember-{uuid.uuid4().hex[:12]}"
         await _ingest_conversation(
             client,

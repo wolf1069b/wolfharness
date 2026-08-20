@@ -92,8 +92,8 @@ def _extract_conversation_pairs(
         if isinstance(msg, ModelRequest):
             for part in msg.parts:
                 if isinstance(part, UserPromptPart):
-                    content = part.content
-                    if isinstance(content, str):
+                    content = _extract_text_content(part.content)
+                    if content:
                         pairs.append({"role": "user", "content": content})
         elif isinstance(msg, ModelResponse):
             text_parts = [p for p in msg.parts if isinstance(p, TextPart)]
@@ -113,7 +113,7 @@ def _extract_full_trace(
     text, this function extracts **all** part types from pydantic-ai messages
     and produces Viking-compatible ``{role, parts}`` dicts:
 
-    - ``UserPromptPart`` / ``SystemPromptPart`` → ``{"type": "text", "text": "..."}``
+    - ``UserPromptPart`` → ``{"type": "text", "text": "..."}``
     - ``TextPart`` / ``ThinkingPart`` → ``{"type": "text", "text": "..."}``
     - ``ToolCallPart`` → ``{"type": "tool", "tool_name": ..., "tool_status": "running", ...}``
     - ``ToolReturnPart`` → ``{"type": "tool", "tool_status": "completed"/"error"}``
@@ -128,7 +128,6 @@ def _extract_full_trace(
     """
     from pydantic_ai.messages import (
         ModelRequest,
-        SystemPromptPart,
         TextPart,
         ThinkingPart,
         ToolCallPart,
@@ -149,14 +148,18 @@ def _extract_full_trace(
                     parts = []
                 role = part_role
 
-            if isinstance(part, (UserPromptPart, SystemPromptPart)):
-                content = part.content if isinstance(part.content, str) else str(part.content)
-                if content.strip():
-                    parts.append({"type": "text", "text": _sanitize_message(content)})
+            if isinstance(part, UserPromptPart):
+                content = _extract_text_content(part.content)
+                if content:
+                    _append_text_part(parts, _sanitize_message(content))
 
-            elif isinstance(part, (TextPart, ThinkingPart)):
+            elif isinstance(part, TextPart):
                 if part.content.strip():
-                    parts.append({"type": "text", "text": _sanitize_message(part.content)})
+                    _append_text_part(parts, _sanitize_message(part.content))
+
+            elif isinstance(part, ThinkingPart):
+                if part.content.strip():
+                    _append_text_part(parts, _sanitize_message(part.content), subtype="thinking")
 
             elif isinstance(part, ToolCallPart):
                 tool_part: dict[str, Any] = {
@@ -190,13 +193,55 @@ def _extract_full_trace(
 
 
 def _trace_part_role(part: Any, *, default: str) -> str:
-    from pydantic_ai.messages import SystemPromptPart, ToolCallPart, ToolReturnPart, UserPromptPart
+    from pydantic_ai.messages import ToolCallPart, ToolReturnPart, UserPromptPart
 
     if isinstance(part, (ToolCallPart, ToolReturnPart)):
         return "assistant"
-    if isinstance(part, (SystemPromptPart, UserPromptPart)):
+    if isinstance(part, UserPromptPart):
         return "user"
     return default
+
+
+def _extract_text_content(content: Any) -> str:
+    """Extract human-readable text from pydantic-ai prompt content."""
+    if isinstance(content, str):
+        return content.strip()
+    if not isinstance(content, list):
+        return ""
+    chunks: list[str] = []
+    for item in content:
+        if isinstance(item, str):
+            text = item
+        elif isinstance(item, dict):
+            value = item.get("text") or item.get("content")
+            text = value if isinstance(value, str) else ""
+        else:
+            value = getattr(item, "text", None)
+            if not isinstance(value, str):
+                value = getattr(item, "content", None)
+            text = value if isinstance(value, str) else ""
+        if text.strip():
+            chunks.append(text.strip())
+    return "\n".join(chunks)
+
+
+def _append_text_part(
+    parts: list[dict[str, Any]],
+    text: str,
+    *,
+    subtype: str | None = None,
+) -> None:
+    """Append text while coalescing adjacent text chunks with matching subtype."""
+    stripped = text.strip()
+    if not stripped:
+        return
+    if parts and parts[-1].get("type") == "text" and parts[-1].get("subtype") == subtype:
+        parts[-1]["text"] = f'{parts[-1].get("text", "")}\n{stripped}'
+        return
+    part: dict[str, Any] = {"type": "text", "text": stripped}
+    if subtype is not None:
+        part["subtype"] = subtype
+    parts.append(part)
 
 
 def _serialize_tool_args(args: Any) -> Any:
@@ -220,15 +265,15 @@ def _serialize_tool_args(args: Any) -> Any:
 def _serialize_tool_output(content: Any) -> str:
     """Serialize tool return content to a string.
 
-    Truncates to 2000 chars to align with the OpenCode plugin's
-    ``captureToolMaxChars`` default.
+    Preserves the complete textual payload so Viking has the auditable
+    tool trace. Display-layer truncation should happen outside ingestion.
     """
     if isinstance(content, str):
-        return content[:2000]
+        return content
     try:
-        return json.dumps(content, ensure_ascii=False, default=str)[:2000]
+        return json.dumps(content, ensure_ascii=False, default=str)
     except (TypeError, ValueError):
-        return str(content)[:2000]
+        return str(content)
 
 
 async def _ingest_conversation(

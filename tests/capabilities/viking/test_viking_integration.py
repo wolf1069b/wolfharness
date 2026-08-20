@@ -18,7 +18,9 @@ from pydantic_ai.messages import (
     ModelResponse,
     SystemPromptPart,
     TextPart,
+    ToolCallPart,
     ToolReturn,
+    ToolReturnPart,
     UserPromptPart,
 )
 from pydantic_ai.models import ModelRequestContext, ModelRequestParameters
@@ -28,6 +30,7 @@ import yamling
 
 from wolfharness.capabilities.viking import VikingCapability
 from wolfharness.capabilities.viking.identity import VikingIdentity
+from wolfharness.capabilities.viking.ingest import _extract_full_trace
 from wolfharness.capabilities.viking.tools import build_tools
 from wolfharness_config.capabilities import VikingCapabilityConfig, build_capability
 
@@ -717,6 +720,102 @@ async def test_l2_auto_ingest_second_turn_triggers_ingestion() -> None:
 
     # Cursor should be advanced to the current message count
     assert cap._last_ingested_idx == 3
+
+
+@pytest.mark.asyncio
+async def test_l2_auto_ingest_rolls_back_cursor_when_commit_fails() -> None:
+    """L2: failed auto-ingest leaves the message range retryable."""
+    client = _make_mock_client()
+    client.commit_session = AsyncMock(side_effect=RuntimeError("viking unavailable"))
+    identity = VikingIdentity(account_id="acct", user_id="alice", role="user")
+
+    cfg = VikingCapabilityConfig(
+        mode="all",
+        auto_ingest_enabled=True,
+        auto_ingest_mode="sync",
+    )
+    cap = _build_cap_from_config(cfg, client, identity)
+
+    messages = [
+        ModelRequest(parts=[UserPromptPart(content="What is X?")]),
+        ModelResponse(parts=[TextPart(content="X is a thing.")]),
+    ]
+    rc = _make_request_context(messages)
+
+    await cap.before_model_request(_make_run_context(), rc)
+
+    assert cap._last_ingested_idx == 0
+    assert len(cap._failed_ingest_batches) == 1
+
+
+@pytest.mark.asyncio
+async def test_l2_auto_ingest_retries_captured_batch_after_context_is_gone() -> None:
+    """L2: failed captured batches retry without relying on source messages."""
+    client = _make_mock_client()
+    client.commit_session = AsyncMock(
+        side_effect=[RuntimeError("viking unavailable"), {"ok": True}]
+    )
+    identity = VikingIdentity(account_id="acct", user_id="alice", role="user")
+
+    cfg = VikingCapabilityConfig(
+        mode="all",
+        auto_ingest_enabled=True,
+        auto_ingest_mode="sync",
+    )
+    cap = _build_cap_from_config(cfg, client, identity)
+
+    messages = [
+        ModelRequest(parts=[UserPromptPart(content="What is X?")]),
+        ModelResponse(parts=[TextPart(content="X is a thing.")]),
+    ]
+    await cap.before_model_request(_make_run_context(), _make_request_context(messages))
+
+    ctx = _make_run_context()
+    ctx.messages = []
+    await cap._flush_tail(ctx)
+
+    assert cap._failed_ingest_batches == []
+    assert client.commit_session.await_count == 2
+
+
+def test_extract_full_trace_skips_system_prompt_and_preserves_tool_payloads() -> None:
+    """Full trace capture avoids injected system text and keeps tool output complete."""
+    long_output = "result-" * 500
+    messages = [
+        ModelRequest(
+            parts=[
+                SystemPromptPart(content="<openviking-recall>injected</openviking-recall>"),
+                UserPromptPart(content=["SY215C 发动机无法启动", {"text": "冷车更明显"}]),
+            ],
+        ),
+        ModelResponse(
+            parts=[
+                TextPart(content="先查蓄电池。"),
+                ToolCallPart(
+                    tool_name="viking_search",
+                    args={"query": "SY215C 发动机无法启动"},
+                    tool_call_id="call-search",
+                ),
+            ],
+        ),
+        ModelRequest(
+            parts=[
+                ToolReturnPart(
+                    tool_name="viking_search",
+                    content=long_output,
+                    tool_call_id="call-search",
+                ),
+            ],
+        ),
+    ]
+
+    trace = _extract_full_trace(messages, 0)
+
+    assert trace[0]["role"] == "user"
+    assert trace[0]["parts"] == [{"type": "text", "text": "SY215C 发动机无法启动\n冷车更明显"}]
+    assert "injected" not in str(trace)
+    assert trace[-1]["role"] == "assistant"
+    assert trace[-1]["parts"][0]["tool_output"] == long_output
 
 
 # ---------------------------------------------------------------------------

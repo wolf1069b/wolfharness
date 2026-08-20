@@ -11,6 +11,7 @@ from dataclasses import replace
 import hashlib
 from typing import TYPE_CHECKING, Any
 
+from wolfharness.capabilities.viking.ingest import _extract_text_content
 from wolfharness.capabilities.viking.utils import truncate_text
 
 
@@ -44,8 +45,8 @@ def _extract_latest_user_prompt(messages: list[Any]) -> str | None:
         for part in reversed(msg.parts):
             if not isinstance(part, UserPromptPart):
                 continue
-            content = part.content
-            if isinstance(content, str) and content.strip():
+            content = _extract_text_content(part.content)
+            if content:
                 return content
     return None
 
