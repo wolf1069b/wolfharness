@@ -55,6 +55,10 @@ class FakeMCPClient:
         self._connected = False
         self._exited = True
 
+    @property
+    def connected(self) -> bool:
+        return self._connected
+
     async def list_tools(self) -> list[Any]:
         if not self._connected:
             raise RuntimeError("Not connected")

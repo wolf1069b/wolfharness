@@ -179,9 +179,9 @@ def _inject_system_message(
     request_context: ModelRequestContext,
     recall_block: str,
 ) -> ModelRequestContext:
-    """Inject a system message with recall block before the latest user message.
+    """Inject a context message with recall block before the latest user message.
 
-    Creates a new ``ModelRequest`` containing a ``SystemPromptPart`` with the
+    Creates a new ``ModelRequest`` containing a ``UserPromptPart`` with the
     recall block text, and inserts it into ``request_context.messages``
     immediately before the last ``ModelRequest`` that contains a
     ``UserPromptPart``.
@@ -197,7 +197,7 @@ def _inject_system_message(
     if not recall_block.strip():
         return request_context
 
-    from pydantic_ai.messages import ModelRequest, SystemPromptPart, UserPromptPart
+    from pydantic_ai.messages import ModelRequest, UserPromptPart
 
     messages = list(request_context.messages)
 
@@ -212,7 +212,7 @@ def _inject_system_message(
     if insert_idx is None:
         return request_context
 
-    system_msg = ModelRequest(parts=[SystemPromptPart(content=recall_block)])
+    system_msg = ModelRequest(parts=[UserPromptPart(content=recall_block)])
     new_messages = [*messages[:insert_idx], system_msg, *messages[insert_idx:]]
 
     return replace(request_context, messages=new_messages)

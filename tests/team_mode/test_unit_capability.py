@@ -4283,3 +4283,33 @@ def test_workflow_task_intent_separates_write_shards() -> None:
     assert pump_key
     assert engine_key != pump_key
     assert engine_key == engine_retry_key
+
+
+@pytest.mark.unit
+def test_workflow_task_intent_idempotency_key_zero_falls_through_to_packet() -> None:
+    """idempotency_key=0 is a conductor placeholder — must fall through to packet_id."""
+    desc_a = (
+        "phase=1A_source_analysis packet_id=chapter_aaa idempotency_key=0 "
+        "chapter_uri=viking://resources/805/raw/chapter_a"
+    )
+    desc_b = (
+        "phase=1A_source_analysis packet_id=chapter_bbb idempotency_key=0 "
+        "chapter_uri=viking://resources/805/raw/chapter_b"
+    )
+    key_a = TeamCommCapability._task_idempotency_key("1A: chapter A", desc_a)
+    key_b = TeamCommCapability._task_idempotency_key("1A: chapter B", desc_b)
+    assert key_a
+    assert key_b
+    assert key_a != key_b, "Different packet_ids must produce different keys even with idempotency_key=0"
+
+
+@pytest.mark.unit
+def test_workflow_task_intent_real_idempotency_key_takes_priority() -> None:
+    """A real planner-generated idempotency_key should take priority over packet_id."""
+    desc = (
+        "phase=1A_source_analysis packet_id=chapter_aaa idempotency_key=e5210b979ae7 "
+        "chapter_uri=viking://resources/805/raw/chapter_a"
+    )
+    key = TeamCommCapability._task_idempotency_key("1A: chapter A", desc)
+    assert key
+    assert "e5210b979ae7" in key.split("|")[0]
