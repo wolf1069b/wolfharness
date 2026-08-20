@@ -452,7 +452,6 @@ class WikiBuildCapability(
 
                 from pydantic_ai.messages import (
                     ModelRequest,
-                    SystemPromptPart,
                     UserPromptPart,
                 )
 
@@ -469,7 +468,7 @@ class WikiBuildCapability(
                 if insert_idx is None:
                     return request_context
 
-                system_msg = ModelRequest(parts=[SystemPromptPart(content=index_block)])
+                system_msg = ModelRequest(parts=[UserPromptPart(content=index_block)])
                 new_messages = [*messages[:insert_idx], system_msg, *messages[insert_idx:]]
                 return replace(request_context, messages=new_messages)
             except Exception:

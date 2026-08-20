@@ -612,6 +612,9 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             return match.group(1).casefold() if match else ""
 
         explicit = field("idempotency_key") or field("task_key")
+        # ponytail: "0" is a conductor placeholder — fall through to packet_id to avoid collapsing distinct chapters
+        if explicit == "0":
+            explicit = ""
         packet = field("packet_id") or field("packet_ids")
         if not explicit and not packet:
             return ""
@@ -1141,6 +1144,14 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
 
         delivery_lines: list[str] = []
         for owner, task_lines in notifications.items():
+            target_sid = team_state.get_member_session_id(team_id, owner)
+            if target_sid is None:
+                delivery_lines.append(
+                    f"⚠️ {owner}=NO_SESSION ({len(task_lines)} task(s)) — "
+                    f"worker not created. Use team_add_member(initial_task=...) "
+                    f"to create this worker before assigning tasks."
+                )
+                continue
             delivered = await self._notify_member(
                 agent_ctx,
                 team_id,
@@ -1614,10 +1625,18 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                 f"full description, then claim it with "
                 f'task_update(status="in_progress").'
             )
-            delivered = await self._notify_member(agent_ctx, team_id, owner, notif_body)
-            dispatch_status = (
-                f"Dispatch: {owner}={'notified' if delivered else 'notification_pending'}"
-            )
+            target_sid = team_state.get_member_session_id(team_id, owner)
+            if target_sid is None:
+                dispatch_status = (
+                    f"Dispatch: ⚠️ {owner}=NO_SESSION — "
+                    f"worker not created. Use team_add_member(initial_task=...) "
+                    f"to create this worker before assigning tasks."
+                )
+            else:
+                delivered = await self._notify_member(agent_ctx, team_id, owner, notif_body)
+                dispatch_status = (
+                    f"Dispatch: {owner}={'notified' if delivered else 'notification_pending'}"
+                )
         # 2. Notify downstream task owners when a dependency completes.
         if "status" in updates and updates.get("status") == "completed":
             all_tasks = team_state.list_tasks(team_id)

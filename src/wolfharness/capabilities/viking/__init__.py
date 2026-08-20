@@ -1133,7 +1133,7 @@ class VikingCapability(AbstractCapability[Any]):
         1. Derives a context hint from ``ctx.deps``.
         2. Queries Viking memories via ``client.find()``.
         3. Formats results as an ``<openviking-profile>`` XML block.
-        4. Injects it as a ``SystemPromptPart`` before the latest user
+        4. Injects it as a ``UserPromptPart`` before the latest user
            message using ``dataclasses.replace()``.
         5. Sets ``_profile_injected = True``.
 
@@ -1196,7 +1196,6 @@ class VikingCapability(AbstractCapability[Any]):
 
             from pydantic_ai.messages import (
                 ModelRequest,
-                SystemPromptPart,
                 UserPromptPart,
             )
 
@@ -1213,7 +1212,7 @@ class VikingCapability(AbstractCapability[Any]):
             if insert_idx is None:
                 return request_context
 
-            system_msg = ModelRequest(parts=[SystemPromptPart(content=profile_block)])
+            system_msg = ModelRequest(parts=[UserPromptPart(content=profile_block)])
             new_messages = [*messages[:insert_idx], system_msg, *messages[insert_idx:]]
             return replace(request_context, messages=new_messages)
         except Exception:
@@ -1237,7 +1236,7 @@ class VikingCapability(AbstractCapability[Any]):
            by default, non-recursive) via ``client.ls()``.
         2. Collects entry names where ``isDir`` is truthy.
         3. Formats them as an ``<openviking-index>`` XML block.
-        4. Injects it as a ``SystemPromptPart`` before the latest user
+        4. Injects it as a ``UserPromptPart`` before the latest user
            message using ``dataclasses.replace()``.
         5. Sets ``_index_injected = True``.
 
@@ -1286,7 +1285,6 @@ class VikingCapability(AbstractCapability[Any]):
 
             from pydantic_ai.messages import (
                 ModelRequest,
-                SystemPromptPart,
                 UserPromptPart,
             )
 
@@ -1303,7 +1301,7 @@ class VikingCapability(AbstractCapability[Any]):
             if insert_idx is None:
                 return request_context
 
-            system_msg = ModelRequest(parts=[SystemPromptPart(content=index_block)])
+            system_msg = ModelRequest(parts=[UserPromptPart(content=index_block)])
             new_messages = [*messages[:insert_idx], system_msg, *messages[insert_idx:]]
             return replace(request_context, messages=new_messages)
         except Exception:

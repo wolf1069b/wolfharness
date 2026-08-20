@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock
 from pydantic_ai.messages import (
     ModelRequest,
     ModelResponse,
-    SystemPromptPart,
+    UserPromptPart,
     TextPart,
     ToolCallPart,
     ToolReturn,
@@ -671,7 +671,7 @@ async def test_l2_auto_recall_before_model_request_fires() -> None:
     sys_msg = result.messages[0]
     assert isinstance(sys_msg, ModelRequest)
     sys_part = sys_msg.parts[0]
-    assert isinstance(sys_part, SystemPromptPart)
+    assert isinstance(sys_part, UserPromptPart)
     assert "<openviking-recall>" in sys_part.content
     assert "viking://user/alice/memories/doc.md" in sys_part.content
 
@@ -1067,7 +1067,7 @@ async def test_l2_memory_features_implicitly_allowed_outside_prefixes() -> None:
         for msg_ in result.messages
         if isinstance(msg_, ModelRequest)
         for part in msg_.parts
-        if isinstance(part, SystemPromptPart)
+        if isinstance(part, UserPromptPart)
     )
 
 
@@ -1237,11 +1237,11 @@ async def test_l2_profile_injection_first_turn_fires_second_skips() -> None:
     sys_msgs = [
         m
         for m in result1.messages
-        if isinstance(m, ModelRequest) and any(isinstance(p, SystemPromptPart) for p in m.parts)
+        if isinstance(m, ModelRequest) and any(isinstance(p, UserPromptPart) for p in m.parts)
     ]
     assert len(sys_msgs) >= 1
     profile_content = next(
-        p.content for m in sys_msgs for p in m.parts if isinstance(p, SystemPromptPart)
+        p.content for m in sys_msgs for p in m.parts if isinstance(p, UserPromptPart)
     )
     assert "<openviking-profile>" in profile_content
 

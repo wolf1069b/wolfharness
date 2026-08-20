@@ -155,6 +155,9 @@ class McpServerCap(
                 fails after all retries.
         """
         if self._client is not None:
+            if self._client.connected:
+                return self._client
+            await self._client.__aenter__()
             return self._client
 
         if self._session_pool is None:
