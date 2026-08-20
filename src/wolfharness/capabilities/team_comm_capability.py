@@ -2879,9 +2879,7 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             roster_lines.append(f"  - `{m_name}` (agent=`{m_agent}`, role=`{role_label}`) — {work}")
         assigned_task = initial_task_record or existing_initial_task
         initial_subject = str(assigned_task.get("subject", "")) if assigned_task else ""
-        new_member_work = (
-            f"Assigned: {initial_subject}" if initial_subject else "No active work"
-        )
+        new_member_work = f"Assigned: {initial_subject}" if initial_subject else "No active work"
         roster_lines.append(
             f"  - `{name}` (agent=`{agent}`, role=`member`) — {new_member_work}",
         )

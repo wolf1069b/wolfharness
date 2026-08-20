@@ -2397,18 +2397,11 @@ async def test_team_add_member_persists_initial_task_before_member_wakeup(
         },
     )
 
-    owned = [
-        task
-        for task in state.list_tasks("team_123")
-        if task.get("owner") == "atomic_worker"
-    ]
+    owned = [task for task in state.list_tasks("team_123") if task.get("owner") == "atomic_worker"]
     assert len(owned) == 1
     assert owned[0]["status"] == "pending"
     assert visible_tasks_at_wakeup
-    assert any(
-        task.get("task_id") == owned[0]["task_id"]
-        for task in visible_tasks_at_wakeup[0]
-    )
+    assert any(task.get("task_id") == owned[0]["task_id"] for task in visible_tasks_at_wakeup[0])
     assert str(owned[0]["task_id"]) in result.return_value
 
 
