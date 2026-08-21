@@ -42,8 +42,6 @@ logger = get_logger(__name__)
 
 ALL_WIKI_TOOLS: frozenset[str] = frozenset(
     {
-        "list_documents",
-        "list_chapters",
         "read_chapter",
         "read_chapters_batch",
         "write_entity",
@@ -51,7 +49,6 @@ ALL_WIKI_TOOLS: frozenset[str] = frozenset(
         "write_symptom_profile",
         "patch_symptom_profile",
         "diff_symptom_profile",
-        "list_symptom_profiles",
         "patch_entity",
         "patch_entities_batch",
         "diff_entity",
@@ -73,12 +70,9 @@ ALL_WIKI_TOOLS: frozenset[str] = frozenset(
         "list_children",
         "get_backlinks",
         "get_related_resources",
-        "trace_diagnostic_path",
-        "search_wiki",
         "find_wiki",
         "grep_wiki",
         "audit_wiki",
-        "prune_stale_index_entries",
         "rebuild_backlinks",
         "rebuild_all_backlinks",
         "finalize_wiki",
@@ -87,28 +81,19 @@ ALL_WIKI_TOOLS: frozenset[str] = frozenset(
         "inspect_build_checkpoint",
         "recover_build",
         "checkpoint_build",
-        "preflight_build",
-        "plan_chapter_batches",
         "plan_chapter_work",
-        "get_source_ledger",
         "record_source_packet",
         "plan_materialization_work",
         "materialize_template_batch",
         "record_materialization_receipt",
         "plan_relation_work",
         "plan_relation_shards",
-        "build_relation_closure",
         "register_no_entity_chapters",
-        "register_case_uri",
-        "score_chapters",
         "auto_repair",
         "get_schema",
         "create_opa",
         "create_ops",
         "get_ops",
-        "create_opl",
-        "ingest_external_opl",
-        "apply_opl",
         "get_opls",
         "get_expert_authority",
         "get_wiki_change_events",
@@ -122,10 +107,6 @@ ALL_WIKI_TOOLS: frozenset[str] = frozenset(
         "ops_dispatch_plan",
         "browse_chapters",
         "browse",
-        "library_doc_ids",
-        "read_chapter_map",
-        "read_raw_resource",
-        "source_snapshot",
         "migrate_source_uri_references",
         "sync_device_system_chapters",
     },
@@ -135,10 +116,6 @@ _HELPER_TOOL_NAMES: frozenset[str] = frozenset(
     {
         "browse_chapters",
         "browse",
-        "library_doc_ids",
-        "read_chapter_map",
-        "read_raw_resource",
-        "source_snapshot",
     },
 )
 
@@ -157,7 +134,6 @@ _READ_TOOLS: frozenset[str] = frozenset(
         "entity_uri",
         "list_children",
         "get_related_resources",
-        "search_wiki",
         "find_wiki",
         "grep_wiki",
         "get_schema",
@@ -191,7 +167,6 @@ _FILE_OP_TOOLS: frozenset[str] = frozenset(
         "move_entity",
         "plan_component_classification",
         "create_subdir",
-        "prune_stale_index_entries",
         "migrate_source_uri_references",
         "sync_device_system_chapters",
     },
@@ -282,7 +257,6 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
         | _OP_AUTHORITY_READ_TOOLS
         | _OP_FLOW_READ_TOOLS
         | frozenset({"record_source_packet", "record_materialization_receipt"})
-        | frozenset({"read_source_packet"})
         | frozenset({"get_model_mappings", "model_mapping_report"})
     ),
     "wiki_relation_worker": (
@@ -326,7 +300,6 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
                 "entity_uri",
                 "list_children",
                 "get_related_resources",
-                "search_wiki",
                 "find_wiki",
                 "grep_wiki",
                 "get_schema",
@@ -354,7 +327,6 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
             {
                 "browse",
                 "wiki_read_resource",
-                "search_wiki",
                 "find_wiki",
                 "get_schema",
                 "get_opas",
