@@ -503,7 +503,7 @@ class TicketEngine:
         if not dedupe_key:
             return None
         for key, content in self._opa_files():
-            frontmatter = parse_frontmatter(content)
+            frontmatter = self._record_from_content(content)
             if str(frontmatter.get("status", "")).strip().lower() in {"superseded", "rejected"}:
                 continue
             if build_id and not self._opa_matches_build(key, frontmatter, build_id):
@@ -587,6 +587,32 @@ class TicketEngine:
         slug = re.sub(r"-+", "-", slug).strip("-._")
         return TicketEngine._clip_utf8(slug, 60).rstrip("-._") or fallback
 
+    @staticmethod
+    def _record_from_content(content: str) -> dict[str, object]:
+        """Parse an OPA record, recovering prose fields from the markdown body.
+
+        Returns the frontmatter merged with:
+        - ``title`` from the first H1 heading when the frontmatter lacks it
+        - ``description`` / ``finding`` / ``missing`` / ``recommendation``
+          from the body sections ``问题描述`` / ``冲突点`` / ``缺失点`` / ``建议``
+          when the frontmatter lacks them (legacy YAML wins).
+        """
+        record = dict(parse_frontmatter(content or ""))
+        if not str(record.get("title", "")).strip():
+            match = re.search(r"^#\s+(.+)$", content or "", re.MULTILINE)
+            if match is not None:
+                record["title"] = match.group(1).strip()
+        sections = extract_sections(content or "")
+        for field, heading in (
+            ("description", "问题描述"),
+            ("finding", "冲突点"),
+            ("missing", "缺失点"),
+            ("recommendation", "建议"),
+        ):
+            if not str(record.get(field, "")).strip() and heading in sections:
+                record[field] = sections[heading]
+        return record
+
     def _readable_opa_id(
         self,
         *,
@@ -600,20 +626,20 @@ class TicketEngine:
     ) -> str:
         """Build a short, human-readable, dedupe-stable OPA filename.
 
-        Only the issue type and the target name go into the filename; the
-        dedupe hash keeps it stable per logical issue without packing the
-        whole record into the name (the old 8-slug format truncated to
-        unreadable garbage).
+        The readable target and title slugs keep the filename searchable,
+        while the short dedupe suffix keeps it stable per logical issue
+        without packing the whole record into the name.
         """
         target = target_uri.rstrip("/").rsplit("/", 1)[-1] if target_uri else (target_path or title)
-        target_slug = self._readable_slug(target, fallback="target")[:24].rstrip("-._") or "target"
+        target_slug = self._readable_slug(target, fallback="target")[:20].rstrip("-._") or "target"
+        title_slug = self._readable_slug(title, fallback="title")[:20].rstrip("-._") or "title"
         base = dedupe_key.removeprefix("opa-dedupe-") if dedupe_key else ""
-        suffix = base[:10] if len(base) >= _DEDUPE_KEY_MIN_LEN else ""
+        suffix = base[:8] if len(base) >= _DEDUPE_KEY_MIN_LEN else ""
         if not suffix:
             source = f"{category}\x1f{reason_code}\x1f{target_uri}\x1f{target_section}\x1f{title}"
-            suffix = sha256(source.encode("utf-8")).hexdigest()[:10]
+            suffix = sha256(source.encode("utf-8")).hexdigest()[:8]
         kind = self._readable_slug(category, fallback="issue")[:12].rstrip("-._") or "issue"
-        return self._clip_utf8(f"opa-{kind}-{target_slug}-{suffix}", 80).rstrip("-._")
+        return self._clip_utf8(f"opa-{kind}-{target_slug}-{title_slug}-{suffix}", 80).rstrip("-._")
 
     @staticmethod
     def _opa_open_for_gate(record: dict) -> bool:
@@ -634,7 +660,7 @@ class TicketEngine:
         """Return active OPA records for the selected build scope."""
         records: list[dict] = []
         for key, content in self._opa_files():
-            frontmatter = parse_frontmatter(content)
+            frontmatter = self._record_from_content(content)
             opa_id = Path(key).stem
             if str(frontmatter.get("status", "")).lower() not in {
                 "resolved",
@@ -793,7 +819,7 @@ class TicketEngine:
         existing_key = self._find_opa_key(opa_id)
         if existing_key and build_id:
             existing_content = self.store.read_text(existing_key)
-            existing_frontmatter = parse_frontmatter(existing_content or "")
+            existing_frontmatter = self._record_from_content(existing_content or "")
             existing_build_id = str(existing_frontmatter.get("build_id", "")).strip()
             if existing_build_id != build_id:
                 # Readable OPA IDs are intentionally stable within a build.
@@ -804,7 +830,7 @@ class TicketEngine:
                 existing_key = self._find_opa_key(opa_id)
         existing = self.store.read_text(existing_key) if existing_key else None
         if existing is not None:
-            previous = parse_frontmatter(existing)
+            previous = self._record_from_content(existing)
             dedupe_key = str(previous.get("dedupe_key", "")).strip() or dedupe_key
         allowed_statuses = {"pending", "resolved", "rejected", "superseded"}
         if status not in allowed_statuses:
@@ -1112,7 +1138,7 @@ class TicketEngine:
         if not ops_id:
             normalized_query = self._normalize_dedupe_text(retrieval_query)
             for existing_key, existing_content in self._op_files("OPS"):
-                existing_fm = parse_frontmatter(existing_content)
+                existing_fm = self._record_from_content(existing_content)
                 existing_parent = str(existing_fm.get("parent_opa", ""))
                 existing_target = str(existing_fm.get("target_uri", ""))
                 if (
@@ -1141,7 +1167,7 @@ class TicketEngine:
                     80,
                 ).rstrip("-._")
         key = self._op_key("OPS", ops_id, target_uri=effective_target)
-        previous = parse_frontmatter(self.store.read_text(key) or "")
+        previous = self._record_from_content(self.store.read_text(key) or "")
         model = OPSModel(
             ops_id=ops_id,
             parent_opa=opa_uri,
@@ -1216,7 +1242,7 @@ class TicketEngine:
                 parent_uri = self._opa_uri(parent_id)
         out: list[dict] = []
         for path, content in self._op_files("OPS", target_uri=target_uri):
-            fm = parse_frontmatter(content)
+            fm = self._record_from_content(content)
             record_parent = str(fm.get("parent_opa", ""))
             if parent_uri and record_parent not in {parent_uri, parent_id}:
                 continue
@@ -2250,7 +2276,7 @@ class TicketEngine:
                 parent_uri = self._opa_uri(parent_id)
         out: list[dict] = []
         for path, content in self._op_files("OPL", target_uri=target_uri):
-            fm = parse_frontmatter(content)
+            fm = self._record_from_content(content)
             sections = extract_sections(content)
             if target_uri and str(fm.get("target_uri", "")) != target_uri:
                 continue
@@ -2807,7 +2833,7 @@ class TicketEngine:
         content = self.store.read_text(key)
         if content is None:
             raise FileNotFoundError(f"OPA not found: {opa_id}")
-        frontmatter = parse_frontmatter(content)
+        frontmatter = self._record_from_content(content)
         return self.create_opa(
             opa_id=opa_id,
             title=str(frontmatter.get("title", opa_id)),
@@ -2855,7 +2881,7 @@ class TicketEngine:
         stored = self.store.read_text(key)
         if stored is None:
             raise FileNotFoundError(f"OPA not found: {opa_id}")
-        frontmatter = parse_frontmatter(stored)
+        frontmatter = self._record_from_content(stored)
         target_uri = str(frontmatter.get("target_uri", ""))
         expected_uri = self.store.entity_uri(concept, class_name or None, object_name)
         if target_uri and self.store.resolve_redirect(target_uri) != self.store.resolve_redirect(
@@ -2910,7 +2936,7 @@ class TicketEngine:
         content = self.store.read_text(key)
         if content is None:
             raise FileNotFoundError(f"OPA not found: {opa_id}")
-        frontmatter = parse_frontmatter(content)
+        frontmatter = self._record_from_content(content)
         effective_closure = closure_status or str(frontmatter.get("closure_status", ""))
         if effective_closure and effective_closure not in OPA_CLOSURE_STATUSES:
             raise ValueError(f"Unsupported closure_status: {effective_closure!r}")
@@ -2960,7 +2986,7 @@ class TicketEngine:
         """
         out: list[dict] = []
         for path, content in self._opa_files(target_uri=target_uri):
-            fm = parse_frontmatter(content)
+            fm = self._record_from_content(content)
             opa_id = str(fm.get("id", Path(path).stem))
             if not include_superseded and str(fm.get("status", "")).strip().lower() in {
                 "superseded",

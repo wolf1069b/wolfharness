@@ -216,32 +216,19 @@ class OPAModel:
         evidence = (
             "\n".join(f"- [{uri}]({uri})" for uri in self.evidence_uris) or "- 尚无可解析证据 URI"
         )
-        frontmatter = ["---", f"id: {_yaml_quote(self.opa_id)}", "# 核心信息(专家可见)"]
+        frontmatter = ["---", f"id: {_yaml_quote(self.opa_id)}"]
         frontmatter += _fm_lines(
             [
-                ("title", self.title),
                 ("category", self.category),
                 ("reason_code", self.reason_code),
                 ("status", self.status),
                 ("target_uri", self.target_uri),
-                ("description", self.description),
-                ("finding", self.finding),
-                ("missing", self.missing),
-                ("recommendation", self.recommendation),
-                ("solution", self.solution),
-                ("evidence_uris", self.evidence_uris),
-                ("related_uris", self.related_uris),
-            ],
-        )
-        frontmatter.append("# 内部字段(构建/审计用,专家可忽略)")
-        frontmatter += _fm_lines(
-            [
-                ("human_key", self.human_key),
+                ("target_section", self.target_section),
                 ("scope", self.scope),
                 ("subtype", self.subtype),
-                ("target_path", self.target_path),
-                ("target_section", self.target_section),
                 ("source_chapter", self.source_chapter),
+                ("evidence_uris", self.evidence_uris),
+                ("related_uris", self.related_uris),
                 ("report_count", self.report_count),
                 ("dedupe_key", self.dedupe_key),
                 ("build_id", self.build_id),
@@ -253,6 +240,8 @@ class OPAModel:
 
         lines = [
             *frontmatter,
+            "",
+            f"# {self.title}",
             "",
             "## 问题描述",
             "",
@@ -334,26 +323,18 @@ class OPSModel:
         """Render a source-backed OPS page."""
         solution = self.solution or "<!-- 待补录:请在此描述解决方案 -->"
         evidence = "\n".join(f"- [{uri}]({uri})" for uri in self.evidence_uris) or "- 尚无证据"
-        frontmatter = ["---", f"id: {_yaml_quote(self.ops_id)}", "# 核心信息(专家可见)"]
+        frontmatter = ["---", f"id: {_yaml_quote(self.ops_id)}"]
         frontmatter += _fm_lines(
             [
                 ("parent_opa", self.parent_opa),
-                ("title", self.title or self.ops_id),
                 ("status", self.status),
                 ("target_uri", self.target_uri),
-                ("analysis", self.analysis),
-                ("solution", self.solution),
-                ("evidence_uris", self.evidence_uris),
-                ("related_uris", self.related_uris),
-            ],
-        )
-        frontmatter.append("# 内部字段(构建/审计用,专家可忽略)")
-        frontmatter += _fm_lines(
-            [
                 ("retrieval_query", self.retrieval_query),
                 ("retrieval_scopes", self.retrieval_scopes),
                 ("retrieval_hit_uris", self.retrieval_hit_uris),
                 ("retrieval_used_uris", self.retrieval_used_uris),
+                ("evidence_uris", self.evidence_uris),
+                ("related_uris", self.related_uris),
                 ("candidate_content", self.candidate_content),
                 ("candidate_operations", self.candidate_operations),
                 ("expected_sha256", self.expected_sha256),
@@ -370,6 +351,8 @@ class OPSModel:
         return "\n".join(
             [
                 *frontmatter,
+                "",
+                f"# {self.title or self.ops_id}",
                 "",
                 "## 关联问题",
                 "",
@@ -456,23 +439,15 @@ class OPLModel:
                 "不能直接作为正式实体内容发布。"
             )
         )
-        frontmatter = ["---", f"id: {_yaml_quote(self.opl_id)}", "# 核心信息(专家可见)"]
+        frontmatter = ["---", f"id: {_yaml_quote(self.opl_id)}"]
         frontmatter += _fm_lines(
             [
-                ("title", self.title),
                 ("parent_opa", self.parent_opa),
                 ("ops_uris", self.ops_uris),
                 ("target_uri", self.target_uri),
                 ("status", self.status),
-                ("proposal", self.proposal),
-                ("rationale", self.rationale),
                 ("evidence_uris", self.evidence_uris),
                 ("related_uris", self.related_uris),
-            ],
-        )
-        frontmatter.append("# 内部字段(构建/审计用,专家可忽略)")
-        frontmatter += _fm_lines(
-            [
                 ("source_type", self.source_type),
                 ("expert_id", self.expert_id),
                 ("expert_name", self.expert_name),
@@ -494,6 +469,8 @@ class OPLModel:
         return "\n".join(
             [
                 *frontmatter,
+                "",
+                f"# {self.title or self.opl_id}",
                 "",
                 "## 关联 OPA",
                 "",
