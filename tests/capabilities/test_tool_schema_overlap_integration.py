@@ -136,6 +136,11 @@ class RecordingFakeMcpClient:
         self._raw_tools = raw_tools
         self.calls: list[tuple[str, dict[str, Any]]] = []
 
+    @property
+    def connected(self) -> bool:
+        """Mirror ``MCPClient.connected`` — the double is always ready."""
+        return True
+
     async def list_tools(self) -> list[RawMcpTool]:
         return list(self._raw_tools)
 
@@ -236,8 +241,10 @@ class TestPerServerScoping:
         # prefixed, web-b is not. Identity metadata carries the raw names.
         client_a = RecordingFakeMcpClient([RawMcpTool(name="search", description="A search")])
         client_b = RecordingFakeMcpClient([RawMcpTool(name="search", description="B search")])
-        cap_a = McpServerCap(MagicMock(), name="web-a", client=client_a, tool_prefix="web_a")  # type: ignore[arg-type]
-        cap_b = McpServerCap(MagicMock(), name="web-b", client=client_b)  # type: ignore[arg-type]
+        cap_a = McpServerCap(  # type: ignore[arg-type]
+            MagicMock(tool_prefix=None), name="web-a", client=client_a, tool_prefix="web_a"
+        )
+        cap_b = McpServerCap(MagicMock(tool_prefix=None), name="web-b", client=client_b)  # type: ignore[arg-type]
         inner_a = await cap_a.get_toolset()(_ctx())
         inner_b = await cap_b.get_toolset()(_ctx())
         assert inner_a is not None
@@ -355,7 +362,9 @@ class TestRuntimeRoundTrip:
     async def _drive(self, prefix: str | None) -> tuple[RecordingFakeMcpClient, ToolsetTool[Any]]:
         raw = RawMcpTool(name="get_weather", description="Get the weather")
         client = RecordingFakeMcpClient([raw])
-        server_cap = McpServerCap(MagicMock(), name="weather", client=client, tool_prefix=prefix)  # type: ignore[arg-type]
+        server_cap = McpServerCap(  # type: ignore[arg-type]
+            MagicMock(tool_prefix=None), name="weather", client=client, tool_prefix=prefix
+        )
         inner = await server_cap.get_toolset()(_ctx())
         assert inner is not None
 

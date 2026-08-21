@@ -444,6 +444,7 @@ module = [
   "apprise",
   "openviking_sdk",
   "xeno_adp_agentic.*",
+  "xeno_adp_harness.*",
 ]
 ignore_missing_imports = true
 

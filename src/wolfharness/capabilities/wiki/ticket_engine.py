@@ -193,7 +193,8 @@ class TicketEngine:
         fs = self.store._fs
         finder = getattr(fs, "find", None)
         if finder is not None:
-            return finder(query, target_uri=target_uri, limit=limit, deep=deep)
+            result = finder(query, target_uri=target_uri, limit=limit, deep=deep)
+            return list(result) if isinstance(result, list) else []
         return []
 
     def _apply_operations(self, content: str, operations: list[dict[str, object]]) -> str:
@@ -304,9 +305,9 @@ class TicketEngine:
         th = self._target_hash(target_uri)
         if th:
             subdir = f"{self._op_dir_key(concept)}/{th}"
-            records = self._read_md_dir(subdir)
-            if records:
-                return sorted(records)
+            th_records = self._read_md_dir(subdir)
+            if th_records:
+                return sorted(th_records)
         records: list[tuple[str, str]] = []
         for key in self.store.list_dir(self._op_dir_key(concept), recursive=True):
             if not key.endswith(".md"):
@@ -337,9 +338,9 @@ class TicketEngine:
         base = self._opa_dir_key()
         if th:
             for subdir in _OPA_CATEGORY_DIRS.values():
-                records = self._read_md_dir(f"{base}/{subdir}/{th}")
-                if records:
-                    return sorted(records)
+                th_records = self._read_md_dir(f"{base}/{subdir}/{th}")
+                if th_records:
+                    return sorted(th_records)
             return []
         records: list[tuple[str, str]] = []
         for key in self.store.list_dir(base, recursive=True):
@@ -372,32 +373,31 @@ class TicketEngine:
         conflict or the source corpus that surfaced the conflict).  Formats
         are checked; existence is not (the record may be filed before the
         entity is merged).
+
+        Accepts any ``viking://resources/`` URI regardless of namespace,
+        because OPA/OPS records may target entities from multiple
+        namespaces (e.g. wiki build namespace vs. raw source namespace).
         """
         uris = [uri for uri in (target_uri, *evidence_uris) if uri]
-        raw_prefix = self._raw_fs.root_uri + "/"
         if not uris:
             raise ValueError(
                 f"OPA must reference at least one URI: set target_uri "
-                f"({self.store.root_uri}/...) or evidence_uris ({raw_prefix}... source chapters).",
+                f"({self.store.root_uri}/...) or evidence_uris "
+                f"(viking://resources/... source chapters).",
             )
         for uri in uris:
-            if (
-                not self.store.is_wiki_uri(uri)
-                and classify_raw_source_uri(
-                    uri,
-                    raw_root_uri=self._raw_fs.root_uri,
-                )
-                is None
-            ):
+            if not uri.startswith("viking://resources/"):
                 raise ValueError(
-                    f"OPA URI must be a {self.store.root_uri}/ or {raw_prefix} URI, got {uri!r}.",
+                    f"OPA URI must be a viking://resources/ URI, got {uri!r}.",
                 )
 
     @staticmethod
     def _list_value(value: object) -> list[str]:
         """Normalize a YAML list/scalar field into unique strings."""
         if isinstance(value, list):
-            return list(dict.fromkeys(str(item).strip() for item in value if str(item).strip()))
+            return list(
+                dict[str, object].fromkeys(str(item).strip() for item in value if str(item).strip())
+            )
         if isinstance(value, str) and value.strip():
             return [value.strip()]
         return []
@@ -407,7 +407,7 @@ class TicketEngine:
         """Read structured patch operations without accepting arbitrary YAML."""
         if not isinstance(value, list):
             return []
-        return [dict(item) for item in value if isinstance(item, dict)]
+        return [dict[str, object](item) for item in value if isinstance(item, dict)]
 
     @staticmethod
     def _normalize_dedupe_text(value: object) -> str:
@@ -498,7 +498,7 @@ class TicketEngine:
         dedupe_key: str,
         *,
         build_id: str = "",
-    ) -> tuple[str, dict] | None:
+    ) -> tuple[str, dict[str, object]] | None:
         """Find an existing OPA by its logical issue identity."""
         if not dedupe_key:
             return None
@@ -526,7 +526,7 @@ class TicketEngine:
                 return key, frontmatter
         return None
 
-    def _opa_matches_build(self, key: str, frontmatter: dict, build_id: str) -> bool:
+    def _opa_matches_build(self, key: str, frontmatter: dict[str, object], build_id: str) -> bool:
         """Match a record to a build without reviving unscoped old records."""
         record_build_id = str(frontmatter.get("build_id", "")).strip()
         if record_build_id:
@@ -616,7 +616,7 @@ class TicketEngine:
         return self._clip_utf8(f"opa-{kind}-{target_slug}-{suffix}", 80).rstrip("-._")
 
     @staticmethod
-    def _opa_open_for_gate(record: dict) -> bool:
+    def _opa_open_for_gate(record: dict[str, object]) -> bool:
         """Whether an OPA still blocks finalize, keyed on closure_status not status."""
         closure = str(record.get("closure_status", "")).strip().lower()
         status = str(record.get("status", "")).strip().lower()
@@ -630,9 +630,9 @@ class TicketEngine:
         # so already-finalized builds are not retroactively blocked.
         return status == "pending"
 
-    def _unresolved_opa_records(self, *, build_id: str | None = None) -> list[dict]:
+    def _unresolved_opa_records(self, *, build_id: str | None = None) -> list[dict[str, object]]:
         """Return active OPA records for the selected build scope."""
-        records: list[dict] = []
+        records: list[dict[str, object]] = []
         for key, content in self._opa_files():
             frontmatter = parse_frontmatter(content)
             opa_id = Path(key).stem
@@ -668,7 +668,7 @@ class TicketEngine:
                 )
         return records
 
-    def _is_explicit_tracked_record(self, record: dict) -> bool:
+    def _is_explicit_tracked_record(self, record: dict[str, object]) -> bool:
         """Return whether a pending OPA is bound to a marked page section."""
         target_uri = str(record.get("target_uri", "")).strip()
         target_section = str(record.get("target_section", "")).strip()
@@ -708,7 +708,7 @@ class TicketEngine:
             marker in content.lower() for marker in markers
         )
 
-    def _is_explicit_gap_record(self, record: dict) -> bool:
+    def _is_explicit_gap_record(self, record: dict[str, object]) -> bool:
         """Backward-compatible alias for source-honest gap callers."""
         return str(
             record.get("category", "")
@@ -740,7 +740,7 @@ class TicketEngine:
         closure_status: str = "",
         closure_reason: str = "",
         skip_dedupe_lookup: bool = False,
-    ) -> dict:
+    ) -> dict[str, object]:
         """结构化落盘一条 OPA 冲突/问题记录,替代手写 md。.
 
         存入 ``OP/OpA/<opa_id>.md``(YAML frontmatter + 证据 + 可解析 URI),
@@ -771,7 +771,7 @@ class TicketEngine:
             finding=effective_finding,
             missing=effective_missing,
         )
-        existing_by_key: tuple[str, dict] | None = None
+        existing_by_key: tuple[str, dict[str, object]] | None = None
         if not skip_dedupe_lookup:
             existing_by_key = self._find_opa_by_dedupe_key(dedupe_key, build_id=build_id)
         if existing_by_key is not None:
@@ -918,7 +918,7 @@ class TicketEngine:
         token = value.rstrip("/").rsplit("/", 1)[-1].removesuffix(".md")
         return token if token.startswith(prefix + "-") else value
 
-    def _opa_record(self, value: str) -> tuple[str, dict, str]:
+    def _opa_record(self, value: str) -> tuple[str, dict[str, object], str]:
         opa_id = self._record_id(value, "opa")
         key = self._find_opa_key(opa_id)
         if key is None:
@@ -937,7 +937,7 @@ class TicketEngine:
         self._validate_opa_uris("", [*evidence_uris, *related_uris])
         unreadable = [
             uri
-            for uri in dict.fromkeys([*evidence_uris, *related_uris])
+            for uri in dict[str, object].fromkeys([*evidence_uris, *related_uris])
             if uri and self.read_resource(uri) is None
         ]
         if unreadable:
@@ -956,7 +956,7 @@ class TicketEngine:
         evidence = [str(uri).strip() for uri in evidence_uris if str(uri).strip()]
         related = [str(uri).strip() for uri in related_uris if str(uri).strip()]
 
-        def canonical(uri):
+        def canonical(uri: str) -> str:
             return self.store.resolve_redirect(uri) if self.store.is_wiki_uri(uri) else uri
 
         evidence_keys = [canonical(uri) for uri in evidence]
@@ -975,7 +975,7 @@ class TicketEngine:
         except ValueError:
             issues.append("REFERENCE_URI_INVALID")
         unreadable: list[str] = []
-        for uri in dict.fromkeys([target, *evidence, *related]):
+        for uri in dict[str, object].fromkeys([target, *evidence, *related]):
             if not uri:
                 continue
             if self.store.is_wiki_uri(uri):
@@ -987,7 +987,7 @@ class TicketEngine:
                 unreadable.append(uri)
         if unreadable:
             issues.append("REFERENCE_UNREADABLE")
-        return list(dict.fromkeys(issues))
+        return list(dict[str, object].fromkeys(issues))
 
     def _require_parent_target(self, *, parent_target: str, requested_target: str) -> str:
         """Keep all records in an OP chain attached to the same target."""
@@ -1024,7 +1024,7 @@ class TicketEngine:
             hit_uris.extend(
                 str(hit.get("uri", "")).strip() for hit in hits if str(hit.get("uri", "")).strip()
             )
-        return scopes, list(dict.fromkeys(hit_uris))
+        return scopes, list(dict[str, object].fromkeys(hit_uris))
 
     def _retrieval_scopes_match(self, scopes: list[str]) -> bool:
         """Accept the current raw root and the historical ``<root>/raw`` alias."""
@@ -1052,7 +1052,7 @@ class TicketEngine:
         candidate_operations: list[dict[str, object]] | None = None,
         expected_sha256: str = "",
         source_type: str = "pipeline",
-    ) -> dict:
+    ) -> dict[str, object]:
         """Persist one source-backed expert recommendation for an OPA."""
         opa_id, opa_fm, opa_uri = self._opa_record(parent_opa)
         if status != "unconfirmed":
@@ -1092,7 +1092,9 @@ class TicketEngine:
             retrieval_query,
             limit=retrieval_limit,
         )
-        used_uris = list(dict.fromkeys(uri.strip() for uri in retrieved_uris if uri.strip()))
+        used_uris = list(
+            dict[str, object].fromkeys(uri.strip() for uri in retrieved_uris if uri.strip())
+        )
         missing_hits = [uri for uri in used_uris if uri not in retrieval_hit_uris]
         if missing_hits:
             raise ValueError(
@@ -1153,7 +1155,7 @@ class TicketEngine:
             retrieval_query=retrieval_query.strip() or str(previous.get("retrieval_query", "")),
             retrieval_scopes=retrieval_scopes,
             retrieval_hit_uris=list(
-                dict.fromkeys(
+                dict[str, object].fromkeys(
                     [
                         *self._list_value(previous.get("retrieval_hit_uris")),
                         *retrieval_hit_uris,
@@ -1205,7 +1207,7 @@ class TicketEngine:
         status: str = "",
         target_uri: str = "",
         limit: int = 50,
-    ) -> list[dict]:
+    ) -> list[dict[str, object]]:
         """Read OPS recommendations, optionally scoped to one OPA/target."""
         parent_id = self._record_id(parent_opa, "opa") if parent_opa else ""
         parent_uri = ""
@@ -1214,7 +1216,7 @@ class TicketEngine:
                 _pid, _pfm, parent_uri = self._opa_record(parent_id)
             except FileNotFoundError:
                 parent_uri = self._opa_uri(parent_id)
-        out: list[dict] = []
+        out: list[dict[str, object]] = []
         for path, content in self._op_files("OPS", target_uri=target_uri):
             fm = parse_frontmatter(content)
             record_parent = str(fm.get("parent_opa", ""))
@@ -1717,7 +1719,7 @@ class TicketEngine:
         candidate_operations: list[dict[str, object]] | None = None,
         expected_sha256: str = "",
         archive_reason: str = "",
-    ) -> dict:
+    ) -> dict[str, object]:
         """Form an unconfirmed knowledge proposal from one OPA and its OPS.
 
         OPL is an optional derived snapshot, not a fact source.  Automatic
@@ -1755,7 +1757,7 @@ class TicketEngine:
         inherited_evidence = self._list_value(opa_fm.get("evidence_uris"))
         for row in ops_rows:
             if row["uri"] in ops_uris:
-                inherited_evidence.extend(row["evidence_uris"])
+                inherited_evidence.extend(self._list_value(row["evidence_uris"]))
         effective_target = self._require_parent_target(
             parent_target=str(opa_fm.get("target_uri", "")),
             requested_target=target_uri,
@@ -1791,7 +1793,9 @@ class TicketEngine:
         if not opl_id and opl_uri:
             opl_id = self._record_id(opl_uri, "opl")
         if not opl_id:
-            requested_ops = set(dict.fromkeys(uri.strip() for uri in ops_uris if uri.strip()))
+            requested_ops = set(
+                dict[str, object].fromkeys(uri.strip() for uri in ops_uris if uri.strip())
+            )
             for existing_key, existing_content in self._op_files("OPL"):
                 existing_fm = parse_frontmatter(existing_content)
                 existing_ops = set(self._list_value(existing_fm.get("ops_uris")))
@@ -1823,7 +1827,9 @@ class TicketEngine:
             opl_id=opl_id,
             title=title or str(previous.get("title", opl_id)),
             parent_opa=opa_uri,
-            ops_uris=list(dict.fromkeys(uri.strip() for uri in ops_uris if uri.strip())),
+            ops_uris=list(
+                dict[str, object].fromkeys(uri.strip() for uri in ops_uris if uri.strip())
+            ),
             target_uri=effective_target,
             status="unconfirmed",
             proposal=self._merge_observations(previous.get("proposal", ""), proposal),
@@ -1849,7 +1855,7 @@ class TicketEngine:
             "opl_id": opl_id,
             "uri": self._op_uri("OPL", opl_id),
             "parent_opa": opa_uri,
-            "ops_uris": list(dict.fromkeys(ops_uris)),
+            "ops_uris": list(dict[str, object].fromkeys(ops_uris)),
             "target_uri": effective_target,
             "status": "unconfirmed",
             "source_type": source_type,
@@ -2102,9 +2108,7 @@ class TicketEngine:
             target_object_name=str(frontmatter.get("target_object_name", "")),
             expected_sha256=str(frontmatter.get("expected_sha256", "")),
             candidate_content=str(frontmatter.get("candidate_content", "")),
-            candidate_operations=frontmatter.get("candidate_operations", [])
-            if isinstance(frontmatter.get("candidate_operations", []), list)
-            else [],
+            candidate_operations=self._list_of_dicts(frontmatter.get("candidate_operations")),
             apply_status=apply_status,
             apply_error=apply_error,
             applied_at=applied_at,
@@ -2156,9 +2160,9 @@ class TicketEngine:
         if target_info is not None:
             concept, class_name, object_name = target_info[0], target_info[1] or "", target_info[2]
         candidate = str(frontmatter.get("candidate_content", ""))
-        operations = frontmatter.get("candidate_operations", [])
-        if not candidate and not isinstance(operations, list):
-            raise ValueError("External OPL candidate_operations must be a list")
+        operations: list[dict[str, object]] = self._list_of_dicts(
+            frontmatter.get("candidate_operations")
+        )
         if not candidate and not operations:
             return self._update_external_opl_status(
                 opl_id, status="unconfirmed", apply_status="needs_review"
@@ -2239,7 +2243,7 @@ class TicketEngine:
         status: str = "",
         target_uri: str = "",
         limit: int = 50,
-    ) -> list[dict]:
+    ) -> list[dict[str, object]]:
         """Read unconfirmed or historical OPL proposals."""
         parent_id = self._record_id(parent_opa, "opa") if parent_opa else ""
         parent_uri = ""
@@ -2248,7 +2252,7 @@ class TicketEngine:
                 _pid, _pfm, parent_uri = self._opa_record(parent_id)
             except FileNotFoundError:
                 parent_uri = self._opa_uri(parent_id)
-        out: list[dict] = []
+        out: list[dict[str, object]] = []
         for path, content in self._op_files("OPL", target_uri=target_uri):
             fm = parse_frontmatter(content)
             sections = extract_sections(content)
@@ -2335,7 +2339,9 @@ class TicketEngine:
                         str(row.get("source_type", "pipeline")) == "external_expert"
                         or (
                             bool(str(row.get("retrieval_query", "")).strip())
-                            and self._retrieval_scopes_match(row.get("retrieval_scopes", []))
+                            and self._retrieval_scopes_match(
+                                self._list_value(row.get("retrieval_scopes"))
+                            )
                         )
                     )
                     and (bool(self._list_value(row.get("evidence_uris"))) or target_readable)
@@ -2454,7 +2460,7 @@ class TicketEngine:
             "items": items,
         }
 
-    def op_flow_report(
+    def op_flow_report(  # noqa: PLR0915
         self,
         *,
         persist: bool = True,
@@ -2487,7 +2493,7 @@ class TicketEngine:
             ]
 
         def coverage(uris: list[str]) -> dict[str, object]:
-            unique = list(dict.fromkeys(uri.strip() for uri in uris if uri.strip()))
+            unique = list(dict[str, object].fromkeys(uri.strip() for uri in uris if uri.strip()))
             manual = 0
             wiki = 0
             readable = 0
@@ -2568,12 +2574,13 @@ class TicketEngine:
             )
 
         def aggregate(rows: list[dict[str, object]]) -> dict[str, object]:
-            covered = sum(
-                1
-                for row in rows
-                if isinstance(row.get("coverage"), dict)
-                and int(row["coverage"].get("readable_source_or_wiki_count", 0)) > 0
-            )
+            covered = 0
+            for row in rows:
+                coverage = row.get("coverage")
+                if isinstance(coverage, dict):
+                    count = coverage.get("readable_source_or_wiki_count", 0)
+                    if isinstance(count, (int, float)) and count > 0:
+                        covered += 1
             return {
                 "total": len(rows),
                 "with_readable_source_or_wiki": covered,
@@ -2630,8 +2637,13 @@ class TicketEngine:
                 offset=offset,
                 limit=limit,
             )
-            issues.extend(dict(issue) for issue in report.get("issues", []))
-            next_offset = int(report.get("next_offset", -1))
+            report_issues = report.get("issues", [])
+            if isinstance(report_issues, list):
+                issues.extend(dict(issue) for issue in report_issues if isinstance(issue, dict))
+            next_offset_raw = report.get("next_offset", -1)
+            next_offset = (
+                int(next_offset_raw) if isinstance(next_offset_raw, (int, float, str)) else -1
+            )
             if next_offset < 0:
                 break
             offset = next_offset
@@ -2713,7 +2725,7 @@ class TicketEngine:
             evidence = self._list_value(frontmatter.get("sources"))
             evidence.extend(extract_source_uris(message))
             evidence = list(
-                dict.fromkeys(
+                dict[str, object].fromkeys(
                     uri for uri in evidence if _cached_read_raw(uri).status is SourceReadStatus.OK
                 )
             )
@@ -2731,7 +2743,7 @@ class TicketEngine:
                 unclassified.append(item)
                 continue
             related = list(
-                dict.fromkeys(
+                dict[str, object].fromkeys(
                     uri
                     for uri in re.findall(re.escape(self.store.root_uri) + r"/[^\s)\]>]+", message)
                     if uri != target_uri
@@ -2793,7 +2805,7 @@ class TicketEngine:
         related_uris: list[str] | None = None,
         closure_status: str = "deferred",
         closure_reason: str = "",
-    ) -> dict:
+    ) -> dict[str, object]:
         """Resolve an existing OPA while retaining its complete evidence chain.
 
         ``closure_status`` defaults to ``deferred``: resolving a record
@@ -2847,7 +2859,7 @@ class TicketEngine:
         content: str,
         solution: str,
         expected_sha256: str = "",
-    ) -> dict:
+    ) -> dict[str, object]:
         """Apply a resolved candidate and close its OPA in one guarded call."""
         key = self._find_opa_key(opa_id)
         if key is None:
@@ -2887,7 +2899,7 @@ class TicketEngine:
         reason_code: str,
         closure_status: str = "",
         closure_reason: str = "",
-    ) -> dict:
+    ) -> dict[str, object]:
         """Refine an OPA's reason_code after retrieval-based triage (called by OPS).
 
         OPA are created with a coarse reason (``content_missing`` /
@@ -2952,13 +2964,13 @@ class TicketEngine:
         limit: int = 50,
         include_superseded: bool = False,
         build_id: str = "",
-    ) -> list[dict]:
+    ) -> list[dict[str, object]]:
         """读取 ``OP/OpA/`` 下匹配条件的 OPA 记录。.
 
         可按 ``target_uri`` / ``status`` / ``category`` / ``reason_code`` / ``scope`` 过滤,
         返回结构化 frontmatter(含 ``uri`` 键,供证据链提取)。
         """
-        out: list[dict] = []
+        out: list[dict[str, object]] = []
         for path, content in self._opa_files(target_uri=target_uri):
             fm = parse_frontmatter(content)
             opa_id = str(fm.get("id", Path(path).stem))
@@ -3023,14 +3035,16 @@ class TicketEngine:
                 break
         return out
 
-    def get_expert_authority(self, *, target_uri: str = "", limit: int = 50) -> list[dict]:
+    def get_expert_authority(
+        self, *, target_uri: str = "", limit: int = 50
+    ) -> list[dict[str, object]]:
         """Inspect sections protected by confirmed or applied expert knowledge.
 
         Expert authority comes from confirmed OPS recommendations and
         applied OPL proposals persisted under ``OP/OpA/`` — the same
         records OPA/OPS/OPL tickets are built from.
         """
-        authority: list[dict] = []
+        authority: list[dict[str, object]] = []
         for path, content in self._op_files("OPL", target_uri=target_uri):
             fm = parse_frontmatter(content)
             if target_uri and str(fm.get("target_uri", "")) != target_uri:
@@ -3068,9 +3082,11 @@ class TicketEngine:
         )
         return authority[: max(1, limit)]
 
-    def get_wiki_change_events(self, *, target_uri: str = "", limit: int = 50) -> list[dict]:
+    def get_wiki_change_events(
+        self, *, target_uri: str = "", limit: int = 50
+    ) -> list[dict[str, object]]:
         """Consume durable apply events from applied OPL proposals."""
-        events: list[dict] = []
+        events: list[dict[str, object]] = []
         for path, content in self._op_files("OPL", target_uri=target_uri):
             fm = parse_frontmatter(content)
             if target_uri and str(fm.get("target_uri", "")) != target_uri:

@@ -32,7 +32,7 @@ from collections.abc import (
 )
 import contextlib
 import os
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Protocol
 
 from pydantic import BaseModel, Field
 from pydantic_ai.tools import (
@@ -129,17 +129,59 @@ class EvalPayload(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _safe_create_opa(tools: Any, /, **kwargs: Any) -> dict[str, Any]:
+class WikiBuildToolsProtocol(Protocol):
+    """Structural interface for WikiBuildTools used by ticket functions."""
+
+    def create_opa(self, **kwargs: object) -> dict[str, object]: ...
+    def read_resource(self, uri: str) -> str: ...
+    def write(self, uri: str, content: str, *, mode: str, wait: bool) -> None: ...
+    def ingest_external_ops(self, **kwargs: object) -> dict[str, object]: ...
+    def update_ops(self, ops_id: str, **kwargs: object) -> dict[str, object]: ...
+    def create_opl(self, **kwargs: object) -> dict[str, object]: ...
+    def apply_opl(self, opl_id: str) -> dict[str, object]: ...
+    def get_opas(self, **kwargs: object) -> list[dict[str, object]]: ...
+    def get_ops(self, **kwargs: object) -> list[dict[str, object]]: ...
+    def get_opls(self, **kwargs: object) -> list[dict[str, object]]: ...
+    def resolve_opa(self, opa_id: str, **kwargs: object) -> dict[str, object]: ...
+    def op_flow_status(self, **kwargs: object) -> dict[str, object]: ...
+    def get_expert_authority(self, **kwargs: object) -> list[dict[str, object]]: ...
+    def get_wiki_change_events(self, **kwargs: object) -> list[dict[str, object]]: ...
+
+
+class _TicketDeps(Protocol):
+    """Minimal deps protocol for ticket tool closures."""
+
+    @property
+    def node(self) -> _TicketNode: ...
+
+
+class _TicketNode(Protocol):
+    @property
+    def host_context(self) -> _TicketHostContext: ...
+
+
+class _TicketHostContext(Protocol):
+    @property
+    def session_pool(self) -> _TicketSessionPool: ...
+
+
+class _TicketSessionPool(Protocol):
+    async def steer_from_background_task(self, session_id: str, message: str) -> str: ...
+
+
+def _safe_create_opa(tools: WikiBuildToolsProtocol, /, **kwargs: object) -> dict[str, object]:
     """Call ``tools.create_opa`` with ``skip_dedupe_lookup`` if supported.
 
     Older ``WikiBuildTools`` versions may not accept ``skip_dedupe_lookup``;
     fall back to calling without it on ``TypeError``.
     """
     try:
-        return tools.create_opa(**kwargs)
+        result = tools.create_opa(**kwargs)
+        return dict(result) if isinstance(result, dict) else {}
     except TypeError:
         kwargs.pop("skip_dedupe_lookup", None)
-        return tools.create_opa(**kwargs)
+        result = tools.create_opa(**kwargs)
+        return dict(result) if isinstance(result, dict) else {}
 
 
 def _record_id(value: str, prefix: str) -> str:
@@ -148,7 +190,9 @@ def _record_id(value: str, prefix: str) -> str:
     return token if token.startswith(prefix + "-") else value
 
 
-async def _notify_opl_applied(ctx: RunContext[Any], result: dict[str, Any]) -> dict[str, str]:
+async def _notify_opl_applied(
+    ctx: RunContext[_TicketDeps], result: dict[str, object]
+) -> dict[str, str]:
     """Best-effort steer notification backed by the durable event ledger."""
     event = result.get("event")
     if (
@@ -213,7 +257,9 @@ def _ticket_evidence(revision: EvalRevision | None) -> list[str]:
     return list(dict.fromkeys([*cited, *linked]))
 
 
-def _sync_entity_to_remote(tools: Any, target_uri: str, opl_uri: str) -> dict[str, object]:
+def _sync_entity_to_remote(
+    tools: WikiBuildToolsProtocol, target_uri: str, opl_uri: str
+) -> dict[str, object]:
     """Push the patched entity page and OPL record to remote Viking.
 
     Best-effort: if the SDK is unavailable or the API key is missing,
@@ -285,11 +331,13 @@ def _sync_entity_to_remote(tools: Any, target_uri: str, opl_uri: str) -> dict[st
 # ---------------------------------------------------------------------------
 
 
-def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Callable[..., Any]]:
+def _build_ticket_fns(
+    tools: WikiBuildToolsProtocol, *, sync_after_apply: bool = False
+) -> list[Callable[..., object]]:
     """Build the six ticket tool closures capturing the tools instance."""
 
     async def create_opa_ticket(
-        ctx: RunContext[Any],
+        ctx: RunContext[_TicketDeps],
         *,
         description: str = "",
         related_uris: list[str] | None = None,
@@ -301,7 +349,7 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
         missing: str = "",
         recommendation: str = "",
         ticket: dict[str, object] | None = None,
-    ) -> dict[str, Any]:
+    ) -> dict[str, object]:
         """File or revise an OPA ticket (problem/feedback for one target).
 
         Creates a ``category=feedback``, ``reason_code=expert_feedback``
@@ -379,8 +427,14 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
         if not opa_id:
             # Reuse an existing pending OPA for the same target instead of
             # duplicating it.  The lookup is O(1): target-uri-hash subdir.
-            existing_opas = await asyncio.to_thread(tools.get_opas, target_uri=effective_target, limit=50)
-            pending = [opa for opa in existing_opas if str(opa.get("status", "")).strip().lower() == "pending"]
+            existing_opas = await asyncio.to_thread(
+                tools.get_opas, target_uri=effective_target, limit=50
+            )
+            pending = [
+                opa
+                for opa in existing_opas
+                if str(opa.get("status", "")).strip().lower() == "pending"
+            ]
             if pending:
                 return {
                     "opa_id": pending[0].get("opa_id", ""),
@@ -409,7 +463,7 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
         )
 
     async def create_ops_ticket(
-        ctx: RunContext[Any],
+        ctx: RunContext[_TicketDeps],
         *,
         suggestion: str = "",
         related_uris: list[str] | None = None,
@@ -419,7 +473,7 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
         expert_id: str = "",
         expert_name: str = "",
         ticket: dict[str, object] | None = None,
-    ) -> dict[str, Any]:
+    ) -> dict[str, object]:
         """Submit or revise an OPS ticket (expert recommendation / draft).
 
         When ``ops_uri`` is provided, the existing OPS record is revised
@@ -486,7 +540,7 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
         )
 
     async def update_ops_ticket(
-        ctx: RunContext[Any],
+        ctx: RunContext[_TicketDeps],
         *,
         ops_uri: str,
         title: str = "",
@@ -500,7 +554,7 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
         status: str = "",
         reviewed_by: str = "",
         review_notes: str = "",
-    ) -> dict[str, Any]:
+    ) -> dict[str, object]:
         """Patch one OPS ticket in place, leaving untouched fields intact.
 
         A true patch, unlike ``create_ops_ticket`` with ``ops_uri`` (which
@@ -568,7 +622,7 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
         )
 
     async def create_opl_ticket(
-        ctx: RunContext[Any],
+        ctx: RunContext[_TicketDeps],
         *,
         ticket: dict[str, object] | None = None,
         parent_opa: str,
@@ -585,7 +639,7 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
         expert_id: str = "",
         expert_name: str = "",
         opl_uri: str = "",
-    ) -> dict[str, Any]:
+    ) -> dict[str, object]:
         """Integrate one OPA and its OPS records into an OPL ticket.
 
         Each referenced OPS is confirmed (``reviewed_by`` = expert or
@@ -690,13 +744,13 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
         )
 
     async def apply_opl_ticket(
-        ctx: RunContext[Any],
+        ctx: RunContext[_TicketDeps],
         *,
         ticket: dict[str, object] | None = None,
         opl_uri: str,
         expert_id: str = "",
         expert_name: str = "",
-    ) -> dict[str, Any]:
+    ) -> dict[str, object]:
         """Apply an OPL ticket to the Wiki and close its ticket chain.
 
         Merges the stored ``candidate_content`` / ``candidate_operations``
@@ -721,7 +775,7 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
             ``notification`` and — when sync ran — ``sync``.
         """
         opl_id = _record_id(opl_uri, "opl")
-        result: dict[str, Any] = await asyncio.to_thread(tools.apply_opl, opl_id)
+        result: dict[str, object] = await asyncio.to_thread(tools.apply_opl, opl_id)
         opl_rows = await asyncio.to_thread(tools.get_opls, limit=200)
         opl_row = next(
             (row for row in opl_rows if row["opl_id"] == opl_id),
@@ -755,12 +809,12 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
         return result
 
     async def get_ticket_status(
-        ctx: RunContext[Any],
+        ctx: RunContext[_TicketDeps],
         *,
         parent_opa: str = "",
         target_uri: str = "",
         limit: int = 50,
-    ) -> dict[str, Any]:
+    ) -> dict[str, object]:
         """Read the current state of OPA / OPS / OPL tickets.
 
         Filters OPA records by ``target_uri`` and OPS/OPL records by
@@ -778,13 +832,17 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
             ``op_flow`` state.
         """
         opas = await asyncio.to_thread(tools.get_opas, target_uri=target_uri, limit=limit)
-        ops = await asyncio.to_thread(tools.get_ops, parent_opa=parent_opa, target_uri=target_uri, limit=limit)
-        opls = await asyncio.to_thread(tools.get_opls, parent_opa=parent_opa, target_uri=target_uri, limit=limit)
+        ops = await asyncio.to_thread(
+            tools.get_ops, parent_opa=parent_opa, target_uri=target_uri, limit=limit
+        )
+        opls = await asyncio.to_thread(
+            tools.get_opls, parent_opa=parent_opa, target_uri=target_uri, limit=limit
+        )
         # op_flow_status is a global scan (get_opas 500 + get_ops 10000) — skip
         # it when a single target_uri is queried; it's irrelevant to per-target
         # ticket lookup and dominates latency on remote backends.
         if target_uri:
-            op_flow: dict[str, Any] = {}
+            op_flow: dict[str, object] = {}
         else:
             op_flow = await asyncio.to_thread(tools.op_flow_status, limit=limit)
         authority = await asyncio.to_thread(
@@ -807,12 +865,12 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
         }
 
     async def submit_eval_payload(
-        ctx: RunContext[Any],
+        ctx: RunContext[_TicketDeps],
         *,
-        payload: dict[str, Any],
+        payload: dict[str, object],
         expert_id: str = "",
         expert_name: str = "",
-    ) -> dict[str, Any]:
+    ) -> dict[str, object]:
         """Sediment an eval payload as OPA + OPS-draft tickets (链路 C).
 
         Pure ingestion: each ``revisions[]`` entry is materialized through
@@ -847,7 +905,7 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
             revision: ticket id, kind, OPA/OPS ids and URIs, statuses).
         """
         payload_obj = EvalPayload.model_validate(payload)
-        records: list[dict[str, Any]] = []
+        records: list[dict[str, object]] = []
         for revision in payload_obj.revisions:
             target = revision.target
             target_uri = (target.entity_uri if target is not None else "") or payload_obj.entity_uri
@@ -869,7 +927,7 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
                 missing=description,
                 recommendation=revision.suggested_resolution,
             )
-            record: dict[str, Any] = {
+            record: dict[str, object] = {
                 "ticket_id": revision.ticket_id,
                 "kind": revision.kind or "OPA",
                 "annotation_ref": revision.annotation_ref,
@@ -907,12 +965,12 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
         }
 
     async def find_op(
-        ctx: RunContext[Any],
+        ctx: RunContext[_TicketDeps],
         *,
         query: str = "",
         prefix: str = "",
         limit: int = 50,
-    ) -> dict[str, Any]:
+    ) -> dict[str, object]:
         """Fast precise lookup over ticket & component identifiers in the wiki store.
 
         Ticket-domain search — directly uses the OpenViking client grep
@@ -980,7 +1038,7 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
 # ---------------------------------------------------------------------------
 
 
-def build_ticket_tools(cap: WikiBuildCapability) -> list[Callable[..., Any]]:
+def build_ticket_tools(cap: WikiBuildCapability) -> list[Callable[..., object]]:
     """Build the ticket tool closures for the WikiBuildCapability.
 
     Args:

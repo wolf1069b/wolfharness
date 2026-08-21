@@ -19,7 +19,7 @@ except ImportError:
     # ponytail: schema_loader lives in xeno_adp_harness which may not be installed
     # when wolfharness is used standalone. Functions that need it already catch
     # KeyError, so raising KeyError makes them return their conservative default.
-    def get_concept_schema(concept: str) -> dict:
+    def get_concept_schema(concept: str) -> dict[str, object]:
         raise KeyError(concept)
 
 
@@ -39,6 +39,9 @@ def _configured_root(env_name: str) -> str:
 # library code while still allowing modules to import before runtime config loads.
 _wiki_root_uri = _configured_root("VIKING_NAMESPACE")
 _raw_source_root_uri = _configured_root("VIKING_RAW_NAMESPACE")
+
+_WIKI_URI_RE: re.Pattern[str]
+_MALFORMED_WIKI_URI_RE: re.Pattern[str]
 
 
 def _compile_wiki_regexes(root_uri: str) -> None:

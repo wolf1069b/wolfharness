@@ -21,15 +21,44 @@ import logging
 import os
 import threading
 import time
-from typing import ClassVar
+from typing import ClassVar, Protocol
 
 from httpx import HTTPError
-from openviking_sdk.errors import AlreadyExistsError, NotFoundError, OpenVikingError
+from openviking_sdk.errors import (  # type: ignore[import-untyped]
+    AlreadyExistsError,
+    NotFoundError,
+    OpenVikingError,
+)
 
 from .backend import FSBackend, _strip_control_chars
 
 
 logger = logging.getLogger(__name__)
+
+
+class VikingClient(Protocol):
+    """Structural interface for the OpenViking SDK client duck-type."""
+
+    def read(self, uri: str) -> str: ...
+    def write(
+        self, uri: str, content: str, *, mode: str, wait: bool, timeout: int = ...
+    ) -> None: ...
+    def stat(self, uri: str) -> dict[str, object]: ...
+    def ls(self, uri: str, *, recursive: bool, simple: bool) -> list[dict[str, object]]: ...
+    def rm(self, uri: str) -> None: ...
+    def mv(self, src: str, dst: str) -> None: ...
+    def find(self, query: str, *, target_uri: str, limit: int) -> dict[str, object]: ...
+    def search(self, query: str, *, target_uri: str, limit: int) -> dict[str, object]: ...
+    def grep(self, target_uri: str, pattern: str, *, node_limit: int) -> dict[str, object]: ...
+    def relations(self, uri: str) -> list[dict[str, object]]: ...
+    def batch_write(
+        self, root_uri: str, operations: list[dict[str, object]], *, wait: bool
+    ) -> None: ...
+    def read_raw(self, uri: str) -> str: ...
+    def tree(self, uri: str) -> list[dict[str, object]]: ...
+    def add_resource(self, *, path: str, to: str, processing_mode: str, wait: bool) -> object: ...
+    def initialize(self) -> None: ...
+
 
 # seconds vs ns threshold: timestamps below are seconds, above already ns
 _NS_TIMESTAMP_THRESHOLD = 1e12
@@ -43,7 +72,7 @@ class VikingFS(FSBackend):
     _lock_registry_guard = threading.Lock()
     _lock_registry: ClassVar[dict[str, tuple[threading.RLock, ...]]] = {}
 
-    def __init__(self, namespace: str, client) -> None:
+    def __init__(self, namespace: str, client: VikingClient) -> None:
         """Wrap a ``openviking_sdk.SyncHTTPClient`` rooted at ``namespace``.
 
         ``client`` is duck-typed to keep this module import-light and
@@ -247,7 +276,7 @@ class VikingFS(FSBackend):
         retry_limit = self._read_retry_limit()
         for attempt in range(retry_limit + 1):
             try:
-                return self._client.read(uri)
+                return str(self._client.read(uri))
             except OpenVikingError as exc:
                 if self._is_not_found(exc):
                     return None
@@ -282,7 +311,7 @@ class VikingFS(FSBackend):
             base = max(0.05, min(5.0, float(os.environ.get("VIKING_READ_BACKOFF_SECONDS", "0.25"))))
         except ValueError:
             base = 0.25
-        return min(5.0, base * (2**attempt))
+        return float(min(5.0, base * (2**attempt)))
 
     @staticmethod
     def _is_not_found(exc: OpenVikingError) -> bool:
@@ -319,7 +348,7 @@ class VikingFS(FSBackend):
             )
         except ValueError:
             base = 0.75
-        return min(30.0, base * (2**attempt))
+        return float(min(30.0, base * (2**attempt)))
 
     def exists(self, key: str) -> bool:
         try:
@@ -534,7 +563,7 @@ class VikingFS(FSBackend):
         target_uri: str = "",
         limit: int = 10,
         deep: bool = False,
-    ) -> list[dict]:
+    ) -> list[dict[str, object]]:
         """Use OpenViking's native ``find``/``search`` retrieval primitive.
 
         ``find`` is deliberately the default because it is bounded, stateless,
@@ -558,10 +587,12 @@ class VikingFS(FSBackend):
         hits = self._extract_hits(result, target_root=target)
         return hits[:limit]
 
-    def search(self, query: str, *, limit: int = 10) -> list[dict]:
+    def search(self, query: str, *, limit: int = 10) -> list[dict[str, object]]:
         return self.find(query, limit=limit, deep=True)
 
-    def grep(self, pattern: str, *, limit: int = 256, target_uri: str = "") -> list[dict]:
+    def grep(
+        self, pattern: str, *, limit: int = 256, target_uri: str = ""
+    ) -> list[dict[str, object]]:
         try:
             result = self._client.grep(
                 target_uri.rstrip("/") or self.root_uri,
@@ -573,7 +604,7 @@ class VikingFS(FSBackend):
             return []
         return self._extract_hits(result, target_root=target_uri.rstrip("/") or self.root_uri)
 
-    def relations(self, uri: str) -> list[dict]:
+    def relations(self, uri: str) -> list[dict[str, object]]:
         """Read OpenViking's native relation edges for *uri*."""
         try:
             result = self._client.relations(uri)
@@ -584,11 +615,16 @@ class VikingFS(FSBackend):
 
     _METADATA_FILENAMES = frozenset({".overview.md", ".abstract.md", "entities.json"})
 
-    def _extract_hits(self, result: dict, *, target_root: str = "") -> list[dict]:
-        hits: list[dict] = []
+    def _extract_hits(
+        self, result: dict[str, object], *, target_root: str = ""
+    ) -> list[dict[str, object]]:
+        hits: list[dict[str, object]] = []
         scope = target_root.rstrip("/") or self.root_uri
         for bucket in ("resources", "memories", "skills"):
-            for item in result.get(bucket, []) or []:
+            bucket_items = result.get(bucket, [])
+            if not isinstance(bucket_items, list):
+                continue
+            for item in bucket_items:
                 if not isinstance(item, dict):
                     continue
                 uri = str(item.get("uri", ""))
@@ -612,13 +648,13 @@ class VikingFS(FSBackend):
     # ── node inspection (structure-coupling isolated here) ───────────────
 
     @staticmethod
-    def _node_uri(node) -> str | None:
+    def _node_uri(node: object) -> str | None:
         if isinstance(node, dict):
             return str(node.get("uri") or node.get("path") or node.get("name") or "")
         return str(node) if node else ""
 
     @staticmethod
-    def _node_is_dir(node) -> bool:
+    def _node_is_dir(node: object) -> bool:
         if isinstance(node, dict):
             if node.get("isDir") is True:
                 return True
@@ -627,7 +663,7 @@ class VikingFS(FSBackend):
         return False
 
     @staticmethod
-    def _timestamp_to_ns(value) -> int | None:
+    def _timestamp_to_ns(value: object) -> int | None:
         if value is None:
             return None
         if isinstance(value, (int, float)):

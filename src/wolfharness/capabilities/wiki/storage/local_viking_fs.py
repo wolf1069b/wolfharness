@@ -18,9 +18,14 @@ from concurrent.futures import ThreadPoolExecutor
 import logging
 from pathlib import Path
 import tempfile
+from typing import TYPE_CHECKING
 
 from .backend import FSBackend
 from .local_fs import LocalFS
+
+
+if TYPE_CHECKING:
+    from .viking_fs import VikingClient
 
 
 logger = logging.getLogger(__name__)
@@ -94,7 +99,7 @@ class LocalVikingFS(FSBackend):
     def move(self, src: str, dst: str) -> None:
         self._local.move(src, dst)
 
-    def sync_native_relations(self, pairs: list[tuple[str, list[str]]]) -> dict:
+    def sync_native_relations(self, pairs: list[tuple[str, list[str]]]) -> dict[str, object]:
         """No-op: local backends have no remote graph API to sync.
 
         Relations are stored in entity frontmatter only; the native
@@ -102,7 +107,7 @@ class LocalVikingFS(FSBackend):
         """
         return {"linked": 0, "unlinked": 0, "errors": []}
 
-    def finalize_upload(self, client) -> dict:
+    def finalize_upload(self, client: VikingClient) -> dict[str, object]:
         """Upload each top-level directory under the wiki root to Viking.
 
         Per-directory ``add_resource(semantic_and_vectors)`` runs in a worker
@@ -113,7 +118,7 @@ class LocalVikingFS(FSBackend):
         Returns:
             ``{"status": "completed"|"failed", "uploads": [{"dir": str, "status": "ok"|"failed"}]}``
         """
-        uploads: list[dict] = []
+        uploads: list[dict[str, object]] = []
         try:
             for child in sorted(self._local.root.iterdir()):
                 if child.is_dir():

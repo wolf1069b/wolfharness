@@ -175,6 +175,11 @@ class FakeMcpClient:
     def __init__(self, raw_tools: list[RawMcpTool]) -> None:
         self._raw_tools = raw_tools
 
+    @property
+    def connected(self) -> bool:
+        """Mirror ``MCPClient.connected`` — the double is always ready."""
+        return True
+
     async def list_tools(self) -> list[RawMcpTool]:
         return list(self._raw_tools)
 

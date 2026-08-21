@@ -4293,7 +4293,9 @@ def test_workflow_task_intent_idempotency_key_zero_falls_through_to_packet() -> 
     key_b = TeamCommCapability._task_idempotency_key("1A: chapter B", desc_b)
     assert key_a
     assert key_b
-    assert key_a != key_b, "Different packet_ids must produce different keys even with idempotency_key=0"
+    assert key_a != key_b, (
+        "Different packet_ids must produce different keys even with idempotency_key=0"
+    )
 
 
 @pytest.mark.unit
