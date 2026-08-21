@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
@@ -53,6 +54,11 @@ if TYPE_CHECKING:
 TContent = TypeVar("TContent", str, BaseModel)
 FormatStyle = Literal["simple", "detailed", "markdown", "custom"]
 logger = get_logger(__name__)
+
+_COST_FALLBACK_TIMEOUT: float = 0.2
+"""Max seconds to wait for the tokonomics cost fallback before returning cost=0."""
+_COST_FALLBACK_FAILED: set[str] = set()
+"""Model names whose cost fallback already failed — skip the network call next time."""
 
 SIMPLE_TEMPLATE = """{{ name or role.title() }}: {{ content }}"""
 
@@ -153,14 +159,52 @@ class TokenCost:
                 price_data = calc_price(usage, model_ref=model_ref, provider_id=provider_id)
                 price = price_data.total_price
             except Exception:  # noqa: BLE001
-                cost = await tokonomics.calculate_token_cost(
-                    model,
-                    usage.input_tokens,
-                    usage.output_tokens,
-                )
-                price = Decimal(cost.total_cost if cost else 0)
+                if model in _COST_FALLBACK_FAILED:
+                    price = Decimal(0)
+                else:
+                    try:
+                        async with asyncio.timeout(_COST_FALLBACK_TIMEOUT):
+                            cost = await tokonomics.calculate_token_cost(
+                                model,
+                                usage.input_tokens,
+                                usage.output_tokens,
+                            )
+                        price = Decimal(cost.total_cost if cost else 0)
+                        if cost is None:
+                            _COST_FALLBACK_FAILED.add(model)
+                    except Exception as exc:  # noqa: BLE001
+                        # Fallback lookup failed (e.g. unreachable pricing host) —
+                        # cache the failure so subsequent turns skip it, and
+                        # degrade cost to 0 instead of blocking end_turn.
+                        _COST_FALLBACK_FAILED.add(model)
+                        price = Decimal(0)
+                        logger.debug("Token cost fallback failed for %r: %s", model, exc)
 
         return cls(token_usage=usage, total_cost=price)
+
+
+async def prefetch_token_cost_cache() -> None:
+    """Prefetch the LiteLLM pricing table into the tokonomics cache.
+
+    A single call to ``tokonomics.get_model_costs`` downloads the full
+    pricing table once and populates the process-wide ``_cost_cache`` for
+    ALL models, so later ``TokenCost.from_usage`` fallbacks hit memory.
+    Runs in the background at server startup; failures are logged and ignored.
+
+    Returns:
+        None
+    """
+    try:
+        # Any model name works — the download seeds the whole table.
+        await tokonomics.get_model_costs("gpt-4o")
+
+        # Also seed cost entries for a couple of commonly used providers so
+        # per-model lookups are memory hits even for models absent from
+        # the local genai_prices snapshot.
+        for probe in ("anthropic/claude-3-5-sonnet", "google/gemini-1.5-pro"):
+            await tokonomics.get_model_costs(probe)
+    except Exception:
+        logger.debug("Token cost prefetch failed", exc_info=True)
 
 
 @dataclass
