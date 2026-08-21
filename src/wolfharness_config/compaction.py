@@ -96,6 +96,19 @@ class TruncateTextPartsConfig(Schema):
         return TruncateTextParts(max_length=self.max_length, suffix=self.suffix)
 
 
+class TruncateToolCallInputsConfig(Schema):
+    """Configuration for TruncateToolCallInputs step."""
+
+    type: Literal["truncate_tool_inputs"] = "truncate_tool_inputs"
+    max_length: int = 1500
+    suffix: str = "\n... [input truncated]"
+
+    def build(self) -> CompactionStep:
+        from wolfharness.messaging.compaction import TruncateToolCallInputs
+
+        return TruncateToolCallInputs(max_length=self.max_length, suffix=self.suffix)
+
+
 class KeepLastMessagesConfig(Schema):
     """Configuration for KeepLastMessages step."""
 
@@ -191,6 +204,7 @@ CompactionStepConfig = Annotated[
     | FilterEmptyMessagesConfig
     | TruncateToolOutputsConfig
     | TruncateTextPartsConfig
+    | TruncateToolCallInputsConfig
     | KeepLastMessagesConfig
     | KeepFirstMessagesConfig
     | KeepFirstAndLastConfig

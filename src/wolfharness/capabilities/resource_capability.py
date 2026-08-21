@@ -110,20 +110,29 @@ class ResourceCapability(AbstractCapability[AgentDepsT]):
 
     @logfire.instrument("capability.resource_capability.get_toolset")
     def get_toolset(self) -> AgentToolset[AgentDepsT] | None:
-        """Return a ``FunctionToolset`` with all 5 resource tools.
+        """Return a ``PrefixedToolset`` with all 5 resource tools.
 
         The tools access ``ctx.deps`` at runtime, which must be an
         ``AgentContextDeps`` with an ``extension_registry`` field.
+
+        The ``resource_`` prefix keeps these tools from colliding with
+        identically-named tools advertised by MCP servers (e.g. an MCP
+        server's own ``list_resources``).
         """
-        return FunctionToolset(
-            [
-                self.list_resources,
-                self.read_resource,
-                self.resource_exists,
-                self.list_resource_templates,
-                self.complete_resource_template,
-            ],
-            id=self._toolset_id,
+        from pydantic_ai.toolsets import PrefixedToolset
+
+        return PrefixedToolset(
+            wrapped=FunctionToolset(
+                [
+                    self.list_resources,
+                    self.read_resource,
+                    self.resource_exists,
+                    self.list_resource_templates,
+                    self.complete_resource_template,
+                ],
+                id=self._toolset_id,
+            ),
+            prefix="resource_",
         )
 
     # ------------------------------------------------------------------

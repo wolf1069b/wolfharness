@@ -236,3 +236,36 @@ class TestSanitizeToolCallArgsInMessages:
 
         sanitize_tool_call_args_in_messages(messages)
         assert messages[0].parts[0].args == '{"cmd": "ls"}'
+
+    def test_repairs_invalid_json_args_to_empty_object(self):
+        """Args that fail json.loads (truncated/unescaped) become {}.
+
+        Regression: poisoned args previously persisted verbatim into message
+        history, making the next model request fail with vLLM HTTP 400
+        "Assistant tool call function.arguments must be valid JSON".
+        """
+        call = ToolCallPart(
+            tool_name="distill",
+            args='{"topic": "body"影响范围"补链"}',
+            tool_call_id="call_broken",
+        )
+        response = ModelResponse(parts=[call], model_name="svc/deepseek-v4-flash")
+        messages: list[Any] = [response]
+
+        sanitize_tool_call_args_in_messages(messages)
+
+        assert messages[0].parts[0].args == "{}"
+
+    def test_repairs_truncated_json_args_to_empty_object(self):
+        """A truncated JSON blob (unknown length) also degrades to {}."""
+        call = ToolCallPart(
+            tool_name="distill",
+            args='{"topic": "long truncated streamed content without closing brace',
+            tool_call_id="call_truncated",
+        )
+        response = ModelResponse(parts=[call], model_name="svc/deepseek-v4-flash")
+        messages: list[Any] = [response]
+
+        sanitize_tool_call_args_in_messages(messages)
+
+        assert messages[0].parts[0].args == "{}"

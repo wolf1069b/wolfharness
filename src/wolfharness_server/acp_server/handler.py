@@ -24,6 +24,7 @@ from wolfharness.agents.events.events import ElicitationDeferredEvent, SpawnSess
 from wolfharness.log import get_logger
 from wolfharness_server.acp_server.event_converter import ACPEventConverter, SubagentContext
 from wolfharness_server.acp_server.input_provider import ACPInputProvider
+from wolfharness_server.acp_server.viking_archive import ACPVikingEventArchive
 from wolfharness_server.mixins import ConsumerShutdown, ProtocolEventConsumerMixin
 
 
@@ -47,6 +48,19 @@ def _make_image_normalizer(host_context: HostContext) -> Any | None:
     if manifest is None:
         return None
     return ImageNormalizer(manifest.attachment)
+
+
+def _content_items_to_text(contents: Sequence[Any]) -> str:
+    """Best-effort text view of ACP prompt content for capability metadata."""
+    text_parts: list[str] = []
+    for item in contents:
+        if isinstance(item, str):
+            text_parts.append(item)
+            continue
+        text = getattr(item, "text", None)
+        if isinstance(text, str):
+            text_parts.append(text)
+    return "\n".join(part for part in text_parts if part.strip()).strip()
 
 
 class ACPProtocolHandler(ProtocolEventConsumerMixin):
@@ -75,6 +89,7 @@ class ACPProtocolHandler(ProtocolEventConsumerMixin):
         client: Client,
         client_capabilities: ClientCapabilities | None = None,
         acp_agent: Any = None,
+        viking_archive: ACPVikingEventArchive | None = None,
     ) -> None:
         """Initialize the protocol handler."""
         super().__init__()
@@ -87,6 +102,17 @@ class ACPProtocolHandler(ProtocolEventConsumerMixin):
         self._parent_of: dict[str, str] = {}
         self.acp_agent = acp_agent
         self._elicitation_tasks: dict[str, set[asyncio.Task[Any]]] = {}
+        if viking_archive is not None:
+            self._viking_archive = viking_archive
+        else:
+            session_pool_config = getattr(
+                getattr(host_context, "manifest", None),
+                "session_pool",
+                None,
+            )
+            self._viking_archive = ACPVikingEventArchive.from_config(
+                getattr(session_pool_config, "acp_viking_archive", None)
+            )
 
     @property
     def event_bus(self) -> EventBus:
@@ -197,7 +223,12 @@ class ACPProtocolHandler(ProtocolEventConsumerMixin):
                     session_id=parent_sid,
                     update=update,
                 )
-                await self.client.session_update(notification)
+                await self._archive_and_send_update(
+                    notification,
+                    consumer_session_id=parent_sid,
+                    source_session_id=parent_sid,
+                    event_id=f"subagent-completed:{child_sid}",
+                )
         except (ConnectionResetError, BrokenPipeError):
             logger.debug(
                 "Client disconnected during completion notification",
@@ -311,7 +342,12 @@ class ACPProtocolHandler(ProtocolEventConsumerMixin):
                     update=update,
                     field_meta=converter.subagent_meta,
                 )
-                await self.client.session_update(notification)
+                await self._archive_and_send_update(
+                    notification,
+                    consumer_session_id=session_id,
+                    source_session_id=effective_sid,
+                    event_id=envelope.event_id,
+                )
         except (ConnectionResetError, BrokenPipeError) as e:
             logger.debug(
                 "Client connection closed gracefully",
@@ -479,6 +515,7 @@ class ACPProtocolHandler(ProtocolEventConsumerMixin):
         Args:
             session_id: The session whose consumer has stopped.
         """
+        await self._viking_archive.flush_session(session_id)
         self._converters.pop(session_id, None)
         self._parent_of.pop(session_id, None)
 
@@ -596,6 +633,7 @@ class ACPProtocolHandler(ProtocolEventConsumerMixin):
         # Convert ACP content blocks to agent prompts
         normalizer = _make_image_normalizer(self._host_context)
         contents = [from_acp_content(block, fs=None, normalizer=normalizer) for block in prompt]
+        raw_user_prompt_text = _content_items_to_text(contents)
 
         # Split slash commands from content and execute local commands.
         # Commands inject expanded prompts into the SessionPool per-session
@@ -662,6 +700,9 @@ class ACPProtocolHandler(ProtocolEventConsumerMixin):
         # sole publication point — the ACPEventConverter reconstructs
         # the content blocks from meta.
         message_id = str(uuid.uuid4())
+        if acp_session is not None:
+            acp_session.latest_user_prompt_text = raw_user_prompt_text
+            acp_session.latest_user_prompt_message_id = message_id
 
         # Build ACP meta from content blocks for the EventBus event.
         from wolfharness_server.acp_server.event_converter import ACPUserMessageMeta
@@ -680,6 +721,7 @@ class ACPProtocolHandler(ProtocolEventConsumerMixin):
                 mode=delivery_mode,
                 input_provider=input_provider,
                 message_id=message_id,
+                deps=acp_session,
                 meta=acp_meta,
             )
             # Legacy clients (no turn_complete support) block until the run finishes
@@ -826,6 +868,7 @@ class ACPProtocolHandler(ProtocolEventConsumerMixin):
 
         # Stop the event consumer (mixin's stop handles cancellation + unsubscribe)
         await self.stop_event_consumer(session_id)
+        await self._viking_archive.flush_session(session_id)
 
         # Signal EventBus to close session
         if session_pool is not None:
@@ -888,12 +931,34 @@ class ACPProtocolHandler(ProtocolEventConsumerMixin):
                     update=chunk,
                 )
                 try:
-                    await self.client.session_update(notification)
+                    await self._archive_and_send_update(
+                        notification,
+                        consumer_session_id=session_id,
+                        source_session_id=session_id,
+                        event_id=f"direct-user-message:{message_id or 'unknown'}",
+                    )
                 except (ConnectionResetError, BrokenPipeError, anyio.ClosedResourceError):
                     logger.debug(
                         "Failed to send user_message_chunk",
                         session_id=session_id,
                     )
+
+    async def _archive_and_send_update(
+        self,
+        notification: Any,
+        *,
+        consumer_session_id: str,
+        source_session_id: str,
+        event_id: Any,
+    ) -> None:
+        """Best-effort archive before forwarding an ACP update to the client."""
+        await self._viking_archive.record_update(
+            consumer_session_id=consumer_session_id,
+            source_session_id=source_session_id,
+            event_id=event_id,
+            update=notification.update,
+        )
+        await self.client.session_update(notification)
 
 
 class _ACPSessionProxy:

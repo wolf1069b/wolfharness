@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import logfire
 from pydantic_ai.capabilities import AbstractCapability
-from pydantic_ai.toolsets import AgentToolset, FunctionToolset
+from pydantic_ai.toolsets import AgentToolset, FunctionToolset, PrefixedToolset
 
 from wolfharness.capabilities.viking.identity import VikingIdentity, _try_decode_api_key
 from wolfharness.capabilities.viking.ingest import (
@@ -46,6 +46,16 @@ _REMEMBER_MAX_RETRIES = 3
 
 # Time budget for the background memory-diff notification task.
 _REMEMBER_NOTIFY_TIMEOUT = 30.0
+
+
+class _MissingVikingSDKClient:
+    """No-op client used when lazy init is exercised without the Viking extra."""
+
+    async def initialize(self) -> None:
+        return None
+
+    async def close(self) -> None:
+        return None
 
 
 if TYPE_CHECKING:
@@ -97,6 +107,8 @@ class VikingCapability(AbstractCapability[Any]):
     account: str | None = None
     user: str | None = None
     timeout: float | None = None
+    tool_prefix: str | None = None
+    """Optional namespace prefix for exposed Viking tool names."""
     skills_uri: str | None = None
     resources_uri: str | None = None
     sessions_uri: str | None = None
@@ -217,6 +229,20 @@ class VikingCapability(AbstractCapability[Any]):
     """When True (default), profile injection runs only on the first turn
     of a session. When False, injection runs on every ``before_model_request``
     call (not recommended — expensive and static)."""
+    index_enabled: bool = False
+    """Enable first-turn resource-namespace index injection. When True,
+    the capability lists live ``viking://resources/<namespace>``
+    namespaces on the first turn and injects them as an
+    ``<openviking-index>`` XML block, eliminating hard-coded namespace
+    knowledge."""
+    index_max_tokens: int = 1000
+    """Maximum token budget for the injected index block. Content is
+    truncated if it exceeds this budget (chars-to-tokens 4:1 heuristic)."""
+    index_limit: int = 20
+    """Maximum number of namespace names to include in the index block."""
+    index_uri: str | None = None
+    """Namespace URI to list. When ``None``, resolves to
+    ``viking://resources/``."""
     enabled_tools: list[str] | None = None
     """If set, only these tools are exposed (whitelist). Mutually exclusive
     with ``disabled_tools``."""
@@ -259,6 +285,9 @@ class VikingCapability(AbstractCapability[Any]):
     _profile_injected: bool = field(default=False, repr=False)
     """Flag tracking whether profile injection has already run for this
     session. Reset to ``False`` in ``for_run()`` so each run starts fresh."""
+    _index_injected: bool = field(default=False, repr=False)
+    """Flag tracking whether index injection has already run for this
+    session. Reset to ``False`` in ``for_run()`` so each run starts fresh."""
     _last_ingested_idx: int = field(default=0, repr=False)
     """Cursor tracking the last message index ingested to Viking.
     Reset to 0 on each per-run copy via ``for_run()``."""
@@ -274,6 +303,11 @@ class VikingCapability(AbstractCapability[Any]):
     _pending_tasks: set[asyncio.Task[None]] = field(default_factory=set, repr=False)
     """References to fire-and-forget ingestion tasks. Prevents GC and
     enables ``after_run()`` to await them before client teardown."""
+    _failed_ingest_batches: list[tuple[list[dict[str, Any]], str, str, int, int]] = field(
+        default_factory=list,
+        repr=False,
+    )
+    """Auto-ingest batches that already lost their source cursor but still need retry."""
 
     @property
     def has_wrap_node_run(self) -> bool:
@@ -399,7 +433,12 @@ class VikingCapability(AbstractCapability[Any]):
         if self._client is not None:
             return self._client
 
-        from openviking_sdk import AsyncHTTPClient
+        try:
+            from openviking_sdk import AsyncHTTPClient
+        except ImportError:
+            client = _MissingVikingSDKClient()
+            self._client = client
+            return client
 
         kwargs: dict[str, Any] = {
             "url": self.url,
@@ -544,10 +583,12 @@ class VikingCapability(AbstractCapability[Any]):
             _owns_client=False,
             _identity=self._identity,
             _profile_injected=False,
+            _index_injected=False,
             _last_ingested_idx=0,
             _remember_pending=[],
             _remember_drain_failures=0,
             _pending_tasks=set(),
+            _failed_ingest_batches=[],
         )
 
     def get_instructions(self) -> str | None:
@@ -583,7 +624,10 @@ class VikingCapability(AbstractCapability[Any]):
         tool_fns = build_tools(self)
         if not tool_fns:
             return None
-        return FunctionToolset(tool_fns, id="viking")
+        toolset = FunctionToolset(tool_fns, id="viking")
+        if self.tool_prefix:
+            return PrefixedToolset(toolset, self.tool_prefix)
+        return toolset
 
     async def get_tools(self) -> Sequence[Any]:
         """Return tools as ``Tool`` objects for listing endpoints.
@@ -1140,7 +1184,7 @@ class VikingCapability(AbstractCapability[Any]):
         1. Derives a context hint from ``ctx.deps``.
         2. Queries Viking memories via ``client.find()``.
         3. Formats results as an ``<openviking-profile>`` XML block.
-        4. Injects it as a ``SystemPromptPart`` before the latest user
+        4. Injects it as a ``UserPromptPart`` before the latest user
            message using ``dataclasses.replace()``.
         5. Sets ``_profile_injected = True``.
 
@@ -1203,7 +1247,6 @@ class VikingCapability(AbstractCapability[Any]):
 
             from pydantic_ai.messages import (
                 ModelRequest,
-                SystemPromptPart,
                 UserPromptPart,
             )
 
@@ -1220,11 +1263,100 @@ class VikingCapability(AbstractCapability[Any]):
             if insert_idx is None:
                 return request_context
 
-            system_msg = ModelRequest(parts=[SystemPromptPart(content=profile_block)])
+            system_msg = ModelRequest(parts=[UserPromptPart(content=profile_block)])
             new_messages = [*messages[:insert_idx], system_msg, *messages[insert_idx:]]
             return replace(request_context, messages=new_messages)
         except Exception:
             logger.warning("Profile injection failed", exc_info=True)
+            return request_context
+
+    # ---- Index Injection (Dynamic Namespaces) ----
+
+    async def _handle_index_inject(
+        self,
+        ctx: RunContext[Any],
+        request_context: ModelRequestContext,
+    ) -> ModelRequestContext:
+        """Inject a live resource-namespace index block on the first turn.
+
+        When ``index_enabled`` is ``True`` and this is the first
+        ``before_model_request`` call for the session (``_index_injected``
+        is ``False`` and message count is <= 2), the method:
+
+        1. Lists namespaces under the index URI (``viking://resources/``
+           by default, non-recursive) via ``client.ls()``.
+        2. Collects entry names where ``isDir`` is truthy.
+        3. Formats them as an ``<openviking-index>`` XML block.
+        4. Injects it as a ``UserPromptPart`` before the latest user
+           message using ``dataclasses.replace()``.
+        5. Sets ``_index_injected = True``.
+
+        On any error, logs a warning and returns the original
+        ``request_context`` unchanged (flag already set, no retry).
+
+        Args:
+            ctx: The pydantic-ai run context.
+            request_context: The model request context containing messages.
+
+        Returns:
+            The (possibly modified) model request context.
+        """
+        if not self.index_enabled or self._index_injected:
+            return request_context
+
+        if len(request_context.messages) > self._FIRST_TURN_MAX_MESSAGES:
+            self._index_injected = True
+            return request_context
+
+        self._index_injected = True
+
+        try:
+            client = await self._ensure_client()
+            from wolfharness.capabilities.viking.index import _format_index_block
+
+            uri = self.index_uri if self.index_uri is not None else "viking://resources/"
+            entries = await client.ls(uri)
+            namespaces: list[str] = []
+            if isinstance(entries, list):
+                for entry in entries:
+                    if isinstance(entry, dict) and entry.get("isDir"):
+                        name = str(entry.get("name") or "")
+                        if name:
+                            namespaces.append(name)
+
+            index_block = _format_index_block(
+                namespaces,
+                max_tokens=self.index_max_tokens,
+                limit=self.index_limit,
+            )
+            if not index_block.strip():
+                return request_context
+
+            from dataclasses import replace
+
+            from pydantic_ai.messages import (
+                ModelRequest,
+                UserPromptPart,
+            )
+
+            messages = list(request_context.messages)
+            insert_idx: int | None = None
+            for i in range(len(messages) - 1, -1, -1):
+                msg = messages[i]
+                if isinstance(msg, ModelRequest) and any(
+                    isinstance(p, UserPromptPart) for p in msg.parts
+                ):
+                    insert_idx = i
+                    break
+
+            if insert_idx is None:
+                return request_context
+
+            system_msg = ModelRequest(parts=[UserPromptPart(content=index_block)])
+            new_messages = [*messages[:insert_idx], system_msg, *messages[insert_idx:]]
+            return replace(request_context, messages=new_messages)
+        except Exception:
+            logger.warning("Index injection failed", exc_info=True)
             return request_context
 
     # ---- Multimodal Bridge (Phase 6) ----
@@ -1241,9 +1373,10 @@ class VikingCapability(AbstractCapability[Any]):
         0. Remember drain (capture deferred ``viking_remember`` intents)
         1. Auto-ingest (process previous turn, fire-and-forget)
         2. Profile injection (add static profile, first turn only)
-        3. Auto-recall (add dynamic recalled memories)
-        4. Compaction archive (reduce context if too large)
-        5. Multimodal bridge (handle binary content)
+        3. Index injection (add live resource namespaces, first turn only)
+        4. Auto-recall (add dynamic recalled memories)
+        5. Compaction archive (reduce context if too large)
+        6. Multimodal bridge (handle binary content)
 
         Each handler checks its own enabled flag and returns early if
         disabled (D14). Handlers receive the output of the previous
@@ -1266,6 +1399,7 @@ class VikingCapability(AbstractCapability[Any]):
             request_context = await self._handle_remember_drain(ctx, request_context)
             request_context = await self._handle_auto_ingest(ctx, request_context)
             request_context = await self._handle_profile_inject(ctx, request_context)
+            request_context = await self._handle_index_inject(ctx, request_context)
             request_context = await self._handle_auto_recall(ctx, request_context)
             request_context = await self._handle_compaction(ctx, request_context)
             return await self._handle_multimodal_bridge(ctx, request_context)
@@ -1754,10 +1888,7 @@ class VikingCapability(AbstractCapability[Any]):
             logger.warning("auto_recall: failed to ensure client", exc_info=True)
             return request_context
 
-        # Extract session_id from ctx.deps if available
-        from wolfharness.capabilities.viking.tools import _get_session_id
-
-        session_id = _get_session_id(ctx)
+        session_id = self._resolve_recall_session_id(ctx)
 
         try:
             session_context: dict[str, Any] | None = None
@@ -1818,6 +1949,12 @@ class VikingCapability(AbstractCapability[Any]):
             logger.warning("auto_recall: recall failed", exc_info=True)
             return request_context
 
+    def _resolve_recall_session_id(self, ctx: RunContext[Any]) -> str | None:
+        """Return the Viking session id used for session-aware recall."""
+        from wolfharness.capabilities.viking.tools import _get_session_id
+
+        return _get_session_id(ctx)
+
     # ---- Auto Conversation Ingestion ----
 
     async def _handle_auto_ingest(
@@ -1830,8 +1967,8 @@ class VikingCapability(AbstractCapability[Any]):
         Called from ``before_model_request`` (wired in Group 7). Extracts
         new messages since ``_last_ingested_idx``, sanitizes them, and
         fires-and-forget an ``asyncio.create_task`` to write them to a
-        new Viking session. Updates the ingestion cursor regardless of
-        success or failure (to avoid retrying on every subsequent turn).
+        new Viking session. Failed batches are retained for retry so
+        compaction cannot erase the only copy of an uncommitted turn.
 
         When ``auto_ingest_mode`` is ``"sync"``, awaits the ingestion
         directly instead of spawning a background task.
@@ -1851,6 +1988,17 @@ class VikingCapability(AbstractCapability[Any]):
         current_count = len(messages)
 
         # No new messages since last ingestion
+        if current_count <= self._last_ingested_idx and not self._failed_ingest_batches:
+            return request_context
+
+        try:
+            client = await self._ensure_client()
+        except Exception:
+            logger.warning("auto_ingest: failed to ensure client", exc_info=True)
+            return request_context
+
+        await self._retry_failed_ingest_batches(client)
+
         if current_count <= self._last_ingested_idx:
             return request_context
 
@@ -1865,14 +2013,10 @@ class VikingCapability(AbstractCapability[Any]):
         if self.auto_ingest_sanitize:
             pairs = [{"role": p["role"], "content": _sanitize_message(p["content"])} for p in pairs]
 
-        # Update cursor BEFORE ingestion to prevent retries on failure
+        previous_idx = self._last_ingested_idx
+        # Claim the range before scheduling to avoid duplicate concurrent ingestion.
+        # If the commit fails, the task rolls this back so the next boundary retries.
         self._last_ingested_idx = current_count
-
-        try:
-            client = await self._ensure_client()
-        except Exception:
-            logger.warning("auto_ingest: failed to ensure client", exc_info=True)
-            return request_context
 
         # Generate a unique session ID for this ingestion
         session_id = f"ingest-{uuid.uuid4().hex[:12]}"
@@ -1887,6 +2031,15 @@ class VikingCapability(AbstractCapability[Any]):
                     keep_recent_turns=self.auto_ingest_keep_recent_turns,
                 )
             except Exception:
+                if self._last_ingested_idx == current_count:
+                    self._last_ingested_idx = previous_idx
+                self._failed_ingest_batches.append((
+                    list(pairs),
+                    session_id,
+                    self.auto_ingest_source_type,
+                    self.auto_ingest_keep_recent_turns,
+                    current_count,
+                ))
                 logger.warning("auto_ingest: ingestion failed", exc_info=True)
 
         if self.auto_ingest_mode == "sync":
@@ -1943,6 +2096,32 @@ class VikingCapability(AbstractCapability[Any]):
             logger.warning("remember: tail-flush failed", exc_info=True)
         return result
 
+    async def _retry_failed_ingest_batches(self, client: Any) -> None:
+        """Retry captured auto-ingest batches whose source messages may be gone."""
+        if not self._failed_ingest_batches:
+            return
+        pending = self._failed_ingest_batches
+        self._failed_ingest_batches = []
+        for pairs, session_id, source_type, keep_recent_turns, cursor_after in pending:
+            try:
+                await _ingest_conversation(
+                    client,
+                    pairs,
+                    session_id=session_id,
+                    source_type=source_type,
+                    keep_recent_turns=keep_recent_turns,
+                )
+                self._last_ingested_idx = max(self._last_ingested_idx, cursor_after)
+            except Exception:
+                self._failed_ingest_batches.append((
+                    pairs,
+                    session_id,
+                    source_type,
+                    keep_recent_turns,
+                    cursor_after,
+                ))
+                logger.warning("auto_ingest: retry failed", exc_info=True)
+
     async def _flush_tail(self, ctx: RunContext[Any]) -> None:
         """Flush pending remember intent and trailing messages at run end.
 
@@ -1960,11 +2139,17 @@ class VikingCapability(AbstractCapability[Any]):
         Args:
             ctx: The pydantic-ai run context.
         """
-        if not self.auto_ingest_enabled and not self._remember_pending:
+        if (
+            not self.auto_ingest_enabled
+            and not self._remember_pending
+            and not self._failed_ingest_batches
+        ):
             return
 
         messages = ctx.messages
         current_count = len(messages)
+        client = await self._ensure_client()
+        await self._retry_failed_ingest_batches(client)
         if current_count <= self._last_ingested_idx and not self._remember_pending:
             return
 
@@ -1981,7 +2166,6 @@ class VikingCapability(AbstractCapability[Any]):
                     "content": _MEMORY_INTENT_TEMPLATE.format(reason=reason),
                 })
 
-        client = await self._ensure_client()
         session_id = f"remember-{uuid.uuid4().hex[:12]}"
         await _ingest_conversation(
             client,

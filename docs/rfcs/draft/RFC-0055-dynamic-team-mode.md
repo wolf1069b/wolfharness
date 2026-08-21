@@ -989,9 +989,13 @@ delete_blackboard(key: str) -> str
 shutdown_request(member_name: str) -> str
     """Request shutdown of a specific teammate."""
 
-team_add_member(name: str, agent: str, prompt: str = "", lifecycle: str = "persistent", notify: str = "", instructions: str = "", skills: list[str] | None = None) -> str
+team_add_member(name: str, agent: str, prompt: str = "", lifecycle: str = "persistent", notify: str = "", instructions: str = "", skills: list[str] | None = None, initial_task: InitialMemberTask | None = None, initial_task_id: str = "") -> str
     """Add a new member to an existing team."""
     # skills: optional — same semantics as team_create member dict "skills" key
+    # initial_task: create and owner-bind an authoritative task before the
+    #               member's first wakeup
+    # initial_task_id: owner-bind an existing released pending/blocked task
+    #                  before wakeup; mutually exclusive with initial_task
 
 task_create_batch(tasks: list[dict]) -> str
     """Create multiple tasks atomically with inter-task dependencies."""

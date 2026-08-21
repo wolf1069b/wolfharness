@@ -186,6 +186,9 @@ class McpServerCap(
                 retries.
         """
         if self._client is not None:
+            if self._client.connected:
+                return self._client
+            await self._client.__aenter__()
             return self._client
 
         if self._session_pool is not None:
@@ -321,7 +324,11 @@ class McpServerCap(
             tools = await client.list_tools()
             if not tools:
                 return None
-            from pydantic_ai.toolsets import CombinedToolset, FunctionToolset, PrefixedToolset
+            from pydantic_ai.toolsets import (
+                CombinedToolset,
+                FunctionToolset,
+                PrefixedToolset,
+            )
 
             from wolfharness.capabilities.tool_schema_overlap_config import (
                 ORIGINAL_TOOL_NAME_METADATA_KEY,
@@ -329,6 +336,8 @@ class McpServerCap(
             )
             from wolfharness.tools.tool_wrapping import wrap_tool_for_pydantic_ai
 
+            if self._config.needs_tool_filtering():
+                tools = [t for t in tools if self._config.is_tool_allowed(t.name)]
             converted = [client.convert_tool(t) for t in tools]
             # Stamp source identity so capability-level toolset wrappers can
             # resolve each tool back to its server and raw MCP name without
@@ -343,7 +352,7 @@ class McpServerCap(
             if not toolsets:
                 return None
             combined = CombinedToolset(toolsets)
-            prefix = self._tool_prefix
+            prefix = self._tool_prefix or self._config.tool_prefix
             if not prefix:
                 return combined
             return PrefixedToolset(wrapped=combined, prefix=prefix)

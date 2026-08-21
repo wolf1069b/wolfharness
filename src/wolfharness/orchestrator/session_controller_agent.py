@@ -17,9 +17,11 @@ from wolfharness_server.opencode_server.models.session_info import SessionInfo
 
 if TYPE_CHECKING:
     import asyncio
+    from collections.abc import Callable
 
     from wolfharness.agents.base_agent import BaseAgent
     from wolfharness.delegation import AgentPool
+    from wolfharness.orchestrator.run import RunHandle
     from wolfharness.orchestrator.runtime_registry import RuntimeAgentRegistry
     from wolfharness_storage.protocols import SessionPersistence
 
@@ -58,6 +60,11 @@ class SessionControllerAgentMixin:
     _event_bus: Any
 
     def _increment_mcp_count(self, _agent: Any) -> None: ...
+
+    # Attribute annotation, NOT a method stub: this mixin precedes
+    # SessionControllerRunsMixin in the MRO, so a stub body would shadow
+    # the real get_live_run and silently return None at runtime.
+    get_live_run: Callable[[str], RunHandle | None]
 
     async def get_or_create_session(
         self,
@@ -448,7 +455,7 @@ class SessionControllerAgentMixin:
                 created_at=s.created_at,
                 last_active_at=s.last_active_at,
                 is_per_session_agent=s.is_per_session_agent,
-                status="busy" if s.current_run_id is not None else "idle",
+                status="busy" if self.get_live_run(s.session_id) is not None else "idle",
             )
             for s in self._sessions.values()
         ]
