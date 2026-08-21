@@ -93,6 +93,7 @@ agents:
 | [`knowledge`](../knowledge.md) | Knowledge sources for this agent |
 | [`workers`](../toolsets/workers.md) | Worker agents which will be available as tools |
 | `requires_tool_confirmation` | How to handle tool confirmation (always/never/per_tool) |
+| `mode` | Client-visible agent mode for OpenCode: `primary` (switcher only, default), `subagent` (at-mention `@agent` popup only), or `all` (both). Visibility only — does not affect execution or delegation |
 | `debug` | Enable debug output for this agent |
 | [`environment`](../execution-environments.md) | Execution environment configuration for this agent |
 | `usage_limits` | Usage limits for this agent |

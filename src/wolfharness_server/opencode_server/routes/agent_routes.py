@@ -140,8 +140,10 @@ async def list_agents(state: StateDep) -> list[Agent]:
     """List available agents from the AgentPool.
 
     Returns all agents with their configurations, suitable for the agent
-    switcher UI. All agents are marked as primary (visible in switcher).
-    The default agent is always first in the returned list.
+    switcher UI and at-mention popup. The ``mode`` of each agent comes
+    from the manifest declaration (``primary``/``subagent``/``all``),
+    controlling client visibility. The default agent is always first in
+    the returned list.
     """
     ctx = state.agent.host_context
     assert ctx is not None, "AgentPool is not initialized"
@@ -151,7 +153,7 @@ async def list_agents(state: StateDep) -> list[Agent]:
             name=name,
             display_name=agent.display_name,
             description=agent.description or f"Agent: {name}",
-            mode="primary",
+            mode=agent.mode,
             default=(name == default_name),
         )
         for name, agent in ctx.manifest.agents.items()

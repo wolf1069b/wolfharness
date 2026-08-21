@@ -147,6 +147,37 @@ agents:
       - type: search
 ```
 
+### Agent Visibility in the OpenCode Client
+
+The OpenCode client exposes two surface areas for agents: the **switcher**
+(agent tabs) and the **at-mention** (`@agent`) popup for delegation. Which
+surface an agent appears in is controlled by its `mode`:
+
+| `mode` | Switcher | At-mention (`@`) popup | Use case |
+|--------|----------|------------------------|----------|
+| `primary` (default) | ✅ | ❌ | Main interactive agents |
+| `subagent` | ❌ | ✅ | Specialists to delegate to (e.g. `@visionary` multimodal analyst) |
+| `all` | ✅ | ✅ | Both interactive and delegable |
+
+```yaml
+agents:
+  lead:
+    type: native
+    mode: primary       # switcher only
+    ...
+  visionary:
+    type: native
+    mode: subagent      # at-mention only — delegate with @visionary
+    ...
+```
+
+`mode` is a *visibility* declaration only. It does not change agent
+execution, delegation authorization, or any other protocol's behavior.
+Any agent can still be delegated to via the `task` tool regardless of its
+`mode`. To make at-mention delegation fully functional, the delegating
+agent additionally needs the `background_task` capability so the `task`
+tool is available to the model.
+
 ## API Endpoints
 
 ### Core Endpoints

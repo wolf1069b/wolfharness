@@ -4,11 +4,12 @@ The OpenCode protocol has two distinct concepts:
 - Agent.mode: Literal["subagent", "primary", "all"] — agent category (visibility)
 - AssistantMessage.mode: str — identifies which agent produced the message
 
-The TUI uses Agent.mode to filter agents (exclude "subagent" from switcher).
+The TUI uses Agent.mode to filter agents (exclude "subagent" from switcher,
+exclude "primary" from the at-mention popup).
 The TUI uses AssistantMessage.agent (name) to resolve the agent for display.
 
 These tests verify:
-1. /agent endpoint returns mode="primary" for all wolfharness agents (correct)
+1. /agent endpoint returns each agent's declared mode from the manifest
 2. Assistant messages created by _before_consumer_loop have mode=agent_name
 3. chat_message_to_opencode preserves mode from ChatMessage.name
 4. Subagent assistant messages have mode and agent matching the child agent
@@ -32,36 +33,89 @@ pytestmark = pytest.mark.unit
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.unit
-async def test_agent_endpoint_mode_is_primary_for_all_agents() -> None:
-    """GET /agent should return mode='primary' for all wolfharness agents.
+def _make_agent(*, mode: str = "primary", description: str = "desc") -> MagicMock:
+    """Build a manifest agent mock with a declared mode.
 
-    AgentMode is Literal['subagent', 'primary', 'all']. All wolfharness agents
-    are primary (visible in switcher). This is correct — mode is a category,
-    not an agent identifier.
+    Mirrors real manifest parsing where Pydantic fills the default
+    ``mode="primary"`` when the field is omitted.
     """
+    agent = MagicMock()
+    agent.description = description
+    agent.display_name = None
+    agent.mode = mode
+    return agent
+
+
+async def _list_agents(*, agents: dict[str, MagicMock], main: str = "agent1"):
+    """Invoke list_agents with a mocked host context."""
     from wolfharness_server.opencode_server.routes.agent_routes import list_agents
 
-    agent1 = MagicMock()
-    agent1.description = "Agent 1"
-    agent1.display_name = None
-    agent2 = MagicMock()
-    agent2.description = "Agent 2"
-    agent2.display_name = None
-
     ctx = MagicMock()
-    ctx.main_agent_name = "agent1"
-    ctx.manifest.agents = {"agent1": agent1, "agent2": agent2}
+    ctx.main_agent_name = main
+    ctx.manifest.agents = agents
 
     state = MagicMock()
     state.agent.host_context = ctx
 
-    agents = await list_agents(state)
+    return await list_agents(state)
+
+
+@pytest.mark.unit
+async def test_agent_endpoint_surfaces_declared_mode() -> None:
+    """GET /agent should return each agent's declared mode from the manifest."""
+    agent1 = _make_agent(mode="primary")
+    agent2 = _make_agent(mode="subagent")
+    agent3 = _make_agent(mode="all")
+
+    agents = await _list_agents(agents={"agent1": agent1, "agent2": agent2, "agent3": agent3})
+
+    assert len(agents) == 3
+    by_name = {a.name: a for a in agents}
+    assert by_name["agent1"].mode == "primary"
+    assert by_name["agent2"].mode == "subagent"
+    assert by_name["agent3"].mode == "all"
+
+
+@pytest.mark.unit
+async def test_agent_endpoint_mode_defaults_to_primary_when_undeclared() -> None:
+    """Agents without a mode declaration should be primary (backward compat).
+
+    Real manifest parsing fills ``mode="primary"`` from the Pydantic default,
+    so every manifest agent carries an explicit ``primary`` value when the
+    YAML omits ``mode``.
+    """
+    agent1 = _make_agent(mode="primary")
+    agent2 = _make_agent(mode="primary")
+
+    agents = await _list_agents(agents={"agent1": agent1, "agent2": agent2})
 
     assert len(agents) == 2
     for agent in agents:
         assert agent.mode == "primary"
         assert agent.name in ("agent1", "agent2")
+
+
+@pytest.mark.unit
+async def test_agent_endpoint_default_flag_independent_of_mode() -> None:
+    """The default flag must come from the manifest default, independent of mode."""
+    agent1 = _make_agent(mode="subagent")
+
+    agents = await _list_agents(agents={"agent1": agent1}, main="agent1")
+
+    assert len(agents) == 1
+    assert agents[0].mode == "subagent"
+    assert agents[0].default is True
+
+
+@pytest.mark.unit
+async def test_agent_endpoint_empty_manifest_fallback() -> None:
+    """An empty manifest returns the self-describing default agent as primary."""
+    agents = await _list_agents(agents={})
+
+    assert len(agents) == 1
+    assert agents[0].name == "default"
+    assert agents[0].mode == "primary"
+    assert agents[0].default is True
 
 
 # ---------------------------------------------------------------------------

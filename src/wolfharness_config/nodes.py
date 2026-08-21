@@ -43,6 +43,20 @@ ToolConfirmationMode = Literal["always", "never", "per_tool"]
 - "per_tool": Use individual tool settings (treated as "always" for ACP)
 """
 
+AgentMode = Literal["subagent", "primary", "all"]
+"""Client-visible agent mode for protocol servers (e.g. OpenCode).
+
+Maps to the OpenCode ``Agent.mode`` field which controls client
+visibility:
+
+- ``"primary"``: shown in the agent switcher only (default).
+- ``"subagent"``: shown in the at-mention (``@agent``) popup only.
+- ``"all"``: visible in both the switcher and at-mention popup.
+
+This is a *visibility* declaration only — it does not change agent
+execution or delegation semantics.
+"""
+
 
 class NodeConfig(Schema):
     """Configuration for a Node of the messaging system."""
@@ -244,6 +258,23 @@ class BaseAgentConfig(NodeConfig):
     - "always": Always require confirmation for all tools
     - "never": Never require confirmation (ignore tool settings)
     - "per_tool": Use individual tool settings
+    """
+
+    mode: AgentMode = Field(
+        default="primary",
+        examples=["primary", "subagent", "all"],
+        title="Agent mode",
+    )
+    """Client-visible agent mode for protocol servers.
+
+    Determines how the agent appears in OpenCode clients:
+
+    - ``"primary"``: shown in the agent switcher only (default).
+    - ``"subagent"``: shown in the at-mention (``@agent``) popup only.
+    - ``"all"``: visible in both the switcher and at-mention popup.
+
+    This is a *visibility* declaration only — it does not change agent
+    execution or delegation semantics.
     """
 
     hooks: HooksConfig | None = Field(

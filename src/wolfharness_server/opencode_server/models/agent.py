@@ -6,12 +6,12 @@ from typing import Literal
 
 from pydantic import Field
 
+from wolfharness_config.nodes import AgentMode  # noqa: TC001
 from wolfharness_server.opencode_server.models.base import OpenCodeBaseModel
 from wolfharness_server.opencode_server.models.common import ModelRef  # noqa: TC001
 
 
 PermissionBehavior = Literal["ask", "allow", "deny"]
-AgentMode = Literal["subagent", "primary", "all"]
 
 
 class AgentPermission(OpenCodeBaseModel):

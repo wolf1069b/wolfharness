@@ -91,3 +91,41 @@ def test_missing_referenced_response():
     config = yamling.load_yaml(INVALID_RESPONSE_CONFIG)
     with pytest.raises(ValidationError):
         AgentsManifest.model_validate(config)
+
+
+def _agent_config_with_mode(mode: str) -> str:
+    """Build a minimal agent YAML declaring the given mode."""
+    return f"""\
+agents:
+  test_agent:
+    type: native
+    name: Test Agent
+    model: test
+    mode: {mode}
+    system_prompt: You are a test agent
+"""
+
+
+def test_agent_mode_subagent_parses():
+    """A manifest agent may declare mode: subagent."""
+    manifest = AgentsManifest.model_validate(yamling.load_yaml(_agent_config_with_mode("subagent")))
+    assert manifest.agents["test_agent"].mode == "subagent"
+
+
+def test_agent_mode_all_parses():
+    """A manifest agent may declare mode: all."""
+    manifest = AgentsManifest.model_validate(yamling.load_yaml(_agent_config_with_mode("all")))
+    assert manifest.agents["test_agent"].mode == "all"
+
+
+def test_agent_mode_defaults_to_primary():
+    """An omitted mode field defaults to primary (backward compat)."""
+    manifest = AgentsManifest.model_validate(yamling.load_yaml(VALID_AGENT_CONFIG))
+    assert manifest.agents["test_agent"].mode == "primary"
+
+
+def test_agent_mode_invalid_value_rejected():
+    """An unknown mode value is rejected at config parse time."""
+    config = yamling.load_yaml(_agent_config_with_mode("invalid-mode"))
+    with pytest.raises(ValidationError):
+        AgentsManifest.model_validate(config)
