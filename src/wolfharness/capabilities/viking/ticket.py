@@ -249,11 +249,22 @@ def _ticket_evidence(revision: EvalRevision | None) -> list[str]:
     Combines ``cited_references[].uri`` (引用的证据) and ``evidence``
     (修改关联的uri) — both are user contracts that must flow into the
     OPA/OPS/OPL ``evidence_uris``.
+
+    Only entries that start with ``viking://`` are included; plain-text
+    evidence annotations (e.g. ``"QuotedText: ..."``) are filtered out
+    because the TicketEngine requires actual Viking URIs.  The text
+    annotations are preserved in ``expert_opinion`` and
+    ``suggested_resolution``, which flow into the ticket's description
+    and analysis fields.
     """
     if revision is None:
         return []
     cited = [ref.uri.strip() for ref in revision.cited_references if ref.uri.strip()]
-    linked = [uri.strip() for uri in revision.evidence if uri.strip()]
+    linked = [
+        uri.strip()
+        for uri in revision.evidence
+        if uri.strip() and uri.strip().startswith("viking://")
+    ]
     return list(dict.fromkeys([*cited, *linked]))
 
 
