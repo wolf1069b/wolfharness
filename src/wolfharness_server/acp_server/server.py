@@ -20,6 +20,7 @@ from wolfharness_config.pool_server import ACPPoolServerConfig
 from wolfharness_server import BaseServer
 from wolfharness_server.acp_server.acp_agent import AgentPoolACPAgent
 from wolfharness_server.acp_server.session_manager import ACPSessionManager
+from wolfharness_server.acp_server.viking_archive import ACPVikingEventArchive
 
 
 if TYPE_CHECKING:
@@ -304,6 +305,8 @@ class ACPServer(BaseServer):
         # Create a shared session manager so WebSocket disconnects can clean up
         # all sessions for the dropped connection via close_all_sessions_for_connection().
         session_manager = ACPSessionManager(pool=self.pool)
+        archive_config = getattr(self.pool.manifest.session_pool, "acp_viking_archive", None)
+        viking_archive = ACPVikingEventArchive.from_config(archive_config)
         create_acp_agent = functools.partial(
             AgentPoolACPAgent,
             default_agent=default_agent,
@@ -313,6 +316,7 @@ class ACPServer(BaseServer):
             subagent_display_mode=self.subagent_display_mode,
             raw_input_mode=self.raw_input_mode,
             session_manager=session_manager,
+            viking_archive=viking_archive,
         )
 
         async def on_disconnect(conn: AgentSideConnection) -> None:
@@ -322,9 +326,9 @@ class ACPServer(BaseServer):
                 await session_manager.close_all_sessions_for_connection(connection_id)
 
         debug_file = self.debug_file if self.debug_messages else None
-        observers = None
+        observers = []
         if self.show_events or self.show_events_detailed:
-            observers = [_acp_event_observer(show_detailed=self.show_events_detailed)]
+            observers.append(_acp_event_observer(show_detailed=self.show_events_detailed))
         self.log.info("ACP server started")
         try:
             await serve(
@@ -333,7 +337,7 @@ class ACPServer(BaseServer):
                 shutdown_event=self._shutdown_event,
                 debug_file=debug_file,
                 on_disconnect=on_disconnect,
-                observers=observers,
+                observers=observers or None,
             )
         except asyncio.CancelledError:
             self.log.info("ACP server shutdown requested")
@@ -342,6 +346,8 @@ class ACPServer(BaseServer):
             self.log.info("ACP server shutdown requested")
         except Exception:
             self.log.exception("ACP server error")
+        finally:
+            await viking_archive.close()
 
     def stop(self) -> None:
         """Stop the ACP server.

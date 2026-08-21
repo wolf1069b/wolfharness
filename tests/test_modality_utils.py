@@ -28,30 +28,91 @@ pytestmark = pytest.mark.unit
 
 @pytest.mark.unit
 def test_describe_binary_image() -> None:
-    """BinaryImage produces '[image/png]' placeholder."""
+    """BinaryImage produces an information-preserving placeholder."""
     img = BinaryImage(data=b"\x89PNG\r\n\x1a\n", media_type="image/png")
-    assert describe_multimodal_content(img) == "[image/png]"
+    result = describe_multimodal_content(img)
+    assert "image/png" in result
+    assert "unsupported" in result
+    assert "not inlined" in result
 
 
 @pytest.mark.unit
 def test_describe_binary_content_audio() -> None:
-    """BinaryContent with audio media type produces '[audio/wav]'."""
+    """BinaryContent with audio media type produces an information-preserving placeholder."""
     audio = BinaryContent(data=b"RIFF....", media_type="audio/wav")
-    assert describe_multimodal_content(audio) == "[audio/wav]"
+    result = describe_multimodal_content(audio)
+    assert "audio/wav" in result
+    assert "unsupported" in result
 
 
 @pytest.mark.unit
 def test_describe_binary_content_video() -> None:
-    """BinaryContent with video media type produces '[video/mp4]'."""
+    """BinaryContent with video media type produces an information-preserving placeholder."""
     video = BinaryContent(data=b"\x00\x00\x00\x20ftyp", media_type="video/mp4")
-    assert describe_multimodal_content(video) == "[video/mp4]"
+    result = describe_multimodal_content(video)
+    assert "video/mp4" in result
+    assert "unsupported" in result
 
 
 @pytest.mark.unit
 def test_describe_binary_content_document() -> None:
-    """BinaryContent with document media type produces '[application/pdf]'."""
+    """BinaryContent with document media type produces an information-preserving placeholder."""
     doc = BinaryContent(data=b"%PDF-1.4", media_type="application/pdf")
-    assert describe_multimodal_content(doc) == "[application/pdf]"
+    result = describe_multimodal_content(doc)
+    assert "application/pdf" in result
+    assert "unsupported" in result
+
+
+@pytest.mark.unit
+def test_describe_binary_content_identifier_included() -> None:
+    """BinaryContent with a path identifier emits the file reference (RFC-0061)."""
+    img = BinaryImage(
+        data=b"\x89PNG\r\n\x1a\n",
+        media_type="image/png",
+        identifier="/tmp/screenshot.png",
+    )
+    result = describe_multimodal_content(img)
+    assert "/tmp/screenshot.png" in result
+    assert "vision-capable subagent or file tool" in result
+
+
+@pytest.mark.unit
+def test_describe_binary_content_hash_identifier_suppressed() -> None:
+    """A hash-shaped identifier is not a retrievable reference and is suppressed."""
+    img = BinaryImage(
+        data=b"\x89PNG\r\n\x1a\n",
+        media_type="image/png",
+        identifier="a1b2c3d4e5f6",
+    )
+    result = describe_multimodal_content(img)
+    assert "a1b2c3d4e5f6" not in result
+    assert "no file reference available" in result
+
+
+@pytest.mark.unit
+def test_describe_binary_content_sha1_hash_identifier_suppressed() -> None:
+    """pydantic-ai's sha1[:6] fallback identifier shape is suppressed."""
+    img = BinaryImage(
+        data=b"\x89PNG\r\n\x1a\n",
+        media_type="image/png",
+        identifier="1a2b3c",
+    )
+    result = describe_multimodal_content(img)
+    assert "1a2b3c" not in result
+    assert "no file reference available" in result
+
+
+@pytest.mark.unit
+def test_describe_binary_content_identifier_control_chars_escaped() -> None:
+    """Control characters in a caller-supplied identifier are escaped (RFC-0061 security)."""
+    img = BinaryImage(
+        data=b"\x89PNG\r\n\x1a\n",
+        media_type="image/png",
+        identifier="evil\n.png",
+    )
+    result = describe_multimodal_content(img)
+    assert "\n" not in result
+    assert "\\x0a" in result
 
 
 @pytest.mark.unit

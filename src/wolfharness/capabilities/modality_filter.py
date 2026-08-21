@@ -7,6 +7,11 @@ configured strategy is applied:
 
 - ``describe``: replace the content with a text placeholder via
   ``describe_multimodal_content``.
+- ``reference``: persist the binary content to a per-run scratch
+  directory and replace it with a ``[file: <path>]`` reference that a
+  vision-capable subagent or file tool can open (RFC-0061).  URL and
+  ``UploadedFile`` content has no local bytes, so it falls back to
+  ``describe``.
 - ``drop``: remove the content entirely.
 - ``pass``: leave the content unchanged (no filtering).
 
@@ -25,7 +30,12 @@ returns BEFORE budget truncation and BEFORE DCP pruning.
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import logging
+import mimetypes
+from pathlib import Path
+import shutil
+import tempfile
 from typing import TYPE_CHECKING, Any, Literal, assert_never
 
 from pydantic_ai import BinaryContent, BinaryImage
@@ -44,6 +54,7 @@ from pydantic_ai.messages import (
     VideoUrl,
 )
 
+from wolfharness.agents.context import AgentRunContext
 from wolfharness.capabilities.modality_utils import (
     BinaryCategory,
     classify_binary_content,
@@ -53,7 +64,11 @@ from wolfharness.capabilities.modality_utils import (
 
 if TYPE_CHECKING:
     from pydantic_ai import RunContext
-    from pydantic_ai.capabilities import WrapToolExecuteHandler
+    from pydantic_ai.capabilities import (
+        AgentNode,
+        NodeResult,
+        WrapToolExecuteHandler,
+    )
     from pydantic_ai.messages import ToolCallPart
     from pydantic_ai.models import ModelRequestContext
     from pydantic_ai.tools import ToolDefinition
@@ -64,7 +79,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-type ModalityStrategy = Literal["describe", "drop", "pass"]
+type ModalityStrategy = Literal["describe", "reference", "drop", "pass"]
 
 
 _FALLBACK_DROP_TEXT = "[Tool returned only unsupported multimodal content]"
@@ -105,9 +120,75 @@ class ModalityFilterCapability(AbstractCapability[Any]):
     video_strategy: ModalityStrategy = "describe"
     document_strategy: ModalityStrategy = "describe"
 
+    _scratch_dirs: set[Path] = dataclasses.field(default_factory=set, init=False, repr=False)
+
     @property
     def has_wrap_node_run(self) -> bool:
         return False
+
+    # ---- Scratch root (RFC-0061 `reference` strategy) ----
+
+    def _scratch_dir(self, ctx: RunContext[Any]) -> Path:
+        """Return the per-run scratch directory for ``reference`` writes.
+
+        Rooted at ``tempfile.gettempdir()/wolfharness-modality/{session_id}``
+        so different runs never collide and the OS can reclaim stale
+        directories.  Falls back to a shared run-id-scoped directory when
+        no session id is available (standalone ``agent.run()``).
+        """
+        base = Path(tempfile.gettempdir()) / "wolfharness-modality"
+        session_id = self._session_id(ctx)
+        scratch = base / session_id
+        scratch.mkdir(parents=True, exist_ok=True)
+        self._scratch_dirs.add(scratch)
+        return scratch
+
+    def _session_id(self, ctx: RunContext[Any]) -> str:
+        """Get the current run's session id, or a safe fallback."""
+        run_ctx = ctx.deps.run_ctx if hasattr(ctx.deps, "run_ctx") else None
+        if isinstance(run_ctx, AgentRunContext):
+            return run_ctx.session_id or "default"
+        return str(getattr(run_ctx, "run_id", None) or "default")
+
+    def _reference_content(self, content: MultiModalContent, ctx: RunContext[Any]) -> str:
+        """Persist binary content and return a ``[file: <path>]`` reference.
+
+        URL types and ``UploadedFile`` have no local bytes to persist, so
+        they fall back to ``describe_multimodal_content``.
+        """
+        if not isinstance(content, (BinaryContent, BinaryImage)):
+            return describe_multimodal_content(content)
+
+        scratch = self._scratch_dir(ctx)
+        ext = mimetypes.guess_extension(content.media_type) or ".bin"
+        # Hash-based name so identical payloads dedupe and filenames stay
+        # filesystem-safe regardless of any caller-supplied identifier.
+        digest = hashlib.sha256(content.data, usedforsecurity=False).hexdigest()[:16]
+        path = scratch / f"content-{digest}{ext}"
+        path.write_bytes(content.data)
+        return f"[file: {path}]"
+
+    async def after_node_run(
+        self,
+        ctx: RunContext[Any],
+        *,
+        node: AgentNode[Any],
+        result: NodeResult[Any],
+    ) -> NodeResult[Any]:
+        """Remove scratch directories written by this run.
+
+        ``reference`` strategy persists degraded content to disk; the
+        session can be resumed later via restart, so cleanup happens only
+        when the run itself ends.  Per-instance tracking avoids deleting
+        directories another concurrent run may still need.
+        """
+        for scratch in self._scratch_dirs:
+            try:
+                shutil.rmtree(scratch, ignore_errors=True)
+            except OSError:
+                logger.warning("Failed to remove modality scratch dir: %s", scratch)
+        self._scratch_dirs.clear()
+        return result
 
     # ---- Ordering ----
 
@@ -154,7 +235,7 @@ class ModalityFilterCapability(AbstractCapability[Any]):
         handler: WrapToolExecuteHandler,
     ) -> Any:
         result = await handler(args)
-        return self._filter_tool_result(result)
+        return self._filter_tool_result(ctx, result)
 
     # ---- Pre-request message filtering ----
 
@@ -184,12 +265,12 @@ class ModalityFilterCapability(AbstractCapability[Any]):
         for msg in messages:
             match msg:
                 case ModelRequest():
-                    filtered_req = self._filter_model_request(msg)
+                    filtered_req = self._filter_model_request(ctx, msg)
                     if filtered_req is not msg:
                         changed = True
                     new_messages.append(filtered_req)
                 case ModelResponse():
-                    filtered_resp = self._filter_model_response(msg)
+                    filtered_resp = self._filter_model_response(ctx, msg)
                     if filtered_resp is not msg:
                         changed = True
                     new_messages.append(filtered_resp)
@@ -203,7 +284,7 @@ class ModalityFilterCapability(AbstractCapability[Any]):
 
     # ---- Internal: tool result filtering ----
 
-    def _filter_tool_result(self, result: Any) -> Any:
+    def _filter_tool_result(self, ctx: RunContext[Any], result: Any) -> Any:
         """Degrade multimodal content in a tool result.
 
         Handles ``str``, ``list``, and direct ``MultiModalContent``.
@@ -212,10 +293,10 @@ class ModalityFilterCapability(AbstractCapability[Any]):
             case str():
                 return result
             case list():
-                return self._filter_content_list(result)
+                return self._filter_content_list(ctx, result)
             case _:
                 if isinstance(result, _MULTIMODAL_TYPES):
-                    filtered = self._filter_single_content(result)  # type: ignore[arg-type]
+                    filtered = self._filter_single_content(ctx, result)  # type: ignore[arg-type]
                     match filtered:
                         case str():
                             return filtered
@@ -225,7 +306,7 @@ class ModalityFilterCapability(AbstractCapability[Any]):
                             return filtered
                 return result
 
-    def _filter_content_list(self, items: list[Any]) -> Any:
+    def _filter_content_list(self, ctx: RunContext[Any], items: list[Any]) -> Any:
         """Filter a list of content items.
 
         Returns the original list if nothing changed, a new list if
@@ -236,7 +317,7 @@ class ModalityFilterCapability(AbstractCapability[Any]):
         changed = False
         for item in items:
             if isinstance(item, _MULTIMODAL_TYPES):
-                filtered = self._filter_single_content(item)  # type: ignore[arg-type]
+                filtered = self._filter_single_content(ctx, item)  # type: ignore[arg-type]
                 match filtered:
                     case None:
                         changed = True
@@ -259,6 +340,7 @@ class ModalityFilterCapability(AbstractCapability[Any]):
 
     def _filter_single_content(
         self,
+        ctx: RunContext[Any],
         content: (
             BinaryContent
             | BinaryImage
@@ -284,6 +366,8 @@ class ModalityFilterCapability(AbstractCapability[Any]):
             match strategy:
                 case "describe":
                     return describe_multimodal_content(content)
+                case "reference":
+                    return self._reference_content(content, ctx)
                 case "drop":
                     return None
                 case "pass":
@@ -295,7 +379,7 @@ class ModalityFilterCapability(AbstractCapability[Any]):
 
     # ---- Internal: message filtering ----
 
-    def _filter_model_request(self, msg: ModelRequest) -> ModelRequest:
+    def _filter_model_request(self, ctx: RunContext[Any], msg: ModelRequest) -> ModelRequest:
         """Filter multimodal content in a ``ModelRequest``.
 
         Returns the original message if nothing changed, or a new
@@ -306,7 +390,7 @@ class ModalityFilterCapability(AbstractCapability[Any]):
         for part in msg.parts:
             match part:
                 case UserPromptPart():
-                    new_part = self._filter_user_prompt_part(part)
+                    new_part = self._filter_user_prompt_part(ctx, part)
                     if new_part is not part:
                         changed = True
                     new_parts.append(new_part)
@@ -317,7 +401,7 @@ class ModalityFilterCapability(AbstractCapability[Any]):
             return msg
         return dataclasses.replace(msg, parts=new_parts)
 
-    def _filter_model_response(self, msg: ModelResponse) -> ModelResponse:
+    def _filter_model_response(self, ctx: RunContext[Any], msg: ModelResponse) -> ModelResponse:
         """Filter multimodal content in a ``ModelResponse``.
 
         Returns the original message if nothing changed, or a new
@@ -328,7 +412,7 @@ class ModalityFilterCapability(AbstractCapability[Any]):
         for part in msg.parts:
             match part:
                 case ToolReturnPart():
-                    new_part = self._filter_tool_return_part(part)
+                    new_part = self._filter_tool_return_part(ctx, part)
                     if new_part is not part:
                         changed = True
                     new_parts.append(new_part)
@@ -339,7 +423,9 @@ class ModalityFilterCapability(AbstractCapability[Any]):
             return msg
         return dataclasses.replace(msg, parts=new_parts)
 
-    def _filter_user_prompt_part(self, part: UserPromptPart) -> UserPromptPart:
+    def _filter_user_prompt_part(
+        self, ctx: RunContext[Any], part: UserPromptPart
+    ) -> UserPromptPart:
         """Filter multimodal content in a ``UserPromptPart``.
 
         ``UserPromptPart.content`` can be ``str`` or
@@ -350,7 +436,7 @@ class ModalityFilterCapability(AbstractCapability[Any]):
             case str():
                 return part
             case list():
-                new_items = self._filter_content_list(content)
+                new_items = self._filter_content_list(ctx, content)
                 match new_items:
                     case list():
                         return dataclasses.replace(part, content=new_items)
@@ -362,7 +448,9 @@ class ModalityFilterCapability(AbstractCapability[Any]):
             case _:
                 return part
 
-    def _filter_tool_return_part(self, part: ToolReturnPart) -> ToolReturnPart:
+    def _filter_tool_return_part(
+        self, ctx: RunContext[Any], part: ToolReturnPart
+    ) -> ToolReturnPart:
         """Filter multimodal content in a ``ToolReturnPart``.
 
         ``ToolReturnPart.content`` can be ``str``, ``MultiModalContent``,
@@ -374,7 +462,7 @@ class ModalityFilterCapability(AbstractCapability[Any]):
             case str():
                 pass
             case list():
-                new_items = self._filter_content_list(content)
+                new_items = self._filter_content_list(ctx, content)
                 match new_items:
                     case list() | str():
                         new_content = new_items
@@ -382,7 +470,7 @@ class ModalityFilterCapability(AbstractCapability[Any]):
                         pass
             case _:
                 if isinstance(content, _MULTIMODAL_TYPES):
-                    filtered = self._filter_single_content(content)  # type: ignore[arg-type]
+                    filtered = self._filter_single_content(ctx, content)  # type: ignore[arg-type]
                     match filtered:
                         case str():
                             new_content = filtered

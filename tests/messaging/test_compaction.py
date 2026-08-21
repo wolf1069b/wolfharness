@@ -24,6 +24,7 @@ from wolfharness.messaging.compaction import (
     KeepFirstMessages,
     KeepLastMessages,
     TruncateTextParts,
+    TruncateToolCallInputs,
     TruncateToolOutputs,
     WhenMessageCountExceeds,
     balanced_context,
@@ -33,6 +34,7 @@ from wolfharness_config.compaction import (
     CompactionConfig,
     FilterThinkingConfig,
     KeepLastMessagesConfig,
+    TruncateToolCallInputsConfig,
     TruncateToolOutputsConfig,
     WhenMessageCountExceedsConfig,
 )
@@ -194,6 +196,66 @@ async def test_truncate_text_parts():
     assert isinstance(text_part, TextPart)
     assert len(text_part.content) < 250
     assert "[truncated]" in text_part.content
+
+
+async def test_truncate_tool_call_inputs_str():
+    """Test truncation of large string tool-call input arguments."""
+    long_args = "x" * 5000
+    part = ToolCallPart(tool_name="read", args=long_args, tool_call_id="1")
+    messages = [ModelResponse(parts=[part])]
+    step = TruncateToolCallInputs(max_length=100)
+    result = await step.apply(messages)
+    response = result[0]
+    assert isinstance(response, ModelResponse)
+    call = response.parts[0]
+    assert isinstance(call, ToolCallPart)
+    assert isinstance(call.args, str)
+    assert len(call.args) < 150
+    assert "[input truncated]" in call.args
+    assert call.tool_name == "read"
+    assert call.tool_call_id == "1"
+
+
+async def test_truncate_tool_call_inputs_dict():
+    """Test truncation of large dict tool-call input arguments (recursive)."""
+    big = "y" * 5000
+    small = "ok"
+    data = {"path": big, "nested": {"content": big}, "small": small}
+    part = ToolCallPart(tool_name="write", args=data, tool_call_id="2")
+    messages = [ModelResponse(parts=[part])]
+    step = TruncateToolCallInputs(max_length=100)
+    result = await step.apply(messages)
+    call = result[0].parts[0]
+    assert isinstance(call, ToolCallPart)
+    assert isinstance(call.args, dict)
+    assert len(call.args["path"]) < 150
+    assert len(call.args["nested"]["content"]) < 150
+    assert "[input truncated]" in call.args["path"]
+    assert call.args["small"] == "ok"
+
+
+async def test_truncate_tool_call_inputs_short_and_none_untouched():
+    """Test that short/None tool-call inputs are left untouched."""
+    part = ToolCallPart(tool_name="get", args="hi", tool_call_id="3")
+    none_part = ToolCallPart(tool_name="get", args=None, tool_call_id="4")
+    messages = [
+        ModelResponse(parts=[part]),
+        ModelResponse(parts=[none_part]),
+    ]
+    step = TruncateToolCallInputs(max_length=100)
+    result = await step.apply(messages)
+    assert result[0].parts[0].args == "hi"
+    assert result[1].parts[0].args is None
+
+
+async def test_truncate_tool_call_inputs_config_roundtrip():
+    """Test the TruncateToolCallInputs YAML config builds correctly."""
+    from wolfharness.messaging.compaction import TruncateToolCallInputs
+
+    cfg = TruncateToolCallInputsConfig(max_length=300)
+    step = cfg.build()
+    assert isinstance(step, TruncateToolCallInputs)
+    assert step.max_length == 300
 
 
 async def test_keep_last_messages(sample_messages):

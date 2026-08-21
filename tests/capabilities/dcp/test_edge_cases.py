@@ -547,6 +547,22 @@ def test_non_string_dict_result_under_budget_returned_unchanged() -> None:
     assert result is small_dict
 
 
+def test_tool_return_preserves_binary_content() -> None:
+    """ToolReturn with image content keeps BinaryImage intact, only strings truncated."""
+    from pydantic_ai.messages import BinaryImage, ToolReturn
+
+    cap = ToolOutputBudgetCapability(max_output_chars=5)
+    img = BinaryImage(data=b"\x89PNG-fake", media_type="image/png")
+    tr = ToolReturn(return_value="[Image #1: image/png]", content=("[Image #1: image/png]", img))
+
+    result = cap._truncate_tool_return(tr)
+    assert isinstance(result, ToolReturn)
+    assert result.content is not None
+    assert isinstance(result.content[1], BinaryImage)
+    assert result.content[1].data == b"\x89PNG-fake"
+    assert result.return_value.endswith(cap.truncation_suffix)
+
+
 # ---------------------------------------------------------------------------
 # 11.9 — DynamicContextCapability deletion — type "dynamic_context" raises error
 # ---------------------------------------------------------------------------

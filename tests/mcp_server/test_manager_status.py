@@ -354,9 +354,17 @@ class _FakeAgent:
     many heavyweight dependencies).
     """
 
-    def __init__(self, mcp: Any, host_context: Any) -> None:
+    def __init__(
+        self,
+        mcp: Any,
+        host_context: Any,
+        *,
+        external_capabilities: list[Any] | None = None,
+    ) -> None:
         self.mcp = mcp
         self.host_context = host_context
+        self._all_capabilities: list[Any] = external_capabilities or []
+        self._external_capabilities: list[Any] = external_capabilities or []
 
 
 async def _mock_server_status(status_map: dict[str, MCPServerStatus]) -> Any:
@@ -426,6 +434,78 @@ async def test_agent_mcp_info_key_collision() -> None:
     assert set(result.keys()) == {"shared"}
     assert result["shared"].status == "connected"
     assert result["shared"].error is None
+
+
+async def test_agent_mcp_info_includes_config_defined_cap() -> None:
+    """A config-defined McpServerCap in _all_capabilities is included in status."""
+    mcp = await _mock_server_status({})
+    cap = _make_connected_cap(
+        client_id="kb_diag",
+        display_name="知识服务",
+        tool_names=["read_resource", "search_kb"],
+        server_info={"name": "knowledge_diag", "version": "3.4.4"},
+    )
+    agent = _FakeAgent(mcp=mcp, host_context=None, external_capabilities=[cap])
+
+    result = await BaseAgent._get_mcp_server_info(agent)  # type: ignore[arg-type]
+
+    assert "知识服务" in result
+    entry = result["知识服务"]
+    assert entry.status == "connected"
+    assert entry.server_name == "knowledge_diag"
+    assert entry.server_version == "3.4.4"
+    assert set(entry.tools) == {"read_resource", "search_kb"}
+
+
+async def test_agent_mcp_info_disconnected_config_defined_cap() -> None:
+    """A config-defined McpServerCap without a client is reported as disconnected."""
+    mcp = await _mock_server_status({})
+    config = _make_config(client_id="kb_diag", display_name="知识服务")
+    cap = McpServerCap(config=config, name="kb_diag")
+    agent = _FakeAgent(mcp=mcp, host_context=None, external_capabilities=[cap])
+
+    result = await BaseAgent._get_mcp_server_info(agent)  # type: ignore[arg-type]
+
+    assert "知识服务" in result
+    entry = result["知识服务"]
+    assert entry.status == "disconnected"
+    assert entry.tools == []
+
+
+async def test_agent_mcp_info_mcpmanager_takes_precedence() -> None:
+    """When MCPManager and _all_capabilities report the same display_name.
+
+    The MCPManager result takes precedence (it was already in the result dict).
+    """
+    agent_mcp = await _mock_server_status({
+        "shared": MCPServerStatus(name="shared", status="connected", server_name="from_manager"),
+    })
+    cap = _make_connected_cap(
+        client_id="shared",
+        display_name="shared",
+        tool_names=["tool_a"],
+        server_info={"name": "from_cap", "version": "1.0"},
+    )
+    agent = _FakeAgent(mcp=agent_mcp, host_context=None, external_capabilities=[cap])
+
+    result = await BaseAgent._get_mcp_server_info(agent)  # type: ignore[arg-type]
+
+    assert "shared" in result
+    # MCPManager result wins — server_name is "from_manager", not "from_cap".
+    assert result["shared"].server_name == "from_manager"
+
+
+async def test_agent_mcp_info_skips_non_mcp_caps() -> None:
+    """Non-McpServerCap capabilities in _all_capabilities are ignored."""
+    mcp = await _mock_server_status({})
+    from wolfharness.capabilities.function_toolset import FunctionToolsetCapability
+
+    non_mcp_cap = FunctionToolsetCapability(tools=[])
+    agent = _FakeAgent(mcp=mcp, host_context=None, external_capabilities=[non_mcp_cap])
+
+    result = await BaseAgent._get_mcp_server_info(agent)  # type: ignore[arg-type]
+
+    assert result == {}
 
 
 # =============================================================================

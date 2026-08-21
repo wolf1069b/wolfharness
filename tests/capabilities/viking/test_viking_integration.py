@@ -17,9 +17,11 @@ from pydantic_ai.messages import (
     ModelRequest,
     ModelResponse,
     SystemPromptPart,
-    TextPart,
-    ToolReturn,
     UserPromptPart,
+    TextPart,
+    ToolCallPart,
+    ToolReturn,
+    ToolReturnPart,
 )
 from pydantic_ai.models import ModelRequestContext, ModelRequestParameters
 from pydantic_ai.models.test import TestModel
@@ -28,6 +30,7 @@ import yamling
 
 from wolfharness.capabilities.viking import VikingCapability
 from wolfharness.capabilities.viking.identity import VikingIdentity
+from wolfharness.capabilities.viking.ingest import _extract_full_trace
 from wolfharness.capabilities.viking.tools import build_tools
 from wolfharness_config.capabilities import VikingCapabilityConfig, build_capability
 
@@ -137,6 +140,49 @@ agents:
     cfg = manifest.agents["test_agent"].capabilities[0]
     assert isinstance(cfg, VikingCapabilityConfig)
     assert cfg.mode == "retrieve"
+
+
+def test_yaml_config_loading_viking_disabled_tools() -> None:
+    """YAML config with disabled_tools excludes the listed tools."""
+    from wolfharness import AgentsManifest
+
+    yaml_str = """
+agents:
+  test_agent:
+    type: native
+    model: test
+    capabilities:
+      - type: viking
+        mode: retrieve
+        disabled_tools: ["viking_search", "viking_find"]
+"""
+    d = yamling.load_yaml(yaml_str, verify_type=dict)
+    manifest = AgentsManifest.model_validate(d)
+    cfg = manifest.agents["test_agent"].capabilities[0]
+    assert isinstance(cfg, VikingCapabilityConfig)
+    assert cfg.disabled_tools == ["viking_search", "viking_find"]
+    cap = build_capability(cfg)
+    from wolfharness.capabilities.viking.tools import build_tools
+
+    names = {t.__name__ for t in build_tools(cap)}
+    assert "viking_search" not in names
+    assert "viking_find" not in names
+    assert "viking_read" in names
+
+
+def test_viking_config_enabled_disabled_mutually_exclusive() -> None:
+    """enabled_tools and disabled_tools together raise a validation error."""
+    import pytest
+
+    from wolfharness_config.capabilities import VikingCapabilityConfig
+
+    with pytest.raises(ValueError, match="Cannot specify both"):
+        VikingCapabilityConfig(
+            type="viking",
+            mode="retrieve",
+            enabled_tools=["viking_ls"],
+            disabled_tools=["viking_search"],
+        )
 
 
 def test_yaml_config_loading_viking_with_fields() -> None:
@@ -281,7 +327,8 @@ async def test_mode_tool_exposure_write() -> None:
     assert toolset is not None
     tool_names = list(toolset.tools.keys())  # type: ignore[attr-defined]
     # 4 write tools (remember gated by enable_memory, forget by enable_forget)
-    assert len(tool_names) == 4
+    # + viking_upload_tree (tree upload from capability)
+    assert len(tool_names) == 5
 
 
 @pytest.mark.asyncio
@@ -313,7 +360,7 @@ async def test_mode_tool_exposure_all() -> None:
     toolset = cap.get_toolset()
     assert toolset is not None
     tool_names = list(toolset.tools.keys())  # type: ignore[attr-defined]
-    assert len(tool_names) == 12  # 7 retrieve + 4 write + 1 graph (expand included in retrieve)
+    assert len(tool_names) == 13  # 7 retrieve + 5 write + 1 graph (expand included in retrieve)
 
 
 @pytest.mark.asyncio
@@ -337,7 +384,7 @@ async def test_mode_tool_exposure_with_config_fields() -> None:
     toolset = cap.get_toolset()
     assert toolset is not None
     tool_names = list(toolset.tools.keys())  # type: ignore[attr-defined]
-    assert len(tool_names) == 12  # default flags: enable_link=False, enable_memory=False
+    assert len(tool_names) == 13  # default flags: enable_link=False, enable_memory=False
 
 
 # ---------------------------------------------------------------------------
@@ -363,7 +410,7 @@ async def test_network_error_graceful() -> None:
     ctx.deps.session_id = "test"
 
     result = await search_tool(ctx, query="test")
-    assert "viking_search error: network down" in result.return_value
+    assert "viking_search error (ConnectionError): network down" in result.return_value
     assert isinstance(result, ToolReturn)
 
 
@@ -385,7 +432,7 @@ async def test_invalid_uri_graceful() -> None:
     ctx.deps.session_id = "test"
 
     result = await read_tool(ctx, uris="not-a-valid-uri")
-    assert "viking_read error: invalid URI format" in result.return_value
+    assert "viking_read error (ValueError): invalid URI format" in result.return_value
 
 
 @pytest.mark.asyncio
@@ -406,7 +453,7 @@ async def test_permission_error_graceful() -> None:
     ctx.deps.session_id = "test"
 
     result = await write_tool(ctx, uri="viking://protected/doc.md", content="data")
-    assert "viking_write error: access denied" in result.return_value
+    assert "viking_write error (PermissionError): access denied" in result.return_value
 
 
 @pytest.mark.asyncio
@@ -427,7 +474,33 @@ async def test_timeout_error_graceful() -> None:
     ctx.deps.session_id = "test"
 
     result = await search_tool(ctx, query="slow query")
-    assert "viking_search error: request timed out" in result.return_value
+    assert "viking_search error (TimeoutError): request timed out" in result.return_value
+
+
+@pytest.mark.asyncio
+async def test_empty_message_error_graceful() -> None:
+    """Exceptions with empty messages still surface the exception type.
+
+    e.g. httpcore raises ``ReadTimeout('')`` — an empty-message exception
+    that would otherwise render as ``viking_search error:`` with no context.
+    """
+    cap = VikingCapability(mode="all")
+    mock_client = AsyncMock()
+    mock_client.search = AsyncMock(side_effect=RuntimeError(""))
+    cap._client = mock_client
+
+    tools = build_tools(cap)
+    search_tool = next(t for t in tools if t.__name__ == "viking_search")
+
+    from unittest.mock import MagicMock
+
+    ctx = MagicMock()
+    ctx.deps = MagicMock()
+    ctx.deps.session_id = "test"
+
+    result = await search_tool(ctx, query="slow query")
+    assert "viking_search error (RuntimeError): " in result.return_value
+    assert result.return_value.strip().endswith("(RuntimeError):")
 
 
 @pytest.mark.asyncio
@@ -448,7 +521,7 @@ async def test_generic_exception_graceful() -> None:
     ctx.deps.session_id = "test"
 
     result = await ls_tool(ctx, uri="viking://broken/")
-    assert "viking_ls error: unexpected error" in result.return_value
+    assert "viking_ls error (Exception): unexpected error" in result.return_value
 
 
 @pytest.mark.asyncio
@@ -598,7 +671,7 @@ async def test_l2_auto_recall_before_model_request_fires() -> None:
     sys_msg = result.messages[0]
     assert isinstance(sys_msg, ModelRequest)
     sys_part = sys_msg.parts[0]
-    assert isinstance(sys_part, SystemPromptPart)
+    assert isinstance(sys_part, UserPromptPart)
     assert "<openviking-recall>" in sys_part.content
     assert "viking://user/alice/memories/doc.md" in sys_part.content
 
@@ -650,6 +723,102 @@ async def test_l2_auto_ingest_second_turn_triggers_ingestion() -> None:
     assert cap._last_ingested_idx == 3
 
 
+@pytest.mark.asyncio
+async def test_l2_auto_ingest_rolls_back_cursor_when_commit_fails() -> None:
+    """L2: failed auto-ingest leaves the message range retryable."""
+    client = _make_mock_client()
+    client.commit_session = AsyncMock(side_effect=RuntimeError("viking unavailable"))
+    identity = VikingIdentity(account_id="acct", user_id="alice", role="user")
+
+    cfg = VikingCapabilityConfig(
+        mode="all",
+        auto_ingest_enabled=True,
+        auto_ingest_mode="sync",
+    )
+    cap = _build_cap_from_config(cfg, client, identity)
+
+    messages = [
+        ModelRequest(parts=[UserPromptPart(content="What is X?")]),
+        ModelResponse(parts=[TextPart(content="X is a thing.")]),
+    ]
+    rc = _make_request_context(messages)
+
+    await cap.before_model_request(_make_run_context(), rc)
+
+    assert cap._last_ingested_idx == 0
+    assert len(cap._failed_ingest_batches) == 1
+
+
+@pytest.mark.asyncio
+async def test_l2_auto_ingest_retries_captured_batch_after_context_is_gone() -> None:
+    """L2: failed captured batches retry without relying on source messages."""
+    client = _make_mock_client()
+    client.commit_session = AsyncMock(
+        side_effect=[RuntimeError("viking unavailable"), {"ok": True}]
+    )
+    identity = VikingIdentity(account_id="acct", user_id="alice", role="user")
+
+    cfg = VikingCapabilityConfig(
+        mode="all",
+        auto_ingest_enabled=True,
+        auto_ingest_mode="sync",
+    )
+    cap = _build_cap_from_config(cfg, client, identity)
+
+    messages = [
+        ModelRequest(parts=[UserPromptPart(content="What is X?")]),
+        ModelResponse(parts=[TextPart(content="X is a thing.")]),
+    ]
+    await cap.before_model_request(_make_run_context(), _make_request_context(messages))
+
+    ctx = _make_run_context()
+    ctx.messages = []
+    await cap._flush_tail(ctx)
+
+    assert cap._failed_ingest_batches == []
+    assert client.commit_session.await_count == 2
+
+
+def test_extract_full_trace_skips_system_prompt_and_preserves_tool_payloads() -> None:
+    """Full trace capture avoids injected system text and keeps tool output complete."""
+    long_output = "result-" * 500
+    messages = [
+        ModelRequest(
+            parts=[
+                SystemPromptPart(content="<openviking-recall>injected</openviking-recall>"),
+                UserPromptPart(content=["SY215C 发动机无法启动", {"text": "冷车更明显"}]),
+            ],
+        ),
+        ModelResponse(
+            parts=[
+                TextPart(content="先查蓄电池。"),
+                ToolCallPart(
+                    tool_name="viking_search",
+                    args={"query": "SY215C 发动机无法启动"},
+                    tool_call_id="call-search",
+                ),
+            ],
+        ),
+        ModelRequest(
+            parts=[
+                ToolReturnPart(
+                    tool_name="viking_search",
+                    content=long_output,
+                    tool_call_id="call-search",
+                ),
+            ],
+        ),
+    ]
+
+    trace = _extract_full_trace(messages, 0)
+
+    assert trace[0]["role"] == "user"
+    assert trace[0]["parts"] == [{"type": "text", "text": "SY215C 发动机无法启动\n冷车更明显"}]
+    assert "injected" not in str(trace)
+    assert trace[-1]["role"] == "assistant"
+    assert trace[-1]["parts"][0]["tool_output"] == long_output
+
+
 # ---------------------------------------------------------------------------
 # 8.4 — L2: URI guard blocks viking:// URIs in protected tools
 # ---------------------------------------------------------------------------
@@ -688,6 +857,218 @@ async def test_l2_uri_guard_blocks_viking_uri_in_read_tool() -> None:
     assert "read" in result
     assert "viking_read" in result or "viking_search" in result
     handler.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# 8.5 — L2: allowed_uri_prefixes config-based restriction
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_l2_allowed_uri_prefixes_block_read_outside_scope() -> None:
+    """L2: viking_read rejects URIs outside the configured prefix allowlist.
+
+    Given: a VikingCapability built from config with
+        allowed_uri_prefixes=["viking://resources/wiki/"].
+    When: viking_read is called with a URI under viking://resources/raw/.
+    Then: the tool returns an error string and the SDK read is NOT called.
+    """
+    client = _make_mock_client()
+    cfg = VikingCapabilityConfig(
+        mode="retrieve",
+        allowed_uri_prefixes=["viking://resources/wiki/"],
+    )
+    cap = _build_cap_from_config(cfg, client)
+    tools = build_tools(cap)
+    read_tool = next(t for t in tools if t.__name__ == "viking_read")
+
+    ctx = _make_run_context()
+    result = await read_tool(ctx, uris="viking://resources/raw/engine.md")
+
+    assert "outside the allowed prefixes" in result.return_value
+    client.read.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_l2_allowed_uri_prefixes_allow_read_in_scope() -> None:
+    """L2: viking_read succeeds for URIs within the configured prefix allowlist.
+
+    Given: a VikingCapability built from config with
+        allowed_uri_prefixes=["viking://resources/wiki/"].
+    When: viking_read is called with a URI under that prefix.
+    Then: the SDK read is called with the URI and content is returned.
+    """
+    client = _make_mock_client()
+    client.read = AsyncMock(return_value="wiki content")
+    cfg = VikingCapabilityConfig(
+        mode="retrieve",
+        allowed_uri_prefixes=["viking://resources/wiki/"],
+    )
+    cap = _build_cap_from_config(cfg, client)
+    tools = build_tools(cap)
+    read_tool = next(t for t in tools if t.__name__ == "viking_read")
+
+    ctx = _make_run_context()
+    result = await read_tool(ctx, uris="viking://resources/wiki/Device/SY215.md")
+
+    assert "1\u2502 wiki content" in result.return_value
+    assert client.read.call_args.args[0] == "viking://resources/wiki/Device/SY215.md"
+
+
+@pytest.mark.asyncio
+async def test_l2_allowed_uri_prefixes_search_scoped_when_no_target() -> None:
+    """L2: viking_search scopes to the allowed prefix when no target is given.
+
+    Given: allowed_uri_prefixes configured, no target_uri passed.
+    When: viking_search is called.
+    Then: the SDK search receives target_uri as a one-element list of the
+        allowed prefixes (list is the SDK's multi-prefix contract).
+    """
+    client = _make_mock_client()
+    cfg = VikingCapabilityConfig(
+        mode="retrieve",
+        allowed_uri_prefixes=["viking://resources/wiki/"],
+    )
+    cap = _build_cap_from_config(cfg, client)
+    tools = build_tools(cap)
+    search_tool = next(t for t in tools if t.__name__ == "viking_search")
+
+    ctx = _make_run_context()
+    await search_tool(ctx, query="hydraulic")
+
+    assert client.search.call_args.kwargs["target_uri"] == ["viking://resources/wiki/"]
+
+
+@pytest.mark.asyncio
+async def test_l2_allowed_uri_prefixes_scopes_list_resources() -> None:
+    """L2: list_resources narrows the resources tree, own sessions pass through.
+
+    Given: allowed_uri_prefixes=["viking://resources/wiki/"].
+    When: list_resources() is called.
+    Then: resources entries come from the allowed prefix; the SDK ls is
+        never invoked on the whole viking://resources/ tree, and the
+        non-resources sessions tree is listed as-is.
+    """
+    client = _make_mock_client()
+    cfg = VikingCapabilityConfig(
+        mode="all",
+        allowed_uri_prefixes=["viking://resources/wiki/"],
+    )
+    cap = _build_cap_from_config(cfg, client)
+    cap._client = client
+
+    client.ls = AsyncMock(
+        return_value=[
+            {
+                "uri": "viking://resources/wiki/Device/SY215.md",
+                "name": "SY215.md",
+                "isDir": False,
+            },
+            {
+                "uri": "viking://resources/wiki/engine/torque.md",
+                "name": "torque.md",
+                "isDir": False,
+            },
+        ]
+    )
+    resources = await cap.list_resources()
+
+    assert [r.uri for r in resources] == [
+        "viking://resources/wiki/Device/SY215.md",
+        "viking://resources/wiki/engine/torque.md",
+    ]
+    ls_uris = [call.args[0] for call in client.ls.await_args_list]
+    assert set(ls_uris) == {
+        "viking://resources/wiki/",
+        "viking://user/default/sessions/",
+    }
+    assert "viking://resources/" not in ls_uris
+
+
+@pytest.mark.asyncio
+async def test_l2_allowed_uri_prefixes_config_roundtrip() -> None:
+    """L2: allowed_uri_prefixes propagates from YAML config to capability.
+
+    Given: an agent YAML fragment with allowed_uri_prefixes.
+    When: the manifest is loaded.
+    Then: the resulting VikingCapabilityConfig carries the prefixes.
+    """
+    from wolfharness import AgentsManifest
+
+    yaml_str = """
+agents:
+  test_agent:
+    type: native
+    model: test
+    capabilities:
+      - type: viking
+        mode: retrieve
+        allowed_uri_prefixes:
+          - viking://resources/wiki/
+          - viking://resources/raw/
+"""
+    d = yamling.load_yaml(yaml_str, verify_type=dict)
+    manifest = AgentsManifest.model_validate(d)
+    cap_configs = manifest.agents["test_agent"].capabilities
+    assert len(cap_configs) == 1
+    cfg = cap_configs[0]
+    assert isinstance(cfg, VikingCapabilityConfig)
+    assert cfg.allowed_uri_prefixes == [
+        "viking://resources/wiki/",
+        "viking://resources/raw/",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_l2_memory_features_implicitly_allowed_outside_prefixes() -> None:
+    """L2: memory features run even though memories URI is outside the allowlist.
+
+    Given: a VikingCapabilityConfig with auto_recall_enabled=True and an
+        allowlist covering only viking://resources/ sub-prefixes.
+    When: before_model_request is called with a user prompt.
+    Then: auto_recall fires — client.search() is called against the agent's
+        memories URI, since the allowlist only restricts the
+        viking://resources/ namespace.
+    """
+    client = _make_mock_client()
+    client.search = AsyncMock(
+        return_value={
+            "results": [
+                {
+                    "uri": "viking://user/alice/memories/doc.md",
+                    "score": 0.9,
+                    "content": "hydraulic diagnosis info",
+                    "context_type": "memory",
+                }
+            ]
+        }
+    )
+    identity = VikingIdentity(account_id="acct", user_id="alice", role="user")
+
+    cfg = VikingCapabilityConfig(
+        mode="all",
+        auto_recall_enabled=True,
+        auto_recall_method="search",
+        allowed_uri_prefixes=["viking://resources/wiki/"],
+    )
+    cap = _build_cap_from_config(cfg, client, identity)
+
+    msg = ModelRequest(parts=[UserPromptPart(content="hydraulic pressure issue")])
+    rc = _make_request_context([msg])
+    ctx = _make_run_context(session_id="sess-123")
+
+    result = await cap.before_model_request(ctx, rc)
+
+    client.search.assert_called_once()
+    assert "viking://user/alice/memories/" in client.search.call_args.kwargs["target_uri"]
+    assert result is not rc
+    assert any(
+        "<openviking-recall>" in part.content
+        for msg_ in result.messages
+        if isinstance(msg_, ModelRequest)
+        for part in msg_.parts
+        if isinstance(part, UserPromptPart)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -856,11 +1237,11 @@ async def test_l2_profile_injection_first_turn_fires_second_skips() -> None:
     sys_msgs = [
         m
         for m in result1.messages
-        if isinstance(m, ModelRequest) and any(isinstance(p, SystemPromptPart) for p in m.parts)
+        if isinstance(m, ModelRequest) and any(isinstance(p, UserPromptPart) for p in m.parts)
     ]
     assert len(sys_msgs) >= 1
     profile_content = next(
-        p.content for m in sys_msgs for p in m.parts if isinstance(p, SystemPromptPart)
+        p.content for m in sys_msgs for p in m.parts if isinstance(p, UserPromptPart)
     )
     assert "<openviking-profile>" in profile_content
 

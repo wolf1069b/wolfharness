@@ -414,8 +414,9 @@ class MCPManager:
             return None
 
         # De-duplicate the model-visible tool prefix across servers sharing
-        # a display_name so prefixed tool names never collide (RFC-0058).
-        base_prefix = config.display_name
+        # a configured prefix/display_name so prefixed tool names never collide
+        # (RFC-0058).
+        base_prefix = config.tool_prefix or config.display_name
         candidate = base_prefix
         n = 2
         while candidate in self._used_tool_prefixes:
@@ -437,13 +438,12 @@ class MCPManager:
                 client=client,
                 tool_prefix=candidate,
             )
-            provider = await self.exit_stack.enter_async_context(provider)
-            self.providers.append(provider)
+            if config.lazy:
+                self.providers.append(provider)
+            else:
+                provider = await self.exit_stack.enter_async_context(provider)
+                self.providers.append(provider)
         except Exception as e:
-            # Record the failure so get_server_status() can report it
-            # as status="error" instead of silently dropping the server.
-            # Re-raise so __aenter__ (with return_exceptions=True) and
-            # direct callers both see the failure.
             self._setup_errors[config.client_id] = str(e)
             raise
         # Success — clear any prior error for this client_id (retry succeeded).
@@ -711,6 +711,7 @@ class MCPManager:
         """
         from pydantic_ai.capabilities import MCP
         from pydantic_ai.mcp import MCPToolset
+        from pydantic_ai.toolsets import PrefixedToolset
 
         from wolfharness_config.mcp_server import (
             SSEMCPServerConfig,
@@ -782,12 +783,21 @@ class MCPManager:
                     raise
                 toolset_cache[client_id] = toolset
 
+            local_toolset = (
+                PrefixedToolset(toolset, server.tool_prefix) if server.tool_prefix else toolset
+            )
             return MCP(
                 url=_derive_url(server),
-                local=toolset,
+                # pydantic-ai accepts AbstractToolset at runtime, but MCP.__init__
+                # currently types local= more narrowly than NativeOrLocalTool.
+                local=local_toolset,  # type: ignore[arg-type]
                 native=False,
                 id=server.name or server.client_id,
-                allowed_tools=server.enabled_tools,
+                allowed_tools=(
+                    [f"{server.tool_prefix}_{name}" for name in server.enabled_tools]
+                    if server.tool_prefix and server.enabled_tools
+                    else server.enabled_tools
+                ),
             )
 
         async def _process_global_configs(
@@ -799,8 +809,29 @@ class MCPManager:
                 server = entry.server_config
                 if not server.enabled or isinstance(server, AcpMCPServerConfig):
                     continue
-                transport = await self._global_pool.get_transport(server)
-                capabilities.append(await _make_capability(server, transport, toolset_cache))
+                # Lazy servers are registered as McpServerCap providers in
+                # setup_server() and connect on first tool access — skip
+                # them here to avoid eager connection via MCPToolset.
+                if getattr(server, "lazy", False):
+                    continue
+                if server.client_id in self._setup_errors:
+                    logger.debug(
+                        "Skipping MCP server %s in get_capabilities: setup failed",
+                        server.display_name,
+                    )
+                    continue
+                try:
+                    transport = await self._global_pool.get_transport(server)
+                    capabilities.append(await _make_capability(server, transport, toolset_cache))
+                except Exception as e:
+                    if getattr(server, "lazy", False):
+                        logger.warning(
+                            "Lazy MCP server %s skipped in get_capabilities: %s",
+                            server.display_name,
+                            e,
+                        )
+                        continue
+                    raise
 
         async def _process_session_configs(
             snap: McpConfigSnapshot,
@@ -819,6 +850,14 @@ class MCPManager:
                 server = entry.server_config
                 if not server.enabled:
                     continue
+                if getattr(server, "lazy", False):
+                    continue
+                if server.client_id in self._setup_errors:
+                    logger.debug(
+                        "Skipping MCP server %s in get_capabilities: setup failed",
+                        server.display_name,
+                    )
+                    continue
                 if isinstance(server, AcpMCPServerConfig):
                     try:
                         transport = await connection_pool.get_transport(server, entry.skill_name)
@@ -826,7 +865,17 @@ class MCPManager:
                         continue
                 else:
                     transport = await connection_pool.get_transport(server, entry.skill_name)
-                capabilities.append(await _make_capability(server, transport, toolset_cache))
+                try:
+                    capabilities.append(await _make_capability(server, transport, toolset_cache))
+                except Exception as e:
+                    if getattr(server, "lazy", False):
+                        logger.warning(
+                            "Lazy MCP server %s skipped in get_capabilities: %s",
+                            server.display_name,
+                            e,
+                        )
+                        continue
+                    raise
 
         ctx = self._session_contexts.get(session_id) if session_id is not None else None
 
@@ -850,9 +899,27 @@ class MCPManager:
                 for server in self.servers:
                     if not server.enabled or isinstance(server, AcpMCPServerConfig):
                         continue
-                    transport = await self._global_pool.get_transport(server)
-                    caps = await _make_capability(server, transport, self._toolset_cache)
-                    capabilities.append(caps)
+                    if getattr(server, "lazy", False):
+                        continue
+                    if server.client_id in self._setup_errors:
+                        logger.debug(
+                            "Skipping MCP server %s in get_capabilities: setup failed",
+                            server.display_name,
+                        )
+                        continue
+                    try:
+                        transport = await self._global_pool.get_transport(server)
+                        caps = await _make_capability(server, transport, self._toolset_cache)
+                        capabilities.append(caps)
+                    except Exception as e:
+                        if getattr(server, "lazy", False):
+                            logger.warning(
+                                "Lazy MCP server %s skipped in get_capabilities: %s",
+                                server.display_name,
+                                e,
+                            )
+                            continue
+                        raise
 
         return capabilities
 

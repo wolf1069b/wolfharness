@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 from pydantic_ai import BinaryContent, ToolReturn
 from pydantic_ai.capabilities import AbstractCapability
-from pydantic_ai.toolsets import FunctionToolset
+from pydantic_ai.toolsets import FunctionToolset, PrefixedToolset
 import pytest
 
 from wolfharness.capabilities.agent_context import AgentContextDeps
@@ -179,17 +179,22 @@ def test_is_abstract_capability() -> None:
     assert isinstance(cap, AbstractCapability)
 
 
-def test_get_toolset_returns_function_toolset() -> None:
-    """get_toolset() returns a FunctionToolset with 5 tools."""
+def test_get_toolset_returns_prefixed_toolset() -> None:
+    """get_toolset() returns a PrefixedToolset with 5 prefixed tools."""
     cap = ResourceCapability()
     toolset = cap.get_toolset()
     assert toolset is not None
-    assert isinstance(toolset, FunctionToolset)
-    assert "list_resources" in toolset.tools
-    assert "read_resource" in toolset.tools
-    assert "resource_exists" in toolset.tools
-    assert "list_resource_templates" in toolset.tools
-    assert "complete_resource_template" in toolset.tools
+    assert isinstance(toolset, PrefixedToolset)
+    assert toolset.prefix == "resource_"
+    assert isinstance(toolset.wrapped, FunctionToolset)
+    wrapped_tools = toolset.wrapped.tools
+    assert set(wrapped_tools.keys()) == {
+        "list_resources",
+        "read_resource",
+        "resource_exists",
+        "list_resource_templates",
+        "complete_resource_template",
+    }
 
 
 def test_name_property() -> None:
@@ -655,16 +660,18 @@ def test_toolset_id_customizable() -> None:
     """Toolset ID can be customized via constructor."""
     cap = ResourceCapability(toolset_id="custom_resources")
     toolset = cap.get_toolset()
-    assert isinstance(toolset, FunctionToolset)
-    assert toolset.id == "custom_resources"
+    assert isinstance(toolset, PrefixedToolset)
+    assert isinstance(toolset.wrapped, FunctionToolset)
+    assert toolset.wrapped.id == "custom_resources"
 
 
 def test_default_toolset_id() -> None:
     """Default toolset ID is 'resource_access'."""
     cap = ResourceCapability()
     toolset = cap.get_toolset()
-    assert isinstance(toolset, FunctionToolset)
-    assert toolset.id == "resource_access"
+    assert isinstance(toolset, PrefixedToolset)
+    assert isinstance(toolset.wrapped, FunctionToolset)
+    assert toolset.wrapped.id == "resource_access"
 
 
 async def test_read_resource_skill_not_found() -> None:

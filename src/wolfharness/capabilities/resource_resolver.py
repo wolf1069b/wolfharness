@@ -191,7 +191,10 @@ async def resolve_resource_content(
             return [f'<resource uri="{uri}">\n{truncated}\n</resource>']
         return None
 
-    # ---- Other URI schemes → ResourceAccess providers ----
+    # ---- URI schemes → ResourceAccess providers ----
+    # No scheme is rejected up front: MCP servers may register resources
+    # under any scheme, including http(s). Each provider decides whether
+    # it owns the URI.
     for resource_cap in resource_caps:
         try:
             contents = await resource_cap.read_resource(uri)

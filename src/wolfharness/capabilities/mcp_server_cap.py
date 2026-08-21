@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 from pydantic_ai.capabilities import AbstractCapability
@@ -59,6 +60,10 @@ logger = logging.getLogger(__name__)
 _DEFAULT_MAX_RETRIES = 3
 _RETRY_BASE_DELAY = 1  # seconds
 
+# Cooldown after a failed connection attempt: a dead server is not retried
+# for this long, so every listing call does not re-pay the retry backoff.
+_CONNECT_COOLDOWN = 30.0  # seconds
+
 
 class McpServerCap(
     AbstractCapability[AgentDepsT],
@@ -84,6 +89,8 @@ class McpServerCap(
         - ``ChangeObservable``: Change events for tool/resource list changes
     """
 
+    _config: MCPServerConfig
+
     def __init__(
         self,
         config: MCPServerConfig,
@@ -98,7 +105,9 @@ class McpServerCap(
         Args:
             config: MCP server configuration.
             session_pool: Pool for obtaining a shared ``MCPClient``.
-                Required if ``client`` is not provided.
+                When omitted and ``client`` is also omitted, a direct
+                ``MCPClient`` is created from ``config`` on first use
+                (see ``_ensure_client()``).
             name: Optional name override. Defaults to ``config.client_id``.
             client: Optional pre-created ``MCPClient``. When provided,
                 bypasses the session pool and uses this client directly.
@@ -109,12 +118,27 @@ class McpServerCap(
                 ``NativeAgentConfig(mcp_servers=[...])``), tools keep their raw
                 MCP names for backward compatibility.
         """
-        self._config = config
+        # Normalize raw dict config to an MCPServerConfig model.
+        # EntryPointCapabilityConfig.build() passes the raw dict from YAML
+        # args directly (capabilities.py:395), so we must validate here.
+        # MCPServerConfig is a pydantic TypeAlias (Annotated union), so we
+        # use pydantic.TypeAdapter for validation.
+        if isinstance(config, dict):
+            from pydantic import TypeAdapter
+
+            from wolfharness_config.mcp_server import MCPServerConfig as _MCPServerConfig
+
+            self._config = TypeAdapter(_MCPServerConfig).validate_python(config)
+        else:
+            self._config = config
         self._session_pool = session_pool
-        self._name = name or config.client_id
+        self._name = name or self._config.client_id
         self._tool_prefix = tool_prefix
         self._client: MCPClient | None = client
         self._change_queues: set[asyncio.Queue[ChangeEvent]] = set()
+        self._resources_cache: list[ResourceEntry] | None = None
+        self._resource_templates_cache: list[ResourceTemplateEntry] | None = None
+        self._connect_cooldown_until: float = 0.0
 
     # ---- Properties ----
 
@@ -141,25 +165,59 @@ class McpServerCap(
     # ---- Lazy client initialization ----
 
     async def _ensure_client(self) -> MCPClient:
-        """Lazily obtain and cache the MCPClient from the session pool.
+        """Lazily obtain and cache the MCPClient.
 
-        Retries with exponential backoff (3 attempts, base delay 1s)
-        on connection failures. Retry logic migrated from
-        ``SkillMcpManager`` (Phase 2, task 2.6b).
+        Connection strategy (in priority order):
+        1. If a cached client exists, return it.
+        2. If a session pool is available, connect via the pool with
+           exponential backoff retry (3 attempts, base delay 1s). A
+           30-second cooldown is enforced after exhausted retries.
+        3. Otherwise, create a direct ``MCPClient`` from config — this
+           mirrors how ``MCPManager.setup_server()`` creates clients for
+           pool-level providers (manager.py:428-439). This fallback
+           supports config-defined ``type: mcp`` capabilities that don't
+           have a session pool.
 
         Returns:
             The cached ``MCPClient`` instance.
 
         Raises:
-            RuntimeError: If the session pool is ``None`` or connection
-                fails after all retries.
+            RuntimeError: If connection is in cooldown or fails after all
+                retries.
         """
         if self._client is not None:
+            if self._client.connected:
+                return self._client
+            await self._client.__aenter__()
             return self._client
 
-        if self._session_pool is None:
+        if self._session_pool is not None:
+            return await self._connect_via_pool()
+
+        # No session pool and no pre-created client — create a direct
+        # MCPClient from config. This mirrors how
+        # MCPManager.setup_server() creates the client for pool-level
+        # providers (manager.py:428-439).
+        from wolfharness.mcp_server.client import MCPClient
+
+        client = MCPClient(config=self._config)
+        await client.__aenter__()
+        self._client = client
+        return client
+
+    async def _connect_via_pool(self) -> MCPClient:
+        """Connect using the session pool with retry logic.
+
+        Enforces a cooldown period after exhausted retries to avoid
+        hammering a failing server on every tool access.
+        """
+        assert self._session_pool is not None
+
+        now = time.monotonic()
+        if now < self._connect_cooldown_until:
             raise RuntimeError(
-                f"Cannot connect MCP server {self._name!r}: no session pool configured"
+                f"MCP server {self._name!r} connection is in cooldown "
+                f"({self._connect_cooldown_until - now:.0f}s remaining)"
             )
 
         last_error: Exception | None = None
@@ -197,6 +255,8 @@ class McpServerCap(
                     await q.put(event)
 
             async def _on_resource_list_changed() -> None:
+                self._resources_cache = None
+                self._resource_templates_cache = None
                 event = ChangeEvent(
                     capability_name=self._name,
                     kind="resource_list_changed",
@@ -229,9 +289,16 @@ class McpServerCap(
                 resource_updated_callback=_on_resource_updated,
                 prompt_change_callback=_on_prompts_changed,
             )
+            # A reconnected server is a different process state — any cached
+            # listings belong to the old connection and are stale. Many
+            # servers never send resources/list_changed, so failures must be
+            # the invalidation trigger, not the notification.
+            self._resources_cache = None
+            self._resource_templates_cache = None
             self._client = client
             return client
 
+        self._connect_cooldown_until = time.monotonic() + _CONNECT_COOLDOWN
         raise RuntimeError(
             f"Failed to connect MCP server {self._name!r} after {_DEFAULT_MAX_RETRIES} attempts"
         ) from last_error
@@ -257,11 +324,27 @@ class McpServerCap(
             tools = await client.list_tools()
             if not tools:
                 return None
-            from pydantic_ai.toolsets import CombinedToolset, FunctionToolset, PrefixedToolset
+            from pydantic_ai.toolsets import (
+                CombinedToolset,
+                FunctionToolset,
+                PrefixedToolset,
+            )
 
+            from wolfharness.capabilities.tool_schema_overlap_config import (
+                ORIGINAL_TOOL_NAME_METADATA_KEY,
+                SERVER_NAME_METADATA_KEY,
+            )
             from wolfharness.tools.tool_wrapping import wrap_tool_for_pydantic_ai
 
+            if self._config.needs_tool_filtering():
+                tools = [t for t in tools if self._config.is_tool_allowed(t.name)]
             converted = [client.convert_tool(t) for t in tools]
+            # Stamp source identity so capability-level toolset wrappers can
+            # resolve each tool back to its server and raw MCP name without
+            # parsing (possibly prefixed) tool names.
+            for raw_tool, tool in zip(tools, converted, strict=True):
+                tool.metadata[SERVER_NAME_METADATA_KEY] = self._name
+                tool.metadata[ORIGINAL_TOOL_NAME_METADATA_KEY] = raw_tool.name
             pydantic_tools = [wrap_tool_for_pydantic_ai(tool) for tool in converted]
             toolsets: list[AbstractToolset[Any]] = [
                 FunctionToolset[Any]([tool]) for tool in pydantic_tools
@@ -269,7 +352,7 @@ class McpServerCap(
             if not toolsets:
                 return None
             combined = CombinedToolset(toolsets)
-            prefix = self._tool_prefix
+            prefix = self._tool_prefix or self._config.tool_prefix
             if not prefix:
                 return combined
             return PrefixedToolset(wrapped=combined, prefix=prefix)
@@ -362,12 +445,16 @@ class McpServerCap(
     async def list_resources(self) -> Sequence[ResourceEntry]:
         """List available MCP resources.
 
-        Returns:
-            Sequence of ``ResourceEntry`` descriptors.
+        Results are cached and invalidated by ``resources/list_changed``
+        notifications. ponytail: no TTL — relies on the server sending the
+        change notification per protocol. Add a TTL if a server never
+        notifies but its resource list changes.
         """
+        if self._resources_cache is not None:
+            return self._resources_cache
         client = await self._ensure_client()
         resources = await client.list_resources()
-        return [
+        self._resources_cache = [
             ResourceEntry(
                 uri=str(r.uri),
                 name=r.title or r.name,
@@ -376,6 +463,7 @@ class McpServerCap(
             )
             for r in resources
         ]
+        return self._resources_cache
 
     async def read_resource(
         self, uri: str
@@ -432,9 +520,8 @@ class McpServerCap(
         Returns:
             ``True`` if the resource exists, ``False`` otherwise.
         """
-        client = await self._ensure_client()
         try:
-            resources = await client.list_resources()
+            resources = await self.list_resources()
         except Exception:  # noqa: BLE001
             return False
         return any(str(r.uri) == uri for r in resources)
@@ -444,12 +531,14 @@ class McpServerCap(
     async def list_resource_templates(self) -> Sequence[ResourceTemplateEntry]:
         """List available MCP resource templates.
 
-        Returns:
-            Sequence of ``ResourceTemplateEntry`` descriptors.
+        Cached like ``list_resources``, invalidated by the same
+        ``resources/list_changed`` notification.
         """
+        if self._resource_templates_cache is not None:
+            return self._resource_templates_cache
         client = await self._ensure_client()
         templates = await client.list_resource_templates()
-        return [
+        self._resource_templates_cache = [
             ResourceTemplateEntry(
                 uri_template=str(t.uriTemplate),
                 name=t.name or "",
@@ -460,6 +549,7 @@ class McpServerCap(
             )
             for t in templates
         ]
+        return self._resource_templates_cache
 
     async def complete_resource_template(
         self,
@@ -690,4 +780,6 @@ class McpServerCap(
         if self._session_pool is None and self._client is not None:
             await self._client.__aexit__(exc_type, exc_val, exc_tb)
         self._client = None
+        self._resources_cache = None
+        self._resource_templates_cache = None
         self._change_queues.clear()
