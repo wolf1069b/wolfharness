@@ -2347,6 +2347,8 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                     team_name=name,
                     role="member",
                     member_name=member["name"],
+                    max_members=self._config.bounds.max_members,
+                    max_parallel_members=self._config.bounds.max_parallel_members,
                 )
                 full_prompt = f"{base_prompt}\n\n## Team Members\n{roster}"
                 if prompt:
@@ -2882,6 +2884,8 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             team_name=team_name,
             role="member",
             member_name=name,
+            max_members=self._config.bounds.max_members,
+            max_parallel_members=self._config.bounds.max_parallel_members,
         )
         # Append current member roster so the new member knows their teammates.
         existing_members: dict[str, dict[str, Any]] = state.get("members", {})
@@ -3415,8 +3419,9 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             - ``session_metadata`` is empty/``None``
 
         When both conditions are met, renders ``config.protocol_template``
-        via ``str.format()`` with ``team_name``, ``role``, and ``member_name``
-        extracted from session metadata (with sensible defaults).
+        via ``str.format()`` with ``team_name``, ``role``, ``member_name``,
+        ``max_members``, and ``max_parallel_members`` extracted from session
+        metadata and team bounds (with sensible defaults).
         """
         if not self._config.enabled or not self._session_metadata:
             return None
@@ -3428,6 +3433,8 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                 "team_member_name",
                 self._agent_name,
             ),
+            max_members=self._config.bounds.max_members,
+            max_parallel_members=self._config.bounds.max_parallel_members,
         )
 
         # Role-specific capabilities section.
