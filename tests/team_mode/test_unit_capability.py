@@ -548,6 +548,7 @@ def _make_add_member_setup(
     mock_pool.create_child_session = AsyncMock(return_value=mock_child_state)
     mock_pool.sessions = MagicMock()
     mock_pool.sessions.get_or_create_session_agent = AsyncMock()
+    mock_pool.sessions.get_live_run = MagicMock(return_value=None)
     mock_pool.event_bus = None  # Skip SpawnSessionStart emission in unit tests
     mock_delegation = MagicMock()
     mock_delegation.create_child_session = AsyncMock(return_value="child_session_new")
@@ -1613,6 +1614,7 @@ async def test_shutdown_request_success(tmp_path: Any) -> None:
         session_pool=mock_pool,
         base_dir=str(tmp_path),
     )
+    mock_pool.sessions.get_live_run = MagicMock(return_value=None)
     config = _make_enabled_config(base_dir=str(tmp_path))
     cap = TeamCommCapability(config, "coordinator", _make_lead_metadata())
 
@@ -2466,6 +2468,7 @@ async def test_shutdown_request_removes_member(tmp_path: Any) -> None:
         session_pool=mock_pool,
         base_dir=str(tmp_path),
     )
+    mock_pool.sessions.get_live_run = MagicMock(return_value=None)
     config = _make_enabled_config(base_dir=str(tmp_path))
     cap = TeamCommCapability(config, "coordinator", _make_lead_metadata())
 
@@ -3933,17 +3936,18 @@ async def test_after_run_no_reminder_when_no_unfinished_tasks(tmp_path: Any) -> 
 
 
 @pytest.mark.unit
-async def test_shutdown_request_rejects_member_with_in_progress_task(tmp_path: Any) -> None:
-    """Given: lead tries to shut down a member who has an in_progress task.
+async def test_shutdown_request_auto_releases_in_progress_task(tmp_path: Any) -> None:
+    """Given: lead shuts down a member who has an in_progress task but no live run.
 
     When: shutdown_request is called.
-    Then: shutdown is rejected until the lead explicitly resolves the active task.
+    Then: the in_progress task is auto-released (owner cleared, status→pending)
+        and shutdown proceeds successfully.
     """
     from wolfharness.capabilities.file_team_state import FileTeamState
 
     _init_team(str(tmp_path))
     team_state = FileTeamState(str(tmp_path))
-    team_state.create_task(
+    task_id = team_state.create_task(
         "team_123",
         {
             "subject": "Translate chapter 3",
@@ -3960,16 +3964,19 @@ async def test_shutdown_request_rejects_member_with_in_progress_task(tmp_path: A
         session_pool=mock_pool,
         base_dir=str(tmp_path),
     )
+    mock_pool.sessions.get_live_run = MagicMock(return_value=None)
     config = _make_enabled_config(base_dir=str(tmp_path))
     cap = TeamCommCapability(config, "coordinator", _make_lead_metadata())
 
     result = await cap.shutdown_request(ctx, "translator_agent")
 
-    assert "Shutdown rejected for translator_agent" in result.return_value
-    assert "Translate chapter 3" in result.return_value
-    assert "in_progress" in result.return_value
-    assert "reassign or cancel" in result.return_value
-    mock_pool.close_session.assert_not_awaited()
+    assert "Shutdown completed for translator_agent" in result.return_value
+    mock_pool.close_session.assert_awaited_once_with("sess_translator")
+    # Task should be released: owner cleared, status flipped to pending.
+    task = team_state.get_task("team_123", task_id)
+    assert task is not None
+    assert task["owner"] == ""
+    assert task["status"] == "pending"
 
 
 @pytest.mark.unit
@@ -4000,6 +4007,7 @@ async def test_shutdown_request_rejects_member_with_active_run_and_pending_tasks
         session_pool=mock_pool,
         base_dir=str(tmp_path),
     )
+    mock_pool.sessions.get_live_run = MagicMock(return_value=MagicMock())
     mock_pool.sessions.get_session.return_value = member_session
     config = _make_enabled_config(base_dir=str(tmp_path))
     cap = TeamCommCapability(config, "coordinator", _make_lead_metadata())
@@ -4007,7 +4015,7 @@ async def test_shutdown_request_rejects_member_with_active_run_and_pending_tasks
     result = await cap.shutdown_request(ctx, "translator_agent")
 
     assert "Shutdown rejected for translator_agent" in result.return_value
-    assert "active run run_active_123" in result.return_value
+    assert "an active run" in result.return_value
     assert "Wait for it to become idle" in result.return_value
     mock_pool.close_session.assert_not_awaited()
 
@@ -4040,6 +4048,7 @@ async def test_shutdown_request_no_warning_when_tasks_completed(tmp_path: Any) -
         session_pool=mock_pool,
         base_dir=str(tmp_path),
     )
+    mock_pool.sessions.get_live_run = MagicMock(return_value=None)
     config = _make_enabled_config(base_dir=str(tmp_path))
     cap = TeamCommCapability(config, "coordinator", _make_lead_metadata())
 
@@ -4072,6 +4081,7 @@ async def test_shutdown_request_warns_and_closes_member_with_pending_task(tmp_pa
         session_pool=mock_pool,
         base_dir=str(tmp_path),
     )
+    mock_pool.sessions.get_live_run = MagicMock(return_value=None)
     config = _make_enabled_config(base_dir=str(tmp_path))
     cap = TeamCommCapability(config, "coordinator", _make_lead_metadata())
 

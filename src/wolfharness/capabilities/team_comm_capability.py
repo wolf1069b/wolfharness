@@ -3059,15 +3059,15 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         # can therefore be doing real work while all owned tasks still say
         # ``pending``. Closing such a session cancels its in-flight write.
         session_pool = agent_ctx.host.session_pool
-        member_session = (
-            session_pool.sessions.get_session(member_sid) if session_pool is not None else None
-        )
-        active_run_id = member_session.current_run_id if member_session is not None else None
-        if isinstance(active_run_id, str) and active_run_id:
+
+        # Use the repair-capable live-run lookup instead of the raw
+        # ``current_run_id`` field — the latter can outlive an errored run's
+        # cleanup and permanently block shutdown of dead workers.
+        if session_pool is not None and self._session_has_live_run(session_pool, member_sid):
             return ToolReturn(
                 return_value=(
-                    f"Shutdown rejected for {member_name}: member has active run "
-                    f"{active_run_id}. Wait for it to become idle, then re-read "
+                    f"Shutdown rejected for {member_name}: member has an active "
+                    "run. Wait for it to become idle, then re-read "
                     "task_list/team_status before retrying shutdown."
                 ),
             )
@@ -3076,15 +3076,28 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         unfinished = self._get_unfinished_tasks(team_state, team_id, member_name)
         active = [task for task in unfinished if task.get("status") == "in_progress"]
         if active:
+            # The member has no live run but still owns in_progress tasks.
+            # This happens when ``on_run_error``'s ``_release_owned_tasks``
+            # didn't fire or raced.  Auto-release the lease (clears owner →
+            # ``FileTeamState`` flips status to ``pending``) so the lead can
+            # reassign instead of deadlocking on shutdown.
+            for task in active:
+                try:
+                    team_state.update_task(team_id, task["task_id"], {"owner": ""})
+                except Exception:  # noqa: BLE001
+                    logger.warning(
+                        "Failed to release task %s during shutdown of %s",
+                        task.get("task_id", "?"),
+                        member_name,
+                    )
             active_tasks = ", ".join(
                 f"'{task.get('subject', '?')}' (id={task.get('task_id', '?')})" for task in active
             )
-            return ToolReturn(
-                return_value=(
-                    f"Shutdown rejected for {member_name}: member still has "
-                    f"{len(active)} in_progress task(s): {active_tasks}. "
-                    "The lead must reassign or cancel each active task before shutdown."
-                ),
+            logger.info(
+                "Auto-released %d in_progress task(s) from %s during shutdown: %s",
+                len(active),
+                member_name,
+                active_tasks,
             )
 
         if session_pool is not None:
