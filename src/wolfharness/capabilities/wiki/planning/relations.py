@@ -1129,6 +1129,25 @@ class RelationMixin:
             self._sync_device_diagnostic_links() if sync_component_links else 0
         )
         self._record_phase_timing("relation", relation_started)
+        # Advance checkpoint so restart can distinguish "relations done" from
+        # "merely materialized"; relation_closure is idempotent and in the
+        # ready-set, so re-calls are safe.
+        self.checkpoint_build(
+            doc_id=str(checkpoint.get("doc_id", "")),
+            device_id=str(checkpoint.get("device_id", "")),
+            series_id=str(checkpoint.get("series_id", "")),
+            stage="relation_closure",
+            build_id=str(checkpoint.get("build_id", "")),
+            input_hash=str(checkpoint.get("input_hash", "")),
+            config_hash=str(checkpoint.get("config_hash", "")),
+            source_snapshot_id=str(checkpoint.get("source_snapshot_id", "")),
+            snapshot_id=str(checkpoint.get("snapshot_id", "")),
+            input_docs=tuple(checkpoint.get("input_docs", ()) or ()),
+            schema_version=str(checkpoint.get("schema_version", "")),
+            audit_profile=self._validate_audit_profile(
+                str(checkpoint.get("audit_profile", "manual")),
+            ),
+        )
         return {
             "candidate_count": len(candidates),
             "linked_edge_count": linked_edge_count,
