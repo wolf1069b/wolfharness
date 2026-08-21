@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 import re
 
-from xeno_adp_harness.quality import (
+from wolfharness.capabilities.wiki.quality import (
     RawSourceKind,
     classify_raw_source_uri,
 )

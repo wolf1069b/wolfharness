@@ -51,7 +51,7 @@ def _viking_client():
     """Return a memoized OpenViking HTTP client (shared by wiki + raw backends)."""
     global _client_cache  # noqa: PLW0603 - process-wide memoized singleton
     if _client_cache is None:
-        from openviking_sdk import SyncHTTPClient
+        from openviking_sdk import SyncHTTPClient  # noqa: PLC0415 - optional dep, only needed in viking mode
 
         _client_cache = SyncHTTPClient(
             url=os.environ.get("VIKING_BASE_URL", _VIKING_DEFAULT_URL),
@@ -94,9 +94,7 @@ def viking_list_children(uri: str, *, recursive: bool = False) -> dict[str, obje
     client = _viking_client()
     target = uri.rstrip("/")
     try:
-        nodes = (
-            client.tree(target) if recursive else client.ls(target, recursive=False, simple=False)
-        )
+        nodes = client.tree(target) if recursive else client.ls(target, recursive=False, simple=False)
     except Exception as exc:  # noqa: BLE001 - read-only probe surfaced to caller
         if isinstance(exc, NotFoundError) or str(getattr(exc, "code", "")).upper() == "NOT_FOUND":
             return {"uri": uri, "type": "error", "error": "not found"}
@@ -154,7 +152,7 @@ def create_wiki_store(wiki_root: str | Path) -> WikiStore:
       ``VIKING_NAMESPACE`` / ``VIKING_BASE_URL`` / ``VIKING_API_KEY`` are
       then required to resolve the remote root.
     """
-    from wolfharness.capabilities.wiki.quality import set_wiki_root_uri
+    from wolfharness.capabilities.wiki.quality import set_wiki_root_uri  # noqa: PLC0415 - optional harness dep
 
     backend = os.environ.get("WIKI_STORAGE_BACKEND", "viking")
     if backend == "local_viking":

@@ -9,11 +9,11 @@ import logging
 import os
 import re
 
-from xeno_adp_harness.quality import (
+from wolfharness.capabilities.wiki.quality import (
     parse_frontmatter,
 )
-from xeno_adp_harness.schema_loader import get_schema_version
-from xeno_adp_harness.validation import (
+from wolfharness.capabilities.wiki.schema_loader import get_schema_version
+from wolfharness.capabilities.wiki.validation import (
     ENTITY_VALIDATION_HOOKS,
     FORMAL_WRITE_EXCLUDED_HOOKS,
 )

@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 import re
 
-from xeno_adp_harness.quality import extract_source_uris
+from wolfharness.capabilities.wiki.quality import extract_source_uris
 
 
 logger = logging.getLogger(__name__)

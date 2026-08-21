@@ -19,7 +19,6 @@ import logging
 
 from .backend import FSBackend
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -65,9 +64,7 @@ class DualFS(FSBackend):
     def fingerprint(self, key: str) -> tuple[int | None, int | None]:
         return self.local.fingerprint(key)
 
-    def find(
-        self, query, *, target_uri: str = "", limit: int = 10, deep: bool = False
-    ) -> list[dict]:
+    def find(self, query, *, target_uri: str = "", limit: int = 10, deep: bool = False) -> list[dict]:
         """Semantic retrieval only exists on the remote backend — delegate."""
         return self.remote.find(query, target_uri=target_uri, limit=limit, deep=deep)
 

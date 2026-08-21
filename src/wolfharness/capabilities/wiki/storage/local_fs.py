@@ -29,7 +29,10 @@ class LocalFS(FSBackend):
         return resolved
 
     def read_text(self, key: str) -> str | None:
-        p = self._p(key)
+        try:
+            p = self._p(key)
+        except ValueError:
+            return None
         if not p.is_file():
             return None
         return _strip_control_chars(p.read_text(encoding="utf-8"))
@@ -99,10 +102,16 @@ class LocalFS(FSBackend):
                     temporary.unlink()
 
     def exists(self, key: str) -> bool:
-        return self._p(key).is_file()
+        try:
+            return self._p(key).is_file()
+        except ValueError:
+            return False
 
     def is_dir(self, key: str) -> bool:
-        return self._p(key).is_dir()
+        try:
+            return self._p(key).is_dir()
+        except ValueError:
+            return False
 
     def list_dir(self, key: str, *, recursive: bool = False) -> list[str]:
         base = self._p(key)
@@ -121,7 +130,10 @@ class LocalFS(FSBackend):
         base = self._p(key)
         if not base.is_dir():
             return []
-        return [str(p.relative_to(self.root)) for p in sorted(base.glob("*"))]
+        out: list[str] = []
+        for p in sorted(base.glob("*")):
+            out.append(str(p.relative_to(self.root)))
+        return out
 
     def mtime_ns(self, key: str) -> int | None:
         p = self._p(key)

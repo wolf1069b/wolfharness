@@ -184,7 +184,7 @@ class WikiBuildCapability(
         wiki_root = self._config.wiki_root or os.environ.get("WIKI_ROOT") or "output/wiki_newbuild"
 
         try:
-            from xeno_adp_agentic.wiki.build.build_logger import WikiBuildLogger
+            from wolfharness.capabilities.wiki.build_logger import WikiBuildLogger
             from .wiki_build_tools import WikiBuildTools
 
             library_root = (

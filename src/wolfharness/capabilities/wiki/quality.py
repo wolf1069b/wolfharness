@@ -2,21 +2,35 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import StrEnum
 import os
 import re
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Literal, NotRequired, TypedDict, get_args
 
 import yaml
 
 from wolfharness.capabilities.wiki.namespaces import resources_root
 from wolfharness.capabilities.wiki.schema_loader import get_concept_schema
-
+from wolfharness.capabilities.wiki.section_constants import (
+    GAP_RE,
+    PLACEHOLDER_TEXT_RE,
+    SECTION_ASSOCIATED_SYMPTOMS,
+    SECTION_COMMON_FAULTS,
+    SECTION_CONTROLLER_IDENTITY,
+    SECTION_DIAGNOSIS_FLOW,
+    SECTION_DIAGNOSTIC_FLOW,
+    SECTION_FAILURE_MECHANISM,
+    SECTION_IMPACT_SCOPE,
+    SECTION_MECHANISM,
+    SECTION_POSSIBLE_FAILURE,
+    SECTION_REPAIR_METHOD,
+    SECTION_SYSTEM_CHAPTERS,
+    SECTION_VERIFICATION,
+)
 
 _SECTION_RE = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
 _WIKI_CONCEPTS = frozenset({"Device", "Component", "DTC", "Symptom", "Fault", "Procedure", "OP"})
-_MIN_URI_SEGMENTS = 2
 
 
 def _configured_root(env_name: str) -> str:
@@ -45,7 +59,7 @@ def _compile_wiki_regexes(root_uri: str) -> None:
         rf"{esc}/(?:Device|Component|DTC|Symptom|Fault|Procedure|OP)/"
         r"(?![0-9a-f]{24}(?:#|$))"
         r"([^/#\s\)\]\"'\u3000\u3001\u3002]*)"
-        r"(?=$|[<{\)\]\s,;:!?。,;:!?])",
+        r"(?=$|[<{\)\]\s,;:!?。，；：！？])",
     )
 
 
@@ -77,7 +91,7 @@ _compile_wiki_regexes(_wiki_root_uri)
 # Agents fetch source content from arbitrary MCP providers; the scheme is
 # an opaque provenance identifier, not a hardcoded file-backend selector.
 _URI_START_RE = re.compile(r"[a-z][a-z0-9+.\-]*://")
-_URI_TRAILING_PUNCTUATION = ".,;:!?,。;:!?、"
+_URI_TRAILING_PUNCTUATION = ".,;:!?，。；：！？、"
 
 # Raw manual chapter URIs.  Addressable backend paths
 # ``viking://.../chapters/<subdir>/chapter.md``, which may contain CJK
@@ -148,7 +162,7 @@ class SourceReadResult:
     error_code: str = ""
 
 
-def classify_raw_source_uri(  # noqa: PLR0911 - classifier with many guard-rail branches
+def classify_raw_source_uri(
     uri: str,
     *,
     raw_root_uri: str | None = None,
@@ -200,11 +214,7 @@ def is_raw_chapter_uri(uri: str) -> bool:
     """
     if not isinstance(uri, str):
         return False
-    return (
-        uri in _RAW_CHAPTER_URIS
-        or uri.startswith(_RAW_CHAPTER_PREFIXES)
-        or ("/chapters/" in uri and uri.endswith("chapter.md"))
-    )
+    return uri in _RAW_CHAPTER_URIS or uri.startswith(_RAW_CHAPTER_PREFIXES) or ("/chapters/" in uri and uri.endswith("chapter.md"))
 
 
 def is_external_source_uri(uri: str) -> bool:
@@ -407,12 +417,7 @@ def extract_sections(content: str) -> dict[str, str]:
             body = "\n".join(lines[end + 1 :])
 
     matches = list(_SECTION_RE.finditer(body))
-    return {
-        match.group(1).strip(): body[
-            match.end() : matches[index + 1].start() if index + 1 < len(matches) else len(body)
-        ].strip()
-        for index, match in enumerate(matches)
-    }
+    return {match.group(1).strip(): body[match.end() : matches[index + 1].start() if index + 1 < len(matches) else len(body)].strip() for index, match in enumerate(matches)}
 
 
 def has_usable_procedure_criteria(section: str) -> bool:
@@ -425,11 +430,8 @@ def has_usable_procedure_criteria(section: str) -> bool:
     return _section_has_substance(section, min_chars=0)
 
 
-_PLACEHOLDER_TEXT_RE = re.compile(
-    r"^(?:见|参见|详见|按|按照|依据)?"
-    r"(?:来源|原文|手册|规范|标准|同上|上述|说明|无|—|--|未知"
-    r"|未提供|未确认|未说明|open_?gap|待补充|TODO|TBD)?$",
-)
+# Placeholder phrase detector (pattern centralized in section_constants).
+_PLACEHOLDER_TEXT_RE = re.compile(PLACEHOLDER_TEXT_RE)
 
 
 def _section_has_substance(section: str, *, min_chars: int = 10) -> bool:
@@ -439,7 +441,7 @@ def _section_has_substance(section: str, *, min_chars: int = 10) -> bool:
     optionally enforces a minimum character count on the remainder.
     """
     without_uris = re.sub(r"[a-z][a-z0-9+.\-]*://[^\s)\]>]+", "", section)
-    normalized = re.sub(r"[\s\[\]()()<>::,,。;;、|#*_\-]+", "", without_uris)
+    normalized = re.sub(r"[\s\[\]（）()<>:：,，。；;、|#*_\-]+", "", without_uris)
     if not normalized:
         return False
     if min_chars and len(normalized) < min_chars:
@@ -460,7 +462,7 @@ def extract_wiki_uris(content: str) -> set[str]:
         remainder = uri.removeprefix(_wiki_root_uri + "/")
         path, _, fragment = remainder.partition("#")
         parts = path.split("/")
-        if len(parts) < _MIN_URI_SEGMENTS or not all(parts) or parts[0] not in _WIKI_CONCEPTS:
+        if len(parts) < 2 or not all(parts) or parts[0] not in _WIKI_CONCEPTS:
             continue
         if fragment and any(character.isspace() for character in fragment):
             continue
@@ -482,7 +484,7 @@ def extract_malformed_wiki_uris(content: str) -> list[str]:
         if not parts or parts[0] not in _WIKI_CONCEPTS:
             continue
         if (
-            len(parts) < _MIN_URI_SEGMENTS
+            len(parts) < 2
             or not all(parts[1:])
             or any(part.startswith(("<", "{")) for part in parts[1:])
             # ``open_gap: ...`` is body prose, not a navigable entity URI.
@@ -588,9 +590,7 @@ def confirmation_requirements(
     sections = extract_sections(content)
     checks: list[RequirementCheck] = []
 
-    def field_present(
-        code: str, field: str, message: str, *, target_concepts: tuple[str, ...] = ()
-    ) -> None:
+    def field_present(code: str, field: str, message: str, *, target_concepts: tuple[str, ...] = ()) -> None:
         checks.append(
             RequirementCheck(
                 code=code,
@@ -642,13 +642,13 @@ def confirmation_requirements(
         )
         section_link(
             "SymptomProfile.possible_faults.body_link",
-            "可能失效机理",
+            SECTION_POSSIBLE_FAILURE,
             ("Fault",),
             "故障现象画像的可能失效机理文本必须链接到故障实体 URI。",
         )
         section_link(
             "SymptomProfile.diagnostic_procedure.body_link",
-            "推荐诊断流程",
+            SECTION_DIAGNOSTIC_FLOW,
             ("Procedure",),
             "故障现象画像的诊断流程必须链接可复用的流程实体。",
         )
@@ -670,16 +670,13 @@ def confirmation_requirements(
         checks.append(
             RequirementCheck(
                 code="Device.system_chapters.raw_link",
-                complete=any(
-                    is_raw_chapter_uri(uri) or is_external_source_uri(uri)
-                    for uri in extract_source_uris(sections.get("系统章节引用", ""))
-                ),
-                message="设备系统章节条目必须引用原始章节 URI(章节:系统章节引用)。",
+                complete=any(is_raw_chapter_uri(uri) or is_external_source_uri(uri) for uri in extract_source_uris(sections.get(SECTION_SYSTEM_CHAPTERS, ""))),
+                message="设备系统章节条目必须引用原始章节 URI（章节：系统章节引用）。",
             ),
         )
         section_link(
             "Device.diagnostic_chain.body_link",
-            "常见故障及故障机理",
+            SECTION_COMMON_FAULTS,
             ("Symptom", "Fault", "Component"),
             "设备诊断表必须链接故障现象、故障和部件实体。",
         )
@@ -694,12 +691,12 @@ def confirmation_requirements(
         # Working mechanism is the terminal node of the diagnostic chain:
         # Symptom → Fault → Component → 工作机理.  Without substantive
         # content here the chain dead-ends and the OPA is actionable.
-        working = sections.get("工作机理", "")
+        working = sections.get(SECTION_MECHANISM, "")
         checks.append(
             RequirementCheck(
                 code="Component.working_mechanism",
                 complete=_section_has_substance(working),
-                message="部件必须包含工作机理章节的实质性内容,描述其工作原理。",
+                message="部件必须包含工作机理章节的实质性内容，描述其工作原理。",
                 disposition=IssueDisposition.GAP,
                 opa_reason_code="content_missing",
             ),
@@ -710,19 +707,12 @@ def confirmation_requirements(
             "controller_role",
             "DTC 必须保留源文档确认的控制器功能角色。",
         )
-        controller_identity = sections.get("控制器身份", "")
+        controller_identity = sections.get(SECTION_CONTROLLER_IDENTITY, "")
         checks.append(
             RequirementCheck(
                 code="DTC.controller_identity",
-                complete=_has_value(frontmatter.get("controller_component"))
-                or bool(
-                    re.search(
-                        r"open_gap|未提供|未确认|未说明|未知", controller_identity, re.IGNORECASE
-                    )
-                ),
-                message=(
-                    "DTC 必须引用已知的控制器部件,或明确记录源文档未标识硬件型号(章节:控制器身份)。"
-                ),
+                complete=_has_value(frontmatter.get("controller_component")) or bool(re.search(GAP_RE, controller_identity, re.IGNORECASE)),
+                message=("DTC 必须引用已知的控制器部件，或明确记录源文档未标识硬件型号（章节：控制器身份）。"),
             ),
         )
         field_present(
@@ -733,13 +723,13 @@ def confirmation_requirements(
         )
         section_link(
             "DTC.related_faults.body_link",
-            "可能失效机理",
+            SECTION_POSSIBLE_FAILURE,
             ("Fault",),
             "DTC 可能失效机理文本必须链接故障实体。",
         )
         section_link(
             "DTC.diagnostic_procedure.body_link",
-            "诊断流程",
+            SECTION_DIAGNOSIS_FLOW,
             ("Procedure",),
             "DTC 诊断步骤必须生成为流程实体并建立链接。",
         )
@@ -753,46 +743,45 @@ def confirmation_requirements(
         checks.append(
             RequirementCheck(
                 code="Fault.procedures",
-                complete=_has_value(frontmatter.get("verification_procedures"))
-                or _has_value(frontmatter.get("repair_procedures")),
+                complete=_has_value(frontmatter.get("verification_procedures")) or _has_value(frontmatter.get("repair_procedures")),
                 message="故障必须至少引用一个验证或修复流程。",
                 target_concepts=("Procedure",),
             ),
         )
         section_link(
             "Fault.component.body_link",
-            "影响范围",
+            SECTION_IMPACT_SCOPE,
             ("Component",),
             "故障影响范围文本必须链接受影响的部件。",
         )
         section_link(
             "Fault.symptom.body_link",
-            "关联故障现象",
+            SECTION_ASSOCIATED_SYMPTOMS,
             ("Symptom",),
             "故障必须链接其可能引发的故障现象实体。",
         )
         if _has_value(frontmatter.get("verification_procedures")):
             section_link(
                 "Fault.verification_procedure.body_link",
-                "验证方法",
+                SECTION_VERIFICATION,
                 ("Procedure",),
                 "故障验证方法文本必须链接流程实体。",
             )
         if _has_value(frontmatter.get("repair_procedures")):
             section_link(
                 "Fault.repair_procedure.body_link",
-                "修复方式",
+                SECTION_REPAIR_METHOD,
                 ("Procedure",),
                 "故障修复方式文本必须链接流程实体。",
             )
         # Failure mechanism is the core diagnostic content: without it
         # the page is a label, not an explanation of how the part fails.
-        failure_mechanism = sections.get("失效机理", "")
+        failure_mechanism = sections.get(SECTION_FAILURE_MECHANISM, "")
         checks.append(
             RequirementCheck(
                 code="Fault.failure_mechanism",
                 complete=_section_has_substance(failure_mechanism),
-                message="故障必须包含失效机理章节的实质性内容,描述部件以何种方式失效。",
+                message="故障必须包含失效机理章节的实质性内容，描述部件以何种方式失效。",
                 disposition=IssueDisposition.GAP,
                 opa_reason_code="content_missing",
             ),

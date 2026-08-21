@@ -21,15 +21,15 @@ from urllib.parse import unquote, urlsplit
 
 from httpx import HTTPError
 from openviking_sdk.errors import OpenVikingError
-from xeno_adp_agentic.wiki.build.build_logger import WikiBuildLogger
-from xeno_adp_agentic.wiki.storage import (
+from wolfharness.capabilities.wiki.build_logger import WikiBuildLogger
+from wolfharness.capabilities.wiki.storage import (
     FSBackend,
     create_raw_reader,
     create_wiki_store,
     viking_read,
 )
-from xeno_adp_harness.auto_repair import batch_auto_repair
-from xeno_adp_harness.quality import (
+from wolfharness.capabilities.wiki.auto_repair import batch_auto_repair
+from wolfharness.capabilities.wiki.quality import (
     BuildProfile,
     RawSourceKind,
     SourceReadResult,
@@ -43,8 +43,8 @@ from xeno_adp_harness.quality import (
     parse_frontmatter,
     set_raw_source_root_uri,
 )
-from xeno_adp_harness.schema_loader import get_concept_schema, get_schema_version
-from xeno_adp_harness.validation import (
+from wolfharness.capabilities.wiki.schema_loader import get_concept_schema, get_schema_version
+from wolfharness.capabilities.wiki.validation import (
     require_valid_entity,
 )
 

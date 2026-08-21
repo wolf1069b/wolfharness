@@ -8,13 +8,13 @@ import logging
 from pathlib import Path
 import re
 
-from xeno_adp_agentic.wiki.serve.text_parsers import (
+from wolfharness.capabilities.wiki.io.text_parsers import (
     _dir_to_clean_title,
 )
-from xeno_adp_agentic.wiki.storage import (
+from wolfharness.capabilities.wiki.storage import (
     viking_read,
 )
-from xeno_adp_harness.quality import (
+from wolfharness.capabilities.wiki.quality import (
     RawSourceKind,
     classify_raw_source_uri,
 )

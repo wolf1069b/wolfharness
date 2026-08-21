@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import os
 
-
 _RESOURCES_PREFIX = "viking://resources/"
 
 

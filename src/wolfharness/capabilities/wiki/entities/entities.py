@@ -9,17 +9,17 @@ import logging
 import re
 import time
 
-from xeno_adp_agentic.wiki.serve.text_parsers import (
+from wolfharness.capabilities.wiki.io.text_parsers import (
     _ENTITY_URI_HEADING_RE,
 )
-from xeno_adp_harness.auto_repair import materialize_body_links
-from xeno_adp_harness.quality import (
+from wolfharness.capabilities.wiki.auto_repair import materialize_body_links
+from wolfharness.capabilities.wiki.quality import (
     entity_status,
     extract_sections,
     extract_source_uris,
     parse_frontmatter,
 )
-from xeno_adp_harness.validation import (
+from wolfharness.capabilities.wiki.validation import (
     require_valid_entity,
 )
 

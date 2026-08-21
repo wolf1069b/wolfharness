@@ -14,7 +14,7 @@ import logging
 from pathlib import Path
 import re
 
-from xeno_adp_agentic.wiki.models import (
+from wolfharness.capabilities.wiki.models import (
     OPA_CLOSURE_STATUSES,
     OPA_REASON_CODES,
     OPAModel,
@@ -22,8 +22,8 @@ from xeno_adp_agentic.wiki.models import (
     OPSModel,
     infer_opa_reason_code,
 )
-from xeno_adp_agentic.wiki.serve.wiki_build_deps import WikiBuildDeps
-from xeno_adp_harness.quality import (
+from wolfharness.capabilities.wiki.wiki_build_deps import WikiBuildDeps
+from wolfharness.capabilities.wiki.quality import (
     BuildProfile,
     IssueDisposition,
     SourceReadResult,
@@ -35,7 +35,7 @@ from xeno_adp_harness.quality import (
     is_optional_relation_issue,
     parse_frontmatter,
 )
-from xeno_adp_harness.section_constants import (
+from wolfharness.capabilities.wiki.section_constants import (
     SECTION_IMPACT_SCOPE,
     SECTION_OVERVIEW,
     SECTION_POSSIBLE_FAILURE,

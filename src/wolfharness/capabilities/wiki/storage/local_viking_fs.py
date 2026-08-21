@@ -14,14 +14,13 @@ capped before upload.
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 import logging
-from pathlib import Path
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 from .backend import FSBackend
 from .local_fs import LocalFS
-
 
 logger = logging.getLogger(__name__)
 
@@ -156,9 +155,7 @@ class LocalVikingFS(FSBackend):
                     except Exception:
                         logger.exception("upload file %s failed", child.name)
                         uploads.append({"dir": child.name, "status": "failed"})
-            status = (
-                "completed" if uploads and all(u["status"] == "ok" for u in uploads) else "failed"
-            )
+            status = "completed" if uploads and all(u["status"] == "ok" for u in uploads) else "failed"
         except Exception:
             logger.exception("finalize_upload failed; local finalize stands")
             return {"status": "failed", "uploads": uploads}
@@ -182,8 +179,7 @@ class LocalVikingFS(FSBackend):
             target = dst / rel
             if len(target.name.encode("utf-8")) > _MAX_FILENAME_BYTES:
                 raise ValueError(
-                    f"filename {target.name!r} is {len(target.name.encode('utf-8'))} bytes "
-                    f"(limit {_MAX_FILENAME_BYTES}); id builders must clip at generation time"
+                    f"filename {target.name!r} is {len(target.name.encode('utf-8'))} bytes (limit {_MAX_FILENAME_BYTES}); id builders must clip at generation time",
                 )
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(file_path.read_text(encoding="utf-8"), encoding="utf-8")

@@ -7,16 +7,16 @@ from hashlib import sha256
 import logging
 from pathlib import Path
 
-from xeno_adp_agentic.wiki.serve.text_parsers import (
+from wolfharness.capabilities.wiki.io.text_parsers import (
     _ENTITY_URI_HEADING_RE,
     _parse_forward_links,
 )
-from xeno_adp_harness.auto_repair import materialize_body_links
-from xeno_adp_harness.quality import (
+from wolfharness.capabilities.wiki.auto_repair import materialize_body_links
+from wolfharness.capabilities.wiki.quality import (
     entity_status,
     parse_frontmatter,
 )
-from xeno_adp_harness.validation import (
+from wolfharness.capabilities.wiki.validation import (
     require_valid_entity,
 )
 

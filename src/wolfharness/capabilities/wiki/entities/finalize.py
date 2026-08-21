@@ -13,17 +13,17 @@ from pathlib import Path
 import re
 import time
 
-from xeno_adp_agentic.wiki.serve.text_parsers import (
+from wolfharness.capabilities.wiki.io.text_parsers import (
     _parse_forward_links,
 )
-from xeno_adp_harness.quality import (
+from wolfharness.capabilities.wiki.quality import (
     BuildProfile,
     WikiAuditReport,
     entity_status,
     extract_source_uris,
     parse_frontmatter,
 )
-from xeno_adp_harness.schema_loader import get_schema_version
+from wolfharness.capabilities.wiki.schema_loader import get_schema_version
 
 
 logger = logging.getLogger(__name__)

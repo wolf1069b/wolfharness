@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 import time
 
-from xeno_adp_harness.quality import (
+from wolfharness.capabilities.wiki.quality import (
     BuildProfile,
     classify_raw_source_uri,
     extract_malformed_wiki_uris,
@@ -22,8 +22,8 @@ from xeno_adp_harness.quality import (
     is_optional_relation_field,
     parse_frontmatter,
 )
-from xeno_adp_harness.schema_loader import get_concept_schema, get_schema_version
-from xeno_adp_harness.section_constants import (
+from wolfharness.capabilities.wiki.schema_loader import get_concept_schema, get_schema_version
+from wolfharness.capabilities.wiki.section_constants import (
     SECTION_COMMON_FAILURE_MODES,
     SECTION_DISASSEMBLY_STEPS,
 )

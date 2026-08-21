@@ -9,7 +9,7 @@ import re
 
 from httpx import HTTPError
 from openviking_sdk.errors import OpenVikingError
-from xeno_adp_harness.section_constants import (
+from wolfharness.capabilities.wiki.section_constants import (
     SECTION_MECHANISM,
     SECTION_OVERVIEW,
     SECTION_SOURCE,

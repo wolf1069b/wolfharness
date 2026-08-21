@@ -9,15 +9,15 @@ import json
 import logging
 from pathlib import Path
 
-from xeno_adp_agentic.wiki.serve.template_materializer import (
+from wolfharness.capabilities.wiki.io.template_materializer import (
     assemble_template_entity,
     strip_device_prefix,
 )
-from xeno_adp_agentic.wiki.storage import (
+from wolfharness.capabilities.wiki.storage import (
     LocalFS,
     LocalVikingFS,
 )
-from xeno_adp_harness.schema_loader import get_schema_version
+from wolfharness.capabilities.wiki.schema_loader import get_schema_version
 
 
 logger = logging.getLogger(__name__)

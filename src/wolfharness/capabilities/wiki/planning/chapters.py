@@ -11,24 +11,24 @@ from pathlib import Path
 import time
 
 from openviking_sdk.errors import OpenVikingError
-from xeno_adp_agentic.wiki.serve.chapter_scoring import (
+from wolfharness.capabilities.wiki.io.chapter_scoring import (
     build_fingerprint,
     score_chapter_record,
     should_auto_register_no_entity,
     should_auto_register_no_entity_from_toc,
 )
-from xeno_adp_agentic.wiki.serve.text_compact import compact_chapter
-from xeno_adp_agentic.wiki.serve.text_parsers import (
+from wolfharness.capabilities.wiki.io.text_compact import compact_chapter
+from wolfharness.capabilities.wiki.io.text_parsers import (
     _CHAPTER_PREFIX_RE,
     _dir_to_clean_title,
 )
-from xeno_adp_agentic.wiki.storage import (
+from wolfharness.capabilities.wiki.storage import (
     FSBackend,
 )
-from xeno_adp_harness.quality import (
+from wolfharness.capabilities.wiki.quality import (
     register_raw_chapter_uris,
 )
-from xeno_adp_harness.section_constants import (
+from wolfharness.capabilities.wiki.section_constants import (
     SECTION_MECHANISM,
 )
 

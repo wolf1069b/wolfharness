@@ -20,9 +20,7 @@ from typing import Any
 import yaml
 
 _SCHEMA_PATH = (
-    Path(__file__).resolve().parent
-    / "templates"
-    / "default_schema.yaml"
+    Path(__file__).resolve().parent / "templates" / "default_schema.yaml"
 )
 
 

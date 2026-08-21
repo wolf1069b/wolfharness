@@ -6,8 +6,8 @@ from collections import Counter
 from hashlib import sha256
 from typing import TypedDict
 
-from xeno_adp_agentic.wiki.serve.wiki_build_deps import WikiBuildDeps
-from xeno_adp_harness.quality import (
+from wolfharness.capabilities.wiki.wiki_build_deps import WikiBuildDeps
+from wolfharness.capabilities.wiki.quality import (
     BUILD_PROFILES,
     BuildProfile,
     CoverageSummary,
@@ -28,8 +28,8 @@ from xeno_adp_harness.quality import (
     parse_frontmatter,
     wiki_uri_prefix,
 )
-from xeno_adp_harness.section_constants import SECTION_COMMON_FAULTS
-from xeno_adp_harness.validation import ENTITY_VALIDATION_HOOKS, run_entity_validation
+from wolfharness.capabilities.wiki.section_constants import SECTION_COMMON_FAULTS
+from wolfharness.capabilities.wiki.validation import ENTITY_VALIDATION_HOOKS, run_entity_validation
 
 from ..tickets.opa import opa_section_names
 

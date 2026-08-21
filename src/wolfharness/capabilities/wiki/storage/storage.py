@@ -14,10 +14,10 @@ import hashlib
 import json
 import logging
 import os
-from pathlib import Path
 import re
 import time
-from typing import TYPE_CHECKING, ClassVar
+from collections.abc import Callable
+from pathlib import Path
 
 from wolfharness.capabilities.wiki.quality import extract_source_uris, is_source_uri_scheme
 
@@ -25,16 +25,7 @@ from .backend import FSBackend
 from .indexes import WikiIndex
 from .local_fs import LocalFS
 
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-
 logger = logging.getLogger(__name__)
-
-_MIN_PATH_SEGMENTS = 2
-_HASH_URI_LENGTH = 24  # hex sha1 identifier length
-_MIN_FUZZY_MATCH_LEN = 3
 
 
 class WikiStore:
@@ -43,7 +34,7 @@ class WikiStore:
     One instance owns one ``root`` directory. All paths are resolved against it.
     """
 
-    CONCEPT_DIRS: ClassVar[dict[str, str]] = {
+    CONCEPT_DIRS: dict[str, str] = {
         "Device": "Device",
         "Component": "Component",
         "DTC": "DTC",
@@ -74,7 +65,7 @@ class WikiStore:
         directory.  Store it as a full-width solidus so the display remains
         recognizable while path traversal protection stays strict.
         """
-        return object_name.translate(str.maketrans({"/": "／", "\\": "＼"}))  # noqa: RUF001
+        return object_name.translate(str.maketrans({"/": "／", "\\": "＼"}))
 
     def __init__(self, root: Path | FSBackend) -> None:
         """Create a store over a local directory or an ``FSBackend``.
@@ -238,9 +229,7 @@ class WikiStore:
             return resolved
         return path
 
-    def legacy_entity_path(
-        self, concept: str, class_name: str | None, object_name: str
-    ) -> Path | None:
+    def legacy_entity_path(self, concept: str, class_name: str | None, object_name: str) -> Path | None:
         """Return the pre-directory-layout .md path for backward compat.
 
         Only DIRECTORY_CONCEPTS had a legacy flat .md layout.  Other concepts
@@ -251,34 +240,29 @@ class WikiStore:
         if concept not in self.DIRECTORY_CONCEPTS:
             return None
         base = self.root / self.CONCEPT_DIRS[concept]
-        return base / class_name / f"{object_name}.md" if class_name else base / f"{object_name}.md"
+        if class_name:
+            path = base / class_name / f"{object_name}.md"
+        else:
+            path = base / f"{object_name}.md"
+        return path
 
     @staticmethod
     def _safe_component(value: str, label: str) -> None:
-        if (
-            not value
-            or value in {".", ".."}
-            or Path(value).name != value
-            or any(separator in value for separator in ("/", "\\"))
-        ):
+        if not value or value in {".", ".."} or Path(value).name != value or any(separator in value for separator in ("/", "\\")):
             raise ValueError(f"Invalid {label}: {value!r}")
 
     @classmethod
     def _safe_profile_id(cls, value: str) -> None:
         """Reject encoded path semantics while leaving entity names intact."""
         cls._safe_component(value, "profile_id")
-        segments = re.split(r"[/\]", value)
+        segments = re.split(r"[／＼]", value)
         reserved = {"profiles", "index.md", ".", ".."}
-        if (
-            any(not segment for segment in segments)
-            or any(segment.casefold() in reserved for segment in segments)
-            or len(segments) > 1
-        ):
+        if any(not segment for segment in segments) or any(segment.casefold() in reserved for segment in segments) or len(segments) > 1:
             raise ValueError(f"Invalid profile_id path shape: {value!r}")
 
     @staticmethod
     def _safe_class(value: str) -> None:
-        """Validate class_name: allows ``/`` for nested dirs (``发动机/电控发动机/EGR``)."""
+        """Validate class_name — allows ``/`` for nested directories (e.g. ``发动机/电控发动机/EGR``)."""
         if not value or "\\" in value:
             raise ValueError(f"Invalid class_name: {value!r}")
         for seg in value.split("/"):
@@ -469,9 +453,7 @@ class WikiStore:
         self._fs.write_text(self._key_of(path), content)
         return path
 
-    def write_entity(
-        self, concept: str, class_name: str | None, object_name: str, content: str
-    ) -> Path:
+    def write_entity(self, concept: str, class_name: str | None, object_name: str, content: str) -> Path:
         """Atomically write an entity markdown file.
 
         For DIRECTORY_CONCEPTS, also removes the legacy flat .md file if it
@@ -496,17 +478,9 @@ class WikiStore:
         """
         if not entities:
             return []
-        paths = [
-            self.entity_path(concept, class_name, object_name)
-            for concept, class_name, object_name, _content in entities
-        ]
+        paths = [self.entity_path(concept, class_name, object_name) for concept, class_name, object_name, _content in entities]
         self._fs.write_many(
-            [
-                (self._key_of(path), content)
-                for path, (_concept, _class_name, _object_name, content) in zip(
-                    paths, entities, strict=True
-                )
-            ],
+            [(self._key_of(path), content) for path, (_concept, _class_name, _object_name, content) in zip(paths, entities, strict=True)],
         )
         self._invalidate_entity_content_cache()
         self._hash_scan_cache = None
@@ -529,9 +503,7 @@ class WikiStore:
             cached = self._physical_entity_cache.get(cache_key)
             if cached is None:
                 continue
-            self._physical_entity_cache[cache_key] = [
-                item for item in cached if item[:3] != identity
-            ]
+            self._physical_entity_cache[cache_key] = [item for item in cached if item[:3] != identity]
             self._physical_entity_cache[cache_key].append(entity)
             self._physical_entity_cache_at[cache_key] = time.monotonic()
 
@@ -555,12 +527,7 @@ class WikiStore:
                 return content
         if concept == "Component" and class_name:
             for prefix in self._LEGACY_TIERS:
-                tiered = (
-                    self.root
-                    / self.CONCEPT_DIRS["Component"]
-                    / f"{prefix}{class_name}"
-                    / f"{object_name}.md"
-                )
+                tiered = self.root / self.CONCEPT_DIRS["Component"] / f"{prefix}{class_name}" / f"{object_name}.md"
                 content = self._fs.read_text(self._key_of(tiered))
                 if content is not None:
                     return content
@@ -590,12 +557,7 @@ class WikiStore:
                     path = legacy
                 elif concept == "Component" and class_name:
                     for prefix in self._LEGACY_TIERS:
-                        tiered = (
-                            self.root
-                            / self.CONCEPT_DIRS["Component"]
-                            / f"{prefix}{class_name}"
-                            / f"{object_name}.md"
-                        )
+                        tiered = self.root / self.CONCEPT_DIRS["Component"] / f"{prefix}{class_name}" / f"{object_name}.md"
                         if self._fs.read_text(self._key_of(tiered)) is not None:
                             path = tiered
                             break
@@ -605,10 +567,7 @@ class WikiStore:
         mtime = self._fs.mtime_ns(key)
         size = self._fs.size(key)
         fingerprint = (mtime, size) if mtime is not None and size is not None else None
-        if (
-            uri in self._entity_content_cache
-            and self._entity_content_cache_fingerprints.get(uri) == fingerprint
-        ):
+        if uri in self._entity_content_cache and self._entity_content_cache_fingerprints.get(uri) == fingerprint:
             return self._entity_content_cache[uri]
         content = self._fs.read_text(key)
         self._entity_content_cache[uri] = content
@@ -630,11 +589,7 @@ class WikiStore:
         concept, class_name, object_name = info
         profile_dir = self.entity_path(concept, class_name, object_name).parent / "profiles"
         keys = self._fs.list_dir(self._key_of(profile_dir))
-        return [
-            (Path(key).stem, f"{symptom_uri}/profiles/{Path(key).stem}")
-            for key in keys
-            if key.endswith(".md") and Path(key).name != "index.md"
-        ]
+        return [(Path(key).stem, f"{symptom_uri}/profiles/{Path(key).stem}") for key in keys if key.endswith(".md") and Path(key).name != "index.md"]
 
     def lookup_by_uri(self, uri: str) -> tuple[str, str | None, str] | None:
         """Resolve a wiki URI to ``(concept, class_name, object_name)``.
@@ -743,9 +698,7 @@ class WikiStore:
             return uri
         return self._indexes.resolve_case_uri(uri)
 
-    def register_natural_key(
-        self, concept: str, class_name: str | None, natural_key: str, uri: str
-    ) -> None:
+    def register_natural_key(self, concept: str, class_name: str | None, natural_key: str, uri: str) -> None:
         """Validate identity without writing a global natural-key mapping."""
         class_name = self.normalize_class_name(concept, class_name)
         natural_key = self.canonical_object_name(natural_key)
@@ -753,9 +706,7 @@ class WikiStore:
         if uri != expected:
             raise ValueError(f"Entity URI does not match its readable identity: {uri}")
 
-    def update_natural_key(
-        self, concept: str, class_name: str | None, natural_key: str, uri: str
-    ) -> None:
+    def update_natural_key(self, concept: str, class_name: str | None, natural_key: str, uri: str) -> None:
         """Update (overwrite) a natural-key → URI mapping.
 
         New readable URIs need no mutable reverse index. Moves remain
@@ -773,9 +724,7 @@ class WikiStore:
         self._invalidate_entity_discovery_cache()
         return existed
 
-    def lookup_natural_key(
-        self, concept: str, class_name: str | None, natural_key: str
-    ) -> str | None:
+    def lookup_natural_key(self, concept: str, class_name: str | None, natural_key: str) -> str | None:
         """Resolve a natural key directly through the entity's readable path."""
         class_name = self.normalize_class_name(concept, class_name)
         natural_key = self.canonical_object_name(natural_key)
@@ -783,28 +732,16 @@ class WikiStore:
             return None
         return self.entity_uri(concept, class_name, natural_key)
 
-    def fuzzy_lookup_natural_key(
-        self, concept: str, class_name: str | None, object_name: str
-    ) -> str | None:
+    def fuzzy_lookup_natural_key(self, concept: str, class_name: str | None, object_name: str) -> str | None:
         """Fuzzy-match discovered entities without a global JSON map."""
         class_name = self.normalize_class_name(concept, class_name)
         object_name = self.canonical_object_name(object_name)
         candidates = self.list_entities(concept)
         if concept == "Component":
             for _concept, candidate_class, candidate_name, uri in candidates:
-                if (
-                    class_name
-                    and candidate_class
-                    and not (
-                        candidate_class == class_name or candidate_class.startswith(class_name)
-                    )
-                ):
+                if class_name and candidate_class and not (candidate_class == class_name or candidate_class.startswith(class_name)):
                     continue
-                if (
-                    (candidate_name.endswith(object_name) or object_name.endswith(candidate_name))
-                    and len(candidate_name) >= _MIN_FUZZY_MATCH_LEN
-                    and len(object_name) >= _MIN_FUZZY_MATCH_LEN
-                ):
+                if (candidate_name.endswith(object_name) or object_name.endswith(candidate_name)) and len(candidate_name) >= 3 and len(object_name) >= 3:
                     return uri
         elif concept == "Device":
             for _concept, _candidate_class, candidate_name, uri in candidates:
@@ -821,9 +758,7 @@ class WikiStore:
                 if class_name and candidate_class != class_name:
                     continue
                 candidate_normalized = normalize_code(candidate_name)
-                if candidate_normalized.startswith(normalized) or normalized.startswith(
-                    candidate_normalized
-                ):
+                if candidate_normalized.startswith(normalized) or normalized.startswith(candidate_normalized):
                     return uri
         return None
 
@@ -842,16 +777,9 @@ class WikiStore:
         cache_key = concept or "*"
         cached = self._physical_entity_cache.get(cache_key)
         cached_at = self._physical_entity_cache_at.get(cache_key, 0.0)
-        if (
-            cached is not None
-            and time.monotonic() - cached_at <= self._entity_discovery_cache_seconds()
-        ):
+        if cached is not None and time.monotonic() - cached_at <= self._entity_discovery_cache_seconds():
             return list(cached)
-        concepts = (
-            [concept]
-            if concept
-            else [name for name in self.CONCEPT_DIRS if name not in {"OPA", "OPS", "OPL"}]
-        )
+        concepts = [concept] if concept else [name for name in self.CONCEPT_DIRS if name not in {"OPA", "OPS", "OPL"}]
         found: list[tuple[str, str | None, str, str]] = []
         for name in concepts:
             if name not in self.CONCEPT_DIRS:
@@ -864,7 +792,7 @@ class WikiStore:
                 rel = Path(key).relative_to(Path(subdir))
                 parts = rel.parts
                 if name == "Symptom":
-                    if Path(key).name != "index.md" or len(parts) < _MIN_PATH_SEGMENTS:
+                    if Path(key).name != "index.md" or len(parts) < 2:
                         continue
                     object_name = parts[-2]
                     class_name = "/".join(parts[:-2]) or None
@@ -877,9 +805,7 @@ class WikiStore:
         self._physical_entity_cache_at[cache_key] = time.monotonic()
         if concept is None:
             for concept_name in concepts:
-                self._physical_entity_cache[concept_name] = [
-                    entity for entity in found if entity[0] == concept_name
-                ]
+                self._physical_entity_cache[concept_name] = [entity for entity in found if entity[0] == concept_name]
                 self._physical_entity_cache_at[concept_name] = time.monotonic()
         return found
 
@@ -902,14 +828,10 @@ class WikiStore:
         if not uri.startswith(prefix):
             return None
         parts = uri[len(prefix) :].strip("/").split("/")
-        if len(parts) < _MIN_PATH_SEGMENTS:
+        if len(parts) < 2:
             return None
         concept = parts[0]
-        classes = {
-            class_name or "(flat)"
-            for entity_concept, class_name, _object_name, _entity_uri in self.list_entities(concept)
-            if entity_concept == concept
-        }
+        classes = {class_name or "(flat)" for entity_concept, class_name, _object_name, _entity_uri in self.list_entities(concept) if entity_concept == concept}
         if parts[1] == "@class":
             readable_class = "/".join(parts[2:]) or "(flat)"
             if readable_class in classes:
@@ -941,7 +863,7 @@ class WikiStore:
             if not uri.startswith(prefix):
                 return uri
             parts = uri.removeprefix(prefix).split("/")
-            if len(parts) < _MIN_PATH_SEGMENTS:
+            if len(parts) < 2:
                 return uri  # malformed
             concept = parts[0]
             # OP sidecars (OPA/OPS/OPL) are review artifacts, not entity
@@ -950,11 +872,7 @@ class WikiStore:
             if concept not in {"Device", "Component", "DTC", "Symptom", "Fault", "Procedure"}:
                 return uri
             object_or_hash = parts[-1]
-            if (
-                len(parts) == _MIN_PATH_SEGMENTS
-                and len(object_or_hash) == _HASH_URI_LENGTH
-                and all(character in "0123456789abcdef" for character in object_or_hash)
-            ):
+            if len(parts) == 2 and len(object_or_hash) == 24 and all(character in "0123456789abcdef" for character in object_or_hash):
                 return uri
             object_name = parts[-1].removesuffix(".md") if parts[-1].endswith(".md") else parts[-1]
             class_name = "/".join(parts[1:-1]) or None
@@ -962,11 +880,7 @@ class WikiStore:
             return resolved if resolved else uri
 
         for uri in sorted(
-            (
-                candidate
-                for candidate in extract_source_uris(content)
-                if self.is_wiki_uri(candidate)
-            ),
+            (candidate for candidate in extract_source_uris(content) if self.is_wiki_uri(candidate)),
             key=len,
             reverse=True,
         ):
@@ -984,9 +898,7 @@ class WikiStore:
         re.MULTILINE,
     )
     # Detect [简述][source-uri] format in source lines — extract the URI
-    _FM_DESC_SOURCE_RE = re.compile(
-        r"^  - \[[^\]]+\]\[([a-z][a-z0-9+.\-]*://[^\]]+)\]$", re.MULTILINE
-    )
+    _FM_DESC_SOURCE_RE = re.compile(r"^  - \[[^\]]+\]\[([a-z][a-z0-9+.\-]*://[^\]]+)\]$", re.MULTILINE)
     # YAML list fields that contain source URIs needing hash resolution
     _FM_URI_FIELDS = frozenset(
         {
@@ -1018,9 +930,7 @@ class WikiStore:
         Keeps only the first occurrence of each URI inside each ``##`` or
         ``###`` section.  Frontmatter (between ``---`` fences) is untouched.
         """
-        fm_end = content.find(
-            "\n---\n", content.find("---\n") + 4 if content.startswith("---\n") else 0
-        )
+        fm_end = content.find("\n---\n", content.find("---\n") + 4 if content.startswith("---\n") else 0)
         if fm_end == -1:
             fm_part = ""
             body = content
@@ -1064,7 +974,7 @@ class WikiStore:
         content: str,
         is_existing_external_uri: Callable[[str], bool] | None = None,
     ) -> str:
-        r"""Repair LLM-generated YAML frontmatter.
+        """Repair LLM-generated YAML frontmatter.
 
         Fixes three systematic issues:
         1. **Concatenation bug**: last source URI merged with next YAML field
@@ -1140,14 +1050,10 @@ class WikiStore:
             if not uri.startswith(prefix):
                 return uri
             parts = uri.removeprefix(prefix).split("/")
-            if len(parts) < _MIN_PATH_SEGMENTS:
+            if len(parts) < 2:
                 return uri
             object_or_hash = parts[-1]
-            if (
-                len(parts) == _MIN_PATH_SEGMENTS
-                and len(object_or_hash) == _HASH_URI_LENGTH
-                and all(c in "0123456789abcdef" for c in object_or_hash)
-            ):
+            if len(parts) == 2 and len(object_or_hash) == 24 and all(c in "0123456789abcdef" for c in object_or_hash):
                 return uri
             concept = parts[0]
             object_name = parts[-1].removesuffix(".md") if parts[-1].endswith(".md") else parts[-1]
@@ -1170,11 +1076,7 @@ class WikiStore:
             if current_field in self._FM_URI_FIELDS:
                 rewritten_line = source_line
                 for uri in sorted(
-                    (
-                        candidate
-                        for candidate in extract_source_uris(source_line)
-                        if self.is_wiki_uri(candidate)
-                    ),
+                    (candidate for candidate in extract_source_uris(source_line) if self.is_wiki_uri(candidate)),
                     key=len,
                     reverse=True,
                 ):
@@ -1206,9 +1108,7 @@ class WikiStore:
                 redirects = {str(k): str(v) for k, v in data.items()}
         redirects[old_uri] = new_uri
         self._redirects_cached = False
-        self.write_text_atomic(
-            Path(key), json.dumps(redirects, ensure_ascii=False, indent=2) + "\n"
-        )
+        self.write_text_atomic(Path(key), json.dumps(redirects, ensure_ascii=False, indent=2) + "\n")
 
     def _redirects_cache(self) -> str | None:
         """Read the redirects table once and cache it for the instance.
@@ -1261,9 +1161,7 @@ class WikiStore:
         )
         self._native_relation_sync_result = self._fs.sync_native_relations(entity_uris_with_links)
 
-    def sync_native_relations(
-        self, entity_uris_with_links: list[tuple[str, list[str]]]
-    ) -> dict[str, object]:
+    def sync_native_relations(self, entity_uris_with_links: list[tuple[str, list[str]]]) -> dict[str, object]:
         """Reconcile backend-native edges (OpenViking ``link``/``unlink``) only.
 
         Unlike ``rebuild_backlinks`` this skips the ``backlinks_index.json``

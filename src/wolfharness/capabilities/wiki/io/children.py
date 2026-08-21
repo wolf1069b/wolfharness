@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import re
 
-from xeno_adp_agentic.wiki.serve.wiki_build_deps import WikiBuildDeps
-from xeno_adp_agentic.wiki.storage import viking_list_children
-from xeno_adp_harness.quality import (
+from wolfharness.capabilities.wiki.wiki_build_deps import WikiBuildDeps
+from wolfharness.capabilities.wiki.storage import viking_list_children
+from wolfharness.capabilities.wiki.quality import (
     extract_sections,
     extract_source_uris,
     extract_wiki_uris,
