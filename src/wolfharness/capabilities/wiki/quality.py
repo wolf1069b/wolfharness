@@ -199,23 +199,31 @@ def classify_raw_source_uri(
     The active raw root is supplied by the caller, so local and remote builds
     share the same contract.  A chapter leaf is a manual source; any other
     Markdown leaf under the active raw root is a single-file case source.
-    Cross-namespace raw libraries are recognized by their public resource
-    shape rather than a configured namespace or collection identifier.
+    Directory URIs accept the shape of their conventional ``chapter.md``
+    leaf.  Cross-namespace raw libraries are recognized by their public
+    resource shape rather than a configured namespace or collection
+    identifier.
     """
     if not isinstance(uri, str):
         return None
     value = uri.strip()
     if not value:
         return None
+    # Workers may pass directory URIs (no ``.md`` leaf) or fragment-anchored
+    # chapter URIs; normalize both before matching.
+    value = value.partition("#")[0].rstrip("/")
     if value in _RAW_CHAPTER_URIS:
         return RawSourceKind.MANUAL_CHAPTER
-    cross_namespace = _CROSS_NAMESPACE_RAW_URI_RE.fullmatch(value)
+    # A directory URI maps to its conventional leaf, mirroring the
+    # ``chapters/<subdir>/chapter.md`` layout without a backend read.
+    leaf = value if value.endswith(".md") else f"{value}/chapter.md"
+    cross_namespace = _CROSS_NAMESPACE_RAW_URI_RE.fullmatch(leaf)
     if cross_namespace is not None:
         relative = cross_namespace.group("relative")
         if "/chapters/" in f"/{relative}" and relative.endswith("/chapter.md"):
             return RawSourceKind.MANUAL_CHAPTER
         return RawSourceKind.CASE
-    if _CROSS_NAMESPACE_BOM_URI_RE.fullmatch(value) is not None:
+    if _CROSS_NAMESPACE_BOM_URI_RE.fullmatch(leaf) is not None:
         return RawSourceKind.CASE
     root = (raw_root_uri if raw_root_uri is not None else _raw_source_root_uri).rstrip("/")
     if not root or not value.startswith(root + "/"):
@@ -223,12 +231,14 @@ def classify_raw_source_uri(
             return RawSourceKind.EXTERNAL
         return None
     relative = value.removeprefix(root + "/")
-    if not relative or relative.endswith("/") or not relative.endswith(".md"):
+    if not relative:
         if _EXTERNAL_URI_RE.match(value):
             return RawSourceKind.EXTERNAL
         return None
     if "/chapters/" in f"/{relative}" and relative.endswith("/chapter.md"):
         return RawSourceKind.MANUAL_CHAPTER
+    # A non-``.md`` path under the raw root is a directory source; classify by
+    # shape — the caller verifies existence downstream.
     return RawSourceKind.CASE
 
 

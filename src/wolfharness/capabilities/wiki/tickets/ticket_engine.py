@@ -336,11 +336,10 @@ class TicketEngine:
         th = self._target_hash(target_uri)
         base = self._opa_dir_key()
         if th:
+            records: list[tuple[str, str]] = []
             for subdir in _OPA_CATEGORY_DIRS.values():
-                records = self._read_md_dir(f"{base}/{subdir}/{th}")
-                if records:
-                    return sorted(records)
-            return []
+                records.extend(self._read_md_dir(f"{base}/{subdir}/{th}"))
+            return sorted(records)
         records: list[tuple[str, str]] = []
         for key in self.store.list_dir(base, recursive=True):
             if not key.endswith(".md"):
@@ -964,7 +963,9 @@ class TicketEngine:
         unreadable = [
             uri
             for uri in dict.fromkeys([*evidence_uris, *related_uris])
-            if uri and self.read_resource(uri) is None
+            if uri
+            and self.read_resource(uri) is None
+            and classify_raw_source_uri(uri, raw_root_uri=self._raw_fs.root_uri) is None
         ]
         if unreadable:
             raise ValueError(f"OP records require readable evidence/related URIs: {unreadable}")

@@ -302,33 +302,53 @@ def _conflicting_facts(current: str, candidate: str) -> set[str]:
 
 
 def _internal_conflicting_facts(content: str) -> set[str]:
-    """Find incompatible parameter values repeated inside one candidate."""
+    """Find incompatible parameter values repeated inside one candidate.
+
+    Body lines are grouped by ``##``/``###`` headings so the same parameter
+    in different subsections (for example distinct measurement points on one
+    page) is not reported as a conflict.  Without section headings the whole
+    document stays a single comparison group, matching the previous
+    whole-page heuristic.
+    """
     facts: dict[str, set[str]] = {}
 
-    def add_value(label: str, value: str) -> None:
+    def add_value(bucket: dict[str, set[str]], label: str, value: str) -> None:
         if re.search(r"\d\s*(?:-|~|～|至|到)\s*-?\d", value):
             return
         for key, values in _parameter_fact_map(label, value).items():
-            facts.setdefault(key, set()).update(values)
-
-    frontmatter = parse_frontmatter(content)
-    for key, value in frontmatter.items():
-        if isinstance(value, str):
-            add_value(key, value)
+            bucket.setdefault(key, set()).update(values)
 
     lines = content.splitlines()
     in_frontmatter = bool(lines and lines[0].strip() == "---")
-    for line in lines[1:] if in_frontmatter else lines:
+    body_lines = lines[1:] if in_frontmatter else lines
+    has_sections = any(re.match(r"^#{2,3}\s", line.strip()) for line in body_lines)
+    if not has_sections:
+        frontmatter = parse_frontmatter(content)
+        for key, value in frontmatter.items():
+            if isinstance(value, str):
+                add_value(facts, key, value)
+    buckets: list[dict[str, set[str]]] = [facts]
+    current: dict[str, set[str]] = facts
+    for line in body_lines:
         if in_frontmatter and line.strip() == "---":
             in_frontmatter = False
             continue
         if in_frontmatter:
             continue
         stripped = line.strip()
+        if re.match(r"^#{2,3}\s", stripped):
+            current = {}
+            buckets.append(current)
+            continue
         if not stripped or stripped.startswith("#") or "://" in stripped:
             continue
         match = _PARAMETER_RE.search(stripped)
         if match:
-            add_value(stripped[: match.start()], stripped)
+            add_value(current, stripped[: match.start()], stripped)
 
-    return {f"internal {key}={sorted(values)}" for key, values in facts.items() if len(values) > 1}
+    return {
+        f"internal {key}={sorted(values)}"
+        for bucket in buckets
+        for key, values in bucket.items()
+        if len(values) > 1
+    }
