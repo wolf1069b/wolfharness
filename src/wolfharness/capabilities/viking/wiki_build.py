@@ -171,30 +171,44 @@ class WikiBuildCapability(
         return self._tools
 
     def _ensure_tools(self) -> None:
-        """Lazily create the host ``WikiBuildTools`` instance."""
+        """Lazily create the ticket tools instance.
+
+        Prefers the full ``WikiBuildTools`` from ``xeno_adp_agentic`` when
+        available (complete entity-write + apply path). Falls back to the
+        standalone ``TicketEngine`` in ``wolfharness.wiki`` so the ticket
+        capability works without the ``xeno_adp_agentic`` dependency.
+        """
         if self._tools is not None:
             return
 
-        from xeno_adp_agentic.wiki.build.build_logger import WikiBuildLogger
-        from xeno_adp_agentic.wiki.serve.build_tools import WikiBuildTools
-
         wiki_root = self._config.wiki_root or os.environ.get("WIKI_ROOT") or "output/wiki_newbuild"
-        library_root = (
-            self._config.library_root or os.environ.get("LIBRARY_ROOT") or "output/library"
-        )
-        fault_root = self._config.faultannotated_root or os.environ.get("FAULTANNOTATED_ROOT")
-        log_dir = self._config.build_log_dir or os.environ.get("WIKI_BUILD_LOG_DIR")
-        if not log_dir:
-            log_dir = "logs" if "://" in str(wiki_root) else str(Path(wiki_root) / "logs")
-        self._build_logger = WikiBuildLogger(log_dir)
-        self._tools = WikiBuildTools(
-            wiki_root,
-            library_root,
-            case_root=self._config.case_root or os.environ.get("CASE_ROOT"),
-            faultannotated_root=fault_root,
-            bom_root=self._config.bom_root or os.environ.get("WIKI_BOM_ROOT"),
-            build_logger=self._build_logger,
-        )
+
+        try:
+            from xeno_adp_agentic.wiki.build.build_logger import WikiBuildLogger
+            from xeno_adp_agentic.wiki.serve.build_tools import WikiBuildTools
+
+            library_root = (
+                self._config.library_root or os.environ.get("LIBRARY_ROOT") or "output/library"
+            )
+            fault_root = self._config.faultannotated_root or os.environ.get("FAULTANNOTATED_ROOT")
+            log_dir = self._config.build_log_dir or os.environ.get("WIKI_BUILD_LOG_DIR")
+            if not log_dir:
+                log_dir = "logs" if "://" in str(wiki_root) else str(Path(wiki_root) / "logs")
+            self._build_logger = WikiBuildLogger(log_dir)
+            self._tools = WikiBuildTools(
+                wiki_root,
+                library_root,
+                case_root=self._config.case_root or os.environ.get("CASE_ROOT"),
+                faultannotated_root=fault_root,
+                bom_root=self._config.bom_root or os.environ.get("WIKI_BOM_ROOT"),
+                build_logger=self._build_logger,
+            )
+        except ImportError:
+            from wolfharness.capabilities.wiki.storage import create_wiki_store
+            from wolfharness.capabilities.wiki.ticket_engine import TicketEngine
+
+            store = create_wiki_store(wiki_root)
+            self._tools = TicketEngine(store)
 
     def get_instructions(self) -> str | None:
         from wolfharness.capabilities.viking.wiki_build_tools import get_instructions
