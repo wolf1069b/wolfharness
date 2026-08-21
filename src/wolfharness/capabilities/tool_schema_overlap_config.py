@@ -119,7 +119,7 @@ class ParamOverride(BaseModel):
     name: NonEmptyStr | None = None
     description: str | None = None
     type: str | None = None
-    enum: list[str] | None = None
+    enum: list[Any] | None = None
     required: bool | None = None
     default: Any = UNDEFINED
 
