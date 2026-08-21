@@ -69,9 +69,11 @@ jobs:
         uses: anomalyco/opencode/github@latest
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           agent: review-lead
           model: deepseek/deepseek-v4-flash
+          use_github_token: true
           prompt: |
             Review this pull request. Read the AGENTS.md file first for project
             conventions, then analyze the diff and delegate to your specialist
