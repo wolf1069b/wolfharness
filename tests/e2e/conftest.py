@@ -449,6 +449,69 @@ def session_e2e_config_with_mcp(tmp_path_factory: pytest.TempPathFactory) -> Pat
     return config_path
 
 
+def _resource_mcp_config(
+    config_path: Path,
+    fixtures_dir: Path,
+    *,
+    resources_enabled: bool,
+) -> Path:
+    """Write a two-provider MCP resource config used by L4 tests."""
+    fake_server_path = fixtures_dir / "fake_mcp_server_resources.py"
+    config = {
+        "agents": {
+            "test_agent": {
+                "type": "native",
+                "model": "test",
+                "system_prompt": "You are a test assistant.",
+                "resources": {"enabled": resources_enabled},
+            }
+        },
+        "mcp_servers": [
+            {
+                "name": "alpha:%",
+                "type": "stdio",
+                "command": sys.executable,
+                "args": [str(fake_server_path)],
+                "enabled": True,
+            },
+            {
+                "name": "beta",
+                "type": "stdio",
+                "command": sys.executable,
+                "args": [str(fake_server_path)],
+                "enabled": True,
+            },
+        ],
+        "storage": {"providers": [{"type": "memory"}]},
+    }
+    config_path.write_text(yaml.dump(config, default_flow_style=False))
+    return config_path
+
+
+@pytest.fixture(scope="session")
+def session_e2e_config_with_mcp_resources(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Session config with two MCP providers exposing identical resources."""
+    config_dir = tmp_path_factory.mktemp("e2e_mcp_resources")
+    return _resource_mcp_config(
+        config_dir / "e2e_config_mcp_resources.yml",
+        Path(__file__).resolve().parent.parent / "fixtures",
+        resources_enabled=True,
+    )
+
+
+@pytest.fixture(scope="session")
+def session_e2e_config_with_mcp_resources_disabled(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Path:
+    """Session config where resource model tools are disabled."""
+    config_dir = tmp_path_factory.mktemp("e2e_mcp_resources_disabled")
+    return _resource_mcp_config(
+        config_dir / "e2e_config_mcp_resources_disabled.yml",
+        Path(__file__).resolve().parent.parent / "fixtures",
+        resources_enabled=False,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Subprocess server cache infrastructure
 # ---------------------------------------------------------------------------
@@ -976,6 +1039,69 @@ async def subprocess_server_with_mcp(
         health_timeout=health_timeout,
         health_path=health_path,
         extra_args=extra_args,
+    ):
+        yield server
+
+
+async def _subprocess_server_with_config(
+    request: pytest.FixtureRequest,
+    process_registry: ProcessRegistry,
+    config_path: Path,
+    allow_model_requests: Any,
+) -> AsyncIterator[SubprocessServer]:
+    """Spawn an OpenCode subprocess for a supplied MCP-resource config."""
+    _ = allow_model_requests
+    params = getattr(request, "param", {"serve_command": "serve-opencode"})
+    serve_command: str = params.get("serve_command", "serve-opencode")
+    host: str = params.get("host", "127.0.0.1")
+    is_stdio: bool = params.get("is_stdio", False)
+    health_timeout: float = params.get("health_timeout", 30.0)
+    health_path: str = params.get("health_path", "/session")
+    extra_args: list[str] | None = params.get("extra_args")
+
+    async for server in _spawn_server(
+        serve_command,
+        config_path,
+        process_registry=process_registry,
+        host=host,
+        is_stdio=is_stdio,
+        health_timeout=health_timeout,
+        health_path=health_path,
+        extra_args=extra_args,
+    ):
+        yield server
+
+
+@pytest.fixture
+async def subprocess_server_with_mcp_resources(
+    request: pytest.FixtureRequest,
+    process_registry: ProcessRegistry,
+    session_e2e_config_with_mcp_resources: Path,
+    allow_model_requests: Any,
+) -> AsyncIterator[SubprocessServer]:
+    """Spawn OpenCode with two identical-resource MCP providers."""
+    async for server in _subprocess_server_with_config(
+        request,
+        process_registry,
+        session_e2e_config_with_mcp_resources,
+        allow_model_requests,
+    ):
+        yield server
+
+
+@pytest.fixture
+async def subprocess_server_with_mcp_resources_disabled(
+    request: pytest.FixtureRequest,
+    process_registry: ProcessRegistry,
+    session_e2e_config_with_mcp_resources_disabled: Path,
+    allow_model_requests: Any,
+) -> AsyncIterator[SubprocessServer]:
+    """Spawn OpenCode with resource providers but hidden model tools."""
+    async for server in _subprocess_server_with_config(
+        request,
+        process_registry,
+        session_e2e_config_with_mcp_resources_disabled,
+        allow_model_requests,
     ):
         yield server
 

@@ -1,4 +1,4 @@
-"""ResourceCapability — unified resource access via 5 agent-facing tools.
+"""ResourceCapability — unified MCP Resource access via three agent tools.
 
 Provides a single ``AbstractCapability`` that aggregates resource access
 across all visible ``ResourceAccess``, ``SkillResource``, and
@@ -6,37 +6,44 @@ across all visible ``ResourceAccess``, ``SkillResource``, and
 ``ExtensionRegistry``. The capability is stateless — it reads
 ``ctx.deps`` (an ``AgentContextDeps``) at runtime to resolve providers.
 
-Tools exposed:
-    - ``list_resources``: Aggregate resources from MCP + skills
-    - ``read_resource``: Read content by URI (skill:// or other)
-    - ``resource_exists``: Check if a resource exists
-    - ``list_resource_templates``: List URI templates for dynamic discovery
-    - ``complete_resource_template``: Get completion suggestions for template params
+Only the three ``list_mcp_*``/``read_mcp_resource`` methods are model-facing.
+The older five methods remain below as internal compatibility helpers.
 """
 
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
+import json
 from typing import TYPE_CHECKING, Annotated
 
 import logfire
 from pydantic import Field
-from pydantic_ai import ToolReturn
+from pydantic_ai import BinaryContent, ToolReturn
 from pydantic_ai.capabilities import AbstractCapability
 from pydantic_ai.tools import AgentDepsT, RunContext
 from pydantic_ai.toolsets import AgentToolset, FunctionToolset
 
 from wolfharness.capabilities.extension_registry import Scope, ScopeLevel
 from wolfharness.capabilities.resource_protocols import (
+    BlobResourceContent,
     CompletionArgument,
     CompletionResult,
+    McpResourceListResult,
+    McpResourceReadResult,
+    McpResourceTemplateListResult,
     ResourceEntry,
+    ResourceError,
     ResourceTemplateEntry,
+    TextResourceContent,
 )
 
 
 if TYPE_CHECKING:
     from wolfharness.capabilities.agent_context import AgentContextDeps
+    from wolfharness.capabilities.resource_protocols import McpResourceProvider
+    from wolfharness.common_types import JsonObject
 
 
 # Number of header lines (header + separator) before data rows.
@@ -45,7 +52,17 @@ _HEADER_LINE_COUNT = 2
 # Default pagination limits.
 _DEFAULT_LIST_LIMIT = 50
 _DEFAULT_READ_TEXT_LIMIT = 10_000
+_MAX_LIST_LIMIT = 100
+_CURSOR_VERSION = 2
 _MAX_COMPLETION_SUGGESTIONS = 100
+_MAX_BLOB_BYTES = 10 * 1024 * 1024
+_SUPPORTED_BLOB_MIME_TYPES = frozenset({
+    "application/pdf",
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+})
 
 # Max wall-clock time a single provider may take to answer a listing request.
 # Providers that time out are skipped with a warning instead of blocking the
@@ -54,7 +71,7 @@ _LIST_PROVIDER_TIMEOUT = 10.0  # seconds
 
 
 class ResourceCapability(AbstractCapability[AgentDepsT]):
-    """Unified resource access capability providing 5 agent-facing tools.
+    """Unified MCP Resource capability providing three agent-facing tools.
 
     Aggregates resources from all visible providers (MCP servers, local
     skills) via the ``ExtensionRegistry`` on ``AgentContextDeps``. The
@@ -93,35 +110,24 @@ class ResourceCapability(AbstractCapability[AgentDepsT]):
             management tools and supported URI schemes.
         """
         return (
-            "You have access to resource management tools:\n"
-            "- list_resources: List available resources from connected MCP "
-            "servers and local files (paginated, use offset to page through)\n"
-            "- read_resource: Read content from a resource URI (e.g. mcp://, "
-            "file://, viking://, optionally http(s) for servers that use web "
-            "URIs; web pages are usually better read with a web fetch tool)\n"
-            "- resource_exists: Check if a resource exists\n"
-            "- list_resource_templates: List URI templates for dynamic "
-            "resource discovery (paginated, use offset to page through)\n"
-            "- complete_resource_template: Get completion suggestions for "
-            "template parameters\n\n"
-            "URI schemes: mcp:// for MCP server resources, file:// for "
-            "file-based resources"
+            "Use MCP Resource tools progressively: list_mcp_resources or "
+            "list_mcp_resource_templates first, then read_mcp_resource with "
+            "the exact server and opaque URI returned by the provider. "
+            "Do not infer URI values from templates."
         )
 
     @logfire.instrument("capability.resource_capability.get_toolset")
     def get_toolset(self) -> AgentToolset[AgentDepsT] | None:
-        """Return a ``FunctionToolset`` with all 5 resource tools.
+        """Return a ``FunctionToolset`` with the three MCP Resource tools.
 
         The tools access ``ctx.deps`` at runtime, which must be an
         ``AgentContextDeps`` with an ``extension_registry`` field.
         """
         return FunctionToolset(
             [
-                self.list_resources,
-                self.read_resource,
-                self.resource_exists,
-                self.list_resource_templates,
-                self.complete_resource_template,
+                self.list_mcp_resources,
+                self.list_mcp_resource_templates,
+                self.read_mcp_resource,
             ],
             id=self._toolset_id,
         )
@@ -184,6 +190,685 @@ class ResourceCapability(AbstractCapability[AgentDepsT]):
         """
         path = uri[len("skill://") :]
         return path.split("/")[0] if path else ""
+
+    @staticmethod
+    def _encode_cursor(
+        *,
+        server: str | None,
+        current_server: str | None,
+        provider_index: int,
+        upstream_cursor: str | None,
+        offset: int,
+    ) -> str:
+        payload = {
+            "version": _CURSOR_VERSION,
+            "server": server,
+            "current_server": current_server,
+            "provider_index": provider_index,
+            "upstream_cursor": upstream_cursor,
+            "offset": offset,
+        }
+        raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+        return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+    @staticmethod
+    def _decode_cursor(cursor: str) -> dict[str, object]:
+        try:
+            padding = "=" * (-len(cursor) % 4)
+            value = json.loads(base64.urlsafe_b64decode((cursor + padding).encode()))
+        except (
+            ValueError,
+            TypeError,
+            binascii.Error,
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+        ) as exc:
+            raise ValueError("cursor is not a valid host cursor") from exc
+        if not isinstance(value, dict) or value.get("version") != _CURSOR_VERSION:
+            raise ValueError("cursor version is unsupported")
+        if not isinstance(value.get("provider_index"), int) or not isinstance(
+            value.get("offset"), int
+        ):
+            raise TypeError("cursor position is invalid")
+        if value["provider_index"] < 0 or value["offset"] < 0:
+            raise ValueError("cursor position is invalid")
+        if value.get("server") is not None and not isinstance(value.get("server"), str):
+            raise ValueError("cursor server is invalid")
+        if value.get("current_server") is not None and not isinstance(
+            value.get("current_server"), str
+        ):
+            raise ValueError("cursor current server is invalid")
+        if value.get("upstream_cursor") is not None and not isinstance(
+            value.get("upstream_cursor"), str
+        ):
+            raise ValueError("cursor upstream value is invalid")
+        return value
+
+    @staticmethod
+    def _cursor_state(value: dict[str, object]) -> tuple[int, str | None, int]:
+        provider_index = value.get("provider_index")
+        offset = value.get("offset")
+        upstream_cursor = value.get("upstream_cursor")
+        if not isinstance(provider_index, int) or not isinstance(offset, int):
+            raise TypeError("cursor position is invalid")
+        if upstream_cursor is not None and not isinstance(upstream_cursor, str):
+            raise ValueError("cursor upstream value is invalid")
+        return provider_index, upstream_cursor, offset
+
+    @staticmethod
+    def _resource_entry_dict(entry: ResourceEntry) -> dict[str, object]:
+        return {
+            "server": entry.server,
+            "uri": entry.uri,
+            "name": entry.name,
+            "title": entry.title,
+            "description": entry.description,
+            "mime_type": entry.mime_type,
+            "size": entry.size,
+            "annotations": entry.annotations,
+            "meta": entry.meta,
+        }
+
+    @staticmethod
+    def _template_entry_dict(entry: ResourceTemplateEntry) -> dict[str, object]:
+        return {
+            "server": entry.server,
+            "uri_template": entry.uri_template,
+            "name": entry.name,
+            "title": entry.title,
+            "description": entry.description,
+            "mime_type": entry.mime_type,
+            "annotations": entry.annotations,
+            "meta": entry.meta,
+        }
+
+    @staticmethod
+    def _error_dict(error: ResourceError) -> dict[str, object]:
+        return {
+            "code": error.code,
+            "message": error.message,
+            "retryable": error.retryable,
+            "suggestion": error.suggestion,
+        }
+
+    @staticmethod
+    def _validate_limit(limit: int) -> None:
+        if not 1 <= limit <= _MAX_LIST_LIMIT:
+            raise ValueError("limit must be between 1 and 100")
+
+    async def _mcp_providers(self, ctx: RunContext[AgentDepsT]) -> list[McpResourceProvider]:
+        agent_ctx = self._resolve_agent_context(ctx)
+        registry = agent_ctx.extension_registry
+        if registry is None:
+            return []
+        from wolfharness.capabilities.resource_protocols import McpResourceProvider
+
+        return sorted(
+            (
+                cap
+                for cap in registry.get_visible_capabilities(self._make_scope(agent_ctx))
+                if isinstance(cap, McpResourceProvider)
+            ),
+            key=lambda provider: provider.server_name,
+        )
+
+    @logfire.instrument("capability.resource_capability.list_mcp_resources")
+    async def list_mcp_resources(  # noqa: PLR0915
+        self,
+        ctx: RunContext[AgentDepsT],
+        server: Annotated[
+            str | None, Field(description="Optional configured MCP server name")
+        ] = None,
+        cursor: Annotated[
+            str | None, Field(description="Opaque cursor from the previous page")
+        ] = None,
+        limit: Annotated[
+            int,
+            Field(
+                ge=1,
+                le=_MAX_LIST_LIMIT,
+                description="Number of resources to return, from 1 to 100",
+            ),
+        ] = _DEFAULT_LIST_LIMIT,
+    ) -> McpResourceListResult:
+        """List one host-aggregated page of MCP resources."""
+        self._validate_limit(limit)
+        providers = await self._mcp_providers(ctx)
+        if server is not None:
+            providers = [provider for provider in providers if provider.server_name == server]
+            if not providers:
+                return self._resource_list_result(
+                    "No MCP server is registered with that name.",
+                    errors=[
+                        ResourceError(
+                            "unknown_server",
+                            f"Unknown MCP server: {server}",
+                            False,
+                            "Use list_mcp_resources without server to discover names.",
+                        )
+                    ],
+                )
+        provider_index = 0
+        upstream_cursor: str | None = None
+        offset = 0
+        if cursor:
+            try:
+                decoded = self._decode_cursor(cursor)
+            except (ValueError, TypeError) as exc:
+                return self._resource_list_result(
+                    "The supplied resource cursor is invalid.",
+                    errors=[
+                        ResourceError(
+                            "invalid_cursor",
+                            str(exc),
+                            False,
+                            "Restart pagination without a cursor.",
+                        )
+                    ],
+                )
+            if decoded.get("server") != server:
+                return self._resource_list_result(
+                    "The cursor does not belong to the requested server.",
+                    errors=[
+                        ResourceError(
+                            "invalid_cursor",
+                            "cursor/server mismatch",
+                            False,
+                            "Restart pagination with the original server argument.",
+                        )
+                    ],
+                )
+            provider_index, upstream_cursor, offset = self._cursor_state(decoded)
+            if provider_index >= len(providers):
+                return self._resource_list_result(
+                    "The supplied resource cursor is no longer valid.",
+                    errors=[
+                        ResourceError(
+                            "invalid_cursor",
+                            "cursor provider position is outside the current provider set",
+                            False,
+                            "Restart pagination without a cursor.",
+                        )
+                    ],
+                )
+            current_server = decoded.get("current_server")
+            if current_server != providers[provider_index].server_name:
+                return self._resource_list_result(
+                    "The supplied resource cursor is no longer valid.",
+                    errors=[
+                        ResourceError(
+                            "invalid_cursor",
+                            "cursor current server does not match provider position",
+                            False,
+                            "Restart pagination without a cursor.",
+                        )
+                    ],
+                )
+
+        entries: list[ResourceEntry] = []
+        errors: list[ResourceError] = []
+        next_cursor: str | None = None
+        while provider_index < len(providers) and len(entries) < limit:
+            provider = providers[provider_index]
+            try:
+                if not await provider.supports_resources():
+                    errors.append(
+                        ResourceError(
+                            "resources_not_supported",
+                            f"Server {provider.server_name} did not declare resources capability",
+                            False,
+                            "Use its tools or configure a server with resources capability.",
+                        )
+                    )
+                    provider_index += 1
+                    upstream_cursor = None
+                    offset = 0
+                    continue
+                page = await provider.list_resources_page(
+                    upstream_cursor if isinstance(upstream_cursor, str) else None
+                )
+            except (OSError, RuntimeError, TimeoutError, ValueError) as exc:
+                errors.append(
+                    ResourceError(
+                        "provider_unavailable",
+                        f"Failed to list resources from {provider.server_name}: {exc}",
+                        True,
+                        "Retry the same request later.",
+                    )
+                )
+                provider_index += 1
+                upstream_cursor = None
+                offset = 0
+                continue
+            available = page.entries[offset:]
+            take = min(limit - len(entries), len(available))
+            entries.extend(available[:take])
+            offset += take
+            if offset < len(page.entries):
+                next_cursor = self._encode_cursor(
+                    server=server,
+                    current_server=provider.server_name,
+                    provider_index=provider_index,
+                    upstream_cursor=upstream_cursor if isinstance(upstream_cursor, str) else None,
+                    offset=offset,
+                )
+                break
+            if page.next_cursor:
+                next_cursor = self._encode_cursor(
+                    server=server,
+                    current_server=provider.server_name,
+                    provider_index=provider_index,
+                    upstream_cursor=page.next_cursor,
+                    offset=0,
+                )
+                if len(entries) >= limit:
+                    break
+                upstream_cursor = page.next_cursor
+                offset = 0
+                continue
+            provider_index += 1
+            upstream_cursor = None
+            offset = 0
+            if len(entries) >= limit:
+                break
+        if next_cursor is None and provider_index < len(providers):
+            next_cursor = self._encode_cursor(
+                server=server,
+                current_server=providers[provider_index].server_name,
+                provider_index=provider_index,
+                upstream_cursor=upstream_cursor if isinstance(upstream_cursor, str) else None,
+                offset=offset,
+            )
+        summary = f"Returned {len(entries)} MCP resource(s)"
+        return self._resource_list_result(
+            summary, resources=entries, next_cursor=next_cursor, errors=errors
+        )
+
+    @logfire.instrument("capability.resource_capability.list_mcp_resource_templates")
+    async def list_mcp_resource_templates(  # noqa: PLR0915
+        self,
+        ctx: RunContext[AgentDepsT],
+        server: Annotated[
+            str | None, Field(description="Optional configured MCP server name")
+        ] = None,
+        cursor: Annotated[
+            str | None, Field(description="Opaque cursor from the previous page")
+        ] = None,
+        limit: Annotated[
+            int,
+            Field(
+                ge=1,
+                le=_MAX_LIST_LIMIT,
+                description="Number of templates to return, from 1 to 100",
+            ),
+        ] = _DEFAULT_LIST_LIMIT,
+    ) -> McpResourceTemplateListResult:
+        """List one host-aggregated page of MCP resource templates."""
+        self._validate_limit(limit)
+        providers = await self._mcp_providers(ctx)
+        if server is not None:
+            providers = [provider for provider in providers if provider.server_name == server]
+            if not providers:
+                return self._template_list_result(
+                    "No MCP server is registered with that name.",
+                    templates=[],
+                    errors=[
+                        ResourceError(
+                            "unknown_server",
+                            f"Unknown MCP server: {server}",
+                            False,
+                            "Use list_mcp_resource_templates without server to discover names.",
+                        )
+                    ],
+                )
+        provider_index = 0
+        upstream_cursor = None
+        offset = 0
+        if cursor:
+            try:
+                decoded = self._decode_cursor(cursor)
+            except (ValueError, TypeError) as exc:
+                return self._template_list_result(
+                    "The supplied resource cursor is invalid.",
+                    templates=[],
+                    errors=[
+                        ResourceError(
+                            "invalid_cursor",
+                            str(exc),
+                            False,
+                            "Restart pagination without a cursor.",
+                        )
+                    ],
+                )
+            if decoded.get("server") != server:
+                return self._template_list_result(
+                    "The cursor does not belong to the requested server.",
+                    templates=[],
+                    errors=[
+                        ResourceError(
+                            "invalid_cursor",
+                            "cursor/server mismatch",
+                            False,
+                            "Restart pagination with the original server argument.",
+                        )
+                    ],
+                )
+            provider_index, upstream_cursor, offset = self._cursor_state(decoded)
+            if provider_index >= len(providers):
+                return self._template_list_result(
+                    "The supplied resource cursor is no longer valid.",
+                    templates=[],
+                    errors=[
+                        ResourceError(
+                            "invalid_cursor",
+                            "cursor provider position is outside the current provider set",
+                            False,
+                            "Restart pagination without a cursor.",
+                        )
+                    ],
+                )
+            current_server = decoded.get("current_server")
+            if current_server != providers[provider_index].server_name:
+                return self._template_list_result(
+                    "The supplied resource cursor is no longer valid.",
+                    templates=[],
+                    errors=[
+                        ResourceError(
+                            "invalid_cursor",
+                            "cursor current server does not match provider position",
+                            False,
+                            "Restart pagination without a cursor.",
+                        )
+                    ],
+                )
+        entries: list[ResourceTemplateEntry] = []
+        errors: list[ResourceError] = []
+        next_cursor: str | None = None
+        while provider_index < len(providers) and len(entries) < limit:
+            provider = providers[provider_index]
+            try:
+                if not await provider.supports_resources():
+                    errors.append(
+                        ResourceError(
+                            "resources_not_supported",
+                            f"Server {provider.server_name} did not declare resources capability",
+                            False,
+                            "Use its tools or configure a server with resources capability.",
+                        )
+                    )
+                    provider_index += 1
+                    upstream_cursor = None
+                    offset = 0
+                    continue
+                page = await provider.list_resource_templates_page(
+                    upstream_cursor if isinstance(upstream_cursor, str) else None
+                )
+            except (OSError, RuntimeError, TimeoutError, ValueError) as exc:
+                errors.append(
+                    ResourceError(
+                        "provider_unavailable",
+                        f"Failed to list resource templates from {provider.server_name}: {exc}",
+                        True,
+                        "Retry the same request later.",
+                    )
+                )
+                provider_index += 1
+                upstream_cursor = None
+                offset = 0
+                continue
+            available = page.entries[offset:]
+            take = min(limit - len(entries), len(available))
+            entries.extend(available[:take])
+            offset += take
+            if offset < len(page.entries):
+                next_cursor = self._encode_cursor(
+                    server=server,
+                    current_server=provider.server_name,
+                    provider_index=provider_index,
+                    upstream_cursor=upstream_cursor if isinstance(upstream_cursor, str) else None,
+                    offset=offset,
+                )
+                break
+            if page.next_cursor:
+                next_cursor = self._encode_cursor(
+                    server=server,
+                    current_server=provider.server_name,
+                    provider_index=provider_index,
+                    upstream_cursor=page.next_cursor,
+                    offset=0,
+                )
+                if len(entries) >= limit:
+                    break
+                upstream_cursor = page.next_cursor
+                offset = 0
+                continue
+            provider_index += 1
+            upstream_cursor = None
+            offset = 0
+        if next_cursor is None and provider_index < len(providers):
+            next_cursor = self._encode_cursor(
+                server=server,
+                current_server=providers[provider_index].server_name,
+                provider_index=provider_index,
+                upstream_cursor=upstream_cursor if isinstance(upstream_cursor, str) else None,
+                offset=offset,
+            )
+        return self._template_list_result(
+            f"Returned {len(entries)} MCP resource template(s)",
+            templates=entries,
+            next_cursor=next_cursor,
+            errors=errors,
+        )
+
+    @staticmethod
+    def _resource_list_result(
+        summary: str,
+        *,
+        resources: list[ResourceEntry] | None = None,
+        next_cursor: str | None = None,
+        errors: list[ResourceError] | None = None,
+    ) -> McpResourceListResult:
+        return McpResourceListResult(
+            summary=summary,
+            resources=resources or [],
+            next_cursor=next_cursor,
+            errors=errors or [],
+        )
+
+    @staticmethod
+    def _template_list_result(
+        summary: str,
+        *,
+        templates: list[ResourceTemplateEntry] | None = None,
+        next_cursor: str | None = None,
+        errors: list[ResourceError] | None = None,
+    ) -> McpResourceTemplateListResult:
+        return McpResourceTemplateListResult(
+            summary=summary,
+            templates=templates or [],
+            next_cursor=next_cursor,
+            errors=errors or [],
+        )
+
+    @logfire.instrument("capability.resource_capability.read_mcp_resource")
+    async def read_mcp_resource(  # noqa: PLR0915
+        self,
+        ctx: RunContext[AgentDepsT],
+        server: Annotated[str, Field(description="Configured MCP server name")],
+        uri: Annotated[
+            str, Field(description="Opaque resource URI copied from MCP list/search output")
+        ],
+    ) -> ToolReturn[McpResourceReadResult]:
+        """Read one resource from the named MCP server without URI rewriting."""
+        providers = await self._mcp_providers(ctx)
+        provider = next((item for item in providers if item.server_name == server), None)
+        if provider is None:
+            error = ResourceError(
+                "unknown_server",
+                f"Unknown MCP server: {server}",
+                False,
+                "Use list_mcp_resources to discover server names.",
+            )
+            return self._read_error(uri, error)
+        try:
+            if not await provider.supports_resources():
+                error = ResourceError(
+                    "resources_not_supported",
+                    f"Server {server} did not declare resources capability",
+                    False,
+                    "Use the server's tools instead.",
+                )
+                return self._read_error(uri, error)
+            contents = await provider.read_mcp_resource(uri)
+        except PermissionError as exc:
+            error = ResourceError(
+                "permission_denied",
+                str(exc),
+                False,
+                "Request a URI permitted by the upstream server.",
+            )
+            return self._read_error(uri, error)
+        except TimeoutError as exc:
+            error = ResourceError("timeout", str(exc), True, "Retry the read later.")
+            return self._read_error(uri, error)
+        except (OSError, RuntimeError, ValueError) as exc:
+            error = ResourceError(
+                "provider_unavailable",
+                str(exc),
+                True,
+                "Retry the read or inspect the provider status.",
+            )
+            return self._read_error(uri, error)
+        if not contents:
+            error = ResourceError(
+                "resource_not_found",
+                f"Resource not found: {uri}",
+                False,
+                "Copy the URI exactly from the server's list or search result.",
+            )
+            return self._read_error(uri, error)
+
+        model_contents: list[JsonObject] = []
+        visible_content: list[str | BinaryContent] = []
+        errors: list[ResourceError] = []
+        truncated = False
+        original_char_count = 0
+        for content in contents:
+            if isinstance(content, TextResourceContent):
+                original_char_count += len(content.text)
+                text = content.text
+                if len(text) > _DEFAULT_READ_TEXT_LIMIT:
+                    text = text[:_DEFAULT_READ_TEXT_LIMIT]
+                    truncated = True
+                content_entry = self._content_entry_with_meta(
+                    {
+                        "type": "text",
+                        "uri": content.uri,
+                        "mime_type": content.mime_type,
+                        "text": text,
+                    },
+                    content.meta,
+                )
+                model_contents.append(content_entry)
+                visible_content.append(text)
+            elif isinstance(content, BlobResourceContent):
+                try:
+                    blob = base64.b64decode(content.blob, validate=True)
+                except (binascii.Error, ValueError):
+                    error = ResourceError(
+                        "unsupported_mime_type",
+                        "Provider returned invalid base64 content",
+                        False,
+                        "Ask the provider for a supported binary resource.",
+                    )
+                    return self._read_error(uri, error)
+                mime_type = content.mime_type or ""
+                if mime_type not in _SUPPORTED_BLOB_MIME_TYPES:
+                    content_entry = self._content_entry_with_meta(
+                        {
+                            "type": "blob",
+                            "uri": content.uri,
+                            "mime_type": mime_type,
+                            "size": len(blob),
+                            "attached": False,
+                            "omission_reason": "unsupported_mime_type",
+                        },
+                        content.meta,
+                    )
+                    model_contents.append(content_entry)
+                    errors.append(
+                        ResourceError(
+                            "unsupported_mime_type",
+                            f"Binary MIME type is not supported: {mime_type or 'unknown'}",
+                            False,
+                            "Request a PDF, GIF, JPEG, PNG, or WebP resource.",
+                        )
+                    )
+                    continue
+                if len(blob) > _MAX_BLOB_BYTES:
+                    content_entry = self._content_entry_with_meta(
+                        {
+                            "type": "blob",
+                            "uri": content.uri,
+                            "mime_type": mime_type,
+                            "size": len(blob),
+                            "attached": False,
+                            "omission_reason": "content_too_large",
+                        },
+                        content.meta,
+                    )
+                    model_contents.append(content_entry)
+                    errors.append(
+                        ResourceError(
+                            "content_too_large",
+                            f"Binary resource exceeds {_MAX_BLOB_BYTES} bytes",
+                            False,
+                            "Read a smaller resource or request metadata only.",
+                        )
+                    )
+                    continue
+                content_entry = self._content_entry_with_meta(
+                    {
+                        "type": "blob",
+                        "uri": content.uri,
+                        "mime_type": mime_type,
+                        "size": len(blob),
+                        "attached": True,
+                    },
+                    content.meta,
+                )
+                model_contents.append(content_entry)
+                visible_content.append(BinaryContent(data=blob, media_type=mime_type))
+        return ToolReturn(
+            return_value=McpResourceReadResult(
+                summary=f"Read MCP resource {uri} from {server}",
+                uri=uri,
+                contents=model_contents,
+                truncated=truncated,
+                original_char_count=original_char_count or None,
+                errors=errors,
+            ),
+            content=visible_content,
+        )
+
+    @staticmethod
+    def _read_error(uri: str, error: ResourceError) -> ToolReturn[McpResourceReadResult]:
+        result = McpResourceReadResult(
+            summary=error.message,
+            uri=uri,
+            errors=[error],
+        )
+        return ToolReturn(return_value=result, content=error.message)
+
+    @staticmethod
+    def _content_entry_with_meta(
+        entry: JsonObject,
+        meta: JsonObject | None,
+    ) -> JsonObject:
+        """Attach upstream content metadata without changing other fields."""
+        if meta is not None:
+            entry["meta"] = meta
+        return entry
 
     # ------------------------------------------------------------------
     # Tool implementations

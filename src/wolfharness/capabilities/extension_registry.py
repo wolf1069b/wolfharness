@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from wolfharness.capabilities.resource_protocols import (
         ChangeObservable,
         CommandResource,
+        McpResourceProvider,
         ResourceAccess,
         ResourceTemplateAccess,
         SkillResource,
@@ -387,7 +388,24 @@ class ExtensionRegistry:
         from wolfharness.capabilities.resource_protocols import ResourceAccess
 
         return [
-            cap for cap in self.get_visible_capabilities(scope) if isinstance(cap, ResourceAccess)
+            cap
+            for cap in self.get_visible_capabilities(scope)
+            if isinstance(cap, ResourceAccess)
+            and getattr(cap, "resources_supported", None) is not False
+        ]
+
+    def get_mcp_resource_providers(
+        self,
+        scope: Scope,
+    ) -> list[McpResourceProvider]:
+        """Get visible providers implementing the paged MCP Resource contract."""
+        from wolfharness.capabilities.resource_protocols import McpResourceProvider
+
+        return [
+            cap
+            for cap in self.get_visible_capabilities(scope)
+            if isinstance(cap, McpResourceProvider)
+            and getattr(cap, "resources_supported", None) is not False
         ]
 
     def get_tool_access(

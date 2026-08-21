@@ -130,6 +130,7 @@ async def resolve_resource_content(
     skill_caps: list[SkillResource],
     *,
     max_text_chars: int = 10_000,
+    client_name: str | None = None,
 ) -> list[UserContent] | None:
     """Resolve a resource URI and return its content as ``UserContent`` items.
 
@@ -144,6 +145,7 @@ async def resolve_resource_content(
         resource_caps: List of ``ResourceAccess`` providers to query for non-skill URIs.
         skill_caps: List of ``SkillResource`` providers to query for ``skill://`` URIs.
         max_text_chars: Maximum text characters before truncation.
+        client_name: Optional exact MCP server identifier for host-injected resources.
 
     Returns:
         A list of ``UserContent`` items (strings and/or ``BinaryContent``) if the
@@ -191,11 +193,32 @@ async def resolve_resource_content(
             return [f'<resource uri="{uri}">\n{truncated}\n</resource>']
         return None
 
-    # ---- URI schemes → ResourceAccess providers ----
-    # No scheme is rejected up front: MCP servers may register resources
-    # under any scheme, including http(s). Each provider decides whether
-    # it owns the URI.
-    for resource_cap in resource_caps:
+    # ---- Other URI schemes → ResourceAccess providers ----
+    # A connected MCP capability can still provide tools when its initialize
+    # handshake explicitly omitted ``resources``.  Keep that server out of
+    # Host ResourceSource routing while leaving generic legacy providers
+    # (which have no negotiated state) untouched.
+    selected_caps = [
+        resource_cap
+        for resource_cap in resource_caps
+        if getattr(resource_cap, "resources_supported", None) is not False
+    ]
+    if client_name is not None:
+        identified_caps = [
+            resource_cap
+            for resource_cap in resource_caps
+            if getattr(resource_cap, "server_name", None) is not None
+        ]
+        if identified_caps:
+            selected_caps = [
+                resource_cap
+                for resource_cap in identified_caps
+                if getattr(resource_cap, "server_name", None) == client_name
+            ]
+            if not selected_caps:
+                return None
+
+    for resource_cap in selected_caps:
         try:
             contents = await resource_cap.read_resource(uri)
         except Exception:  # noqa: BLE001

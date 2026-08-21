@@ -30,6 +30,8 @@ from wolfharness.capabilities.resource_protocols import (
     CompletionArgument,
     CompletionResult,
     McpResource,
+    McpResourceListPage,
+    McpResourceTemplateListPage,
     ResourceAccess,
     ResourceTemplateAccess,
     ResourceTemplateEntry,
@@ -68,6 +70,7 @@ class FakeMCPClient:
     _prompt_change_callback: Any = None
     _subscribed_uris: list[str] = field(default_factory=list)
     _unsubscribed_uris: list[str] = field(default_factory=list)
+    _supports_resources: bool = True
     config: Any = None
 
     async def __aenter__(self) -> Self:
@@ -87,10 +90,48 @@ class FakeMCPClient:
             raise RuntimeError("Not connected")
         return list(self._resources)
 
+    async def supports_resources(self) -> bool:
+        return self._supports_resources
+
+    async def list_resources_mcp(self, cursor: str | None = None) -> McpResourceListPage:
+        del cursor
+        from wolfharness.capabilities.resource_protocols import ResourceEntry
+
+        return McpResourceListPage(
+            entries=[
+                ResourceEntry(
+                    uri=str(resource.uri),
+                    server=self.config.client_id if self.config is not None else "",
+                    name=resource.name,
+                    description=resource.description,
+                    mime_type=resource.mimeType,
+                )
+                for resource in self._resources
+            ]
+        )
+
     async def list_resource_templates(self) -> list[Any]:
         if not self._connected:
             raise RuntimeError("Not connected")
         return list(self._resource_templates)
+
+    async def list_resource_templates_mcp(
+        self, cursor: str | None = None
+    ) -> McpResourceTemplateListPage:
+        del cursor
+        from wolfharness.capabilities.resource_protocols import ResourceTemplateEntry
+
+        return McpResourceTemplateListPage(
+            entries=[
+                ResourceTemplateEntry(
+                    uri_template=str(template.uriTemplate),
+                    server=self.config.client_id if self.config is not None else "",
+                    name=template.name,
+                    description=template.description,
+                )
+                for template in self._resource_templates
+            ]
+        )
 
     async def read_resource(self, uri: str) -> list[Any]:
         if not self._connected:
@@ -163,6 +204,7 @@ class FakeSessionPool:
     async def get_client(self, config: Any, skill_name: str | None = None) -> FakeMCPClient:
         self.get_client_call_count += 1
         self._client._connected = True
+        self._client.config = config
         return self._client
 
 
@@ -185,6 +227,8 @@ def _make_resource(
     res.title = None
     res.description = description
     res.mimeType = mime_type
+    res.meta = None
+    res.annotations = None
     return res
 
 
@@ -223,6 +267,7 @@ def _make_resource_template(
     tmpl.description = description
     tmpl.mimeType = mime_type
     tmpl.annotations = None
+    tmpl.meta = None
     return tmpl
 
 
@@ -472,15 +517,49 @@ async def test_list_resources_delegation() -> None:
         _make_resource("file:///path1", "res1", "Resource 1", "text/plain"),
         _make_resource("file:///path2", "res2"),
     ]
+    resources[0].title = "Resource One"
+    resources[0].size = 42
+    resources[0].annotations = {"audience": ["user"]}
+    resources[0].meta = {"origin": "upstream"}
     client = FakeMCPClient(_resources=resources)
     cap = McpServerCap(config=_make_config(), session_pool=FakeSessionPool(client))
 
     result = await cap.list_resources()
     assert len(result) == 2
     assert result[0].uri == "file:///path1"
-    assert result[0].name == "res1"
+    # Title is preferred as the display name (RFC-0058 / PR #372 behavior);
+    # the raw title is additionally preserved in its own field.
+    assert result[0].name == "Resource One"
     assert result[0].description == "Resource 1"
     assert result[0].mime_type == "text/plain"
+    assert result[0].title == "Resource One"
+    assert result[0].size == 42
+    assert result[0].annotations == {"audience": ["user"]}
+    assert result[0].meta == {"origin": "upstream"}
+
+
+@pytest.mark.anyio
+async def test_paged_resource_contract_preserves_server_and_cursor() -> None:
+    resources = [_make_resource("file:///path1", "res1", "Resource 1", "text/plain")]
+    client = FakeMCPClient(_resources=resources)
+    cap = McpServerCap(config=_make_config(), session_pool=FakeSessionPool(client))
+
+    assert await cap.supports_resources() is True
+    page = await cap.list_resources_page()
+    assert page.entries[0].server == cap.server_name
+    assert page.entries[0].uri == "file:///path1"
+    templates = await cap.list_resource_templates_page()
+    assert templates.entries == []
+
+
+@pytest.mark.anyio
+async def test_resource_capability_negotiation_is_cached() -> None:
+    client = FakeMCPClient(_supports_resources=False)
+    cap = McpServerCap(config=_make_config(), session_pool=FakeSessionPool(client))
+
+    assert cap.client_name == cap.server_name == _make_config().client_id
+    assert await cap.supports_resources() is False
+    assert cap.resources_supported is False
 
 
 class FlakySessionPool(FakeSessionPool):

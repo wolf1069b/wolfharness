@@ -51,6 +51,17 @@ router = APIRouter(tags=["agent"])
 logger = get_logger(__name__)
 
 
+def _resource_tools_enabled(state: Any) -> bool:
+    """Return the configured model-resource-tool gate for the active agent."""
+    host_context = state.agent.host_context
+    if host_context is None:
+        return False
+    from wolfharness.models.agents import NativeAgentConfig
+
+    config = host_context.manifest.agents.get(state.agent.name)
+    return isinstance(config, NativeAgentConfig) and config.resources.enabled
+
+
 def _extract_hints(template: str | None) -> list[str]:
     """Extract input hints from a command template.
 
@@ -492,8 +503,8 @@ async def get_console_state() -> dict[str, Any]:
 async def list_mcp_resources(state: StateDep) -> dict[str, McpResource]:
     """Get all available MCP resources from connected servers.
 
-    Returns a dictionary mapping resource keys to McpResource objects.
-    Keys are formatted as "{client}:{resource_name}" for uniqueness.
+    Returns a dictionary mapping escaped ``server:uri`` keys to McpResource
+    objects. The configured server/client name is preserved in each entry.
 
     Uses the ``ExtensionRegistry`` to discover ``ResourceAccess`` providers
     at SESSION scope (POOL + AGENT + SESSION).
@@ -503,7 +514,10 @@ async def list_mcp_resources(state: StateDep) -> dict[str, McpResource]:
         import asyncio
 
         from wolfharness.capabilities.extension_registry import Scope, ScopeLevel
-        from wolfharness.capabilities.resource_protocols import ResourceAccess
+        from wolfharness.capabilities.resource_protocols import (
+            McpResourceProvider,
+            resource_catalog_key,
+        )
 
         agent = state.agent
         host_ctx = agent.host_context
@@ -518,11 +532,29 @@ async def list_mcp_resources(state: StateDep) -> dict[str, McpResource]:
                 )
             else:
                 scope = Scope(level=ScopeLevel.AGENT, agent_name=agent.name)
-            resource_caps = registry.get_resource_access(scope)
+            resource_caps = registry.get_mcp_resource_providers(scope)
         else:
             caps = agent._all_capabilities
-            resource_caps = [cap for cap in caps if isinstance(cap, ResourceAccess)]
+            resource_caps = [cap for cap in caps if isinstance(cap, McpResourceProvider)]
 
+        if resource_caps:
+            candidates = resource_caps
+            support_results = await asyncio.gather(
+                *(cap.supports_resources() for cap in candidates),
+                return_exceptions=True,
+            )
+            for cap, supported in zip(candidates, support_results, strict=False):
+                if isinstance(supported, BaseException):
+                    logger.warning(
+                        "Failed to negotiate MCP resource capability",
+                        server=cap.server_name,
+                        error=str(supported),
+                    )
+            resource_caps = [
+                cap
+                for cap, supported in zip(candidates, support_results, strict=False)
+                if supported is True
+            ]
         if resource_caps:
             results = await asyncio.gather(
                 *(cap.list_resources() for cap in resource_caps),
@@ -530,21 +562,22 @@ async def list_mcp_resources(state: StateDep) -> dict[str, McpResource]:
             )
             for cap, res in zip(resource_caps, results, strict=False):
                 if isinstance(res, BaseException):
+                    logger.warning(
+                        "Failed to list MCP resources",
+                        server=cap.server_name,
+                        error=str(res),
+                    )
                     continue
+                client = cap.server_name
                 for resource in res:
-                    # ResourceEntry doesn't have a .client field;
-                    # use the capability class name as the client identifier.
-                    client = type(cap).__name__
-                    client_name = client.replace("/", "_")
-                    resource_name = resource.name.replace("/", "_")
-                    result[f"{client_name}:{resource_name}"] = McpResource(
-                        name=resource.uri,
+                    result[resource_catalog_key(client, resource.uri)] = McpResource(
+                        name=resource.name,
                         uri=resource.uri,
                         description=resource.description,
                         mime_type=resource.mime_type,
                         client=client,
                     )
-    except Exception:  # noqa: BLE001
+    except (OSError, RuntimeError, TimeoutError, ValueError):
         return {}
     else:
         return result
@@ -757,9 +790,26 @@ async def list_tool_ids(state: StateDep) -> list[str]:
     """
     try:
         tools = await state.agent._get_all_tools()
-        return [tool.name for tool in tools]
+        tool_ids = [tool.name for tool in tools]
+        # ResourceCapability is attached to the per-run toolset, rather than
+        # the shared provider list used by ``_get_all_tools``.  Include its
+        # formal names here so OpenCode clients can discover them before the
+        # first model run, while still honoring the per-agent gate.
+        pool = state.pool_or_none
+        if (
+            pool is not None
+            and _resource_tools_enabled(state)
+            and pool.resource_capability is not None
+        ):
+            resource_tools = pool.resource_capability.get_toolset()
+            if resource_tools is not None:
+                for name in resource_tools.tools:
+                    if name not in tool_ids:
+                        tool_ids.append(name)
     except Exception:  # noqa: BLE001
         return []
+    else:
+        return tool_ids
 
 
 class ToolListItem(BaseModel):
@@ -796,6 +846,24 @@ async def list_tools_with_schemas(  # noqa: D417
             params = tool.schema["function"]["parameters"]
             item = ToolListItem(id=tool.name, description=tool.description or "", parameters=params)
             result.append(item)
+        pool = state.pool_or_none
+        if (
+            pool is not None
+            and _resource_tools_enabled(state)
+            and pool.resource_capability is not None
+        ):
+            resource_tools = pool.resource_capability.get_toolset()
+            if resource_tools is not None:
+                known_ids = {item.id for item in result}
+                for name, tool in resource_tools.tools.items():
+                    if name not in known_ids:
+                        result.append(
+                            ToolListItem(
+                                id=name,
+                                description=tool.function_schema.description or "",
+                                parameters=tool.function_schema.json_schema,
+                            )
+                        )
     except Exception:  # noqa: BLE001
         return []
     else:

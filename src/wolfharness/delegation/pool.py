@@ -720,10 +720,12 @@ class AgentPool[TPoolDeps = None]:
     async def _setup_resource_capability(self) -> None:
         """Create the ``ResourceCapability`` instance.
 
-        The capability provides 5 agent-facing tools (``list_resources``,
-        ``read_resource``, ``resource_exists``, ``list_resource_templates``,
-        ``complete_resource_template``) that aggregate resource access
-        across all visible providers in the ``ExtensionRegistry``.
+        The capability provides three model-facing MCP Resource tools
+        (``list_mcp_resources``, ``list_mcp_resource_templates``, and
+        ``read_mcp_resource``) that aggregate resource access across all
+        visible MCP providers in the ``ExtensionRegistry``. Legacy five-method
+        Python helpers remain available for internal compatibility but are not
+        registered in the model toolset.
 
         The capability is stateless — it reads ``AgentContext`` at runtime
         to resolve providers. Per-agent opt-out is handled in

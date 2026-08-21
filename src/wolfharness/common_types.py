@@ -36,18 +36,22 @@ if TYPE_CHECKING:
     # Import path string for dynamic tool loading (e.g., "mymodule:my_tool")
     type ImportPathString = str
     type ToolType = ImportPathString | AnyCallable | Tool
-    # Define what we consider JSON-serializable
-    type JsonPrimitive = bool | int | float | str | None
     type SessionIdType = str | UUID | None
     type ProcessorCallback[TResult] = Callable[..., TResult | Awaitable[TResult]]
+
+# Define JSON aliases at runtime as well as for static type checking.  The
+# MCP Resource result models are exposed through pydantic-ai tool schemas, so
+# leaving these aliases inside ``TYPE_CHECKING`` would make their annotations
+# unresolved at runtime.
+type JsonPrimitive = bool | int | float | str | None
+type JsonValue = JsonPrimitive | JsonArray | JsonObject
+type JsonObject = dict[str, JsonValue]
+type JsonArray = list[JsonValue]
 
 # In reflex for example, the complex ones create issues..
 SimpleJsonType = dict[
     str, bool | int | float | str | list[str] | dict[str, bool | int | float | str]
 ]
-type JsonValue = JsonPrimitive | JsonArray | JsonObject
-type JsonObject = dict[str, JsonValue]
-type JsonArray = list[JsonValue]
 
 
 MCPConnectionStatus = Literal[

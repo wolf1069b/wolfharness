@@ -30,6 +30,9 @@ from wolfharness.capabilities.resource_protocols import (
     CommandResource,
     CompletionArgument,
     CompletionResult,
+    McpResourceListPage,
+    McpResourceProvider,
+    McpResourceTemplateListPage,
     ResourceAccess,
     ResourceEntry,
     ResourceTemplateAccess,
@@ -40,6 +43,7 @@ from wolfharness.capabilities.resource_protocols import (
     ToolAccess,
     ToolEntry,
     ToolResult,
+    normalize_mcp_json_object,
 )
 
 
@@ -69,6 +73,7 @@ class McpServerCap(
     AbstractCapability[AgentDepsT],
     ToolAccess,
     ResourceAccess,
+    McpResourceProvider,
     ResourceTemplateAccess,
     SkillResource,
     CommandResource,
@@ -135,6 +140,10 @@ class McpServerCap(
         self._name = name or self._config.client_id
         self._tool_prefix = tool_prefix
         self._client: MCPClient | None = client
+        # ``None`` means that the MCP initialize handshake has not yet been
+        # queried.  The registry treats an explicit ``False`` as a tools-only
+        # server and keeps it out of the Resource provider view.
+        self._resources_supported: bool | None = None
         self._change_queues: set[asyncio.Queue[ChangeEvent]] = set()
         self._resources_cache: list[ResourceEntry] | None = None
         self._resource_templates_cache: list[ResourceTemplateEntry] | None = None
@@ -161,6 +170,11 @@ class McpServerCap(
     def client(self) -> MCPClient | None:
         """Return the wrapped MCP client, or None if not yet initialized."""
         return self._client
+
+    @property
+    def resources_supported(self) -> bool | None:
+        """Return the cached MCP Resource capability state, when known."""
+        return self._resources_supported
 
     # ---- Lazy client initialization ----
 
@@ -433,6 +447,89 @@ class McpServerCap(
 
     # ---- ResourceAccess ----
 
+    @property
+    def client_name(self) -> str:
+        """Return the stable configured MCP client/server identifier."""
+        display_name = getattr(self._config, "display_name", None)
+        if isinstance(display_name, str) and display_name.strip():
+            return display_name.strip()
+        return self._config.client_id
+
+    @property
+    def server_name(self) -> str:
+        """Return the stable configured server identifier."""
+        return self.client_name
+
+    async def supports_resources(self) -> bool:
+        """Return whether this upstream MCP server declared resources."""
+        client = await self._ensure_client()
+        try:
+            supported = await client.supports_resources()
+        except (OSError, RuntimeError, TimeoutError, ValueError):
+            # A failed handshake must not leave an ambiguous provider in the
+            # Resource registry; the MCP tool connection remains available.
+            self._resources_supported = False
+            raise
+        self._resources_supported = supported
+        return supported
+
+    async def list_resources_page(self, cursor: str | None = None) -> McpResourceListPage:
+        """Return one upstream resource page with complete MCP metadata."""
+        client = await self._ensure_client()
+        return await client.list_resources_mcp(cursor)
+
+    async def list_resource_templates_page(
+        self, cursor: str | None = None
+    ) -> McpResourceTemplateListPage:
+        """Return one upstream resource-template page."""
+        client = await self._ensure_client()
+        return await client.list_resource_templates_mcp(cursor)
+
+    async def read_mcp_resource(
+        self, uri: str
+    ) -> list[TextResourceContent | BlobResourceContent] | None:
+        """Read a resource through the MCP Resource contract."""
+        client = await self._ensure_client()
+        contents = await client.read_resource(uri)
+        return self._convert_resource_contents(uri, contents)
+
+    @staticmethod
+    def _convert_resource_contents(
+        uri: str,
+        contents: Sequence[Any],
+    ) -> list[TextResourceContent | BlobResourceContent] | None:
+        """Convert MCP content blocks to shared protocol content types."""
+        if not contents:
+            return None
+        result: list[TextResourceContent | BlobResourceContent] = []
+        for content in contents:
+            text_value: str | None = getattr(content, "text", None)
+            if text_value is not None:
+                result.append(
+                    TextResourceContent(
+                        uri=uri,
+                        mime_type=getattr(content, "mimeType", None),
+                        meta=normalize_mcp_json_object(
+                            getattr(content, "meta", getattr(content, "_meta", None))
+                        ),
+                        text=text_value,
+                    )
+                )
+                continue
+            blob_value: str | None = getattr(content, "blob", None)
+            if blob_value is not None:
+                result.append(
+                    BlobResourceContent(
+                        uri=uri,
+                        mime_type=getattr(content, "mimeType", None),
+                        meta=normalize_mcp_json_object(
+                            getattr(content, "meta", getattr(content, "_meta", None))
+                        ),
+                        blob=blob_value,
+                    )
+                )
+        return result or None
+
     async def list_resources(self) -> Sequence[ResourceEntry]:
         """List available MCP resources.
 
@@ -448,9 +545,14 @@ class McpServerCap(
         self._resources_cache = [
             ResourceEntry(
                 uri=str(r.uri),
+                server=self.server_name,
                 name=r.title or r.name,
+                title=getattr(r, "title", "") or "",
                 description=r.description or "",
                 mime_type=r.mimeType if r.mimeType else "",
+                size=getattr(r, "size", None),
+                annotations=normalize_mcp_json_object(getattr(r, "annotations", None)),
+                meta=normalize_mcp_json_object(getattr(r, "meta", getattr(r, "_meta", None))),
             )
             for r in resources
         ]
@@ -474,33 +576,7 @@ class McpServerCap(
         except Exception:
             logger.warning("Failed to read resource %r", uri, exc_info=True)
             return None
-        if not contents:
-            return None
-        result: list[TextResourceContent | BlobResourceContent] = []
-        for c in contents:
-            # MCP TextResourceContents has .text, BlobResourceContents has .blob
-            text_val: str | None = getattr(c, "text", None)
-            if text_val is not None:
-                result.append(
-                    TextResourceContent(
-                        uri=uri,
-                        mime_type=getattr(c, "mimeType", None),
-                        meta=getattr(c, "meta", None),
-                        text=text_val,
-                    )
-                )
-            else:
-                blob_val: str | None = getattr(c, "blob", None)
-                if blob_val is not None:
-                    result.append(
-                        BlobResourceContent(
-                            uri=uri,
-                            mime_type=getattr(c, "mimeType", None),
-                            meta=getattr(c, "meta", None),
-                            blob=blob_val,
-                        )
-                    )
-        return result if result else None
+        return self._convert_resource_contents(uri, contents)
 
     async def resource_exists(self, uri: str) -> bool:
         """Check if an MCP resource exists.
@@ -532,11 +608,13 @@ class McpServerCap(
         self._resource_templates_cache = [
             ResourceTemplateEntry(
                 uri_template=str(t.uriTemplate),
+                server=self.server_name,
                 name=t.name or "",
                 title=getattr(t, "title", "") or "",
                 description=t.description or "",
                 mime_type=t.mimeType if t.mimeType else "",
-                annotations=getattr(t, "annotations", None),
+                annotations=normalize_mcp_json_object(getattr(t, "annotations", None)),
+                meta=normalize_mcp_json_object(getattr(t, "meta", getattr(t, "_meta", None))),
             )
             for t in templates
         ]

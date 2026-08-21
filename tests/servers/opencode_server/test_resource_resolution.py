@@ -223,6 +223,27 @@ async def test_resolve_resource_multiple_providers() -> None:
     assert result == ['<resource uri="viking://doc">\nfound\n</resource>']
 
 
+async def test_resolve_resource_routes_same_uri_by_server_name() -> None:
+    """A ResourceSource server name must prevent same-URI provider mixing."""
+
+    class NamedResourceAccess(FakeResourceAccess):
+        def __init__(self, server_name: str, text: str) -> None:
+            super().__init__(read_result=[TextResourceContent(uri="kb:///same", text=text)])
+            self.server_name = server_name
+
+    first = NamedResourceAccess("alpha", "alpha content")
+    second = NamedResourceAccess("beta", "beta content")
+
+    result = await resolve_resource_content(
+        "kb:///same",
+        resource_caps=[first, second],
+        skill_caps=[],
+        client_name="beta",
+    )
+
+    assert result == ['<resource uri="kb:///same">\nbeta content\n</resource>']
+
+
 async def test_resolve_resource_skill_uri() -> None:
     """``skill://`` URI routed to SkillResource, not ResourceAccess."""
     skill_cap = FakeSkillResource(read_result="content")

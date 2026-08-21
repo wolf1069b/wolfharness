@@ -438,6 +438,17 @@ class MCPManager:
                 tool_prefix=candidate,
             )
             provider = await self.exit_stack.enter_async_context(provider)
+            # Negotiate the Resource capability while the manager-owned
+            # client is connected.  A tools-only server remains available to
+            # the MCP tool path, but is excluded from the Resource registry.
+            try:
+                await provider.supports_resources()
+            except (OSError, RuntimeError, TimeoutError, ValueError):
+                logger.debug(
+                    "MCP Resource capability negotiation failed",
+                    client_id=config.client_id,
+                    exc_info=True,
+                )
             self.providers.append(provider)
         except Exception as e:
             # Record the failure so get_server_status() can report it

@@ -20,6 +20,13 @@ from pydantic_ai import BinaryContent, RunContext, ToolReturn
 from schemez import FunctionSchema
 
 from wolfharness.agents.context import AgentContext
+from wolfharness.capabilities.resource_protocols import (
+    McpResourceListPage,
+    McpResourceTemplateListPage,
+    ResourceEntry,
+    ResourceTemplateEntry,
+    normalize_mcp_json_object,
+)
 from wolfharness.log import get_logger
 from wolfharness.mcp_server.constants import MCP_TO_LOGGING
 from wolfharness.mcp_server.helpers import extract_text_content, mcp_tool_to_fn_schema
@@ -154,6 +161,14 @@ class MCPClient:
                 self._resource_updated_callback,
             )
         return self._wolfharness_message_handler
+
+    @property
+    def client_name(self) -> str:
+        """Return the configured display name used for Resource identity."""
+        display_name = getattr(self.config, "display_name", None)
+        if isinstance(display_name, str) and display_name.strip():
+            return display_name.strip()
+        return self.config.client_id
 
     @property
     def server_info(self) -> dict[str, str] | None:
@@ -421,6 +436,60 @@ class MCPClient:
         else:
             return filtered
 
+    async def supports_resources(self) -> bool:
+        """Return whether the connected server declared MCP Resource support."""
+        self._ensure_connected()
+        return self._has_server_capability("resources")
+
+    async def list_resources_mcp(self, cursor: str | None = None) -> McpResourceListPage:
+        """Read one raw MCP resources/list page without auto-pagination."""
+        self._ensure_connected()
+        if not self._has_server_capability("resources"):
+            return McpResourceListPage()
+        result = await self._client.list_resources_mcp(cursor=cursor)
+        entries = [
+            ResourceEntry(
+                uri=str(resource.uri),
+                server=self.client_name,
+                name=resource.name or "",
+                title=getattr(resource, "title", "") or "",
+                description=resource.description or "",
+                mime_type=getattr(resource, "mimeType", "") or "",
+                size=getattr(resource, "size", None),
+                annotations=normalize_mcp_json_object(getattr(resource, "annotations", None)),
+                meta=normalize_mcp_json_object(
+                    getattr(resource, "meta", getattr(resource, "_meta", None))
+                ),
+            )
+            for resource in result.resources
+        ]
+        return McpResourceListPage(entries=entries, next_cursor=result.nextCursor)
+
+    async def list_resource_templates_mcp(
+        self, cursor: str | None = None
+    ) -> McpResourceTemplateListPage:
+        """Read one raw MCP resources/templates/list page."""
+        self._ensure_connected()
+        if not self._has_server_capability("resources"):
+            return McpResourceTemplateListPage()
+        result = await self._client.list_resource_templates_mcp(cursor=cursor)
+        entries = [
+            ResourceTemplateEntry(
+                uri_template=str(template.uriTemplate),
+                server=self.client_name,
+                name=template.name or "",
+                title=getattr(template, "title", "") or "",
+                description=template.description or "",
+                mime_type=getattr(template, "mimeType", "") or "",
+                annotations=normalize_mcp_json_object(getattr(template, "annotations", None)),
+                meta=normalize_mcp_json_object(
+                    getattr(template, "meta", getattr(template, "_meta", None))
+                ),
+            )
+            for template in result.resourceTemplates
+        ]
+        return McpResourceTemplateListPage(entries=entries, next_cursor=result.nextCursor)
+
     async def list_prompts(self) -> list[MCPPrompt]:
         """Get available prompts from the server."""
         self._ensure_connected()
@@ -475,6 +544,8 @@ class MCPClient:
         self._ensure_connected()
         try:
             return await self._client.read_resource(uri)
+        except (OSError, PermissionError, TimeoutError):
+            raise
         except Exception as e:
             raise RuntimeError(f"Failed to read resource {uri!r}: {e}") from e
 
