@@ -2659,16 +2659,26 @@ class TestResourceAccessProtocol:
         mock_client.download_bytes.assert_called_once_with("viking://resources/photo.png")
         mock_client.overview.assert_not_called()
 
-    async def test_read_resource_image_text_only_model_no_bytes(
+    async def test_read_resource_image_bytes_regardless_of_support_vision(
         self, viking_cap: VikingCapability, mock_client: AsyncMock
     ) -> None:
-        """Text-only model (default) never downloads image bytes — text path."""
+        """read_resource is programmatic — image bytes even when text-only.
+
+        ``support_vision`` only gates the ``viking_read`` LLM tool (which
+        returns content to the model conversation); ``read_resource`` always
+        returns the actual payload, so programmatic consumers (e.g.
+        AnalyzeImageCapability) receive image bytes regardless of the
+        capability's vision setting.
+        """
+        import base64
+
         mock_client.download_bytes = AsyncMock(return_value=b"\x89PNG-fake")
-        mock_client.overview = AsyncMock(return_value="overview content")
         result = await viking_cap.read_resource("viking://resources/photo.png")
         assert result is not None
-        assert result[0].text == "overview content"
-        mock_client.download_bytes.assert_not_called()
+        assert result[0].mime_type == "image/png"
+        assert result[0].blob == base64.b64encode(b"\x89PNG-fake").decode("ascii")
+        mock_client.download_bytes.assert_called_once_with("viking://resources/photo.png")
+        mock_client.overview.assert_not_called()
 
     async def test_read_resource_oversize_image_degrades_to_hint(
         self, viking_cap: VikingCapability, mock_client: AsyncMock
