@@ -185,7 +185,7 @@ class WikiBuildCapability(
 
         try:
             from xeno_adp_agentic.wiki.build.build_logger import WikiBuildLogger
-            from xeno_adp_agentic.wiki.serve.build_tools import WikiBuildTools
+            from .wiki_build_tools import WikiBuildTools
 
             library_root = (
                 self._config.library_root or os.environ.get("LIBRARY_ROOT") or "output/library"
