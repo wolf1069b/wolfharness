@@ -784,6 +784,25 @@ class TestRetrieveTools:
         assert img.media_type == "image/png"
 
     @pytest.mark.asyncio
+    async def test_viking_read_image_oversize_degrades_to_hint(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """Oversize image degrades to a text hint, no BinaryImage emitted."""
+        from wolfharness.capabilities.viking.constants import IMAGE_BLOB_MAX_BYTES
+
+        viking_cap.support_vision = True
+        mock_client.download_bytes = AsyncMock(return_value=b"\x00" * (IMAGE_BLOB_MAX_BYTES + 1))
+        tools = build_tools(viking_cap)
+        read_tool = _get_tool(tools, "viking_read")
+
+        ctx = _make_ctx()
+        result = await read_tool(ctx, uris="viking://huge.jpg")
+
+        mock_client.download_bytes.assert_called_once_with("viking://huge.jpg")
+        assert result.content is None
+        assert "Image resource" in result.return_value
+
+    @pytest.mark.asyncio
     async def test_viking_read_image_support_vision_false(
         self, viking_cap: VikingCapability, mock_client: AsyncMock
     ) -> None:
@@ -2913,6 +2932,67 @@ class TestResourceAccessProtocol:
         result = await viking_cap.read_resource("viking://resources/missing.md")
         assert result is None
 
+    async def test_read_resource_image_returns_blob(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """Image resources are served as base64 blob bytes + MIME for vision models."""
+        import base64
+
+        viking_cap.support_vision = True
+        mock_client.download_bytes = AsyncMock(return_value=b"\x89PNG-fake")
+        result = await viking_cap.read_resource("viking://resources/photo.png")
+        assert result is not None
+        assert result[0].mime_type == "image/png"
+        assert result[0].blob == base64.b64encode(b"\x89PNG-fake").decode("ascii")
+        mock_client.download_bytes.assert_called_once_with("viking://resources/photo.png")
+        mock_client.overview.assert_not_called()
+
+    async def test_read_resource_image_text_only_model_no_bytes(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """Text-only model (default) never downloads image bytes — text path."""
+        mock_client.download_bytes = AsyncMock(return_value=b"\x89PNG-fake")
+        mock_client.overview = AsyncMock(return_value="overview content")
+        result = await viking_cap.read_resource("viking://resources/photo.png")
+        assert result is not None
+        assert result[0].text == "overview content"
+        mock_client.download_bytes.assert_not_called()
+
+    async def test_read_resource_oversize_image_degrades_to_hint(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """Oversize images degrade to a text hint even for vision models."""
+        from wolfharness.capabilities.viking.constants import IMAGE_BLOB_MAX_BYTES
+
+        viking_cap.support_vision = True
+        mock_client.download_bytes = AsyncMock(return_value=b"\x00" * (IMAGE_BLOB_MAX_BYTES + 1))
+        result = await viking_cap.read_resource("viking://resources/huge.jpg")
+        assert result is not None
+        assert result[0].text is not None
+        assert "Image resource" in result[0].text
+        mock_client.download_bytes.assert_called_once_with("viking://resources/huge.jpg")
+
+    async def test_read_resource_non_viking_scheme_stays_text(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """http(s) URLs never enter the image byte path even with vision on."""
+        viking_cap.support_vision = True
+        result = await viking_cap.read_resource("https://example.com/photo.png")
+        assert result is not None
+        assert result[0].text is not None
+        mock_client.download_bytes.assert_not_called()
+
+    async def test_read_resource_svg_stays_text(
+        self, viking_cap: VikingCapability, mock_client: AsyncMock
+    ) -> None:
+        """SVG is vector text, not blob bytes — text path with a URI hint kept."""
+        mock_client.overview = AsyncMock(return_value="<svg/>")
+        result = await viking_cap.read_resource("viking://resources/diagram.svg")
+        assert result is not None
+        assert result[0].text == "<svg/>"
+        mock_client.overview.assert_called_once_with("viking://resources/diagram.svg")
+        mock_client.download_bytes.assert_not_called()
+
     async def test_resource_exists_true(
         self, viking_cap: VikingCapability, mock_client: AsyncMock
     ) -> None:
@@ -4142,7 +4222,7 @@ class TestAutoRecall:
 
     def test_inject_system_message_inserts_before_user(self) -> None:
         """System message is inserted before the latest user message."""
-        from pydantic_ai.messages import ModelRequest, SystemPromptPart, UserPromptPart
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
 
         msg1 = ModelRequest(parts=[UserPromptPart(content="first")])
         msg2 = ModelRequest(parts=[UserPromptPart(content="second")])
@@ -4154,7 +4234,7 @@ class TestAutoRecall:
         sys_msg = result.messages[1]
         assert isinstance(sys_msg, ModelRequest)
         sys_part = sys_msg.parts[0]
-        assert isinstance(sys_part, SystemPromptPart)
+        assert isinstance(sys_part, UserPromptPart)
         assert "recall block text" in sys_part.content
 
     def test_inject_system_message_no_user_prompt(self) -> None:
@@ -4271,11 +4351,11 @@ class TestAutoRecall:
         # Verify recall block was injected
         assert result is not rc
         assert len(result.messages) == 2
-        from pydantic_ai.messages import SystemPromptPart
+        from pydantic_ai.messages import UserPromptPart
 
         sys_msg = result.messages[0]
         sys_part = sys_msg.parts[0]
-        assert isinstance(sys_part, SystemPromptPart)
+        assert isinstance(sys_part, UserPromptPart)
         assert "<openviking-recall>" in sys_part.content
         assert "viking://user/alice/memories/doc.md" in sys_part.content
 
@@ -4322,10 +4402,10 @@ class TestAutoRecall:
 
         # Verify recall block injected
         assert result is not rc
-        from pydantic_ai.messages import SystemPromptPart
+        from pydantic_ai.messages import UserPromptPart
 
         sys_part = result.messages[0].parts[0]
-        assert isinstance(sys_part, SystemPromptPart)
+        assert isinstance(sys_part, UserPromptPart)
         assert "<openviking-recall>" in sys_part.content
 
     @pytest.mark.asyncio
@@ -4408,10 +4488,10 @@ class TestAutoRecall:
         mock_client.search.assert_called_once()
         # Recall block should still be injected (without session context)
         assert result is not rc
-        from pydantic_ai.messages import SystemPromptPart
+        from pydantic_ai.messages import UserPromptPart
 
         sys_part = result.messages[0].parts[0]
-        assert isinstance(sys_part, SystemPromptPart)
+        assert isinstance(sys_part, UserPromptPart)
         assert "<openviking-recall>" in sys_part.content
         # No <session-context> section
         assert "<session-context>" not in sys_part.content
@@ -5367,13 +5447,13 @@ class TestCompaction:
 
         # Result should have fewer messages than original (archived replaced with summary)
         assert len(result.messages) < len(messages)
-        # First message should be the archive summary (SystemPromptPart)
+        # First message should be the archive summary (UserPromptPart)
         first_msg = result.messages[0]
         assert isinstance(first_msg, ModelRequest)
-        from pydantic_ai.messages import SystemPromptPart
+        from pydantic_ai.messages import UserPromptPart
 
         sys_part = first_msg.parts[0]
-        assert isinstance(sys_part, SystemPromptPart)
+        assert isinstance(sys_part, UserPromptPart)
         assert archive_uri in sys_part.content
 
     @pytest.mark.asyncio
@@ -6405,7 +6485,7 @@ class TestProfileInjection:
     @pytest.mark.asyncio
     async def test_handle_profile_inject_first_turn(self, mock_client: AsyncMock) -> None:
         """_handle_profile_inject injects profile on first turn."""
-        from pydantic_ai.messages import ModelRequest, SystemPromptPart, UserPromptPart
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
 
         mock_client.find = AsyncMock(
             return_value={
@@ -6436,11 +6516,11 @@ class TestProfileInjection:
         assert call_kwargs["limit"] == 5  # default profile_limit
         assert call_kwargs["context_type"] == "memory"
         assert "viking://user/alice/memories/" in call_kwargs["target_uri"]
-        # Check that a SystemPromptPart was injected before the user message
+        # Check that a UserPromptPart was injected before the user message
         assert len(result.messages) == 2
         first_msg = result.messages[0]
         assert isinstance(first_msg, ModelRequest)
-        assert any(isinstance(p, SystemPromptPart) for p in first_msg.parts)
+        assert any(isinstance(p, UserPromptPart) for p in first_msg.parts)
 
     @pytest.mark.asyncio
     async def test_handle_profile_inject_skips_when_already_injected(
@@ -6526,7 +6606,7 @@ class TestProfileInjection:
     @pytest.mark.asyncio
     async def test_handle_profile_inject_token_budget(self, mock_client: AsyncMock) -> None:
         """_handle_profile_inject truncates profile to profile_max_tokens."""
-        from pydantic_ai.messages import ModelRequest, SystemPromptPart, UserPromptPart
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
 
         long_content = "x" * 5000
         mock_client.find = AsyncMock(
@@ -6555,9 +6635,9 @@ class TestProfileInjection:
 
         result = await cap._handle_profile_inject(ctx, rc)
 
-        # The injected SystemPromptPart content should be truncated
+        # The injected UserPromptPart content should be truncated
         first_msg = result.messages[0]
-        sys_parts = [p for p in first_msg.parts if isinstance(p, SystemPromptPart)]
+        sys_parts = [p for p in first_msg.parts if isinstance(p, UserPromptPart)]
         assert len(sys_parts) == 1
         assert len(sys_parts[0].content) < 600
         assert "truncated" in sys_parts[0].content
@@ -6751,7 +6831,7 @@ class TestIndexInjection:
     @pytest.mark.asyncio
     async def test_handle_index_inject_first_turn(self, mock_client: AsyncMock) -> None:
         """_handle_index_inject injects an index block on the first turn."""
-        from pydantic_ai.messages import ModelRequest, SystemPromptPart, UserPromptPart
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
 
         mock_client.ls = AsyncMock(
             return_value=[
@@ -6775,7 +6855,7 @@ class TestIndexInjection:
         assert len(result.messages) == 2
         first_msg = result.messages[0]
         assert isinstance(first_msg, ModelRequest)
-        sys_parts = [p for p in first_msg.parts if isinstance(p, SystemPromptPart)]
+        sys_parts = [p for p in first_msg.parts if isinstance(p, UserPromptPart)]
         assert len(sys_parts) == 1
         assert "<openviking-index>" in sys_parts[0].content
         assert "wiki, raw" in sys_parts[0].content
@@ -6847,7 +6927,7 @@ class TestIndexInjection:
         self, mock_client: AsyncMock
     ) -> None:
         """_handle_index_inject truncates the namespace list to index_limit."""
-        from pydantic_ai.messages import ModelRequest, SystemPromptPart, UserPromptPart
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
 
         mock_client.ls = AsyncMock(
             return_value=[
@@ -6865,7 +6945,7 @@ class TestIndexInjection:
         result = await cap._handle_index_inject(ctx, rc)
 
         first_msg = result.messages[0]
-        sys_parts = [p for p in first_msg.parts if isinstance(p, SystemPromptPart)]
+        sys_parts = [p for p in first_msg.parts if isinstance(p, UserPromptPart)]
         content = sys_parts[0].content
         assert "ns0, ns1, ns2, ns3, ns4" in content
         assert "ns5" not in content
@@ -7030,7 +7110,7 @@ class TestWikiBuildIndex:
     @pytest.mark.asyncio
     async def test_before_model_request_first_turn_injects_index(self) -> None:
         """before_model_request injects a block with resolved config roots."""
-        from pydantic_ai.messages import ModelRequest, SystemPromptPart, UserPromptPart
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
 
         cap = WikiBuildCapability(
             wiki_root="viking://resources/810test",
@@ -7048,7 +7128,7 @@ class TestWikiBuildIndex:
         assert len(result.messages) == 2
         first_msg = result.messages[0]
         assert isinstance(first_msg, ModelRequest)
-        sys_parts = [p for p in first_msg.parts if isinstance(p, SystemPromptPart)]
+        sys_parts = [p for p in first_msg.parts if isinstance(p, UserPromptPart)]
         assert len(sys_parts) == 1
         assert "<openviking-index>" in sys_parts[0].content
         assert "- wiki:  viking://resources/810test" in sys_parts[0].content
@@ -7065,7 +7145,7 @@ class TestWikiBuildIndex:
         With no namespace env vars set, a local root cannot be mapped to a
         remote wiki, so it is filtered out (local backend semantics).
         """
-        from pydantic_ai.messages import ModelRequest, SystemPromptPart, UserPromptPart
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
 
         monkeypatch.delenv("VIKING_NAMESPACE", raising=False)
         monkeypatch.delenv("VIKING_RAW_NAMESPACE", raising=False)
@@ -7083,7 +7163,7 @@ class TestWikiBuildIndex:
         result = await cap.before_model_request(ctx, rc)
 
         first_msg = result.messages[0]
-        sys_parts = [p for p in first_msg.parts if isinstance(p, SystemPromptPart)]
+        sys_parts = [p for p in first_msg.parts if isinstance(p, UserPromptPart)]
         content = sys_parts[0].content
         assert "- wiki:  viking://resources/810test" in content
         assert "output/library" not in content
@@ -7096,7 +7176,7 @@ class TestWikiBuildIndex:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Local roots map to namespace URIs when viking backend + namespaces."""
-        from pydantic_ai.messages import ModelRequest, SystemPromptPart, UserPromptPart
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
 
         monkeypatch.setenv("WIKI_STORAGE_BACKEND", "viking")
         monkeypatch.setenv("VIKING_NAMESPACE", "810test")
@@ -7115,7 +7195,7 @@ class TestWikiBuildIndex:
         result = await cap.before_model_request(ctx, rc)
 
         first_msg = result.messages[0]
-        sys_parts = [p for p in first_msg.parts if isinstance(p, SystemPromptPart)]
+        sys_parts = [p for p in first_msg.parts if isinstance(p, UserPromptPart)]
         content = sys_parts[0].content
         assert "- wiki:  viking://resources/810test" in content
         assert "- raw:  viking://resources/raw/vikingtest" in content

@@ -116,6 +116,7 @@ code_mode = "wolfharness.capabilities.code_mode_capability:CodeModeCapability"
 tool_display = "wolfharness.capabilities.tool_display_capability:ToolDisplayCapability"
 question = "wolfharness.capabilities.question:QuestionCapability"
 background_task = "wolfharness.capabilities.background_task:BackgroundTaskCapability"
+tool-schema-overlap = "wolfharness.capabilities.tool_schema_overlap_capability:ToolSchemaOverlapCapability"
 
 [project.optional-dependencies]
 a2a = ["fasta2a", "starlette"]  # A2A Server

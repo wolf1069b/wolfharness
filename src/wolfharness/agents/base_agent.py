@@ -27,7 +27,7 @@ from wolfharness.agents.events import (
 )
 from wolfharness.agents.modes import ModeInfo
 from wolfharness.capabilities.function_toolset import FunctionToolsetCapability
-from wolfharness.common_types import IndividualEventHandler
+from wolfharness.common_types import IndividualEventHandler, MCPServerStatus
 from wolfharness.log import get_logger
 from wolfharness.messaging import ChatMessage, MessageHistory, MessageNode
 from wolfharness.observability.spans import safe_span
@@ -63,7 +63,6 @@ if TYPE_CHECKING:
     from wolfharness.common_types import (
         AgentName,
         AnyEventHandlerType,
-        MCPServerStatus,
         ProcessorCallback,
         PromptCompatible,
         StrPath,
@@ -543,6 +542,12 @@ class BaseAgent[TDeps = None, TResult = str](MessageNode[TDeps, TResult]):
         servers), pool-level servers from ``host_context.mcp`` are merged
         in, with agent-scoped keys taking precedence on collision.
 
+        Additionally, scans ``_all_capabilities`` for ``McpServerCap``
+        instances that are not tracked by any ``MCPManager`` (e.g.
+        config-defined ``type: mcp`` capabilities created via
+        ``EntryPointCapabilityConfig.build()``). These are stored in
+        ``_external_capabilities`` and never registered with a manager.
+
         Returns:
             Dict mapping ``client_id`` to ``MCPServerStatus``.
         """
@@ -555,6 +560,41 @@ class BaseAgent[TDeps = None, TResult = str](MessageNode[TDeps, TResult]):
             pool_status = await host_ctx.mcp.get_server_status()
             pool_status.update(result)
             result = pool_status
+
+        # Scan _all_capabilities for McpServerCap instances not tracked
+        # by any MCPManager. Config-defined type: mcp capabilities are
+        # built via EntryPointCapabilityConfig.build() and stored in
+        # _external_capabilities — they are never registered with a manager.
+        from wolfharness.capabilities.mcp_server_cap import McpServerCap
+
+        for cap in self._all_capabilities:
+            if not isinstance(cap, McpServerCap):
+                continue
+            display_name = cap.config.display_name
+            if display_name in result:
+                continue  # Already reported by an MCPManager.
+            # Only check cap.client (no lazy connection) to avoid
+            # triggering _ensure_client() during status reporting.
+            if cap.client is not None:
+                tool_entries = await cap.list_tools()
+                tools = [t.name for t in tool_entries]
+                info = cap.client.server_info
+                server_name = info.get("name") if info else None
+                server_version = info.get("version") if info else None
+            else:
+                tools = []
+                server_name = None
+                server_version = None
+            result[display_name] = MCPServerStatus(
+                name=display_name,
+                status="connected" if cap.client is not None else "disconnected",
+                display_name=display_name,
+                server_type=cap.config.type,
+                server_name=server_name,
+                server_version=server_version,
+                tools=tools,
+            )
+
         return result
 
     async def get_resource(self, name: str) -> Any:

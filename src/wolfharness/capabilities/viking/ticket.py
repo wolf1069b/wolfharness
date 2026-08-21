@@ -129,6 +129,19 @@ class EvalPayload(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+def _safe_create_opa(tools: Any, /, **kwargs: Any) -> dict[str, Any]:
+    """Call ``tools.create_opa`` with ``skip_dedupe_lookup`` if supported.
+
+    Older ``WikiBuildTools`` versions may not accept ``skip_dedupe_lookup``;
+    fall back to calling without it on ``TypeError``.
+    """
+    try:
+        return tools.create_opa(**kwargs)
+    except TypeError:
+        kwargs.pop("skip_dedupe_lookup", None)
+        return tools.create_opa(**kwargs)
+
+
 def _record_id(value: str, prefix: str) -> str:
     """Accept either a record id or a backend URI and return its id."""
     token = value.rstrip("/").rsplit("/", 1)[-1].removesuffix(".md")
@@ -303,8 +316,10 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
         values.
 
         All URIs use the ``viking://resources/<namespace>/...`` scheme.
-        Use ``read_resource`` / ``find_wiki`` to locate the target entity
-        and ``get_ticket_status`` to check what already exists for it.
+        Create the OPA for the given ``target_uri`` directly — the returned
+        ``uri`` is the audit anchor that later OPS/OPL steps must reuse.
+        Do not call ``get_ticket_status`` first; the create result is the
+        source of truth for what was written.
 
         Args:
             description: The problem / feedback content. First line
@@ -361,8 +376,23 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
             )
         )
         effective_finding = finding or description
+        if not opa_id:
+            # Reuse an existing pending OPA for the same target instead of
+            # duplicating it.  The lookup is O(1): target-uri-hash subdir.
+            existing_opas = await asyncio.to_thread(tools.get_opas, target_uri=effective_target, limit=50)
+            pending = [opa for opa in existing_opas if str(opa.get("status", "")).strip().lower() == "pending"]
+            if pending:
+                return {
+                    "opa_id": pending[0].get("opa_id", ""),
+                    "uri": pending[0].get("uri", ""),
+                    "title": pending[0].get("title", ""),
+                    "target_uri": effective_target,
+                    "status": "pending",
+                    "reused": True,
+                }
         return await asyncio.to_thread(
-            tools.create_opa,
+            _safe_create_opa,
+            tools,
             opa_id=opa_id,
             title=effective_title,
             description=description,
@@ -375,6 +405,7 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
             finding=effective_finding,
             missing=missing or description,
             recommendation=recommendation or effective_finding,
+            skip_dedupe_lookup=True,
         )
 
     async def create_ops_ticket(
@@ -400,8 +431,9 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
         ``suggested_resolution`` → suggestion, ``cited_references[].uri``
         plus ``evidence`` (修改关联的uri) → evidence URIs.
 
-        Use ``get_ticket_status`` to see existing OPS records for an OPA
-        before deciding whether to create or revise.
+        Create or revise the OPS under ``parent_opa`` — the ``viking://`` URI
+        returned by ``create_opa_ticket``. Do not call ``get_ticket_status``
+        to rediscover the parent; pass the returned URI directly.
 
         Args:
             suggestion: The expert's recommendation. First line becomes
@@ -479,8 +511,8 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
 
         Pass ``status`` to transition the draft — ``unconfirmed`` |
         ``confirmed`` | ``rejected``; confirming or rejecting requires
-        ``reviewed_by``. Use ``get_ticket_status`` to read the current
-        record before patching.
+        ``reviewed_by``. Reuse the ``ops_uri`` returned by
+        ``create_ops_ticket``; do not rediscover it via ``get_ticket_status``.
 
         Args:
             ops_uri: ``viking://`` URI of the existing OPS ticket.
@@ -746,9 +778,15 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
             ``op_flow`` state.
         """
         opas = await asyncio.to_thread(tools.get_opas, target_uri=target_uri, limit=limit)
-        ops = await asyncio.to_thread(tools.get_ops, parent_opa=parent_opa, limit=limit)
-        opls = await asyncio.to_thread(tools.get_opls, parent_opa=parent_opa, limit=limit)
-        op_flow = await asyncio.to_thread(tools.op_flow_status, limit=limit)
+        ops = await asyncio.to_thread(tools.get_ops, parent_opa=parent_opa, target_uri=target_uri, limit=limit)
+        opls = await asyncio.to_thread(tools.get_opls, parent_opa=parent_opa, target_uri=target_uri, limit=limit)
+        # op_flow_status is a global scan (get_opas 500 + get_ops 10000) — skip
+        # it when a single target_uri is queried; it's irrelevant to per-target
+        # ticket lookup and dominates latency on remote backends.
+        if target_uri:
+            op_flow: dict[str, Any] = {}
+        else:
+            op_flow = await asyncio.to_thread(tools.op_flow_status, limit=limit)
         authority = await asyncio.to_thread(
             tools.get_expert_authority,
             target_uri=target_uri,

@@ -171,6 +171,26 @@ async def test_resolve_resource_read_raises_exception() -> None:
     assert result is None
 
 
+async def test_resolve_resource_http_url_dispatched_to_providers() -> None:
+    """http(s) URIs are legal MCP resource schemes — forwarded, not rejected."""
+    cap = FakeResourceAccess(
+        read_result=[TextResourceContent(text="web doc", uri="https://example.com/page")]
+    )
+    result = await resolve_resource_content(
+        "https://example.com/page", resource_caps=[cap], skill_caps=[]
+    )
+    assert result == ['<resource uri="https://example.com/page">\nweb doc\n</resource>']
+
+
+async def test_resolve_resource_http_url_unowned_returns_none() -> None:
+    """http(s) URI no provider owns → providers consulted, result None."""
+    cap = FakeResourceAccess(read_result=None)
+    result = await resolve_resource_content(
+        "https://example.com/page", resource_caps=[cap], skill_caps=[]
+    )
+    assert result is None
+
+
 async def test_resolve_resource_mixed_text_and_binary() -> None:
     """Both TextResourceContent and BlobResourceContent returned → all items in output."""
     blob_data = base64.b64encode(b"pic").decode()

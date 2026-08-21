@@ -1,0 +1,121 @@
+# 知识库故障诊断 Agent —— 包装 knowledge_diag MCP 服务器
+#
+# 机制说明见 docs/explanation/tool-schema-overlap-capability.md：
+#   - type: mcp               接入远程知识库 MCP 服务器（streamable-http）
+#   - type: tool-schema-overlap  重写工具/参数描述，让模型知道何时、如何使用每个工具
+#
+# 运行示例：
+#   wolfharness run knowledge_diag_agent "SY215C 液压系统压力标准值是多少?" \
+#       --config examples/kb_diag_agent.yaml
+agents:
+  knowledge_diag_agent:
+    type: native
+    model: openai:gpt-4o-mini # ← 按实际部署的模型替换
+    capabilities:
+      # ── 1) 接入知识库 MCP 服务器 ──────────────────────────────────────
+      - type: mcp
+        args:
+          config:
+            type: streamable-http
+            name: knowledge_diag
+            url: https://sprouts-dev-app-frontend.sany.com.cn/api-mcp/knowledge_diag/mcp
+            # 去掉 search_kb 接口：若仍需保留该工具，删除下一行即可
+            disabled_tools:
+              - search_kb
+          # servers 段的键必须与该 name 一致（缺省时回退 config 的 client_id）
+          name: knowledge_diag
+
+      # ── 2) 工具描述包装：配置键为 MCP 原始工具名，前缀不参与匹配 ──────
+      - type: tool-schema-overlap
+        args:
+          servers:
+            knowledge_diag:
+              read_resource:
+                description: |-
+                  按 URI 读取知识库资源的完整内容（章节正文、章节目录树、文本片段、表格或图片）。
+
+                  这是检索工作流的主要跟进工具，典型路径：
+                  1. 目录浏览路径：list_resources() → 选定知识库与文档 →
+                     read_resource(kb://documents/{document_id}/toc) 获取目录树 →
+                     复制章节/图片 URI → read_resource(uri)；
+                  2. 检索路径：若环境中提供语义检索工具（如 search_kb），复制其结果中的
+                     primary_uri 或 chapter_uri → read_resource(uri)；
+                  3. 对来源不明的 URI（用户口述、历史陈旧结果、手工选择的目录条目），
+                     可先 check_resource_exists(uri) 预检，再读取。
+
+                  使用要求：
+                  - uri 是唯一入参，必须直接复制上一步工具输出中的 URI
+                    （primary_uri / chapter_uri / chunk_uri / toc_uri 等），
+                    不要自行编造章节 ID，不要在 URI 末尾追加 /text 等后缀；
+                  - URI 中的 ID 为英文格式。
+
+                  支持的 URI 形式：
+                  - kb://documents/{document_id} —— 文档
+                  - kb://documents/{document_id}/toc —— 章节目录树
+                    （无目录时返回 NO TOC，应改用检索或直接读章节）
+                  - kb://chapters/{chapter_id} —— 章节正文
+                  - kb://chunks/{chunk_id} —— 文本片段
+                  - kb://tables/{table_id} —— 表格
+                  - kb://images/{image_id} —— 图片（返回 base64 图片内容与 mimeType，
+                    可直接用于多模态理解）
+
+                  返回内容带有结构化 metadata（primary_uri / previous_uri / next_uri /
+                  page_start / page_end 等），可据此读取相邻章节或继续翻页。
+                param_descriptions:
+                  uri: |-
+                    要读取的资源 URI（kb:// 协议，英文格式）。直接从 list_resources /
+                    check_resource_exists 或检索工具的输出中复制（如 primary_uri、
+                    chapter_uri、toc_uri、图片 URI），不要自行编造 ID 或改写 URI 结构。
+
+              check_resource_exists:
+                description: |-
+                  轻量预检：确认一个 kb:// URI 是否有效且存在，不返回资源正文。
+
+                  这是 read_resource 之前的可选防护步骤，不是主要检索工具：
+                  - URI 来自用户口述、历史陈旧结果或手工选择的目录条目时，先用本工具
+                    确认存在再读取，避免 read_resource 读取失败；
+                  - URI 是 list_resources 或检索工具刚返回的，可以跳过本工具直接
+                    read_resource。
+
+                  支持的 URI 形式与 read_resource 一致：
+                  - kb://documents/{document_id}
+                  - kb://documents/{document_id}/toc
+                  - kb://chapters/{chapter_id}
+                  - kb://chunks/{chunk_id}
+                  - kb://tables/{table_id}
+                  - kb://images/{image_id}
+
+                  返回 status=exists 表示该资源可读。URI 应直接复制自已有工具输出。
+                param_descriptions:
+                  uri: |-
+                    待检查的资源 URI（kb:// 协议，英文格式）。直接复制自已有工具输出或
+                    用户提供的内容，不要自行编造 ID。
+
+              list_resources:
+                description: |-
+                  列出当前环境的快照知识库及其包含的文档（按机型组织）。
+
+                  这是尚无任何 URI 时的第一步发现工具：
+                  list_resources() → 选定知识库 → list_resources(knowledge_id) →
+                  选定文档 → read_resource(kb://documents/{document_id}/toc)。
+
+                  何时使用：
+                  - 不知道环境里有哪些知识库：不带参数（或 knowledge_id 留空）调用，
+                    返回知识库列表；
+                  - 已知知识库、想查看其中有哪些文档：传入 knowledge_id
+                    （多个知识库用英文逗号分隔）。
+
+                  返回说明：
+                  - 知识库记录包含 id 与名称；文档记录包含 document_id
+                    （拼成 kb://documents/{document_id} 使用）、名称、适用机型与页数；
+                  - 将文档的 document_id 直接用于构造 toc URI 或 read_resource，
+                    不要编造文档 ID。
+                param_descriptions:
+                  knowledge_id: |-
+                    知识库 ID，可选；多个用英文逗号分隔。留空或不传时返回当前环境的
+                    全部知识库列表，而不是文档列表。
+                  offset_page: |-
+                    结果分页的起始页码，可选，默认 1（从 1 开始计数；小于 1 按 1 处理）。
+                  limit_page: |-
+                    最多拉取的结果页数，可选，默认 1；每页 20 条；小于 1 按 1 处理，
+                    大于 5 会抛出异常。

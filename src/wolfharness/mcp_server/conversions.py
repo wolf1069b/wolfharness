@@ -136,9 +136,9 @@ async def from_mcp_content(
                 decoded_data = base64.b64decode(data)
                 content = BinaryContent(data=decoded_data, media_type=mime_type)
                 contents.append(content)
-            case BlobResourceContents(blob=blob):
+            case BlobResourceContents(blob=blob, mimeType=blob_mime_type):
                 decoded_data = base64.b64decode(blob)
-                mime = "application/octet-stream"
+                mime = blob_mime_type or "application/octet-stream"
                 content = BinaryContent(data=decoded_data, media_type=mime)
                 contents.append(content)
             case ResourceLink(uri=uri, mimeType=mime_type) if client:

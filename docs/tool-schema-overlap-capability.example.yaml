@@ -1,0 +1,102 @@
+# ToolSchemaOverlapCapability 配置示例
+#
+# 能力级工具 schema 语义适配:不改 MCP 服务端与子能力源码,按配置改写
+# agent 已装配工具的模型可见 schema —— 工具/参数改名、描述改写、类型/枚举/
+# 默认值覆写、增删参数;运行期自动还原参数后调用上游。
+# servers 按服务器隔离(键 = McpServerCap name/client_id),global_overrides
+# 跨服务器兜底,同名时 servers 优先。配置键永远是原始 MCP 工具名/参数名,
+# tool_prefix 不参与匹配。
+# 详见 docs/explanation/tool-schema-overlap-capability.md
+---
+# 示例 1:完整语义适配 —— 改名 + 描述 + 参数改名 + 删参补默认 + 增参
+#   模型看到 fetch_weather(city, units?),运行期还原为
+#   get_weather(location, api_key=sk-default, units=celsius) 调上游。
+agents:
+  weather-assistant:
+    model: openai:gpt-4o-mini
+    capabilities:
+      - type: mcp
+        args:
+          config:
+            type: streamable-http
+            name: weather
+            url: https://mcp.example.com/weather
+          name: weather           # servers 键必须与该 name 一致(缺省回退 config 的 client_id)
+          tool_prefix: weather    # 可选;不影响本能力的配置键
+      - type: tool-schema-overlap
+        args:
+          servers:
+            weather:
+              get_weather:
+                name: fetch_weather
+                description: 查询指定城市的当前天气
+                param_names:
+                  location: city
+                param_descriptions:
+                  location: 城市名,如 Beijing
+                param_removals:
+                  - api_key
+                param_overrides:
+                  api_key:
+                    default: sk-default
+                param_additions:
+                  units:
+                    type: string
+                    enum: [celsius, fahrenheit]
+                    default: celsius
+---
+# 示例 2:跨服务器兜底 —— global_overrides 作用于任意服务器的同名工具
+#   两台搜索服务器的 search 工具统一描述;服务器级配置存在时优先生效。
+agents:
+  research-agent:
+    model: openai:gpt-4o-mini
+    capabilities:
+      - type: mcp
+        args:
+          config:
+            type: streamable-http
+            name: web-a
+            url: https://mcp.example.com/web-a
+          name: web-a
+      - type: mcp
+        args:
+          config:
+            type: streamable-http
+            name: web-b
+            url: https://mcp.example.com/web-b
+          name: web-b
+      - type: tool-schema-overlap
+        args:
+          servers:
+            web-a:
+              search:
+                name: web_search
+                description: Web-A 站内搜索
+          global_overrides:
+            search:
+              description: Search the web.
+---
+# 示例 3:与展示层叠加 —— schema 改写在 ToolDisplayCapability 内层
+#   模型可见 fetch_weather,协议客户端再按展示名渲染;调用自动逐层还原。
+agents:
+  display-demo:
+    model: openai:gpt-4o-mini
+    capabilities:
+      - type: mcp
+        args:
+          config:
+            type: streamable-http
+            name: weather
+            url: https://mcp.example.com/weather
+          name: weather
+      - type: tool-schema-overlap
+        args:
+          servers:
+            weather:
+              get_weather:
+                name: fetch_weather
+      - type: tool_display
+        args:
+          rename_mode: true
+          name_map:
+            fetch_weather: get-weather

@@ -353,6 +353,11 @@ class FileTeamState:
         sid: str = member.get("session_id", "")
         return sid if sid else None
 
+    def list_member_names(self, team_id: str) -> set[str]:
+        """Return the set of registered member names for a team."""
+        state = self._read_json(self._state_path(team_id))
+        return set(state.get("members", {}).keys())
+
     def get_member_agent(self, team_id: str, member_name: str) -> str | None:
         """Return the registered agent role behind one team member name."""
         state = self._read_json(self._state_path(team_id))

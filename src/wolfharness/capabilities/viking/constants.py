@@ -44,3 +44,9 @@ IMAGE_MIME_TYPES: dict[str, str] = {
     ".ico": "image/x-icon",
     ".jp2": "image/jp2",
 }
+
+# Upper bound for image bytes returned to a model after base64 encoding.
+# Larger images degrade to a text URI hint — full-res blobs would blow the
+# model context on both the tool path and the OpenCode converter path (which
+# has no budget). Applies to ``read_resource`` blob serving.
+IMAGE_BLOB_MAX_BYTES: int = 5 * 1024 * 1024
