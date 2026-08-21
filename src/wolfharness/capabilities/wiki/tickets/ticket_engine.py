@@ -21,6 +21,7 @@ from pathlib import Path
 import re
 from typing import TYPE_CHECKING
 
+from wolfharness.capabilities.wiki._helpers import _entity_batch_limit
 from wolfharness.capabilities.wiki.models import (
     OPA_CLOSURE_STATUSES,
     OPA_REASON_CODES,
@@ -2418,14 +2419,27 @@ class TicketEngine:
             "blockers": blockers,
         }
 
-    def ops_dispatch_plan(self, *, limit: int = 1000) -> dict[str, object]:
+    def ops_dispatch_plan(
+        self,
+        *,
+        limit: int = 1000,
+        max_parallel_shards: int | None = None,
+    ) -> dict[str, object]:
         """Code-generated, domain-grouped OPS dispatch plan for the conductor.
 
         Returns every open OPA that has no OPS draft yet, sorted cheapest
         repair first (``relation_missed`` before ``source_incomplete``) and
         grouped by target class so the conductor can dispatch the whole plan
         in one ``task_create_batch`` instead of hand-enumerating.
+
+        The plan also exposes a sharded view (``shards``): items grouped by
+        target class and chunked into ``_entity_batch_limit()``-sized OPS
+        work batches. ``max_parallel_shards`` caps how many shards are
+        dispatched in the current wave; ``remaining_count`` reports how many
+        shards are left for later waves.
         """
+        if max_parallel_shards is not None and max_parallel_shards < 1:
+            raise ValueError("max_parallel_shards must be positive when provided")
         checkpoint = self.store.read_json("index/build_checkpoint.json")
         build_id = (
             str(checkpoint.get("build_id", "")).strip() if isinstance(checkpoint, dict) else ""
@@ -2472,13 +2486,53 @@ class TicketEngine:
         by_domain: dict[str, int] = {}
         for row in items:
             by_domain[str(row["target_class"])] = by_domain.get(str(row["target_class"]), 0) + 1
+        grouped_by_class: dict[str, list[dict[str, object]]] = {}
+        for row in items:
+            grouped_by_class.setdefault(str(row["target_class"]), []).append(row)
+        all_shards: list[dict[str, object]] = []
+        shard_index = 0
+        for target_class in sorted(grouped_by_class):
+            class_items = grouped_by_class[target_class]
+            for start in range(0, len(class_items), _entity_batch_limit()):
+                shard_index += 1
+                chunk = class_items[start : start + _entity_batch_limit()]
+                opa_ids = [str(row["opa_id"]) for row in chunk]
+                shard_id = f"ops_{target_class.casefold()}_{shard_index}"
+                task_description = "\n".join(
+                    [
+                        "worker_role: wiki_ops_worker",
+                        "depends_on_stage: opa_discovered",
+                        "ops_planner: ops_dispatch_plan",
+                        f"ops_shard_id: {shard_id}",
+                        f"write_scope: ops_draft:{shard_id}",
+                        f"opa_ids: {json.dumps(opa_ids, ensure_ascii=False)}",
+                        (
+                            "worker_task: read each OPA and its evidence, then create an "
+                            "unconfirmed OPS draft proposing the repair for that OPA"
+                        ),
+                        "expected_artifacts: unconfirmed_ops_drafts",
+                    ],
+                )
+                all_shards.append(
+                    {
+                        "shard_id": shard_id,
+                        "worker_role": "wiki_ops_worker",
+                        "opa_ids": opa_ids,
+                        "item_count": len(chunk),
+                        "task_description": task_description,
+                    },
+                )
+        shards = all_shards[:max_parallel_shards] if max_parallel_shards is not None else all_shards
+        remaining_count = len(all_shards) - len(shards)
         return {
             "build_id": build_id,
             "open_opa_count": len(open_opas),
             "to_dispatch": len(items),
             "already_has_ops": len(open_opas) - len(items),
             "by_domain": by_domain,
-            "items": items,
+            "items": items,  # keep flat list for backward compat
+            "shards": shards,  # NEW: sharded view
+            "remaining_count": remaining_count,  # NEW
         }
 
     def op_flow_report(
@@ -2671,6 +2725,7 @@ class TicketEngine:
         unclassified: list[dict[str, str]] = []
         repair_only_count = 0
         unclassified_count = 0
+        skipped_low_value = 0
         # Cross-issue caches: avoid re-reading the same entity / raw source
         # for every issue that targets the same URI.  Without these caches
         # discover_opa makes ~1500+ HTTP round-trips for a 500-issue audit.
@@ -2733,8 +2788,28 @@ class TicketEngine:
                 skipped.append(item)
                 unclassified.append(item)
                 continue
-            category = disposition_value
+            # Skip known low-value issue classes before materializing an OPA.
+            # The audit prompt already avoids these; enforce it in code so a
+            # prompt drift cannot flood the OPA ledger with noise.
             target_section = self._opa_target_section(message, code)
+            root_prefix = self.store.root_uri.rstrip("/") + "/"
+            target_class = target_uri.removeprefix(root_prefix).split("/")[0] if target_uri else ""
+            is_low_value = (
+                reason_code == "relation_missed"
+                or (
+                    target_section.startswith("frontmatter:")
+                    and reason_code not in {"content_missing", "fact_conflict"}
+                )
+                or (
+                    target_class in {"Procedure", "DTC", "Part"}
+                    and reason_code in {"relation_missed", "extraction_missed"}
+                )
+            )
+            if is_low_value:
+                skipped_low_value += 1
+                skipped.append({"code": code, "reason": "low-value audit issue"})
+                continue
+            category = disposition_value
             content = _cached_read_entity(target_uri) or ""
             frontmatter = parse_frontmatter(content)
             evidence = self._list_value(frontmatter.get("sources"))
@@ -2766,8 +2841,14 @@ class TicketEngine:
             )
             category_label = "内容缺失" if category == "gap" else "知识冲突"
             issue_concept = str(issue.get("concept", "")).strip()
+            entity_name = target_uri.rstrip("/").rsplit("/", 1)[-1].removesuffix(".md")
+            if entity_name and entity_name not in issue_concept:
+                prefix = f"{category_label}: {entity_name}"
+            else:
+                prefix = f"{category_label}:"
+            title = f"{prefix} {issue_concept} {target_section}".strip()
             result = self.create_opa(
-                title=f"{category_label}: {issue_concept} {target_section}".strip(),
+                title=title,
                 description=message,
                 category=category,
                 reason_code=reason_code,
@@ -2788,6 +2869,7 @@ class TicketEngine:
             "profile": profile,
             "repair_only_count": repair_only_count,
             "unclassified_count": unclassified_count,
+            "skipped_low_value": skipped_low_value,
             "created": created,
             "skipped": skipped,
             "unclassified": unclassified,

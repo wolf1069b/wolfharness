@@ -2728,6 +2728,28 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         if session_pool is None:
             return ToolReturn(return_value="SessionPool not available")
 
+        # Bounds: max_parallel_members check (concurrent active workers).
+        max_parallel = self._config.bounds.max_parallel_members
+        if max_parallel > 0:
+            active_count = 0
+            for mname, member in members.items():
+                if mname == lead_member_name:
+                    continue
+                member_sid = (
+                    member.get("session_id", "") if isinstance(member, dict) else ""
+                )
+                if member_sid and self._session_has_live_run(session_pool, member_sid):
+                    active_count += 1
+            if active_count >= max_parallel:
+                return ToolReturn(
+                    return_value=(
+                        f"Team exceeds max_parallel_members "
+                        f"({active_count} active workers >= {max_parallel}). "
+                        "Wait for active workers to become idle or shutdown "
+                        "completed workers."
+                    )
+                )
+
         normalized_initial_task_id = initial_task_id.strip()
         if initial_task is not None and normalized_initial_task_id:
             return ToolReturn(

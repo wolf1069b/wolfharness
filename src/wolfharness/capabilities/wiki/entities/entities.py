@@ -102,19 +102,21 @@ class EntityWriteMixin:
                 ],
             ),
         )
-        opa_id = (
-            f"opa-merge-{sha256((uri + chr(31).join(changed_facts)).encode()).hexdigest()[:20]}"
-        )
+        entity_name = uri.rstrip("/").rsplit("/", 1)[-1].removesuffix(".md") or concept
+        slug = re.sub(r"[^A-Za-z0-9_-]+", "-", entity_name).strip("-") or "entity"
+        conflict_key = uri + chr(31).join(changed_facts)
+        conflict_digest = sha256(conflict_key.encode()).hexdigest()[:12]
+        opa_id = f"opa-merge-{slug}-{conflict_digest}"
         record = self.create_opa(
             opa_id=opa_id,
-            title=f"{concept} 增量合并事实冲突",
+            title=f"{entity_name} — {concept} 增量合并事实冲突",
             description=f"同一实体的重复构建输入产生了不同事实：{uri}",
             category="conflict",
             reason_code="fact_conflict",
             target_uri=uri,
             target_section="增量合并事实",
             evidence_uris=evidence,
-            finding="\n".join(changed_facts[:20]),
+            finding="以下参数在重复构建中出现了不一致值：\n" + "\n".join(changed_facts[:20]),
             missing="在人工裁决前，无法确认哪一组事实适用于当前机型或配置。",
             recommendation="保留双方证据，按机型和来源裁决；不得静默覆盖旧事实。",
         )
