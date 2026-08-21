@@ -331,6 +331,121 @@ async def test_lazy_init_connection_on_first_list_tools() -> None:
     assert pool.get_client_call_count == 1
 
 
+@pytest.mark.anyio
+async def test_lazy_init_direct_client_fallback() -> None:
+    """_ensure_client() creates direct MCPClient when no session pool."""
+    from unittest.mock import AsyncMock, patch
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+
+    with patch("wolfharness.mcp_server.client.MCPClient", return_value=mock_client):
+        cap = McpServerCap(config=_make_config())  # No session_pool, no client
+
+        assert cap._client is None
+        assert cap._session_pool is None
+
+        client = await cap._ensure_client()
+
+        assert client is mock_client
+        assert cap._client is mock_client
+        mock_client.__aenter__.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_list_tools_with_direct_client_fallback() -> None:
+    """list_tools() works with MCPClient created via fallback (no session pool)."""
+    from unittest.mock import AsyncMock, patch
+
+    tool = _make_tool("test_tool", "A test tool")
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.list_tools.return_value = [tool]
+
+    with patch("wolfharness.mcp_server.client.MCPClient", return_value=mock_client):
+        cap = McpServerCap(config=_make_config())
+
+        result = await cap.list_tools()
+
+        assert len(result) == 1
+        assert result[0].name == "test_tool"
+        mock_client.list_tools.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_direct_client_fallback_aexit() -> None:
+    """__aexit__ cleans up MCPClient created via fallback (no session pool)."""
+    from unittest.mock import AsyncMock, patch
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+
+    with patch("wolfharness.mcp_server.client.MCPClient", return_value=mock_client):
+        cap = McpServerCap(config=_make_config())
+
+        await cap._ensure_client()
+        assert cap._client is mock_client
+
+        await cap.__aexit__(None, None, None)
+
+        assert cap._client is None
+        mock_client.__aexit__.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_dict_config_normalized_at_init() -> None:
+    """Raw dict config is normalized to MCPServerConfig at __init__ time."""
+    from wolfharness_config.mcp_server import StreamableHTTPMCPServerConfig
+
+    raw_dict = {
+        "type": "streamable-http",
+        "name": "knowledge_diag",
+        "url": "http://localhost:9999/test",
+    }
+    cap = McpServerCap(config=raw_dict)
+
+    # MCPServerConfig is an Annotated type alias — can't use isinstance().
+    # Verify by checking the concrete type and attributes.
+    assert isinstance(cap.config, StreamableHTTPMCPServerConfig)
+    assert cap.config.display_name == "knowledge_diag"
+    # Without explicit name, name defaults to config.client_id
+    # (which is auto-generated from type+url, not from the json name field)
+
+
+@pytest.mark.anyio
+async def test_dict_config_ensure_client_creates_mcpclient() -> None:
+    """_ensure_client() works with dict config (normalized at init)."""
+    from unittest.mock import AsyncMock, patch
+
+    from wolfharness_config.mcp_server import StreamableHTTPMCPServerConfig
+
+    raw_dict = {
+        "type": "streamable-http",
+        "name": "knowledge_diag",
+        "url": "http://localhost:9999/test",
+    }
+
+    # Track what MCPClient receives
+    received_config: object = None
+
+    def _capture_config(*args: object, **kwargs: object) -> AsyncMock:
+        nonlocal received_config
+        received_config = kwargs.get("config")
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        return mock_client
+
+    with patch("wolfharness.mcp_server.client.MCPClient", side_effect=_capture_config):
+        cap = McpServerCap(config=raw_dict)
+
+        client = await cap._ensure_client()
+
+        assert client is not None
+        # Verify MCPClient received an MCPServerConfig, not a raw dict
+        assert isinstance(received_config, StreamableHTTPMCPServerConfig)
+        assert received_config.display_name == "knowledge_diag"
+
+
 # ---------------------------------------------------------------------------
 # Delegation tests
 # ---------------------------------------------------------------------------

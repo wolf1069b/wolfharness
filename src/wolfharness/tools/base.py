@@ -303,6 +303,7 @@ class Tool[TOutputType = Any]:
                 name=schema_override.get("name", tool_def.name),
                 description=schema_override.get("description", tool_def.description),
                 parameters_json_schema=parameters_json_schema,
+                metadata=tool_def.metadata,
             )
 
         return prepare_override
@@ -476,10 +477,11 @@ class Tool[TOutputType = Any]:
                 json_schema=json_schema,
                 takes_ctx=takes_ctx,
             )
-            # Tool.from_schema doesn't accept prepare or requires_approval,
-            # assign them manually after construction.
+            # Tool.from_schema doesn't accept prepare, requires_approval, or
+            # metadata, so assign them manually after construction.
             tool_instance.prepare = self._get_effective_prepare()  # type: ignore[assignment]
             tool_instance.requires_approval = requires_approval
+            tool_instance.metadata = metadata
             return tool_instance
         # No custom schema, let pydantic-ai infer it automatically
         return PydanticAiTool(
