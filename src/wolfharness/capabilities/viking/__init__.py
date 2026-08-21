@@ -1002,16 +1002,24 @@ class VikingCapability(AbstractCapability[Any]):
     ) -> list[TextResourceContent | BlobResourceContent] | None:
         """Read a Viking resource by URI.
 
-        Uses the configured ``resource_read_level`` to determine content
-        depth (L0 abstract, L1 overview, or L2 full content). Falls back
-        to L2 (``client.read``) if the requested level is unavailable.
+        For image resources (png/jpg/jpeg/gif/webp/bmp), returns
+        ``BlobResourceContent`` with the raw image bytes — regardless of
+        ``support_vision``.  ``support_vision`` only gates the
+        ``viking_read`` LLM tool (which returns content to the model
+        conversation); ``read_resource`` is a programmatic API that always
+        returns the actual content.
+
+        For text resources, uses the configured ``resource_read_level`` to
+        determine content depth (L0 abstract, L1 overview, or L2 full
+        content). Falls back to L2 (``client.read``) if the requested level
+        is unavailable.
 
         Args:
             uri: The Viking URI of the resource to read.
 
         Returns:
-            A list containing a ``TextResourceContent`` with the resource
-            content, or ``None`` if not found or on error.
+            A list containing ``TextResourceContent`` or
+            ``BlobResourceContent``, or ``None`` if not found or on error.
         """
         if self._check_uri_allowed(uri, tool_name="read_resource") is not None:
             return None
@@ -1019,9 +1027,11 @@ class VikingCapability(AbstractCapability[Any]):
             client = await self._ensure_client()
 
             # Image resources are served as decoded blob bytes (with their
-            # MIME type) so vision-capable models can consume them directly —
-            # mirrors ``viking_read``. SVG stays on the text path: most vision
-            # APIs reject the vector format.
+            # MIME type) regardless of ``support_vision`` — ``read_resource``
+            # is a programmatic API, not an LLM-facing tool. ``support_vision``
+            # only gates ``viking_read`` (which returns content to the model
+            # conversation). SVG stays on the text path: most vision APIs
+            # reject the vector format.
             from pathlib import PurePosixPath
 
             from wolfharness.capabilities.viking.constants import (
@@ -1034,12 +1044,7 @@ class VikingCapability(AbstractCapability[Any]):
             )
 
             suffix = PurePosixPath(uri).suffix.lower()
-            if (
-                suffix in IMAGE_EXTENSIONS
-                and suffix != ".svg"
-                and uri.startswith("viking://")
-                and self._should_return_image_bytes()
-            ):
+            if suffix in IMAGE_EXTENSIONS and suffix != ".svg" and uri.startswith("viking://"):
                 data = await client.download_bytes(uri)
                 if len(data) > IMAGE_BLOB_MAX_BYTES:
                     from wolfharness.capabilities.viking.tools import _image_uri_hint
