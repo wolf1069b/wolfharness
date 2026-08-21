@@ -15,6 +15,7 @@ import time
 
 from wolfharness.capabilities.wiki.quality import (
     BuildProfile,
+    all_relation_uris,
     classify_raw_source_uri,
     extract_malformed_wiki_uris,
     extract_source_uris,
@@ -153,15 +154,10 @@ class RelationMixin:
             page = self.store.read_entity_by_uri(uri)
             if page is None:
                 continue
-            frontmatter = parse_frontmatter(page)
-            relation_uris = {
-                value.split("#", 1)[0]
-                for value in self._frontmatter_uri_values(
-                    self.store.root_uri, frontmatter, relation_field
-                )
-            }
+            relation_uris = all_relation_uris(page, concept, relation_field, self.store.root_uri)
             if component_uri not in relation_uris:
                 continue
+            frontmatter = parse_frontmatter(page)
             title = frontmatter.get("title")
             label = title.strip() if isinstance(title, str) and title.strip() else object_name
             links.append((label, uri))
@@ -272,14 +268,11 @@ class RelationMixin:
                 content = self.store.read_entity_by_uri(device_uri)
                 if content is None:
                     continue
-                device_frontmatter = parse_frontmatter(content)
-                device_components = set(
-                    self._frontmatter_uri_values(
-                        self.store.root_uri, device_frontmatter, "critical_components"
-                    )
+                device_components = all_relation_uris(
+                    content, "Device", "critical_components", self.store.root_uri
                 )
-                symptom_uris = self._frontmatter_uri_values(
-                    self.store.root_uri, device_frontmatter, "symptom_refs"
+                symptom_uris = all_relation_uris(
+                    content, "Device", "symptom_refs", self.store.root_uri
                 )
                 rows: dict[tuple[str, str, str], tuple[str, str, str, str]] = {}
 
@@ -298,33 +291,39 @@ class RelationMixin:
                         profile_content = self.store.read_entity_by_uri(profile_uri)
                         if profile_content is None:
                             continue
-                        profile_frontmatter = parse_frontmatter(profile_content)
-                        profile_devices = set(
-                            self._frontmatter_uri_values(
-                                self.store.root_uri, profile_frontmatter, "device_refs"
-                            )
+                        profile_devices = all_relation_uris(
+                            profile_content, "Symptom", "device_refs", self.store.root_uri
                         )
                         if profile_devices and device_uri not in profile_devices:
                             continue
-                        direct_component = self._frontmatter_uri_values(
-                            self.store.root_uri,
-                            profile_frontmatter,
-                            "direct_component_uri",
+                        direct_component = list(
+                            all_relation_uris(
+                                profile_content,
+                                "Symptom",
+                                "direct_component_uri",
+                                self.store.root_uri,
+                            )
                         )
-                        profile_faults = self._frontmatter_uri_values(
-                            self.store.root_uri,
-                            profile_frontmatter,
-                            "possible_faults",
+                        profile_faults = list(
+                            all_relation_uris(
+                                profile_content,
+                                "Symptom",
+                                "possible_faults",
+                                self.store.root_uri,
+                            )
                         )
                         for fault_uri in profile_faults:
                             fault_content = self.store.read_entity_by_uri(fault_uri)
                             if fault_content is None:
                                 continue
                             fault_frontmatter = parse_frontmatter(fault_content)
-                            affected_components = self._frontmatter_uri_values(
-                                self.store.root_uri,
-                                fault_frontmatter,
-                                "affected_components",
+                            affected_components = list(
+                                all_relation_uris(
+                                    fault_content,
+                                    "Fault",
+                                    "affected_components",
+                                    self.store.root_uri,
+                                )
                             )
                             component_candidates = [
                                 uri
@@ -456,6 +455,10 @@ class RelationMixin:
                 value = frontmatter.get(field)
                 values = relation_values(value)
                 if value is None or value == "" or value == []:
+                    # Body fallback: check if the body section has URIs before
+                    # flagging this field missing (body-first authoring).
+                    if all_relation_uris(content, str(concept), field, root_uri):
+                        continue
                     missing_fields.append(field)
                     continue
                 if (

@@ -45,6 +45,33 @@ def _configured_root(env_name: str) -> str:
 _wiki_root_uri = _configured_root("VIKING_NAMESPACE")
 _raw_source_root_uri = _configured_root("VIKING_RAW_NAMESPACE")
 
+# (concept or "_Profile") → {frontmatter_field: (body_section_heading, target_concept)}
+_BODY_LINK_MAP: dict[str, dict[str, tuple[str, str]]] = {
+    "Fault": {
+        "affected_components": (SECTION_IMPACT_SCOPE, "Component"),
+        "verification_procedures": (SECTION_VERIFICATION, "Procedure"),
+        "repair_procedures": (SECTION_REPAIR_METHOD, "Procedure"),
+    },
+    "DTC": {
+        "related_faults": (SECTION_POSSIBLE_FAILURE, "Fault"),
+    },
+    "_Profile": {
+        "possible_faults": (SECTION_POSSIBLE_FAILURE, "Fault"),
+    },
+    "Procedure": {
+        "target_components": ("操作目的", "Component"),
+    },
+    "Device": {
+        "critical_components": ("关重件清单", "Component"),
+    },
+}
+
+
+def _is_profile(content: str) -> bool:
+    """Detect Symptom Profile by presence of ``profile_id`` in frontmatter."""
+    fm = parse_frontmatter(content)
+    return "profile_id" in fm
+
 
 def _compile_wiki_regexes(root_uri: str) -> None:
     """Recompile URI-matching regexes against a root URI prefix."""
@@ -470,6 +497,41 @@ def extract_wiki_uris(content: str) -> set[str]:
     return result
 
 
+def all_relation_uris(
+    content: str, concept: str, field: str, root_uri: str = ""
+) -> set[str]:
+    """Get URIs for a relation field from frontmatter AND body section.
+
+    Checks frontmatter first; also extracts ``viking://`` URIs from the
+    corresponding body section per ``_BODY_LINK_MAP``.  Returns the
+    combined set (fragment-anchors stripped).
+    """
+    uris: set[str] = set()
+    frontmatter = parse_frontmatter(content)
+
+    # From frontmatter
+    fm_value = frontmatter.get(field)
+    prefix = root_uri.rstrip("/") + "/" if root_uri else ""
+    if isinstance(fm_value, str) and fm_value.strip():
+        if not prefix or fm_value.startswith(prefix):
+            uris.add(fm_value.split("#", 1)[0])
+    elif isinstance(fm_value, list):
+        for item in fm_value:
+            if isinstance(item, str) and item.strip() and (not prefix or item.startswith(prefix)):
+                uris.add(item.split("#", 1)[0])
+
+    # From body section (fallback for fields in _BODY_LINK_MAP)
+    body_key = "_Profile" if _is_profile(content) else concept
+    field_info = _BODY_LINK_MAP.get(body_key, {}).get(field)
+    if field_info:
+        heading, _ = field_info
+        sections = extract_sections(content)
+        section_text = sections.get(heading, "")
+        uris.update(u.split("#", 1)[0] for u in extract_wiki_uris(section_text))
+
+    return uris
+
+
 def extract_malformed_wiki_uris(content: str) -> list[str]:
     """Return class-only / placeholder ``{root_uri}/Concept/`` tails.
 
@@ -591,10 +653,13 @@ def confirmation_requirements(
     checks: list[RequirementCheck] = []
 
     def field_present(code: str, field: str, message: str, *, target_concepts: tuple[str, ...] = ()) -> None:
+        fm_present = _has_value(frontmatter.get(field)) or bool(
+            all_relation_uris(content, concept, field)
+        )
         checks.append(
             RequirementCheck(
                 code=code,
-                complete=_has_value(frontmatter.get(field)),
+                complete=fm_present,
                 message=message,
                 disposition=IssueDisposition.GAP,
                 opa_reason_code="content_missing",

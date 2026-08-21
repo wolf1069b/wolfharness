@@ -18,15 +18,11 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from wolfharness.capabilities.wiki.quality import (
+    _BODY_LINK_MAP,
+    _is_profile,
     extract_sections,
     extract_wiki_uris,
     parse_frontmatter,
-)
-from wolfharness.capabilities.wiki.section_constants import (
-    SECTION_IMPACT_SCOPE,
-    SECTION_POSSIBLE_FAILURE,
-    SECTION_REPAIR_METHOD,
-    SECTION_VERIFICATION,
 )
 
 if TYPE_CHECKING:
@@ -64,33 +60,6 @@ def clean_open_gap(content: str) -> str:
 
 
 # ── body-link materialization ─────────────────────────────────────────────
-
-# (concept or "_Profile") → {frontmatter_field: (body_section_heading, target_concept)}
-_BODY_LINK_MAP: dict[str, dict[str, tuple[str, str]]] = {
-    "Fault": {
-        "affected_components": (SECTION_IMPACT_SCOPE, "Component"),
-        "verification_procedures": (SECTION_VERIFICATION, "Procedure"),
-        "repair_procedures": (SECTION_REPAIR_METHOD, "Procedure"),
-    },
-    "DTC": {
-        "related_faults": (SECTION_POSSIBLE_FAILURE, "Fault"),
-    },
-    "_Profile": {
-        "possible_faults": (SECTION_POSSIBLE_FAILURE, "Fault"),
-    },
-    "Procedure": {
-        "target_components": ("操作目的", "Component"),
-    },
-    "Device": {
-        "critical_components": ("关重件清单", "Component"),
-    },
-}
-
-
-def _is_profile(content: str) -> bool:
-    """Detect Symptom Profile by presence of ``profile_id`` in frontmatter."""
-    fm = parse_frontmatter(content)
-    return "profile_id" in fm
 
 
 def _frontmatter_uri_list(frontmatter: dict[str, object], field: str) -> list[str]:
