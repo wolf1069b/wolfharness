@@ -86,12 +86,7 @@ class PacketMixin:
         """Hash schema and taxonomy rules that define materialization behavior."""
         package_root = Path(__file__).resolve().parents[4]
         config_paths = (
-            package_root
-            / "src"
-            / "xeno_adp_agentic"
-            / "wiki"
-            / "templates"
-            / "default_schema.yaml",
+            Path(__file__).resolve().parent.parent / "templates" / "default_schema.yaml",
             package_root / "config" / "component-taxonomy.yaml",
             package_root / "config" / "prompts" / "team" / "wiki_extraction_worker.j2",
         )
