@@ -14,7 +14,7 @@ Two categories of tools:
    chapter map, etc.) toggled by ``include_helpers``.
 
 External OP capabilities (OPA/OPS/OPL as tickets, the
-``wiki_external_expert`` role) now live in :mod:`wolfharness.capabilities.wiki.ticket`;
+``wiki_external_expert`` role) now live in :mod:`wolfharness.capabilities.wiki.tickets.ticket`;
 this module routes that role to ``ticket.build_ticket_tools``.
 """
 
@@ -512,7 +512,7 @@ def build_tools(cap: WikiBuildCapability) -> list[Callable[..., Any]]:
     Dispatches based on ``cap._config.role``:
 
     - ``wiki_external_expert`` → the ticket tools from
-      :mod:`wolfharness.capabilities.wiki.ticket`
+      :mod:`wolfharness.capabilities.wiki.tickets.ticket`
       (``build_ticket_tools``).
     - Any other role (or no role) → method wrappers from
       ``WikiBuildTools``.
@@ -532,7 +532,7 @@ def build_tools(cap: WikiBuildCapability) -> list[Callable[..., Any]]:
 
     # External expert role: read method-wrappers + ticket tools.
     if role == "wiki_external_expert":
-        from wolfharness.capabilities.wiki.ticket import build_ticket_tools
+        from wolfharness.capabilities.wiki.tickets.ticket import build_ticket_tools
 
         read_names = ROLE_TOOLS["wiki_external_expert"]
         if cap.config.tool_names:
@@ -571,12 +571,12 @@ def get_instructions(role: str | None) -> str | None:
     """Return guidance for the agent on available tools.
 
     For the external expert role, returns the ticket flow instructions
-    from :mod:`wolfharness.capabilities.wiki.ticket`.  For all other
+    from :mod:`wolfharness.capabilities.wiki.tickets.ticket`.  For all other
     roles, returns ``None`` (instructions come from the agent's system
     prompt).
     """
     if role == "wiki_external_expert":
-        from wolfharness.capabilities.wiki.ticket import get_ticket_instructions
+        from wolfharness.capabilities.wiki.tickets.ticket import get_ticket_instructions
 
         return get_ticket_instructions()
     return None

@@ -31,7 +31,7 @@ from xeno_adp_harness.quality import (
 from xeno_adp_harness.section_constants import SECTION_COMMON_FAULTS
 from xeno_adp_harness.validation import ENTITY_VALIDATION_HOOKS, run_entity_validation
 
-from .opa import opa_section_names
+from ..tickets.opa import opa_section_names
 
 
 _CASE_SOFT_REQUIREMENT_CODES = {

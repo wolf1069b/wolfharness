@@ -22,7 +22,7 @@ from xeno_adp_harness.quality import (
 
 logger = logging.getLogger(__name__)
 
-from ._helpers import _CHAPTER_COMPONENT_RE
+from .._helpers import _CHAPTER_COMPONENT_RE
 
 
 class MigrationMixin:

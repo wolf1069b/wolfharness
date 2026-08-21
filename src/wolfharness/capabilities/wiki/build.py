@@ -205,7 +205,7 @@ class WikiBuildCapability(
             )
         except ImportError:
             from wolfharness.capabilities.wiki.storage import create_wiki_store
-            from wolfharness.capabilities.wiki.ticket_engine import TicketEngine
+            from wolfharness.capabilities.wiki.tickets.ticket_engine import TicketEngine
 
             store = create_wiki_store(wiki_root)
             self._tools = TicketEngine(store)

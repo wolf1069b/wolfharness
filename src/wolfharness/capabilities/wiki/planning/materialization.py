@@ -22,7 +22,7 @@ from xeno_adp_harness.schema_loader import get_schema_version
 
 logger = logging.getLogger(__name__)
 
-from ._helpers import _entity_batch_limit, _materialization_task_byte_limit
+from .._helpers import _entity_batch_limit, _materialization_task_byte_limit
 
 
 class MaterializationMixin:

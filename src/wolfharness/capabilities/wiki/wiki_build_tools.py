@@ -48,11 +48,11 @@ from xeno_adp_harness.validation import (
     require_valid_entity,
 )
 
-from .audit import AuditCache, AuditMixin
-from .children import ChildrenMixin
-from .model_mapping import ModelMappingMixin
-from .opa import OPAMixin
-from .text_parsers import TextParsersMixin
+from .io.audit import AuditCache, AuditMixin
+from .io.children import ChildrenMixin
+from .io.model_mapping import ModelMappingMixin
+from .tickets.opa import OPAMixin
+from .io.text_parsers import TextParsersMixin
 
 
 logger = logging.getLogger(__name__)
@@ -60,15 +60,15 @@ logger = logging.getLogger(__name__)
 from ._helpers import _FORMAL_WRITE_HOOKS, _io_worker_limit
 
 
-from .bom import BomMixin
-from .chapters import ChapterMixin
-from .entities import EntityWriteMixin
-from .finalize import FinalizeMixin
-from .materialization import MaterializationMixin
-from .migration import MigrationMixin
-from .packets import PacketMixin
-from .patches import PatchMixin
-from .relations import RelationMixin
+from .planning.bom import BomMixin
+from .planning.chapters import ChapterMixin
+from .entities.entities import EntityWriteMixin
+from .entities.finalize import FinalizeMixin
+from .planning.materialization import MaterializationMixin
+from .io.migration import MigrationMixin
+from .entities.packets import PacketMixin
+from .entities.patches import PatchMixin
+from .planning.relations import RelationMixin
 
 
 class WikiBuildTools(

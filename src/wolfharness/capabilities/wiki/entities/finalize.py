@@ -28,7 +28,7 @@ from xeno_adp_harness.schema_loader import get_schema_version
 
 logger = logging.getLogger(__name__)
 
-from ._helpers import _with_publication_state
+from .._helpers import _with_publication_state
 
 
 class FinalizeMixin:

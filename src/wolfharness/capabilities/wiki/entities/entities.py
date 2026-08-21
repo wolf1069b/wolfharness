@@ -26,7 +26,7 @@ from xeno_adp_harness.validation import (
 
 logger = logging.getLogger(__name__)
 
-from ._helpers import _FORMAL_WRITE_HOOKS, _conflicting_facts, _entity_batch_limit, _internal_conflicting_facts
+from .._helpers import _FORMAL_WRITE_HOOKS, _conflicting_facts, _entity_batch_limit, _internal_conflicting_facts
 
 
 class EntityWriteMixin:

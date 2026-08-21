@@ -23,7 +23,7 @@ from xeno_adp_harness.validation import (
 
 logger = logging.getLogger(__name__)
 
-from ._helpers import _FORMAL_WRITE_HOOKS, _entity_batch_limit
+from .._helpers import _FORMAL_WRITE_HOOKS, _entity_batch_limit
 
 
 class PatchMixin:

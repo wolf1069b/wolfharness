@@ -31,7 +31,7 @@ from xeno_adp_harness.section_constants import (
 
 logger = logging.getLogger(__name__)
 
-from ._helpers import _RELATION_CLOSURE_READY_STAGES, _entity_batch_limit, _io_worker_limit
+from .._helpers import _RELATION_CLOSURE_READY_STAGES, _entity_batch_limit, _io_worker_limit
 
 
 class RelationMixin:

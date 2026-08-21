@@ -18,7 +18,7 @@ from xeno_adp_harness.section_constants import (
 
 logger = logging.getLogger(__name__)
 
-from ._helpers import _BOM_PATH_PLACEHOLDER_RE, _entity_batch_limit
+from .._helpers import _BOM_PATH_PLACEHOLDER_RE, _entity_batch_limit
 
 
 class BomMixin:
