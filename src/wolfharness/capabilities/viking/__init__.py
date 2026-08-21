@@ -922,18 +922,24 @@ class VikingCapability(AbstractCapability[Any]):
         if not isinstance(top_entries, list):
             return []
 
-        all_entries: list[dict[str, Any]] = []
-        for entry in top_entries:
-            if not isinstance(entry, dict):
-                continue
-            if entry.get("isDir"):
-                sub_uri = str(entry.get("uri") or "")
-                if sub_uri:
-                    sub_entries = await client.ls(sub_uri, recursive=True, node_limit=5000)
-                    if isinstance(sub_entries, list):
-                        all_entries.extend(e for e in sub_entries if isinstance(e, dict))
-            else:
-                all_entries.append(entry)
+        sub_uris = [
+            str(entry.get("uri"))
+            for entry in top_entries
+            if isinstance(entry, dict) and entry.get("isDir") and entry.get("uri")
+        ]
+        # Per-directory recursive ls in parallel; a slow directory must not
+        # serialize the rest.
+        sub_results = await asyncio.gather(
+            *[client.ls(sub_uri, recursive=True, node_limit=5000) for sub_uri in sub_uris],
+            return_exceptions=True,
+        )
+
+        all_entries: list[dict[str, Any]] = [
+            entry for entry in top_entries if isinstance(entry, dict) and not entry.get("isDir")
+        ]
+        for result in sub_results:
+            if isinstance(result, list):
+                all_entries.extend(e for e in result if isinstance(e, dict))
 
         resources: list[ResourceEntry] = []
         for entry in all_entries:
@@ -1055,6 +1061,55 @@ class VikingCapability(AbstractCapability[Any]):
             return None
         try:
             client = await self._ensure_client()
+
+            # Image resources are served as decoded blob bytes (with their
+            # MIME type) so vision-capable models can consume them directly —
+            # mirrors ``viking_read``. SVG stays on the text path: most vision
+            # APIs reject the vector format.
+            from pathlib import PurePosixPath
+
+            from wolfharness.capabilities.viking.constants import (
+                IMAGE_BLOB_MAX_BYTES,
+                IMAGE_EXTENSIONS,
+                IMAGE_MIME_TYPES,
+            )
+            from wolfharness.capabilities.resource_protocols import (
+                TextResourceContent,
+            )
+
+            suffix = PurePosixPath(uri).suffix.lower()
+            if (
+                suffix in IMAGE_EXTENSIONS
+                and suffix != ".svg"
+                and uri.startswith("viking://")
+                and self._should_return_image_bytes()
+            ):
+                data = await client.download_bytes(uri)
+                if len(data) > IMAGE_BLOB_MAX_BYTES:
+                    from wolfharness.capabilities.viking.tools import _image_uri_hint
+
+                    return [
+                        TextResourceContent(
+                            uri=uri,
+                            mime_type="text/plain",
+                            text=_image_uri_hint(uri),
+                        )
+                    ]
+                import base64
+
+                mime_type = IMAGE_MIME_TYPES.get(suffix, "application/octet-stream")
+                from wolfharness.capabilities.resource_protocols import (
+                    BlobResourceContent,
+                )
+
+                return [
+                    BlobResourceContent(
+                        uri=uri,
+                        mime_type=mime_type,
+                        blob=base64.b64encode(data).decode("ascii"),
+                    )
+                ]
+
             # Use configured read level (L0/L1/L2), fallback to L2 if unavailable
             content: str | None = None
             if self.resource_read_level == "abstract":
@@ -1072,10 +1127,6 @@ class VikingCapability(AbstractCapability[Any]):
 
             if not content:
                 return None
-
-            from wolfharness.capabilities.resource_protocols import (
-                TextResourceContent,
-            )
 
             return [
                 TextResourceContent(

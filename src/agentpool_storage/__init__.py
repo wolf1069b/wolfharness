@@ -14,6 +14,10 @@ import warnings
 from importlib import abc, machinery
 
 from wolfharness_storage import *  # noqa: F403
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import types
 
 warnings.warn(
     "``agentpool_storage`` has been renamed to ``wolfharness_storage``. "
@@ -28,6 +32,35 @@ def __getattr__(name: str) -> object:
     import wolfharness_storage
 
     return getattr(wolfharness_storage, name)
+
+
+class _AliasLoader(abc.Loader):
+    """Loader that returns an already-imported target module as-is.
+
+    ``create_module`` hands back the ``wolfharness`` module object itself,
+    so the import machinery registers it under the alias name without
+    re-executing the module code. Re-execution would produce duplicate
+    module and class objects, breaking identity-based checks such as
+    ``isinstance`` and ``ann is SomeClass``.
+    """
+
+    def __init__(
+        self,
+        module: types.ModuleType,
+        original_spec: machinery.ModuleSpec | None,
+    ) -> None:
+        self._module = module
+        self._original_spec = original_spec
+
+    def create_module(self, spec: machinery.ModuleSpec) -> types.ModuleType:
+        return self._module
+
+    def exec_module(self, module: types.ModuleType) -> None:
+        # ``_init_module_attrs`` overwrites ``__spec__`` with the alias spec
+        # before this runs. Restore the target module's own spec so that
+        # introspection and ``importlib.reload`` keep seeing the real module.
+        if self._original_spec is not None:
+            module.__spec__ = self._original_spec
 
 
 class _ShimFinder(abc.MetaPathFinder):
@@ -48,8 +81,11 @@ class _ShimFinder(abc.MetaPathFinder):
         except ModuleNotFoundError:
             return None
 
-        sys.modules[fullname] = wolf_mod
-        return machinery.ModuleSpec(fullname, loader=None)
+        # Do not pre-set ``sys.modules[fullname]`` here: if the alias is
+        # already present in ``sys.modules`` when ``_find_spec`` returns,
+        # CPython reuses the target module's own spec and ``_load_unlocked``
+        # re-executes the module file, duplicating every class defined in it.
+        return machinery.ModuleSpec(fullname, loader=_AliasLoader(wolf_mod, wolf_mod.__spec__))
 
 
 if not any(isinstance(f, _ShimFinder) for f in sys.meta_path):
