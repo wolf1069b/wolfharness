@@ -11,16 +11,7 @@ from typing import Literal, NotRequired, TypedDict, get_args
 import yaml
 
 from wolfharness.capabilities.wiki.namespaces import resources_root
-
-
-try:
-    from xeno_adp_harness.schema_loader import get_concept_schema
-except ImportError:
-    # ponytail: schema_loader lives in xeno_adp_harness which may not be installed
-    # when wolfharness is used standalone. Functions that need it already catch
-    # KeyError, so raising KeyError makes them return their conservative default.
-    def get_concept_schema(concept: str) -> dict:
-        raise KeyError(concept)
+from wolfharness.capabilities.wiki.schema_loader import get_concept_schema
 
 
 _SECTION_RE = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
