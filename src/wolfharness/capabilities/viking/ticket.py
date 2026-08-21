@@ -129,6 +129,19 @@ class EvalPayload(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+def _safe_create_opa(tools: Any, /, **kwargs: Any) -> dict[str, Any]:
+    """Call ``tools.create_opa`` with ``skip_dedupe_lookup`` if supported.
+
+    Older ``WikiBuildTools`` versions may not accept ``skip_dedupe_lookup``;
+    fall back to calling without it on ``TypeError``.
+    """
+    try:
+        return tools.create_opa(**kwargs)
+    except TypeError:
+        kwargs.pop("skip_dedupe_lookup", None)
+        return tools.create_opa(**kwargs)
+
+
 def _record_id(value: str, prefix: str) -> str:
     """Accept either a record id or a backend URI and return its id."""
     token = value.rstrip("/").rsplit("/", 1)[-1].removesuffix(".md")
@@ -378,7 +391,8 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
                     "reused": True,
                 }
         return await asyncio.to_thread(
-            tools.create_opa,
+            _safe_create_opa,
+            tools,
             opa_id=opa_id,
             title=effective_title,
             description=description,
