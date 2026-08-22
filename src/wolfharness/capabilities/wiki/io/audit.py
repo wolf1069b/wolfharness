@@ -65,12 +65,39 @@ _GAP_CATEGORY_MAP: dict[str, str] = {
 }
 
 
-def _classify_gap_category(code: str, opa_reason_code: str = "") -> str:
-    """Map an audit issue code to a gap triage category."""
+_CONTENT_HOOK_NAMES = frozenset({
+    "body_evidence",
+    "body_sections",
+    "source_ref",
+    "lightweight_materialization",
+    "working_mechanism",
+    "failure_mechanism",
+    "target_components",
+    "symptom_profile",
+})
+
+
+def _classify_gap_category(
+    code: str,
+    opa_reason_code: str = "",
+    disposition: str = "",
+) -> str:
+    """Map an audit issue code to a gap triage category.
+
+    Content-completeness hook findings (``hook.body_sections``, etc.) and
+    ``repair_only`` issues on already-materialized entities are content
+    limitations, not structural dependency gaps — classify them as
+    ``data_limitation`` so the finalize gate does not self-lock on its own
+    promotion artifacts.
+    """
     if code in _GAP_CATEGORY_MAP:
         return _GAP_CATEGORY_MAP[code]
     if opa_reason_code and opa_reason_code in _GAP_CATEGORY_MAP:
         return _GAP_CATEGORY_MAP[opa_reason_code]
+    if code.startswith("hook.") and code.removeprefix("hook.") in _CONTENT_HOOK_NAMES:
+        return "data_limitation"
+    if disposition == "repair_only":
+        return "data_limitation"
     if "物化身份" in code or "model" in code.lower():
         return "data_limitation"
     return "dependency_gap"
@@ -326,12 +353,17 @@ class AuditMixin(WikiBuildDeps):
         limit: int = 100,
         profile: BuildProfile = "manual",
         entity_uris: list[str] | None = None,
+        force_refresh: bool = False,
     ) -> WikiAuditReport:
         """Audit formal entities with a paginated actionable issue list.
 
         When ``entity_uris`` is provided, only those entities are audited
         (incremental mode).  Otherwise all entities (optionally filtered by
         ``concept``) are scanned.
+
+        ``force_refresh`` bypasses the in-memory audit cache.  Use it when
+        workers may have modified entities since the last full audit on this
+        instance (e.g. before finalize).
         """
         if offset < 0:
             raise ValueError("audit_wiki offset must be non-negative")
@@ -345,11 +377,21 @@ class AuditMixin(WikiBuildDeps):
         concept_filter = concept
         code_filter = code
 
+        # ponytail: stale-cache guard — the cache is per-instance and only
+        # invalidated by writes on THIS instance.  A conductor that never
+        # writes will serve a frozen snapshot forever.  Cheap entity-count
+        # probe (directory listing with its own TTL cache) catches adds/deletes;
+        # force_refresh covers content-only patches.
+        if force_refresh and self._audit_cache is not None:
+            self._audit_cache = None
         if (
             entity_uris is None
             and self._audit_cache is not None
             and self._audit_cache["profile"] == audit_profile
         ):
+            live_count = len(self.store.list_entities())
+            if live_count != self._audit_cache["entity_count"]:
+                self._audit_cache = None
             return self._finalize_audit_report(
                 issues=self._audit_cache["issues"],
                 coverage_counts=self._audit_cache["coverage_counts"],
@@ -974,6 +1016,7 @@ class AuditMixin(WikiBuildDeps):
                 issue["gap_category"] = _classify_gap_category(
                     issue.get("code", ""),
                     issue.get("opa_reason_code", ""),
+                    issue.get("disposition", ""),
                 )
         next_offset = offset + limit if offset + limit < len(filtered_issues) else -1
         return {

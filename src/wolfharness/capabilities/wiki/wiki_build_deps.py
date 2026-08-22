@@ -120,6 +120,7 @@ class WikiBuildDeps(Protocol):
         limit: int = 100,
         profile: BuildProfile = "manual",
         entity_uris: list[str] | None = None,
+        force_refresh: bool = False,
     ) -> WikiAuditReport: ...
     def get_opas(
         self,
