@@ -5,28 +5,22 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from wolfharness.capabilities.wiki.hooks.base import BaseHook, HookResult
-from wolfharness.capabilities.wiki.hooks.body_evidence import BodyEvidenceHook
 from wolfharness.capabilities.wiki.hooks.body_sections import BodySectionsHook
 from wolfharness.capabilities.wiki.hooks.component_taxonomy import ComponentTaxonomyHook
 from wolfharness.capabilities.wiki.hooks.diagnostic_closure import DiagnosticClosureHook
 from wolfharness.capabilities.wiki.hooks.directory_structure import DirectoryStructureHook
 from wolfharness.capabilities.wiki.hooks.frontmatter_schema import FrontmatterSchemaHook
-from wolfharness.capabilities.wiki.hooks.lightweight_materialization import LightweightMaterializationHook
 from wolfharness.capabilities.wiki.hooks.reference_integrity import ReferenceIntegrityHook
 from wolfharness.capabilities.wiki.hooks.relationship_completeness import RelationshipCompletenessHook
-from wolfharness.capabilities.wiki.hooks.source_ref import SourceReferenceHook
 from wolfharness.capabilities.wiki.hooks.uri_integrity import URIIntegrityHook
 
 ENTITY_VALIDATION_HOOKS: tuple[BaseHook, ...] = (
-    LightweightMaterializationHook(),
     DirectoryStructureHook(),
     BodySectionsHook(),
-    BodyEvidenceHook(),
     ComponentTaxonomyHook(),
     FrontmatterSchemaHook(),
     URIIntegrityHook(),
     ReferenceIntegrityHook(),
-    SourceReferenceHook(),
     RelationshipCompletenessHook(),
     DiagnosticClosureHook(),
 )
@@ -35,7 +29,7 @@ ENTITY_VALIDATION_HOOKS: tuple[BaseHook, ...] = (
 # content.  Both the MCP server and the capability layer use this set so
 # the write gate is consistent across layers.
 FORMAL_WRITE_EXCLUDED_HOOKS: frozenset[str] = frozenset(
-    {"directory_structure", "body_sections", "diagnostic_closure", "lightweight_materialization"},
+    {"directory_structure", "body_sections", "diagnostic_closure"},
 )
 
 

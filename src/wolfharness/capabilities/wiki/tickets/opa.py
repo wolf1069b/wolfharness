@@ -2495,9 +2495,13 @@ class OPAMixin(WikiBuildDeps):
                     disposition_value = policy.disposition.value
                     reason_code = reason_code or policy.opa_reason_code
             if disposition_value == IssueDisposition.REPAIR_ONLY.value:
-                repair_only_count += 1
-                skipped.append({"code": code, "reason": "repair_only audit issue"})
-                continue
+                # repair_only means the target concept is already materialized
+                # but a content/link gap remains. Convert to an open_gap OPA
+                # instead of silently skipping, so the finalize gate can see
+                # the tracked record and the limitation is explicitly recorded.
+                if not reason_code:
+                    reason_code = "content_limitation"
+                disposition_value = IssueDisposition.GAP.value
             if (
                 disposition_value
                 not in {

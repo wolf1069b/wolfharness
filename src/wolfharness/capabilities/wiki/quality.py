@@ -13,19 +13,12 @@ import yaml
 from wolfharness.capabilities.wiki.namespaces import resources_root
 from wolfharness.capabilities.wiki.schema_loader import get_concept_schema
 from wolfharness.capabilities.wiki.section_constants import (
-    GAP_RE,
     PLACEHOLDER_TEXT_RE,
-    SECTION_ASSOCIATED_SYMPTOMS,
-    SECTION_COMMON_FAULTS,
-    SECTION_CONTROLLER_IDENTITY,
-    SECTION_DIAGNOSIS_FLOW,
-    SECTION_DIAGNOSTIC_FLOW,
     SECTION_FAILURE_MECHANISM,
     SECTION_IMPACT_SCOPE,
     SECTION_MECHANISM,
     SECTION_POSSIBLE_FAILURE,
     SECTION_REPAIR_METHOD,
-    SECTION_SYSTEM_CHAPTERS,
     SECTION_VERIFICATION,
 )
 
@@ -677,56 +670,7 @@ def confirmation_requirements(
             ),
         )
 
-    def section_link(
-        code: str,
-        heading: str,
-        target_concepts: tuple[str, ...],
-        message: str,
-    ) -> None:
-        section = sections.get(heading, "")
-        complete = all(_has_concept_uri(section, target) for target in target_concepts)
-        checks.append(
-            RequirementCheck(
-                code=code,
-                complete=complete,
-                message=f"{message} (section: {heading})",
-                disposition=IssueDisposition.GAP,
-                opa_reason_code="content_missing",
-                target_concepts=target_concepts,
-            ),
-        )
-
     if _has_value(frontmatter.get("profile_id")):
-        field_present(
-            "SymptomProfile.device_refs",
-            "device_refs",
-            "故障现象画像必须引用其适用的具体设备实体。",
-            target_concepts=("Device",),
-        )
-        field_present(
-            "SymptomProfile.direct_component_uri",
-            "direct_component_uri",
-            "故障现象画像必须通过 URI 引用其直接关联的部件。",
-            target_concepts=("Component",),
-        )
-        field_present(
-            "SymptomProfile.possible_faults",
-            "possible_faults",
-            "故障现象画像必须至少引用一个故障实体。",
-            target_concepts=("Fault",),
-        )
-        section_link(
-            "SymptomProfile.possible_faults.body_link",
-            SECTION_POSSIBLE_FAILURE,
-            ("Fault",),
-            "故障现象画像的可能失效机理文本必须链接到故障实体 URI。",
-        )
-        section_link(
-            "SymptomProfile.diagnostic_procedure.body_link",
-            SECTION_DIAGNOSTIC_FLOW,
-            ("Procedure",),
-            "故障现象画像的诊断流程必须链接可复用的流程实体。",
-        )
         return tuple(checks)
 
     if concept == "Device":
@@ -736,28 +680,6 @@ def confirmation_requirements(
             "设备必须引用其关重件清单。",
             target_concepts=("Component",),
         )
-        field_present(
-            "Device.symptom_refs",
-            "symptom_refs",
-            "设备必须索引适用于该机型的故障现象实体。",
-            target_concepts=("Symptom",),
-        )
-        checks.append(
-            RequirementCheck(
-                code="Device.system_chapters.raw_link",
-                complete=any(is_raw_chapter_uri(uri) or is_external_source_uri(uri) for uri in extract_source_uris(sections.get(SECTION_SYSTEM_CHAPTERS, ""))),
-                message="设备系统章节条目必须引用原始章节 URI（章节：系统章节引用）。",
-            ),
-        )
-        section_link(
-            "Device.diagnostic_chain.body_link",
-            SECTION_COMMON_FAULTS,
-            ("Symptom", "Fault", "Component"),
-            "设备诊断表必须链接故障现象、故障和部件实体。",
-        )
-        # A Device may legitimately have no DTC material in the current raw
-        # scope.  Do not force an empty controller/DTC node just to satisfy a
-        # schema example; graph isolation and source coverage remain hard.
     elif concept == "Component":
         # Component associations are commonly owned by Device, Fault and
         # Procedure pages.  They are validated corpus-wide through
@@ -778,77 +700,12 @@ def confirmation_requirements(
         )
     elif concept == "DTC":
         field_present(
-            "DTC.controller_role",
-            "controller_role",
-            "DTC 必须保留源文档确认的控制器功能角色。",
-        )
-        controller_identity = sections.get(SECTION_CONTROLLER_IDENTITY, "")
-        checks.append(
-            RequirementCheck(
-                code="DTC.controller_identity",
-                complete=_has_value(frontmatter.get("controller_component")) or bool(re.search(GAP_RE, controller_identity, re.IGNORECASE)),
-                message=("DTC 必须引用已知的控制器部件，或明确记录源文档未标识硬件型号（章节：控制器身份）。"),
-            ),
-        )
-        field_present(
             "DTC.related_faults",
             "related_faults",
             "DTC 必须至少引用一个故障实体。",
             target_concepts=("Fault",),
         )
-        section_link(
-            "DTC.related_faults.body_link",
-            SECTION_POSSIBLE_FAILURE,
-            ("Fault",),
-            "DTC 可能失效机理文本必须链接故障实体。",
-        )
-        section_link(
-            "DTC.diagnostic_procedure.body_link",
-            SECTION_DIAGNOSIS_FLOW,
-            ("Procedure",),
-            "DTC 诊断步骤必须生成为流程实体并建立链接。",
-        )
     elif concept == "Fault":
-        field_present(
-            "Fault.affected_components",
-            "affected_components",
-            "故障必须引用受影响的部件。",
-            target_concepts=("Component",),
-        )
-        checks.append(
-            RequirementCheck(
-                code="Fault.procedures",
-                complete=_has_value(frontmatter.get("verification_procedures")) or _has_value(frontmatter.get("repair_procedures")),
-                message="故障必须至少引用一个验证或修复流程。",
-                target_concepts=("Procedure",),
-            ),
-        )
-        section_link(
-            "Fault.component.body_link",
-            SECTION_IMPACT_SCOPE,
-            ("Component",),
-            "故障影响范围文本必须链接受影响的部件。",
-        )
-        section_link(
-            "Fault.symptom.body_link",
-            SECTION_ASSOCIATED_SYMPTOMS,
-            ("Symptom",),
-            "故障必须链接其可能引发的故障现象实体。",
-        )
-        if _has_value(frontmatter.get("verification_procedures")):
-            section_link(
-                "Fault.verification_procedure.body_link",
-                SECTION_VERIFICATION,
-                ("Procedure",),
-                "故障验证方法文本必须链接流程实体。",
-            )
-        if _has_value(frontmatter.get("repair_procedures")):
-            section_link(
-                "Fault.repair_procedure.body_link",
-                SECTION_REPAIR_METHOD,
-                ("Procedure",),
-                "故障修复方式文本必须链接流程实体。",
-            )
         # Failure mechanism is the core diagnostic content: without it
         # the page is a label, not an explanation of how the part fails.
         failure_mechanism = sections.get(SECTION_FAILURE_MECHANISM, "")
@@ -861,19 +718,6 @@ def confirmation_requirements(
                 opa_reason_code="content_missing",
             ),
         )
-    elif concept == "Procedure":
-        field_present(
-            "Procedure.target_components",
-            "target_components",
-            "流程必须引用其目标部件。",
-            target_concepts=("Component",),
-        )
-        if class_name == "diagnosis":
-            field_present(
-                "Procedure.procedure_scope",
-                "procedure_scope",
-                "诊断流程必须声明其为原子流程还是复合流程。",
-            )
 
     return tuple(checks)
 

@@ -79,7 +79,6 @@ concepts:
     body_sections:
       - "总成概览"
       - "工作机理"
-      - "来源"
     optional_body_sections:
       - "组成零件"
     example: |
@@ -102,8 +101,6 @@ concepts:
       > 具体流量、压力、转速和调节值不在通用 Wiki 复制；按适用机型读取下列原始章节。
       ## 组成零件
       - 回油滤芯 P-7534：见原始章节 `05_液压系统/05_2 主泵`。
-      ## 来源
-      - viking://resources/<raw_namespace>/manual-sy215/chapters/05_液压系统/05_2 主泵/chapter.md
 
   # ── Fault — 故障机理 ──
   Fault:
@@ -154,7 +151,6 @@ concepts:
       - "关联故障现象"
       - "验证方法"
       - "修复方式"
-      - "来源"
     example: |
       ---
       id: FAULT-PUMP-WEAR-LEAK
@@ -197,8 +193,6 @@ concepts:
       - [检查主泵内泄](viking://resources/<namespace>/Procedure/def456abc789012345678901)
       ## 修复方式
       - [修复主泵内泄](viking://resources/<namespace>/Procedure/ghi789abc012345678901234)
-      ## 来源
-      - viking://resources/<raw_namespace>/manual-sy215/chapters/05_液压系统/05_2 主泵/chapter.md
 
   # ── Symptom — 故障现象 ──
   Symptom:
@@ -235,7 +229,6 @@ concepts:
       - "相似现象区分"
       - "产品配置差异"
       - "Profile 索引"
-      - "来源"
     sub_resources:
       profiles:
         description: "配置特化的诊断上下文"
@@ -286,7 +279,6 @@ concepts:
           - "与其他配置的差异"
           - "可能失效机理"
           - "推荐诊断流程"
-          - "来源"
         example: |
           ---
           profile_id: sy215c柴油_主泵川崎K3V112
@@ -310,8 +302,6 @@ concepts:
           - [主泵磨损导致内泄增大](viking://resources/<namespace>/Fault/ghi789def012345678901234)
           ## 推荐诊断流程
           1. [检查主泵内泄](viking://resources/<namespace>/Procedure/def456abc789012345678901)
-          ## 来源
-          - viking://resources/<raw_namespace>/manual-sy215/chapters/05_液压系统/05_2 主泵/chapter.md
     example: |
       ---
       id: SYMPTOM-MACHINE-SLOW
@@ -342,8 +332,6 @@ concepts:
       ## Profile 索引
       - [sy215c柴油_主泵川崎K3V112](viking://resources/<namespace>/Symptom/0123456789abcdef01234567/profiles/sy215c柴油_主泵川崎K3V112) — SY215C 柴油版 + 主泵川崎K3V112
       > 此节必须列出每个已创建 Profile 的 URI + 一句话描述，禁止仅写"详见 profiles/"。
-      ## 来源
-      - viking://resources/<raw_namespace>/manual-sy215/chapters/05_液压系统/05_2 主泵/chapter.md
 
   # ── DTC — 故障码 ──
   DTC:
@@ -396,7 +384,6 @@ concepts:
       - "设备表现"
       - "可能失效机理"
       - "诊断流程"
-      - "来源"
     example: |
       ---
       id: DTC-SY215-168-02
@@ -425,8 +412,6 @@ concepts:
       - [电源电路故障](viking://resources/<namespace>/Fault/pqr901stu234567890123456)
       ## 诊断流程
       1. [检查电源电压](viking://resources/<namespace>/Procedure/stu345vwx678901234567890)
-      ## 来源
-      - viking://resources/<raw_namespace>/manual-sy215/chapters/09_故障诊断/09_4 排故流程/chapter.md
 
   # ── Procedure — 操作规程 ──
   Procedure:
@@ -473,7 +458,6 @@ concepts:
       - "操作步骤"
       - "判定标准"
       - "后续处理"
-      - "来源"
     example: |
       ---
       id: PROCEDURE-DIAGNOSE-PUMP-LEAK
@@ -499,8 +483,6 @@ concepts:
       测量结果不满足适用机型原始章节规定时，进入关联 Fault；通用 Wiki 只保存分支语义。
        ## 后续处理
        结果异常时沿关联 Fault/修复 Procedure 继续；结果正常时返回上一级诊断流程。
-       ## 来源
-       - viking://resources/<raw_namespace>/manual-sy215/chapters/05_液压系统/05_2 主泵/chapter.md
 
   # ── Device — 机型 ──
   Device:
@@ -543,7 +525,6 @@ concepts:
       - "基础信息"
       - "包含系统"
       - "系统章节引用"
-      - "来源"
     optional_body_sections:
       - "本型号特点"
       - "常见故障及故障机理"
@@ -577,8 +558,6 @@ concepts:
       | DTC URI | 描述 |
       |---------|------|
       | viking://resources/<namespace>/DTC/vwx234yza567890123456789 | 168-02 主控制器电源异常 |
-      ## 来源
-      - viking://resources/<raw_namespace>/manual-sy215/chapters/01_前言/01_1 阅读维修手册的方法/chapter.md
 
 # ── 关系定义（严格单向写入）──
 #

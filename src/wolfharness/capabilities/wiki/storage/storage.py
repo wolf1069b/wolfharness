@@ -56,6 +56,8 @@ class WikiStore:
     # class_name path alone.
     _LEGACY_TIERS: tuple[str, ...] = ("关重件/", "普通件/")
 
+    _MAX_OBJECT_NAME_BYTES = 180
+
     @staticmethod
     def canonical_object_name(object_name: str) -> str:
         """Keep model-internal slashes out of filesystem path components.
@@ -64,8 +66,19 @@ class WikiStore:
         ``HP3V80/AV10RC``).  A slash is data in that name, not a nested wiki
         directory.  Store it as a full-width solidus so the display remains
         recognizable while path traversal protection stays strict.
+
+        Also clips the name to a safe byte length so the resulting filename
+        stays within OS limits (macOS ``NAME_MAX`` = 255 bytes, but
+        ``LocalVikingFS`` enforces 200 bytes at upload). The 180-byte cap
+        leaves room for the ``.md`` extension and path components.
         """
-        return object_name.translate(str.maketrans({"/": "／", "\\": "＼"}))
+        sanitized = object_name.translate(str.maketrans({"/": "／", "\\": "＼"}))
+        encoded = sanitized.encode("utf-8")
+        if len(encoded) <= WikiStore._MAX_OBJECT_NAME_BYTES:
+            return sanitized
+        # ponytail: byte-clip from the end, trim incomplete UTF-8 tail
+        clipped = encoded[: WikiStore._MAX_OBJECT_NAME_BYTES].decode("utf-8", errors="ignore")
+        return clipped
 
     def __init__(self, root: Path | FSBackend) -> None:
         """Create a store over a local directory or an ``FSBackend``.

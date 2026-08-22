@@ -164,7 +164,78 @@ def _component_body_sections(
     return lines
 
 
-def assemble_template_entity(  # noqa: PLR0915
+def _fault_body_sections(
+    *,
+    source_subject: str,
+    causal_chain: Any,
+) -> list[str]:
+    """Body sections for Fault pages: failure description + mechanism.
+
+    The causal chain (``failure_mode``, ``initiating_condition``,
+    ``propagation_steps``, ``system_effect``, ``observable_symptoms``) is
+    rendered directly into ``## 失效机理`` / ``## 影响范围``.  ``## 失效机理``
+    is always emitted so missing causal_chain gaps stay visible.
+    """
+    lines: list[str] = []
+    if source_subject:
+        lines.append("## 失效描述")
+        lines.append("")
+        lines.append(source_subject)
+        lines.append("")
+
+    lines.append("## 失效机理")
+    lines.append("")
+    if not isinstance(causal_chain, dict) or not causal_chain:
+        lines.append("> 失效机理待补充: 当前 packet 未提供 causal_chain 失效信息。")
+        lines.append("")
+        return lines
+
+    emitted = False
+    failure_mode = str(causal_chain.get("failure_mode", "")).strip()
+    if failure_mode:
+        lines.append(f"- **失效模式**: {failure_mode}")
+        emitted = True
+    initiating_condition = str(causal_chain.get("initiating_condition", "")).strip()
+    if initiating_condition:
+        lines.append(f"- **诱发条件**: {initiating_condition}")
+        emitted = True
+    propagation_steps = causal_chain.get("propagation_steps", "")
+    if propagation_steps:
+        lines.append("- **传播过程**:")
+        if isinstance(propagation_steps, list):
+            lines.extend(
+                f"  - {step}" for step in propagation_steps if str(step).strip()
+            )
+        else:
+            lines.append(f"  - {propagation_steps}")
+        emitted = True
+    system_effect = str(causal_chain.get("system_effect", "")).strip()
+    if system_effect:
+        lines.append(f"- **系统后果**: {system_effect}")
+        emitted = True
+    if not emitted:
+        lines.append("> 失效机理待补充: 当前 packet 未提供 causal_chain 失效信息。")
+    lines.append("")
+
+    observable_symptoms = causal_chain.get("observable_symptoms", "")
+    symptom_lines: list[str] = []
+    if isinstance(observable_symptoms, list):
+        symptom_lines.extend(
+            f"- {symptom}"
+            for symptom in observable_symptoms
+            if str(symptom).strip()
+        )
+    elif str(observable_symptoms).strip():
+        symptom_lines.append(f"- {observable_symptoms}")
+    if symptom_lines:
+        lines.append("## 影响范围")
+        lines.append("")
+        lines.extend(symptom_lines)
+        lines.append("")
+    return lines
+
+
+def assemble_template_entity(
     *,
     packet_body: dict[str, Any],
     concept: str,
@@ -178,7 +249,8 @@ def assemble_template_entity(  # noqa: PLR0915
     Only sections with content are emitted — no empty headings.  Component
     pages are the exception: ``## 工作机理`` is always emitted (with a
     placeholder when ``causal_chain.normal_function`` is missing) so content
-    gaps stay visible.  The output is a draft entity page (``status: draft``)
+    gaps stay visible.  Fault pages likewise always emit ``## 失效机理``.
+    The output is a draft entity page (``status: draft``)
     ready for ``write_entities_batch``.
 
     Args:
@@ -197,7 +269,6 @@ def assemble_template_entity(  # noqa: PLR0915
     explicit_facts = packet_body.get("explicit_facts")
     ordered_actions = packet_body.get("ordered_actions")
     causal_chain = packet_body.get("causal_chain")
-    evidence_map = packet_body.get("evidence_map")
 
     # ── Frontmatter ──────────────────────────────────────────────────────
     id_prefix = _concept_id_prefix(concept)
@@ -224,6 +295,13 @@ def assemble_template_entity(  # noqa: PLR0915
                 source_subject=source_subject,
                 causal_chain=causal_chain,
                 parts_and_specs=parts_and_specs,
+            )
+        )
+    elif concept == "Fault":
+        body_lines.extend(
+            _fault_body_sections(
+                source_subject=source_subject,
+                causal_chain=causal_chain,
             )
         )
     else:
@@ -261,13 +339,5 @@ def assemble_template_entity(  # noqa: PLR0915
                 if str(key).strip() and str(value).strip():
                     body_lines.append(f"- **{key}**: {value}")
             body_lines.append("")
-
-    source_lines = _format_sources(evidence_map, source_uris or [])
-    if source_lines:
-        body_lines.append("## 来源")
-        body_lines.append("")
-        for uri in source_lines:
-            body_lines.append(f"- {uri}")
-        body_lines.append("")
 
     return "\n".join(fm_lines) + "\n" + "\n".join(body_lines)
