@@ -571,6 +571,19 @@ class FinalizeMixin:
                     "published_count": int(current_checkpoint.get("published_count", 0)),
                     "remote_sync": {"status": "not_required"},
                 }
+            # ponytail: remote_sync_pending means entities are already promoted
+            # and committed locally; only the remote upload failed.  Skip audit
+            # and promotion (re-auditing confirmed entities would self-lock the
+            # gate via strict hooks) and retry just the upload.
+            if ckpt_stage == "remote_sync_pending" and ckpt_snapshot == self._current_entity_snapshot_id():
+                logger.info(
+                    "finalize_wiki: retrying remote sync only (build_id=%s, snapshot=%s).",
+                    current_checkpoint.get("build_id", ""),
+                    ckpt_snapshot,
+                )
+                return self._retry_remote_sync(
+                    current_checkpoint, audit_profile
+                )
         device_chapter_sync = self.sync_device_system_chapters(doc_id, device_id)
         self._invalidate_audit_cache()
         audit_started = time.perf_counter()
@@ -899,6 +912,71 @@ class FinalizeMixin:
             "config_hash": config_hash,
             "metrics_path": "index/build_metrics.json",
             "spec_version": get_schema_version(),
+        }
+
+    def _retry_remote_sync(
+        self,
+        checkpoint: dict[str, object],
+        audit_profile: str,
+    ) -> dict[str, object]:
+        """Retry only the remote upload when a prior finalize succeeded locally.
+
+        Entities are already promoted and committed locally; re-auditing would
+        activate strict hooks on confirmed entities and self-lock the gate.
+        """
+        from ..storage.local_viking_fs import LocalVikingFS
+
+        upload_result: dict | None = None
+        if isinstance(self.store._fs, LocalVikingFS):
+            from ..storage import _viking_client
+
+            try:
+                from concurrent.futures import ThreadPoolExecutor
+
+                executor = ThreadPoolExecutor(max_workers=1)
+                try:
+                    upload_result = executor.submit(
+                        self.store._fs.finalize_upload,
+                        _viking_client(),
+                    ).result(timeout=200)
+                finally:
+                    executor.shutdown(wait=False)
+                logger.info("Wiki remote sync retry succeeded: %s", upload_result)
+            except Exception:
+                logger.exception("Wiki remote sync retry failed")
+                upload_result = {"status": "upload_failed"}
+
+        remote_sync_ok = upload_result is None or upload_result.get("status") == "completed"
+        if remote_sync_ok:
+            # Upgrade checkpoint to finalized
+            finalized_checkpoint = {**checkpoint, "stage": "finalized", "status": "finalized"}
+            if upload_result:
+                finalized_checkpoint["remote_sync"] = upload_result
+            self.store.write_json("index/build_checkpoint.json", finalized_checkpoint)
+        else:
+            self.store.write_json(
+                "index/build_checkpoint.json",
+                {**checkpoint, "remote_sync": upload_result},
+            )
+
+        return {
+            "resource_count": 0,
+            "concept_count": 0,
+            "entity_count": int(checkpoint.get("entity_count", 0)),
+            "unresolved_opa_count": 0,
+            "published_count": int(checkpoint.get("published_count", 0)),
+            "publication_allowed_count": int(checkpoint.get("published_count", 0)),
+            "publication_update_count": 0,
+            "entity_created_count": 0,
+            "entity_updated_count": 0,
+            "entity_touched_count": 0,
+            "build_id": str(checkpoint.get("build_id", "")),
+            "snapshot_id": str(checkpoint.get("snapshot_id", "")),
+            "source_snapshot_id": str(checkpoint.get("source_snapshot_id", "")),
+            "audit_profile": audit_profile,
+            "op_flow_passed": True,
+            "status": "finalized" if remote_sync_ok else "finalized_local",
+            "remote_sync": upload_result or {"status": "not_required"},
         }
 
     @staticmethod
