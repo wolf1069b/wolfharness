@@ -125,7 +125,46 @@ def _format_sources(evidence_map: Any, source_uris: list[str]) -> list[str]:
     return uris
 
 
-def assemble_template_entity(
+def _component_body_sections(
+    *,
+    source_subject: str,
+    causal_chain: Any,
+    parts_and_specs: Any,
+) -> list[str]:
+    """Body sections for Component pages: identity + normal working principle.
+
+    Component pages carry no parameter tables, thresholds, wiring info or
+    fault propagation.  ``## 工作机理`` is always emitted so missing
+    ``causal_chain.normal_function`` gaps stay visible.
+    """
+    lines: list[str] = []
+    if source_subject:
+        lines.append("## 总成概览")
+        lines.append("")
+        lines.append(source_subject)
+        lines.append("")
+
+    lines.append("## 工作机理")
+    lines.append("")
+    normal_function = ""
+    if isinstance(causal_chain, dict):
+        normal_function = str(causal_chain.get("normal_function", "")).strip()
+    lines.append(
+        normal_function
+        or "> 工作机理待补充: 当前 packet 未提供 causal_chain.normal_function。"
+    )
+    lines.append("")
+
+    spec_lines = _format_parts_and_specs(parts_and_specs)
+    if spec_lines:
+        lines.append("## 组成零件")
+        lines.append("")
+        lines.extend(spec_lines)
+        lines.append("")
+    return lines
+
+
+def assemble_template_entity(  # noqa: PLR0915
     *,
     packet_body: dict[str, Any],
     concept: str,
@@ -136,8 +175,11 @@ def assemble_template_entity(
 ) -> str:
     """Assemble a full entity page (frontmatter + body) from packet body fields.
 
-    Only sections with content are emitted — no empty headings.  The output is
-    a draft entity page (``status: draft``) ready for ``write_entities_batch``.
+    Only sections with content are emitted — no empty headings.  Component
+    pages are the exception: ``## 工作机理`` is always emitted (with a
+    placeholder when ``causal_chain.normal_function`` is missing) so content
+    gaps stay visible.  The output is a draft entity page (``status: draft``)
+    ready for ``write_entities_batch``.
 
     Args:
         packet_body: The ``packet`` field from a stored source packet.
@@ -176,40 +218,49 @@ def assemble_template_entity(
     # ── Body sections (only non-empty) ───────────────────────────────────
     body_lines: list[str] = []
 
-    if source_subject:
-        body_lines.append("## 总成概览")
-        body_lines.append("")
-        body_lines.append(source_subject)
-        body_lines.append("")
+    if concept == "Component":
+        body_lines.extend(
+            _component_body_sections(
+                source_subject=source_subject,
+                causal_chain=causal_chain,
+                parts_and_specs=parts_and_specs,
+            )
+        )
+    else:
+        if source_subject:
+            body_lines.append("## 总成概览")
+            body_lines.append("")
+            body_lines.append(source_subject)
+            body_lines.append("")
 
-    spec_lines = _format_parts_and_specs(parts_and_specs)
-    if spec_lines:
-        body_lines.append("## 规格参数")
-        body_lines.append("")
-        body_lines.extend(spec_lines)
-        body_lines.append("")
+        spec_lines = _format_parts_and_specs(parts_and_specs)
+        if spec_lines:
+            body_lines.append("## 规格参数")
+            body_lines.append("")
+            body_lines.extend(spec_lines)
+            body_lines.append("")
 
-    fact_lines = _format_explicit_facts(explicit_facts)
-    if fact_lines:
-        body_lines.append("## 关键事实")
-        body_lines.append("")
-        body_lines.extend(fact_lines)
-        body_lines.append("")
+        fact_lines = _format_explicit_facts(explicit_facts)
+        if fact_lines:
+            body_lines.append("## 关键事实")
+            body_lines.append("")
+            body_lines.extend(fact_lines)
+            body_lines.append("")
 
-    action_lines = _format_ordered_actions(ordered_actions)
-    if action_lines:
-        body_lines.append("## 步骤")
-        body_lines.append("")
-        body_lines.extend(action_lines)
-        body_lines.append("")
+        action_lines = _format_ordered_actions(ordered_actions)
+        if action_lines:
+            body_lines.append("## 步骤")
+            body_lines.append("")
+            body_lines.extend(action_lines)
+            body_lines.append("")
 
-    if isinstance(causal_chain, dict) and causal_chain:
-        body_lines.append("## 因果链")
-        body_lines.append("")
-        for key, value in causal_chain.items():
-            if str(key).strip() and str(value).strip():
-                body_lines.append(f"- **{key}**: {value}")
-        body_lines.append("")
+        if isinstance(causal_chain, dict) and causal_chain:
+            body_lines.append("## 因果链")
+            body_lines.append("")
+            for key, value in causal_chain.items():
+                if str(key).strip() and str(value).strip():
+                    body_lines.append(f"- **{key}**: {value}")
+            body_lines.append("")
 
     source_lines = _format_sources(evidence_map, source_uris or [])
     if source_lines:

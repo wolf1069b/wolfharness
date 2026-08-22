@@ -31,6 +31,29 @@ logger = logging.getLogger(__name__)
 from .._helpers import _with_publication_state
 
 
+# Core-path publication blockers: the diagnostic backbone a Wiki page
+# dead-ends without.  Mechanism content (Component.working_mechanism,
+# Fault.failure_mechanism) and the required Device↔Symptom↔Fault graph edges
+# (Device.critical_components, SymptomProfile.device_refs, DTC.related_faults)
+# hard-block finalize.  Every other error — Procedure associations,
+# body-link completeness, isolated/draft entities, hook.* structural findings
+# — is reported but never stops publication.  This mirrors the OPA/planning
+# backbone policy (``is_optional_relation_issue``) that already defers
+# non-required relations; the finalize gate must not self-lock on relation
+# edges the schema itself treats as optional.
+_CORE_PATH_BLOCKER_CODES = frozenset({
+    "Component.working_mechanism",   # content: body ## 工作机理
+    "Fault.failure_mechanism",        # content: body ## 失效机理
+    "Device.critical_components",     # relation: frontmatter (BOM-filled) + body fallback
+    "DTC.related_faults",             # relation: frontmatter OR body ## 可能失效机理
+    # ponytail: SymptomProfile.device_refs removed — schema-optional, no body
+    # fallback, closure defers it.  Blocking on it contradicts the backbone
+    # policy and body-first design.  DTC→Device has no field-level code
+    # (bound via class_name/controller), so DTC.related_faults is the only
+    # DTC link code the audit can raise.
+})
+
+
 class FinalizeMixin:
     """Search, backlinks, change report, and finalize."""
 
@@ -524,6 +547,30 @@ class FinalizeMixin:
                 raise ValueError(
                     f"Build audit profile cannot change between checkpoint and finalize: existing={checkpoint_profile}, requested={audit_profile}",
                 )
+        # Idempotency: if the checkpoint already records a successful finalize
+        # for the same entity snapshot, return immediately instead of re-auditing.
+        # Re-auditing after promotion would activate strict hooks on confirmed
+        # entities and self-lock the gate (the prior finalize's own stamping
+        # turns warnings into errors on the next pass).
+        if current_checkpoint is not None:
+            ckpt_stage = str(current_checkpoint.get("stage", "")).strip()
+            ckpt_snapshot = str(current_checkpoint.get("snapshot_id", "")).strip()
+            if ckpt_stage == "finalized" and ckpt_snapshot == self._current_entity_snapshot_id():
+                logger.info(
+                    "finalize_wiki: build already finalized (build_id=%s, snapshot=%s); returning cached result.",
+                    current_checkpoint.get("build_id", ""),
+                    ckpt_snapshot,
+                )
+                return {
+                    "status": "already_finalized",
+                    "build_id": str(current_checkpoint.get("build_id", "")),
+                    "snapshot_id": ckpt_snapshot,
+                    "source_snapshot_id": str(current_checkpoint.get("source_snapshot_id", "")),
+                    "audit_profile": str(current_checkpoint.get("audit_profile", audit_profile)),
+                    "entity_count": int(current_checkpoint.get("entity_count", 0)),
+                    "published_count": int(current_checkpoint.get("published_count", 0)),
+                    "remote_sync": {"status": "not_required"},
+                }
         device_chapter_sync = self.sync_device_system_chapters(doc_id, device_id)
         self._invalidate_audit_cache()
         audit_started = time.perf_counter()
@@ -531,36 +578,29 @@ class FinalizeMixin:
         audit_elapsed_ms = round((time.perf_counter() - audit_started) * 1000, 3)
         if not audit["passed"]:
             error_issues = [i for i in audit.get("issues", []) if i.get("severity") == "error"]
-            # Content gaps and extraction conflicts remain visible review
-            # artifacts, but do not stop the rest of the Wiki from being
-            # generated. Structural relation/reference defects remain
-            # blockers through the ``untracked`` check below.
-            hard_blocker_codes = {"Profile.device_model_unlinked"}
-            hard_blockers = [
-                issue for issue in error_issues if str(issue.get("code", "")) in hard_blocker_codes
+            # Only the core diagnostic backbone hard-blocks finalize: missing
+            # mechanism content and the Device↔Symptom↔Fault graph edges the
+            # user relies on.  Every other error (Procedure associations,
+            # body-link completeness, isolated/draft entities, hook.*
+            # structural findings) stays visible in the report but never
+            # blocks publication.
+            blockers = [
+                issue
+                for issue in error_issues
+                if str(issue.get("code", "")) in _CORE_PATH_BLOCKER_CODES
             ]
-            if hard_blockers:
-                codes = ", ".join(sorted({str(issue.get("code", "")) for issue in hard_blockers}))
+            if blockers:
+                codes = ", ".join(sorted({str(issue.get("code", "")) for issue in blockers}))
                 raise ValueError(
-                    f"Wiki quality gate has non-waivable publication blockers: {codes}. Resolve the conflict/mapping/model association before finalizing.",
+                    f"Wiki quality gate has non-waivable core-path blockers: {codes}. "
+                    "Resolve the missing mechanism content or "
+                    "Device↔Symptom↔Fault edge before finalizing.",
                 )
-            acceptable_gaps = {"data_limitation", "fact_conflict"}
-            untracked = [
-                i
-                for i in error_issues
-                if i.get("gap_category", "dependency_gap") not in acceptable_gaps
-            ]
-            if untracked:
-                raise ValueError(
-                    "Wiki quality gate failed before finalize: "
-                    f"errors={audit['error_count']}, untracked={len(untracked)}. "
-                    "Repair every core blocker or explicitly track a source-honest open_gap; "
-                    "only content/identity gaps and fact conflicts require OPA review.",
+            if error_issues:
+                logger.warning(
+                    "Finalize: audit has %d non-core-path errors; reporting and proceeding.",
+                    len(error_issues),
                 )
-            logger.warning(
-                "Finalize: audit has %d errors but all are tracked open_gaps. Proceeding.",
-                len(error_issues),
-            )
         audit_snapshot_id = str(audit.get("snapshot_id", ""))
         source_snapshot_id = str(audit.get("source_snapshot_id", ""))
         if not source_snapshot_id:

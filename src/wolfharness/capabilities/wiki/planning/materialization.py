@@ -260,7 +260,7 @@ class MaterializationMixin:
         """
         if max_parallel_shards is not None and max_parallel_shards < 1:
             raise ValueError("max_parallel_shards must be positive when provided")
-        response_shard_limit = min(max_parallel_shards or 12, 12)
+        response_shard_limit = min(max_parallel_shards or 50, 50)
         checkpoint = self.store.read_json("index/build_checkpoint.json")
         if isinstance(checkpoint, dict):
             build_id = build_id.strip() or str(checkpoint.get("build_id", "")).strip()
