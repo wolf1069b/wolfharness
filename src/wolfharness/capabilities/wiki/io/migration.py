@@ -248,6 +248,17 @@ class MigrationMixin:
 
         current = self.store.read_entity("Device", None, normalized_device_id)
         if current is None:
+            # ponytail: fuzzy fallback — BOM may register Device under a different object_name
+            for _concept, _cls, obj_name, _uri in self.store.list_entities("Device"):
+                if (
+                    obj_name.startswith(normalized_device_id)
+                    or normalized_device_id.startswith(obj_name)
+                ):
+                    current = self.store.read_entity("Device", None, obj_name)
+                    if current is not None:
+                        normalized_device_id = obj_name
+                        break
+        if current is None:
             return {
                 "status": "skipped",
                 "reason": "device_not_found",

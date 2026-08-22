@@ -183,7 +183,7 @@ class TeamWorkflowGuardCapability(AbstractCapability[AgentDepsT]):
 
         result = await handler(args)
         if call.tool_name.endswith("finalize_wiki") and isinstance(result, dict):
-            if result.get("status") == "finalized" and result.get("op_flow_passed") is True:
+            if result.get("status") in ("finalized", "finalized_local") and result.get("op_flow_passed") is True:
                 agent_ctx.session.metadata["_wiki_finalize_receipt"] = {
                     "audit_profile": str(result.get("audit_profile", "")),
                     "source_snapshot_id": str(result.get("source_snapshot_id", "")),

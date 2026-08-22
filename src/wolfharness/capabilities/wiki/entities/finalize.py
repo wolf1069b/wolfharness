@@ -515,7 +515,7 @@ class FinalizeMixin:
         doc_id: str,
         device_id: str,
         series_id: str,
-        entities: list[dict],
+        entities: list[dict] | None = None,
         *,
         authoritative: bool = False,
         allow_residual_errors: bool = False,
@@ -638,7 +638,7 @@ class FinalizeMixin:
             }
             for record in self._formal_entity_snapshot_records()
         ]
-        provided_uris = {str(entity.get("uri", "")) for entity in entities if entity.get("uri")}
+        provided_uris = {str(entity.get("uri", "")) for entity in (entities or []) if entity.get("uri")}
         indexed_uris = {str(entity["uri"]) for entity in indexed_entities}
         if provided_uris and provided_uris != indexed_uris:
             missing = sorted(indexed_uris - provided_uris)
