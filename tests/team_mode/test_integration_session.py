@@ -40,6 +40,7 @@ def _make_manifest(
     *,
     idle_timeout: float = 300.0,
     poll_interval: float = 30.0,
+    max_members: int = 10,
 ) -> AgentsManifest:
     """Create a manifest with team_mode enabled and TestModel agents."""
     yaml_str = """
@@ -64,11 +65,14 @@ team_mode:
   base_dir: {base_dir}
   idle_timeout: {idle_timeout}
   poll_interval: {poll_interval}
+  bounds:
+    max_members: {max_members}
 """
     yaml_str = yaml_str.format(
         base_dir=str(tmp_path),
         idle_timeout=idle_timeout,
         poll_interval=poll_interval,
+        max_members=max_members,
     )
     config_dict = yamling.load_yaml(yaml_str, verify_type=dict)
     return AgentsManifest(**config_dict)
@@ -424,3 +428,114 @@ async def test_cleanup_deferred_when_member_has_active_run(
         assert ms is not None, "Member session should NOT be closed while it has an active run"
 
         await session_pool.close_session(lead_session_id)
+
+
+@pytest.mark.integration
+async def test_idle_cleanup_frees_state_json_slots_for_add_member(
+    tmp_path: Any,
+) -> None:
+    """Regression: idle auto-cleanup must remove members from state.json.
+
+    Before the fix, ``_schedule_member_cleanup`` closed member sessions
+    but left them in ``state.json``'s ``members`` dict.  Since
+    ``team_add_member`` counts members from ``state.json`` to enforce
+    ``max_members``, the freed sessions still occupied capacity slots
+    and subsequent ``team_add_member`` calls were incorrectly rejected.
+
+    This test creates a team at ``max_members`` capacity, triggers idle
+    auto-cleanup, then verifies:
+      1. Members are removed from ``state.json``.
+      2. ``team_add_member`` succeeds (slot was freed).
+    """
+    manifest = _make_manifest(
+        tmp_path,
+        idle_timeout=0.5,
+        poll_interval=0.1,
+        max_members=2,
+    )
+    team_mode_config: TeamModeConfig | None = manifest.team_mode
+    assert team_mode_config is not None
+
+    async with AgentPool(manifest) as pool:
+        session_pool = pool.session_pool
+        assert session_pool is not None
+
+        lead_sid = "lead-session-regression"
+        await session_pool.create_session(
+            lead_sid,
+            agent_name="coordinator",
+            team_role="lead",
+            team_member_name="coordinator",
+        )
+        lead_session = session_pool.sessions.get_session(lead_sid)
+        assert lead_session is not None
+
+        run_handle = _inject_run_handle(session_pool, lead_session)
+        agent_ctx = _make_agent_context(pool, lead_sid, team_mode_config)
+        cap = TeamCommCapability(
+            team_mode_config,
+            "coordinator",
+            session_metadata={
+                "team_role": "lead",
+                "team_member_name": "coordinator",
+            },
+        )
+        mock_ctx = _make_mock_run_context(agent_ctx)
+
+        create_result = await cap.team_create(
+            mock_ctx,
+            "test_team",
+            [
+                {"agent": "worker", "name": "worker_1"},
+                {"agent": "reviewer", "name": "reviewer_1"},
+            ],
+        )
+        assert "Team 'test_team' created with 2 members" in create_result.return_value
+        team_id = create_result.return_value.split("team_id=")[1].strip()
+
+        from wolfharness.capabilities.file_team_state import FileTeamState
+
+        team_state = FileTeamState(str(tmp_path))
+
+        state = team_state._read_json(team_state._state_path(team_id))
+        member_session_ids: list[str] = [
+            m["session_id"]
+            for m in state.get("members", {}).values()
+            if m.get("session_id") and m["session_id"] != lead_sid
+        ]
+        assert len(member_session_ids) == 2
+
+        # Team is at max_members=2 — adding now should fail.
+        add_before = await cap.team_add_member(mock_ctx, "extra_member", "worker")
+        assert "max_members" in add_before.return_value
+
+        # Trigger idle auto-cleanup.
+        import time
+
+        lead_session.current_run_id = None
+        session_pool.sessions._runs.pop(run_handle.run_id, None)
+        run_handle.complete_event.set()
+        lead_session.last_active_at = time.monotonic() - 100.0
+
+        await asyncio.sleep(2.0)
+
+        # Sessions closed.
+        for msid in member_session_ids:
+            assert session_pool.sessions.get_session(msid) is None
+
+        # state.json members should be cleared (except lead).
+        state_after = team_state._read_json(team_state._state_path(team_id))
+        non_lead_after = [
+            m for mname, m in state_after.get("members", {}).items() if mname != "coordinator"
+        ]
+        assert non_lead_after == [], (
+            f"Expected no non-lead members in state.json after idle cleanup, got {non_lead_after}"
+        )
+
+        # team_add_member should now succeed — slot was freed.
+        add_after = await cap.team_add_member(mock_ctx, "extra_member", "worker")
+        assert "added to team" in add_after.return_value, (
+            f"Expected success, got: {add_after.return_value}"
+        )
+
+        await session_pool.close_session(lead_sid)
