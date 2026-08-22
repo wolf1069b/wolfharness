@@ -1,11 +1,13 @@
 ---
 rfc_id: RFC-0034
 title: BackgroundTask Architecture Redesign for AgentPool
-status: DRAFT
+status: REVIEW
 author: yuchen.liu
-reviewers: []
+reviewers:
+  - name: TBD
+    status: pending
 created: 2026-06-09
-last_updated: 2026-06-09
+last_updated: 2026-07-21
 decision_date:
 related_documents:
   - packages/xeno-agent/docs/rfcs/RFC-0001-async-task-background-task-v2.md
@@ -125,6 +127,47 @@ The BackgroundTask system was initially designed as a xeno-agent-specific augmen
 - **RFC-0026**: Per-session agent isolation ensures background tasks do not share `MessageHistory` across concurrent subagents.
 - **RFC-0001 (wolfharness)**: Workers and Teams session management establishes `SpawnSessionStart` patterns that background tasks must emit consistently.
 
+### 2.5 Cross-System Comparison: opencode
+
+A comparative analysis of opencode's background task system (located at `/Users/mollion-mo/Downloads/projects/opencode`) was conducted to inform this RFC's status query design. Key findings:
+
+#### 2.5.1 Tool Surface
+
+opencode exposes a **single** `task` tool with an optional `background: boolean` parameter. There is no `background_output`, `background_cancel`, `task_status`, or `steer_task` tool. A test in `packages/opencode/test/tool/registry.test.ts:103-110` explicitly asserts that `task_status` does **not** exist as a registered tool, confirming this is a deliberate design decision, not an omission.
+
+#### 2.5.2 Status Visibility from the LLM's Perspective
+
+The parent agent's LLM sees only two state transitions:
+
+1. **Launch**: `task(background=true)` returns immediately with `<task id="..." state="running">`.
+2. **Completion**: A background fiber calls `inject()` which inserts a synthetic message (`synthetic: true`) into the parent session's prompt stream containing `<task id="..." state="completed|error">` and the task output.
+
+Intermediate status is **invisible** to the LLM. The tool's instruction text explicitly commands: "DO NOT sleep, poll for progress, ask the task for status, or duplicate this task's work."
+
+#### 2.5.3 Internal Status (System-Level Only)
+
+opencode's `BackgroundJob.Service` provides `get(id)` and `list()` methods returning `Info` objects with `status`, `started_at`, `completed_at`, `output`, and `error` fields. `ToolPart` states (`pending`, `running`, `completed`, `error`) propagate via SDK `message.part.updated` events for UI rendering. However, these are **system-level APIs only** — not exposed as LLM-facing tools.
+
+#### 2.5.4 Cancellation
+
+No standalone cancel tool. Cancellation is implicit: when a parent session is cancelled, `SessionRunState.cancelBackgroundJobs` lists running jobs via `background.list()`, matches by `parentSessionId`/`sessionId` metadata, and cancels them recursively.
+
+#### 2.5.5 Comparison Matrix
+
+| Capability | opencode | xeno-agent (current) | This RFC (proposed) |
+|-----------|----------|---------------------|---------------------|
+| LLM-visible status query tool | None (test-enforced absence) | `background_output(block=False)` returns status summary | `task_status()` tool with structured return |
+| Intermediate progress visibility | Not possible for LLM | `output_file` written but not exposed to LLM | `progress_preview` field in `task_status()` return |
+| Completion notification | Auto-inject synthetic message | `NotificationBatcher` via `followup()` | `session_end_policy: notify` + `NotificationBatcher` |
+| Standalone cancel tool | No (session lifecycle cascade) | `background_cancel` tool | `cancel_task()` tool |
+| Steering (mid-task injection) | No | `steer_task` tool | `steer_task()` tool (preserved) |
+| Polling guidance | Instruction-level prohibition | Allowed but discouraged | Multi-layer norm constraint (see §7.5) |
+| States | 4 (`running`, `completed`, `error`, `cancelled`) | 7 (`pending`, `running`, `cancelling`, `completed`, `error`, `cancelled`, `timed_out`) | 7 (preserved) |
+
+#### 2.5.6 Key Takeaway
+
+opencode's "no status query" design works for its use case (short research tasks, ~30s–5min, cheap to cancel and restart). xeno-agent's industrial diagnosis use case involves longer tasks (5–10min deep analysis) where blind cancellation is expensive. The `steer_task` tool — which xeno-agent has and opencode lacks — requires status information to make informed intervention decisions. Therefore, this RFC proposes **providing** status query capability while **constraining** its usage through multi-layer norm design (see §7.5), rather than following opencode's approach of technical absence.
+
 ---
 
 ## 3. Problem Statement
@@ -140,6 +183,10 @@ The BackgroundTask system was initially designed as a xeno-agent-specific augmen
 4. **No upstream abstraction**: Every downstream project that wants background tasks must copy xeno-agent's implementation. There is no wolfharness-native primitive.
 
 5. **String-based API**: Returning raw string IDs makes it impossible for the LLM to introspect task state without making another tool call.
+
+6. **No progress visibility for running tasks**: The current `background_output(block=False)` returns only `status` + `started_at`. The `_run_and_stream` coroutine incrementally writes to `output_file` via `fs.pipe()` during execution, but this content is **not read** in non-block mode. The parent agent cannot see what the subagent is currently doing, how much output it has produced, or whether it is making progress. For industrial diagnosis tasks running 5–10 minutes, this opacity makes it impossible to distinguish a stuck task from a productive one, leading to either premature cancellation (wasting minutes of work) or indefinite waiting.
+
+7. **No task listing capability**: There is no tool to list all active background tasks for the current session. The parent agent must track task IDs in its own context, which is fragile — if the LLM loses track of a task ID (common in long conversations), the task result becomes irretrievable.
 
 ### 3.2 Evidence
 
@@ -169,6 +216,10 @@ The BackgroundTask system was initially designed as a xeno-agent-specific augmen
 4. **SEP-1686 alignment**: API signatures and semantics match MCP task tool patterns.
 5. **Hard switch**: Directly replace the old API in xeno-agent; no compatibility shim.
 6. **Pydantic-AI compliance**: Every `create_task` must have matching `cancel_and_drain` or `await`.
+
+7. **Status query with progress visibility**: Provide `task_status()` tool that returns structured status including a `progress_preview` field (tail of `output_file`) for running tasks, enabling stuck-task detection without full result retrieval.
+
+8. **Multi-layer norm constraint on status polling**: Status query capability is technically available but constrained through tool description, parameter design, runtime soft-limits, and system prompt directives to prevent misuse (see §7.5).
 
 ### 4.2 Non-Goals (Out of Scope)
 
@@ -335,6 +386,34 @@ for task in task_manager.get_tasks_by_session(session_id):
 - **Pro**: No dual-path maintenance.
 - **Con**: All consumers must migrate atomically.
 - **Con**: Cannot partially upgrade.
+
+### Q5: How should running-task status and progress be exposed to the LLM?
+
+**Decision: B — Provide structured status query with progress preview, constrained by multi-layer norms**
+
+Three options were considered:
+
+| Option | Description | LLM Can Query Status? | LLM Can See Progress? | Polling Risk |
+|--------|-------------|----------------------|----------------------|--------------|
+| A: opencode-style (no status tool) | No `task_status` tool; rely solely on auto-notification | No | No | None (impossible) |
+| B: Status + progress with norms | `task_status()` returns status + `progress_preview`; usage constrained by §7.5 | Yes | Yes (tail of output) | Mitigated by multi-layer constraints |
+| C: Status only, no progress | `task_status()` returns status + timing only | Yes | No | Medium (status-only is less useful, may tempt repeated polling) |
+
+**Rationale for B**:
+
+1. **Steering requires status**: xeno-agent has a `steer_task` tool that opencode lacks. Making informed steering decisions (intervene vs. cancel vs. wait) requires knowing the task's current state and progress. Option A makes `steer_task` blind.
+
+2. **Industrial diagnosis cost asymmetry**: A 5–10 minute diagnostic task that is blindly cancelled loses significant work. The ability to distinguish "stuck" from "productive" via `progress_preview` justifies the polling risk.
+
+3. **Data already exists**: `_run_and_stream` already incrementally writes to `output_file` via `fs.pipe()`. The `progress_preview` field reads the tail of this file — no new data pipeline needed, just exposing existing data.
+
+4. **Norms mitigate risk**: The multi-layer constraint design (§7.5) — tool description, `status_only` parameter, runtime soft-limits, system prompt — channels usage toward the intended pattern (check status only when stuck or before steering) without making the capability technically impossible.
+
+**Trade-offs**:
+- **Pro**: Enables informed steering and stuck-task detection.
+- **Pro**: `progress_preview` provides actionable signal, not just "still running."
+- **Con**: LLM may poll despite norms, consuming context window.
+- **Con**: More complex than opencode's clean "no status" approach.
 
 ---
 
@@ -572,6 +651,139 @@ def create_task(..., parent_session_id: str | None = None, ...) -> TaskHandle:
     ...
 ```
 
+### 7.4 Status Query & Progress Design
+
+#### 7.4.1 The `task_status()` Tool
+
+The `task_status()` tool replaces the non-blocking path of the old `background_output(block=False)`. It returns a structured dictionary (not a raw string) with the following fields:
+
+| Field | Type | Present When | Description |
+|-------|------|-------------|-------------|
+| `task_id` | `str` | Always | The task identifier |
+| `status` | `TaskStatus` | Always | One of the 7 states |
+| `description` | `str` | Always | Task description (for identification) |
+| `agent_name` | `str` | Always | Which agent is executing |
+| `created_at` | `str` (ISO 8601) | Always | Creation timestamp |
+| `started_at` | `str` (ISO 8601) \| `null` | Always | Start timestamp, or `null` if pending |
+| `duration` | `str` | Running or terminal | Human-readable elapsed time (e.g., "2m 30s") |
+| `progress_preview` | `str` \| `null` | Running only | Tail (last ~500 chars) of `output_file` content |
+| `error` | `str` \| `null` | Terminal error/timed_out | Error message if applicable |
+| `completed_at` | `str` (ISO 8601) \| `null` | Terminal | Completion timestamp |
+
+#### 7.4.2 `progress_preview` Implementation
+
+The `_run_and_stream` coroutine already incrementally writes to `output_file` via `fs.pipe()`. The `progress_preview` field reads the tail of this file when the task is in a non-terminal state:
+
+```python
+def _get_progress_preview(self, ctx: AgentContext, task: BackgroundTask) -> str | None:
+    """Read the tail of the task's output_file for progress indication."""
+    if task.status not in ("running", "pending"):
+        return None
+    if not task.output_file:
+        return None
+    try:
+        raw = ctx.internal_fs.cat(task.output_file)
+        content = raw.decode("utf-8") if isinstance(raw, bytes) else str(raw)
+        if not content.strip():
+            return None
+        # Return last 500 characters to keep context window impact bounded
+        return content[-500:] if len(content) > 500 else content
+    except Exception:
+        return None
+```
+
+**Context window budget**: The `progress_preview` is capped at 500 characters. A single `task_status()` call on a running task adds at most ~500 chars + structured fields (~300 chars) = ~800 chars to the LLM context. This is bounded and predictable.
+
+#### 7.4.3 `list_tasks()` — Session Task Enumeration
+
+A companion tool `list_tasks()` (optional, provider-level) returns a summary table of all tasks for the current session:
+
+```python
+async def list_tasks(ctx: AgentContext) -> str:
+    """List all background tasks for the current session.
+
+    Returns a markdown table with task_id, description, status, and duration.
+    Useful for recovering lost task IDs in long conversations.
+    """
+    ...
+```
+
+This addresses Problem 7 (§3.1): the LLM losing track of task IDs in long conversations. The return is a compact markdown table, not full task details, keeping context impact minimal.
+
+### 7.5 Multi-Layer Norm Constraint Design
+
+The status query capability is **technically available but constrained** through four layers. Each layer independently reduces the probability of misuse; together they form a defense-in-depth against polling anti-patterns.
+
+#### Layer 1: Tool Description (Static)
+
+The `task_status()` tool's description in the YAML schema explicitly scopes its intended use:
+
+```yaml
+# task_status.yaml
+description: |
+  Query the current status of a background task, including a progress preview
+  for running tasks.
+
+  Use this tool ONLY when:
+  - You suspect a task may be stuck (no notification received after expected duration)
+  - You need status information before deciding to steer or cancel a task
+
+  Do NOT use this tool for routine progress checking. You will receive an
+  automatic notification when each task completes — wait for it.
+```
+
+This is the first signal the LLM sees. It defines the social contract: the tool exists for stuck-detection and steering-decisions, not for progress monitoring.
+
+#### Layer 2: Parameter Design (Structural)
+
+The `task_status()` tool separates "query status" from "retrieve result" into distinct tools (`task_status` vs `task_result`). This prevents the pattern where `background_output(block=False)` was used for both purposes, making casual status checks feel like a natural part of result retrieval.
+
+Additionally, the `progress_preview` field is **always included** when the task is running — there is no opt-in parameter. This means the LLM gets a useful snapshot in a single call, reducing the temptation to call repeatedly for "just a bit more" output.
+
+#### Layer 3: Runtime Soft-Limit (Advisory)
+
+The provider tracks `task_status()` call frequency per task per session. When the LLM calls `task_status()` for the same task more than `N` times within `M` seconds (configurable, defaults: N=3, M=60), the return includes an additional warning field:
+
+```python
+{
+    "task_id": "bg_abc123",
+    "status": "running",
+    "progress_preview": "...",
+    "_warning": "You have queried this task 3 times in the last 60 seconds. "
+                "The task is still running. Consider waiting for the completion "
+                "notification instead of polling."
+}
+```
+
+This is advisory, not blocking — the tool still returns the status. The warning is injected into the structured return, ensuring the LLM sees it in the same response that tempted it to poll.
+
+#### Layer 4: System Prompt Directive (Instructional)
+
+The agent's system prompt includes a directive about background task etiquette:
+
+```
+## Background Task Etiquette
+
+When you launch background tasks:
+1. Continue with other work while tasks run — do not wait idly.
+2. You will receive a <system-reminder> notification when each task completes.
+3. Use `task_status()` ONLY if you suspect a task is stuck or before steering/cancelling.
+4. Do NOT poll task_status() repeatedly for progress updates.
+```
+
+This is the same mechanism opencode uses (tool instruction text prohibiting polling), adapted to coexist with the technical capability.
+
+#### Constraint Effectiveness Analysis
+
+| Layer | What It Prevents | Bypass Risk | Cost of Implementation |
+|-------|-----------------|-------------|----------------------|
+| Tool description | Unaware misuse (LLM doesn't know it shouldn't poll) | High (LLM may ignore) | Low (YAML text) |
+| Parameter design | Conflating status check with result retrieval | Medium (separate tools reduce temptation) | Low (API design) |
+| Runtime soft-limit | Sustained polling loops | Low (warning is in-band, hard to ignore) | Medium (provider state tracking) |
+| System prompt | All forms of polling | Medium (instruction-following varies by model) | Low (prompt text) |
+
+No single layer is sufficient. Together, they create a gradient from "the LLM knows it shouldn't poll" (Layer 1+4) to "the system makes polling less rewarding" (Layer 2) to "the system actively warns when polling is detected" (Layer 3).
+
 ---
 
 ## 8. API Design
@@ -666,7 +878,17 @@ async def task_status(
 ) -> dict[str, Any]:
     """Query the status of a background task.
 
-    Returns a JSON-serializable dict with status, duration, and metadata.
+    Returns a JSON-serializable dict with status, duration, progress preview,
+    and metadata. For running tasks, includes a ``progress_preview`` field
+    containing the tail (~500 chars) of the task's incremental output.
+
+    Intended use cases:
+    - Stuck-task detection (no notification after expected duration)
+    - Pre-steering status check (before calling ``steer_task``)
+    - Pre-cancellation status check (before calling ``cancel_task``)
+
+    NOT intended for routine progress polling — wait for the completion
+    notification instead.
     """
     ...
 
@@ -677,7 +899,9 @@ async def task_result(
 ) -> str:
     """Retrieve the result of a background task, optionally blocking.
 
-    Replaces ``background_output(block=True)``.
+    Replaces ``background_output(block=True)``. For non-terminal tasks,
+    blocks up to ``timeout_seconds`` for completion. If the timeout fires,
+    returns a status message indicating the task is still running.
     """
     ...
 
@@ -689,6 +913,30 @@ async def cancel_task(
     """Cancel a background task or all tasks.
 
     Replaces ``background_cancel()``.
+    """
+    ...
+
+async def steer_task(
+    ctx: AgentContext,
+    task_id: str,
+    message: str,
+    mode: Literal["interrupt", "advisory"] = "advisory",
+) -> str:
+    """Send a steering message to a running background task.
+
+    Preserved from the current implementation. Two modes:
+    - ``advisory`` (default): Queued for the next turn.
+    - ``interrupt``: Injected into the active turn immediately.
+    """
+    ...
+
+async def list_tasks(
+    ctx: AgentContext,
+) -> str:
+    """List all background tasks for the current session.
+
+    Returns a markdown table with task_id, description, status, and duration.
+    Useful for recovering lost task IDs in long conversations.
     """
     ...
 ```
@@ -1033,6 +1281,26 @@ The following test files in `xeno-agent` must be updated:
    - Owner: API design
    - Status: Open
 
+6. **What is the optimal `progress_preview` character limit?**
+   - Context: 500 chars is a preliminary estimate balancing context window impact vs. usefulness. Too small and it's useless; too large and it pollutes context.
+   - Owner: API design
+   - Status: Open — needs empirical testing with real diagnostic tasks.
+
+7. **Should the runtime soft-limit (Layer 3 of §7.5) be configurable per-agent?**
+   - Context: Different agents may have different polling tolerance. A fast research agent might tolerate N=2; a slow diagnostic agent might allow N=5.
+   - Owner: xeno-agent
+   - Status: Open
+
+8. **Should `list_tasks()` be a core agentpool tool or a xeno-agent provider tool?**
+   - Context: Task listing is useful for any downstream project, but the markdown table format is presentation-level.
+   - Owner: API design
+   - Status: Open
+
+9. **How should `progress_preview` handle binary or non-UTF-8 output?**
+   - Context: `fs.pipe()` writes bytes; tasks producing binary output (e.g., image analysis) may not have meaningful text previews.
+   - Owner: Implementation
+   - Status: Open — current design returns `None` on decode failure, which may need refinement.
+
 ---
 
 ## 15. Decision Record
@@ -1051,6 +1319,7 @@ The following test files in `xeno-agent` must be updated:
 | D2 | TaskHandle replaces string IDs (Q2=B) | Type safety, SEP-1686 alignment, ergonomics |
 | D3 | Configurable session_end_policy (Q3=C) | Covers all known use cases; safe default |
 | D4 | Hard cutover, no compat layer (Q4=A) | Cleanest long-term API; controlled test scope |
+| D5 | Status + progress with multi-layer norms (Q5=B) | Enables steering decisions and stuck-task detection; norms mitigate polling risk |
 
 ### Key Discussion Points
 
