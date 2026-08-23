@@ -13,11 +13,12 @@ from wolfharness.capabilities.wiki.io.template_materializer import (
     assemble_template_entity,
     strip_device_prefix,
 )
+from wolfharness.capabilities.wiki.quality import parse_frontmatter
+from wolfharness.capabilities.wiki.schema_loader import get_schema_version
 from wolfharness.capabilities.wiki.storage import (
     LocalFS,
     LocalVikingFS,
 )
-from wolfharness.capabilities.wiki.schema_loader import get_schema_version
 
 
 logger = logging.getLogger(__name__)
@@ -507,6 +508,13 @@ class MaterializationMixin:
                                 "entity_candidates="
                                 + json.dumps(chunk, ensure_ascii=False, separators=(",", ":")),
                             ])
+                        llm_lines.append(
+                            "existing_entity_check=mandatory: Before writing any entity, "
+                            "call list_children(<wiki_root>/<Concept>) to check if the entity "
+                            "already exists. If it exists, use patch_entity (with expected_sha256 "
+                            "from diff_entity) to merge — do NOT blind-write with write_entity. "
+                            "If facts conflict, create_opa instead of overwriting.",
+                        )
                         description = "\n".join(llm_lines)
                     shards.append(
                         {
@@ -660,6 +668,7 @@ class MaterializationMixin:
         resolved_map: dict[str, str] = {}
         fallback_to_llm: list[dict[str, str]] = []
         errors: list[dict[str, str]] = []
+        skipped_existing = 0
 
         # Group by packet for efficient reads; only single-packet candidates
         # are template-eligible.  Multi-packet (merge) candidates go to fallback.
@@ -736,6 +745,12 @@ class MaterializationMixin:
                 existing = self.store.read_entity(concept, class_name or None, actual_object_name)
                 expected_sha = ""
                 if existing is not None:
+                    existing_fm = parse_frontmatter(existing)
+                    existing_status = str(existing_fm.get("status", "")).strip()
+                    if existing_status in ("confirmed", "published"):
+                        # Expert-confirmed content — skip template overwrite.
+                        skipped_existing += 1
+                        continue
                     expected_sha = sha256(existing.encode("utf-8")).hexdigest()
 
                 entities_to_write.append({
@@ -800,6 +815,7 @@ class MaterializationMixin:
             "fallback_count": len(fallback_to_llm),
             "fallback_to_llm": fallback_to_llm,
             "resolved_entity_uris": resolved_map,
+            "skipped_existing": skipped_existing,
             "errors": errors,
         }
 

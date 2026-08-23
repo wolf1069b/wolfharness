@@ -1113,12 +1113,14 @@ class RelationMixin:
                 },
             )
 
+        preloaded = {uri: content for uri, _fields, content in update_records if content is not None}
         patched: list[str] = []
         batch_limit = _entity_batch_limit()
         for start in range(0, len(patches), batch_limit):
             result = self.patch_entities_batch(
                 patches[start : start + batch_limit],
                 sync_component_links=sync_component_links,
+                preloaded_contents=preloaded,
             )
             patched.extend(str(uri) for uri in result.get("uris", []) if isinstance(uri, str))
 

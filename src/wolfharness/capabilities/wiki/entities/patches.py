@@ -190,6 +190,7 @@ class PatchMixin:
         patches: list[dict[str, object]],
         *,
         sync_component_links: bool = True,
+        preloaded_contents: dict[str, str] | None = None,
     ) -> dict[str, object]:
         """Apply guarded patches to independent existing entities in one commit.
 
@@ -231,10 +232,14 @@ class PatchMixin:
             if identity in identities:
                 raise ValueError(f"duplicate entity identity in batch: {identity}")
             identities.add(identity)
-            current = self.store.read_entity(concept, class_name or None, object_name)
+            uri = self.store.entity_uri(concept, class_name or None, object_name)
+            if preloaded_contents is not None and uri in preloaded_contents:
+                current = preloaded_contents[uri]
+            else:
+                current = self.store.read_entity(concept, class_name or None, object_name)
             if current is None:
                 raise FileNotFoundError(
-                    f"Entity not found: {self.store.entity_uri(concept, class_name or None, object_name)}",
+                    f"Entity not found: {uri}",
                 )
             current_sha256 = sha256(current.encode("utf-8")).hexdigest()
             if not expected_sha256:
