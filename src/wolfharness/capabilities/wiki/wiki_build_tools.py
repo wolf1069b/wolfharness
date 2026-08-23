@@ -589,7 +589,13 @@ class WikiBuildTools(
             )
 
     def _reject_nonexistent_raw_sources(self, content: str) -> None:
-        """Reject source URIs that don't resolve to actual raw files."""
+        """Warn about source URIs that don't resolve to actual raw files.
+
+        Downgraded from hard rejection to warning — a truncated or stale
+        source URI in frontmatter ``sources`` is a reference-quality issue,
+        not a data-integrity blocker.  The 4 core-path content checks
+        (``confirmation_requirements``) are the real publish gate.
+        """
         source_uris = extract_source_uris(content)
         nonexistent: list[str] = []
         for uri in source_uris:
@@ -602,8 +608,11 @@ class WikiBuildTools(
         if nonexistent:
             shown = ", ".join(nonexistent[:5])
             suffix = "..." if len(nonexistent) > 5 else ""
-            raise ValueError(
-                f"Entity write contains source URI(s) that do not exist: {shown}{suffix}. Use `browse` or `list_chapters` to get actual file URIs.",
+            logger.warning(
+                "Entity write has unresolvable source URI(s): %s%s. "
+                "Non-blocking — entity content is unaffected.",
+                shown,
+                suffix,
             )
 
     def _root_doc_name(self) -> str:
