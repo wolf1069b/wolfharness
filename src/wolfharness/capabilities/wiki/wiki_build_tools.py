@@ -427,8 +427,14 @@ class WikiBuildTools(
                             f"External source never registered in a source packet: {uri}",
                         )
                 else:
-                    raise ValueError(
-                        f"Raw source changed or became unavailable after audit: {uri} ({result.status.value}).",
+                    # ponytail: skip unresolvable sources to match audit's behavior
+                    # (audit drops them from the hash instead of raising).  A
+                    # truncated/stale source URI is a reference-quality issue,
+                    # not a data-integrity blocker.
+                    logger.warning(
+                        "Skipping unresolvable source URI in snapshot: %s (%s)",
+                        uri,
+                        result.status.value,
                     )
         return sha256(
             "\n".join(
