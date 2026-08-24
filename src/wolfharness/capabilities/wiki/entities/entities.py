@@ -116,7 +116,7 @@ class EntityWriteMixin:
             target_uri=uri,
             target_section="增量合并事实",
             evidence_uris=evidence,
-            finding="以下参数在重复构建中出现了不一致值：\n" + "\n".join(changed_facts[:20]),
+            finding="以下内容在重复构建中出现了不一致：\n" + "\n".join(changed_facts[:20]),
             missing="在人工裁决前，无法确认哪一组事实适用于当前机型或配置。",
             recommendation="保留双方证据，按机型和来源裁决；不得静默覆盖旧事实。",
         )
@@ -564,6 +564,8 @@ class EntityWriteMixin:
                 skip_materialization=skip_materialization,
             )
         self.store.write_symptom_profile(symptom_uri, profile_id, content)
+        # Backfill parent index.md with updated Profile 索引
+        self._sync_symptom_profile_index(symptom_uri)
         logger.info("Symptom Profile written: %s (%d chars)", profile_uri, len(content))
         return profile_uri
 
@@ -664,7 +666,7 @@ class EntityWriteMixin:
         }
 
     def migrate_legacy_symptom_profiles(self) -> dict[str, int]:
-        """Move legacy pseudo-Symptom Profile entities into ``profiles/``."""
+        """Move legacy pseudo-Symptom Profile entities into ``profile/``."""
         symptom_root_key = self.store.CONCEPT_DIRS["Symptom"]
         migrated = 0
         skipped = 0

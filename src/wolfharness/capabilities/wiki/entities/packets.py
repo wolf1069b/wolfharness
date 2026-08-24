@@ -11,6 +11,8 @@ import os
 from pathlib import Path
 import re
 
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
 from wolfharness.capabilities.wiki.quality import (
     RawSourceKind,
     classify_raw_source_uri,
@@ -18,6 +20,73 @@ from wolfharness.capabilities.wiki.quality import (
 
 
 logger = logging.getLogger(__name__)
+
+
+class PacketBody(BaseModel):
+    """Validated packet body for ``record_source_packet``.
+
+    Enforces ``working_mechanism`` when Component candidates are present and
+    ``failure_mechanism`` when Fault candidates are present.  BOM identity
+    and no-entity packets pass through unchecked via the ``kind`` field.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    # --- discriminator for internal packet types ---
+    kind: str | None = None
+
+    # --- chapter extraction fields (all optional individually) ---
+    packet_kind: str | None = None
+    source_subject: str = ""
+    explicit_facts: list[str] = Field(default_factory=list)
+    normalized_identity_candidates: list[dict[str, object]] = Field(default_factory=list)
+    entity_candidates: list[dict[str, object]] = Field(default_factory=list)
+    entities: list[dict[str, object]] = Field(default_factory=list)
+    working_mechanism: str = ""
+    failure_mechanism: str = ""
+    images: list[dict[str, object]] = Field(default_factory=list)
+    dtc: str = ""
+    ordered_actions: list[dict[str, object]] = Field(default_factory=list)
+    parts_and_specs: object = None
+    evidence_map: list[dict[str, object]] = Field(default_factory=list)
+    uncertainties: object = None
+    cross_concept_handoffs: object = None
+
+    @model_validator(mode="after")
+    def _validate_mechanism_fields(self) -> PacketBody:
+        """Require mechanism fields when matching candidates exist."""
+        # Skip validation for internal packet types
+        if self.kind in {"bom_identity_plan", "no_entity"}:
+            return self
+
+        # Collect all candidates from the three possible field names
+        all_candidates = (
+            list(self.normalized_identity_candidates)
+            + list(self.entity_candidates)
+            + list(self.entities)
+        )
+
+        has_component = any(
+            str(c.get("concept", "")).lower() == "component" for c in all_candidates
+        )
+        has_fault = any(
+            str(c.get("concept", "")).lower() == "fault" for c in all_candidates
+        )
+
+        if has_component and not self.working_mechanism.strip():
+            raise ValueError(
+                "working_mechanism must not be empty when packet contains "
+                "Component candidates; infer from diagnostic context and "
+                "mark with 'inferred' if the source does not state it explicitly",
+            )
+        if has_fault and not self.failure_mechanism.strip():
+            raise ValueError(
+                "failure_mechanism must not be empty when packet contains "
+                "Fault candidates; infer from diagnostic context and "
+                "mark with 'inferred' if the source does not state it explicitly",
+            )
+
+        return self
 
 
 class PacketMixin:
@@ -495,7 +564,7 @@ class PacketMixin:
         source_hash: str = "",
         status: str = "complete",
         evidence_count: int = 0,
-        packet_body: dict[str, object] | None = None,
+        packet_body: PacketBody | None = None,
         ledger_key: str = "",
         source_contents: dict[str, str] | None = None,
         allow_same_snapshot_replace: bool = False,
@@ -522,6 +591,8 @@ class PacketMixin:
             raise ValueError("source packet status must be complete, partial, or failed")
         if evidence_count < 0:
             raise ValueError("evidence_count must be non-negative")
+        if isinstance(packet_body, PacketBody):
+            packet_body = packet_body.model_dump(exclude_none=True)
         sources = sorted({
             self._canonicalize_local_raw_uri(uri.strip()) for uri in source_uris if uri.strip()
         })

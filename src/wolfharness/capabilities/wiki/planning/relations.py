@@ -234,6 +234,60 @@ class RelationMixin:
             len(resolved_procedure_links),
         )
 
+    def _sync_symptom_profile_index(self, symptom_uri: str, *, force: bool = False) -> None:
+        """Backfill ## Profile 索引 in a Symptom index.md from its profile files."""
+        with self._relation_sync_lock:
+            self._sync_symptom_profile_index_locked(symptom_uri, force=force)
+
+    def _sync_symptom_profile_index_locked(self, symptom_uri: str, *, force: bool = False) -> None:
+        """Run Symptom profile index synchronization under its shared lock."""
+        relation_mode = os.environ.get("WIKI_RELATION_SYNC_MODE", "immediate").strip().lower()
+        if not force and relation_mode == "deferred":
+            return
+        info = self.store.lookup_by_uri(symptom_uri)
+        if info is None or info[0] != "Symptom":
+            return
+        concept, class_name, object_name = info
+        content = self.store.read_entity_by_uri(symptom_uri)
+        if content is None:
+            return
+        profiles = self.store.list_symptom_profiles(symptom_uri)
+        if not profiles:
+            return
+        rows: list[str] = []
+        for profile_id, profile_uri in profiles:
+            profile_content = self.store.read_entity_by_uri(profile_uri)
+            if profile_content is None:
+                continue
+            fm = parse_frontmatter(profile_content)
+            device_ref = fm.get("device_refs", [])
+            direct_comp = fm.get("direct_component_uri", "")
+            applicable = fm.get("applicable_models", [])
+            if isinstance(applicable, list) and applicable:
+                desc = ", ".join(str(item) for item in applicable[:2])
+            elif isinstance(device_ref, list) and device_ref:
+                first = device_ref[0]
+                desc = first.rsplit("/", 1)[-1] if isinstance(first, str) else profile_id
+            else:
+                desc = profile_id
+            if direct_comp and isinstance(direct_comp, str):
+                desc = f"{desc} + {direct_comp.rsplit('/', 1)[-1]}"
+            rows.append(f"| [{profile_id}]({profile_uri}) | {desc} |")
+        if not rows:
+            return
+        table_header = "| Profile | 设备 + 直接关联 Component |\n|---|---|"
+        table_body = "\n".join(rows)
+        section_body = f"{table_header}\n{table_body}"
+        updated = self._replace_h2_section(content, "Profile 索引", section_body)
+        updated = self._dedupe_h2_sections(updated)
+        if updated == content:
+            return
+        updated = self.store.resolve_body_refs(updated, None)
+        updated = self.store.dedup_citations(updated)
+        self.store.write_entity(concept, class_name, object_name, updated)
+        self.store.register_natural_key(concept, class_name, object_name, symptom_uri)
+        logger.info("Synced Symptom profile index: %s (%d profiles)", symptom_uri, len(rows))
+
     @staticmethod
     def _replace_h2_section(content: str, heading: str, body: str) -> str:
         """Replace one existing ``##`` section or append it once."""
@@ -264,6 +318,30 @@ class RelationMixin:
         """
         synced = 0
         with self._relation_sync_lock:
+            # Pre-collect DTCs by model prefix for the 控制器与故障码 section.
+            # DTC class_name format: <model>_<controller_role> (e.g. SY75C_主控制器)
+            dtc_by_model: dict[str, list[tuple[str, str, str, str]]] = {}
+            for _c, dtc_class, _o, dtc_uri in self.store.list_entities("DTC"):
+                dtc_content = self.store.read_entity_by_uri(dtc_uri)
+                if dtc_content is None:
+                    continue
+                dtc_fm = parse_frontmatter(dtc_content)
+                code = str(dtc_fm.get("code", _o))
+                role = str(dtc_fm.get("controller_role", ""))
+                if not role and "_" in dtc_class:
+                    role = dtc_class.split("_", 1)[-1]
+                fault_uris = list(
+                    all_relation_uris(dtc_content, "DTC", "related_faults", self.store.root_uri)
+                )
+                fault_display = ""
+                if fault_uris:
+                    fc = self.store.read_entity_by_uri(fault_uris[0])
+                    if fc:
+                        ff = parse_frontmatter(fc)
+                        fname = str(ff.get("title", fault_uris[0].rsplit("/", 1)[-1]))
+                        fault_display = f"[{fname.replace('|', '／')}]({fault_uris[0]})"
+                model_prefix = dtc_class.split("_", 1)[0] if "_" in dtc_class else dtc_class
+                dtc_by_model.setdefault(model_prefix, []).append((role, code, dtc_uri, fault_display))
             for _concept, class_name, object_name, device_uri in self.store.list_entities("Device"):
                 content = self.store.read_entity_by_uri(device_uri)
                 if content is None:
@@ -274,7 +352,19 @@ class RelationMixin:
                 symptom_uris = all_relation_uris(
                     content, "Device", "symptom_refs", self.store.root_uri
                 )
+                device_fm = parse_frontmatter(content)
+                raw_models = device_fm.get("applicable_models", [])
+                if isinstance(raw_models, list):
+                    device_models = [str(m) for m in raw_models]
+                elif raw_models:
+                    device_models = [str(raw_models)]
+                else:
+                    device_models = []
+                dtc_rows: list[tuple[str, str, str, str]] = []
+                for model in device_models:
+                    dtc_rows.extend(dtc_by_model.get(model, []))
                 rows: dict[tuple[str, str, str], tuple[str, str, str, str]] = {}
+                symptom_links: list[tuple[str, str]] = []
 
                 for symptom_uri in symptom_uris:
                     symptom_content = self.store.read_entity_by_uri(symptom_uri)
@@ -284,6 +374,7 @@ class RelationMixin:
                     symptom_name = str(
                         symptom_frontmatter.get("title", symptom_uri.rsplit("/", 1)[-1])
                     )
+                    symptom_links.append((symptom_name, symptom_uri))
                     symptom_sources = extract_source_uris(symptom_content)
                     profiles = self.list_symptom_profiles(symptom_uri)
                     for profile in profiles:
@@ -357,6 +448,43 @@ class RelationMixin:
                                 rows[key] = (symptom_name, fault_name, component_name, evidence)
 
                 if not rows:
+                    if not symptom_links and not dtc_rows:
+                        continue
+                    # No profile→fault→component chain resolved; fall back to
+                    # listing symptom_refs as readable links in the body.
+                    updated = content
+                    if symptom_links:
+                        table_lines = [
+                            "| 故障现象 |",
+                            "| --- |",
+                        ]
+                        for sname, suri in sorted(symptom_links):
+                            table_lines.append(
+                                f"| [{sname.replace('|', '／')}]({suri}) |"
+                            )
+                        updated = self._replace_h2_section(
+                            updated, "常见故障及故障机理", "\n".join(table_lines)
+                        )
+                        updated = self._dedupe_h2_sections(updated)
+                        updated = self.store.resolve_body_refs(updated, None)
+                        updated = self.store.dedup_citations(updated)
+                    # DTC section
+                    if dtc_rows:
+                        dtc_table = [
+                            "| 控制器 | 故障码 | 关联失效 |",
+                            "| --- | --- | --- |",
+                        ]
+                        for role, code, dtc_uri, fault_display in sorted(dtc_rows):
+                            dtc_table.append(
+                                f"| {role} | [{code}]({dtc_uri}) | {fault_display or '—'} |"
+                            )
+                        updated = self._replace_h2_section(
+                            updated, "控制器与故障码", "\n".join(dtc_table)
+                        )
+                        updated = self._dedupe_h2_sections(updated)
+                    if updated != content:
+                        self.store.write_entity("Device", class_name, object_name, updated)
+                        synced += 1
                     continue
                 table_lines = [
                     "| 故障现象 | 失效机理 | 关联部件 | 原文证据 |",
@@ -379,6 +507,20 @@ class RelationMixin:
                 updated = self._dedupe_h2_sections(updated)
                 updated = self.store.resolve_body_refs(updated, None)
                 updated = self.store.dedup_citations(updated)
+                # DTC section
+                if dtc_rows:
+                    dtc_table = [
+                        "| 控制器 | 故障码 | 关联失效 |",
+                        "| --- | --- | --- |",
+                    ]
+                    for role, code, dtc_uri, fault_display in sorted(dtc_rows):
+                        dtc_table.append(
+                            f"| {role} | [{code}]({dtc_uri}) | {fault_display or '—'} |"
+                        )
+                    updated = self._replace_h2_section(
+                        updated, "控制器与故障码", "\n".join(dtc_table)
+                    )
+                    updated = self._dedupe_h2_sections(updated)
                 if updated != content:
                     self.store.write_entity("Device", class_name, object_name, updated)
                     synced += 1

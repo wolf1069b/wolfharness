@@ -797,7 +797,7 @@ class ChildrenMixin(WikiBuildDeps):
 
         identity = self.store.lookup_by_uri(uri)
         concept = identity[0] if identity is not None else ""
-        if "/profiles/" in uri:
+        if "/profile/" in uri:
             concept = "SymptomProfile"
         frontmatter = parse_frontmatter(content)
         all_sources = list(dict.fromkeys(_source_values(frontmatter.get("sources"))))

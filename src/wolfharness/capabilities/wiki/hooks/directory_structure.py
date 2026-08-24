@@ -225,9 +225,9 @@ class DirectoryStructureHook(BaseHook):
 
             # ── Symptom index.md: 产品配置差异 must be a redirect, not inline ─
             # design_729.md §3.6: index.md's 产品配置差异 section should be
-            # a one-liner redirect to profiles/. Config-specific content
+            # a one-liner redirect to profile/. Config-specific content
             # (model names, pressure values, component types) belongs in
-            # profiles/<profile_id>.md.
+            # profile/<profile_id>.md.
             if "## 产品配置差异" in content:
                 # Extract the section content between ## 产品配置差异 and next ##
                 lines = content.splitlines()
@@ -254,7 +254,7 @@ class DirectoryStructureHook(BaseHook):
                     issues.append(
                         f"Symptom index.md '## 产品配置差异' contains "
                         f"config-specific content ({', '.join(found_patterns[:3])}). "
-                        f"This belongs in profiles/<profile_id>.md, not index.md. "
+                        f"This belongs in profile/<profile_id>.md, not index.md. "
                         f"index.md should only have a redirect sentence like: "
                         f"'不同配置下的失效机理和诊断路径存在差异，详见对应 Symptom Profile。' "
                         f"(design_729.md §3.6).",

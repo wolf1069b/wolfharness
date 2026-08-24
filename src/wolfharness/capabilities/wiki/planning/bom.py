@@ -375,8 +375,6 @@ class BomMixin:
                         f"{device_description.strip() or f'{target_model.strip()} 设备型号基线。'}\n\n"
                         "## 包含系统\n"
                         "BOM 组件树已登记，系统章节与诊断实体在后续章节抽取阶段补充。\n\n"
-                        "## 系统章节引用\n"
-                        f"{chapter_yaml.replace('  - ', '- ') if chapter_yaml else '- 待章节索引阶段补充'}\n\n"
                         f"## {SECTION_SOURCE}\n"
                         f"- {bom_uri}\n"
                     ),

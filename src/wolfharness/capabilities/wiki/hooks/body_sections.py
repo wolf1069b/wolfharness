@@ -41,7 +41,6 @@ from ..section_constants import (
     SECTION_OVERVIEW,
     SECTION_POSSIBLE_FAILURE,
     SECTION_SOURCE,
-    SECTION_SYSTEM_CHAPTERS,
 )
 from .base import BaseHook, HookResult
 
@@ -60,7 +59,7 @@ _CASE_REQUIRED_SECTIONS: dict[str, frozenset[str]] = {
     "Component": frozenset({SECTION_OVERVIEW, SECTION_MECHANISM, SECTION_SOURCE}),
     "DTC": frozenset({"故障码定义", SECTION_POSSIBLE_FAILURE, SECTION_DIAGNOSIS_FLOW, SECTION_SOURCE}),
     "Procedure": frozenset({"操作目的", SECTION_OPERATION_STEPS, SECTION_JUDGMENT_CRITERIA, "后续处理", SECTION_SOURCE}),
-    "Device": frozenset({"基础信息", "包含系统", SECTION_SYSTEM_CHAPTERS, SECTION_SOURCE}),
+    "Device": frozenset({"基础信息", "包含系统", SECTION_SOURCE}),
 }
 
 # Section heading pattern: "## Title" (exactly 2 hashes, not 3+)

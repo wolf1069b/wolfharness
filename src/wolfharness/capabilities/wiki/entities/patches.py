@@ -501,7 +501,7 @@ class PatchMixin:
         """Move an entity file to a new location and update the natural key.
 
         For DIRECTORY_CONCEPTS (Symptom), moves the entire entity directory
-        (including profiles/).  Falls back to legacy .md path if the new
+        (including profile/).  Falls back to legacy .md path if the new
         index.md path does not exist.
 
         Returns the new ``{root_uri}/...`` URI.

@@ -490,7 +490,7 @@ class ChapterMixin:
                 keys = self.store.list_dir(relative_root, recursive=True)
                 for key in keys:
                     rel_parts = Path(key).relative_to(Path(relative_root)).parts
-                    if "tmp" in rel_parts or "profiles" in rel_parts:
+                    if "tmp" in rel_parts or "profile" in rel_parts:
                         continue
                     formal_paths.add(Path(key))
             entity_count = len(formal_paths)
@@ -531,6 +531,9 @@ class ChapterMixin:
         active_packet_ids: list[str] | None = None,
         audit_profile: str = "manual",
         refresh: bool = False,
+        preview: bool = False,
+        preview_offset: int = 0,
+        preview_limit: int = 50,
     ) -> dict[str, object]:
         """Return the next receipt-missing chapters for dynamic dispatch.
 
@@ -764,14 +767,10 @@ class ChapterMixin:
         ]
         selected = dispatchable[:limit]
         auto_no_entity_count = sum(bool(chapter.get("auto_no_entity")) for chapter in chapters)
-        # Lightweight preview of ALL chapters for conductor-level filtering.
-        # Contains only metadata (no task_description) so the conductor can
-        # review the full chapter list and batch-skip low-value chapters
-        # (prefaces, safety notices, administrative pages) via
-        # register_no_entity_chapters before dispatching workers.
         pending_packet_ids = {str(ch.get("packet_id", "")) for ch in pending}
-        chapter_preview = [
-            {
+
+        def _build_preview_entry(ch: dict[str, object]) -> dict[str, object]:
+            return {
                 "title": str(ch.get("title", "")),
                 "section": str(ch.get("section", "")),
                 "rootsection": str(ch.get("rootsection", "")),
@@ -782,8 +781,21 @@ class ChapterMixin:
                 "auto_no_entity": bool(ch.get("auto_no_entity")),
                 "completed": str(ch.get("packet_id", "")) not in pending_packet_ids,
             }
-            for ch in chapters
-        ]
+
+        # ponytail: chapter_preview was returned on every call (~60K tokens for
+        # 337 chapters). Now opt-in via preview=True with pagination so the
+        # conductor pulls chapter metadata on demand instead of every response.
+        preview_total = len(chapters)
+        if preview:
+            pv_end = min(preview_offset + preview_limit, preview_total)
+            chapter_preview: list[dict[str, object]] = [
+                _build_preview_entry(ch) for ch in chapters[preview_offset:pv_end]
+            ]
+            preview_has_more = pv_end < preview_total
+        else:
+            chapter_preview = []
+            preview_has_more = preview_total > 0
+
         pre_filter_required = (
             self.store.read_json(
                 f"index/chapter_plans/{plan_id}.prefilter.json",
@@ -808,10 +820,15 @@ class ChapterMixin:
             "work_items": selected,
             "count": len(selected),
             "chapter_preview": chapter_preview,
+            "preview_total": preview_total,
+            "preview_has_more": preview_has_more if preview else False,
+            "preview_available": preview_total > 0,
             "pre_filter_required": pre_filter_required,
             "pre_filter_message": (
-                "PRE_FILTER_REQUIRED: chapter_preview contains all chapters. "
-                "Review it and call register_no_entity_chapters(doc_id, build_id, "
+                "PRE_FILTER_REQUIRED: call plan_chapter_work with preview=True "
+                "(and preview_offset/preview_limit for pagination) to retrieve "
+                "chapter metadata for filtering. Then call "
+                "register_no_entity_chapters(doc_id, build_id, "
                 "packet_id='<build_id>_lowvalue', source_uris=[low-value URIs]) "
                 "to skip administrative/preface chapters. work_items are withheld "
                 "until pre-filtering is done."

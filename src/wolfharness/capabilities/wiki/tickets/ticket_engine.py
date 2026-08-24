@@ -70,7 +70,6 @@ _MAX_DISCOVERY_LIMIT = 500
 # (source_missing, controller_identity, etc.) stay in OPA.
 _RELATION_GAP_CODES: frozenset[str] = frozenset({
     # Policy-level relation codes
-    "isolated_entity",
     "dangling_relation_target",
     "dangling_wiki_reference",
     "dangling_reference",
@@ -84,7 +83,6 @@ _RELATION_GAP_CODES: frozenset[str] = frozenset({
     "SymptomProfile.possible_faults",
     "Device.critical_components",
     "Device.symptom_refs",
-    "Device.system_chapters.raw_link",
     "DTC.related_faults",
     "Fault.affected_components",
     "Fault.procedures",
@@ -531,24 +529,15 @@ class TicketEngine:
         record_build_id = str(frontmatter.get("build_id", "")).strip()
         if record_build_id:
             return record_build_id == build_id
+        # Records without build_id were created before the checkpoint was
+        # initialised (common early in a build).  Accept them as part of the
+        # current build rather than silently dropping current-build OPAs —
+        # the checkpoint build_id match is sufficient scoping.
         checkpoint = self.store.read_json("index/build_checkpoint.json")
-        if (
-            not isinstance(checkpoint, dict)
-            or str(checkpoint.get("build_id", "")).strip() != build_id
-        ):
-            return False
-        started_at = str(checkpoint.get("started_at", "")).strip()
-        if not started_at:
-            return False
-        try:
-            started = datetime.fromisoformat(started_at)
-        except ValueError:
-            return False
-        if started.tzinfo is None:
-            started = started.replace(tzinfo=UTC)
-        started_ns = int(started.timestamp() * 1_000_000_000)
-        modified_ns = self.store._fs.mtime_ns(key)
-        return modified_ns is not None and modified_ns >= started_ns
+        return (
+            isinstance(checkpoint, dict)
+            and str(checkpoint.get("build_id", "")).strip() == build_id
+        )
 
     def _opa_category_from_key(self, key: str) -> str:
         for category, subdir in _OPA_CATEGORY_DIRS.items():
@@ -2777,7 +2766,7 @@ class TicketEngine:
                 # instead of silently skipping, so the finalize gate can see
                 # the tracked record and the limitation is explicitly recorded.
                 if not reason_code:
-                    reason_code = "content_limitation"
+                    reason_code = "content_missing"
                 disposition_value = IssueDisposition.GAP.value
             if (
                 disposition_value
@@ -2828,9 +2817,7 @@ class TicketEngine:
             # URI: bind the OPA to the concrete page as observation evidence,
             # while keeping ``missing`` explicit so this is never mistaken for
             # a source citation.
-            if not evidence and code == "source_missing":
-                evidence = [target_uri]
-            elif not evidence:
+            if not evidence:
                 unclassified_count += 1
                 item = {"code": code, "reason": "OPA issue has no readable evidence URI"}
                 skipped.append(item)

@@ -199,6 +199,28 @@ _UNIT_SCALE: dict[str, tuple[str, float]] = {
     "c": ("temperature_c", 1.0),
 }
 
+_DIMENSION_CN: dict[str, str] = {
+    "voltage_v": "电压",
+    "pressure_pa": "压力",
+    "current_a": "电流",
+    "frequency_hz": "频率",
+    "length_mm": "长度",
+    "temperature_c": "温度",
+    "unitless": "数值",
+}
+
+
+def _humanize_fact_key(key: str) -> str:
+    """Render a machine fact key as a human-readable Chinese label."""
+    if key.startswith("parameter:"):
+        _, label, dimension = key.split(":", 2)
+        return f'参数「{label}」的{_DIMENSION_CN.get(dimension, "数值")}'
+    if key.startswith("fm:"):
+        return f'frontmatter 字段「{key.split(":", 1)[1]}」'
+    if key.startswith("body-state:"):
+        return f'状态描述「{key.split(":", 1)[1]}」'
+    return key
+
 
 def _parameter_fact_map(label: str, value: object) -> dict[str, set[str]]:
     """Return normalized parameter values keyed by their semantic label."""
@@ -297,7 +319,10 @@ def _conflicting_facts(current: str, candidate: str) -> set[str]:
         current_values = current_facts[key]
         candidate_values = candidate_facts[key]
         if current_values.isdisjoint(candidate_values):
-            conflicts.add(f"{key}={sorted(current_values)} -> {sorted(candidate_values)}")
+            humanized_key = _humanize_fact_key(key)
+            current_vals = ", ".join(sorted(current_values))
+            candidate_vals = ", ".join(sorted(candidate_values))
+            conflicts.add(f"{humanized_key}：已有内容为 {current_vals}，新内容为 {candidate_vals}")
     return conflicts
 
 
@@ -347,8 +372,22 @@ def _internal_conflicting_facts(content: str) -> set[str]:
             add_value(current, stripped[: match.start()], stripped)
 
     return {
-        f"internal {key}={sorted(values)}"
+        f"{_humanize_fact_key(key)}在同一文档内不一致：{', '.join(sorted(values))}"
         for bucket in buckets
         for key, values in bucket.items()
         if len(values) > 1
     }
+
+
+if __name__ == "__main__":
+    # Self-check: conflict strings must be human-readable Chinese, not machine keys.
+    expected = "参数「传感器输出电压异常」的电压"
+    assert _humanize_fact_key("parameter:传感器输出电压异常:voltage_v") == expected
+    assert _humanize_fact_key("fm:title") == "frontmatter 字段「title」"
+    assert _humanize_fact_key("body-state:压力正常") == "状态描述「压力正常」"
+    assert _humanize_fact_key("unknown:key") == "unknown:key"
+    cross = _conflicting_facts("电压 0.3v\n", "电压 4.7v\n")
+    assert cross == {"参数「电压」的电压：已有内容为 0.3，新内容为 4.7"}, cross
+    internal = _internal_conflicting_facts("电压 0.3v\n电压 4.7v\n")
+    assert internal == {"参数「电压」的电压在同一文档内不一致：0.3, 4.7"}, internal
+    print("humanized conflict format self-check passed")

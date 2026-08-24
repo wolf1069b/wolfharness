@@ -209,7 +209,7 @@ concepts:
         required: true
       - name: class_name
         type: string
-        required: true
+        required: false
         description: "功能域，不是机型（如 液压系统、动力与发动机）"
       - name: object_name
         type: string
@@ -219,7 +219,7 @@ concepts:
         required: true
       - name: profile_resource
         type: string
-        description: "固定值 profiles/"
+        description: "固定值 profile/"
       - name: sources
         type: list
         required: true
@@ -310,7 +310,7 @@ concepts:
       class_name: 液压系统
       object_name: 整机动作慢
       status: draft
-      profile_resource: profiles/
+      profile_resource: profile/
       sources:
         - viking://resources/<raw_namespace>/manual-sy215/chapters/05_液压系统/05_2 主泵/chapter.md
       ---
@@ -327,11 +327,11 @@ concepts:
       ## 产品配置差异
       | 配置 | 差异要点 | 对应 Profile |
       |------|---------|-------------|
-      | SY215C 柴油 + 川崎泵 | 诊断路径按该配置 Profile 区分；具体阈值读取原始章节 | [sy215c柴油_主泵川崎K3V112](viking://resources/<namespace>/Symptom/0123456789abcdef01234567/profiles/sy215c柴油_主泵川崎K3V112) |
+      | SY215C 柴油 + 川崎泵 | 诊断路径按该配置 Profile 区分；具体阈值读取原始章节 | [sy215c柴油_主泵川崎K3V112](viking://resources/<namespace>/Symptom/0123456789abcdef01234567/profile/sy215c柴油_主泵川崎K3V112) |
       > 此节必须列出源章节中提到的不同设备配置及其在该现象下的具体差异（排放标准/液压配置/控制策略等），禁止仅写"见 Profile"。
       ## Profile 索引
-      - [sy215c柴油_主泵川崎K3V112](viking://resources/<namespace>/Symptom/0123456789abcdef01234567/profiles/sy215c柴油_主泵川崎K3V112) — SY215C 柴油版 + 主泵川崎K3V112
-      > 此节必须列出每个已创建 Profile 的 URI + 一句话描述，禁止仅写"详见 profiles/"。
+      - [sy215c柴油_主泵川崎K3V112](viking://resources/<namespace>/Symptom/0123456789abcdef01234567/profile/sy215c柴油_主泵川崎K3V112) — SY215C 柴油版 + 主泵川崎K3V112
+      > 此节必须列出每个已创建 Profile 的 URI + 一句话描述，禁止仅写"详见 profile/"。
 
   # ── DTC — 故障码 ──
   DTC:
@@ -524,7 +524,6 @@ concepts:
     body_sections:
       - "基础信息"
       - "包含系统"
-      - "系统章节引用"
     optional_body_sections:
       - "本型号特点"
       - "常见故障及故障机理"
@@ -548,8 +547,6 @@ concepts:
       - 电气系统
       ## 本型号特点
       电控发动机，带 EGR 排放系统。
-      ## 系统章节引用
-      - [液压系统原理](viking://resources/<raw_namespace>/manual-sy215/chapters/05_液压系统/05_6 多路阀/chapter.md)
       ## 常见故障及故障机理
       | Symptom URI | Fault URI | Component URI |
       |-------------|-----------|--------------|

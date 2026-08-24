@@ -308,6 +308,10 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
         OPA targeted at ``target_uri``, or — when ``opa_uri`` is given —
         revises that existing OPA record in place.
 
+        Each submission without ``opa_uri`` creates its own distinct OPA
+        record: the same problem reported again (possibly by another
+        expert) is filed as a new record, never merged into a prior one.
+
         When ``ticket`` is provided, fields are derived from an eval
         revision: ``target.entity_uri`` → source/target,
         ``target.content_snippet`` or ``suggested_resolution`` → problem
@@ -376,20 +380,6 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
             )
         )
         effective_finding = finding or description
-        if not opa_id:
-            # Reuse an existing pending OPA for the same target instead of
-            # duplicating it.  The lookup is O(1): target-uri-hash subdir.
-            existing_opas = await asyncio.to_thread(tools.get_opas, target_uri=effective_target, limit=50)
-            pending = [opa for opa in existing_opas if str(opa.get("status", "")).strip().lower() == "pending"]
-            if pending:
-                return {
-                    "opa_id": pending[0].get("opa_id", ""),
-                    "uri": pending[0].get("uri", ""),
-                    "title": pending[0].get("title", ""),
-                    "target_uri": effective_target,
-                    "status": "pending",
-                    "reused": True,
-                }
         return await asyncio.to_thread(
             _safe_create_opa,
             tools,

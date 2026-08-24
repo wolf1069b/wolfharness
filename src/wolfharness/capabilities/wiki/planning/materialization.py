@@ -26,6 +26,25 @@ logger = logging.getLogger(__name__)
 from .._helpers import _entity_batch_limit, _materialization_task_byte_limit
 
 
+def _core_section_filled(content: str, section_heading: str) -> bool:
+    """Check if entity content has a body section with real (non-placeholder) content."""
+    idx = content.find(section_heading)
+    if idx < 0:
+        return False
+    after = content[idx + len(section_heading):]
+    # Stop at the next section heading
+    next_section = after.find("\n## ")
+    if next_section >= 0:
+        after = after[:next_section]
+    after = after.strip()
+    if not after:
+        return False
+    # Treat placeholder text as empty
+    if "待补充" in after:
+        return False
+    return True
+
+
 class MaterializationMixin:
     """Materialization planning and template batch execution."""
 
@@ -79,15 +98,20 @@ class MaterializationMixin:
                 concept = candidate.get("concept")
                 class_name = candidate.get("class_name", candidate.get("class"))
                 object_name = candidate.get("object_name", candidate.get("name"))
-                if not all(
-                    isinstance(value, str) and value.strip()
-                    for value in (concept, class_name, object_name)
-                ):
+                if not isinstance(concept, str) or not concept.strip():
                     continue
-                assert isinstance(concept, str)
-                assert isinstance(class_name, str)
-                assert isinstance(object_name, str)
+                # For Symptom, class_name is optional (directory layout drops class level)
+                needs_class = concept != "Symptom"
+                if needs_class and (not isinstance(class_name, str) or not class_name.strip()):
+                    continue
+                if not isinstance(object_name, str) or not object_name.strip():
+                    continue
                 normalized_concept = concept.strip()
+                cls_value = (
+                    class_name.strip()
+                    if isinstance(class_name, str) and class_name.strip()
+                    else None
+                )
                 if normalized_concept not in self.store.CONCEPT_DIRS:
                     # A malformed candidate must not abort the whole planner
                     # and force the conductor back into manual re-planning.
@@ -95,7 +119,7 @@ class MaterializationMixin:
                     # concepts the store can materialize deterministically.
                     continue
                 uri = self.store.entity_uri(
-                    normalized_concept, class_name.strip(), object_name.strip()
+                    normalized_concept, cls_value, object_name.strip()
                 )
                 raw_source_uris = packet.get("source_uris", [])
                 source_uris = raw_source_uris if isinstance(raw_source_uris, list) else []
@@ -103,7 +127,7 @@ class MaterializationMixin:
                     {
                         "packet_id": packet_id,
                         "concept": normalized_concept,
-                        "class_name": class_name.strip(),
+                        "class_name": cls_value or "",
                         "object_name": object_name.strip(),
                         "entity_uri": uri,
                         "write_set": [uri],
@@ -324,10 +348,10 @@ class MaterializationMixin:
         grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
         for candidate in dispatchable.values():
             concept = str(candidate["concept"])
-            # Symptom identity includes class_name and the harness requires a
-            # single stable class per task. Keep classes isolated while still
-            # allowing unrelated URI sets to run concurrently.
-            class_partition = str(candidate["class_name"]) if concept == "Symptom" else ""
+            # Symptom no longer partitions by class_name (directory layout
+            # drops the class level), so all Symptoms share one partition —
+            # unrelated URI sets still run concurrently.
+            class_partition = ""
             grouped.setdefault((concept, class_partition), []).append(candidate)
         shards: list[dict[str, object]] = []
         shard_index = 0
@@ -700,8 +724,8 @@ class MaterializationMixin:
             batch = pending[batch_start : batch_start + batch_limit]
             entities_to_write: list[dict[str, object]] = []
             batch_meta: list[
-                tuple[str, str, str, str]
-            ] = []  # (planned_uri, concept, class_name, actual_object_name)
+                tuple[str, str, str, str, str]
+            ] = []  # (planned_uri, concept, class_name, actual_object_name, packet_id)
 
             for candidate in batch:
                 concept = str(candidate["concept"])
@@ -725,6 +749,22 @@ class MaterializationMixin:
                     })
                     continue
 
+                # Component/Fault with empty mechanism text → LLM inference needed
+                if concept == "Component":
+                    if not str(body.get("working_mechanism", "")).strip():
+                        fallback_to_llm.append({
+                            "entity_uri": planned_uri,
+                            "reason": "empty working_mechanism requires LLM inference",
+                        })
+                        continue
+                elif concept == "Fault":
+                    if not str(body.get("failure_mechanism", "")).strip():
+                        fallback_to_llm.append({
+                            "entity_uri": planned_uri,
+                            "reason": "empty failure_mechanism requires LLM inference",
+                        })
+                        continue
+
                 # Strip device-model prefix for Component (validation rule).
                 actual_object_name = original_object_name
                 if concept == "Component" and device_model:
@@ -741,14 +781,23 @@ class MaterializationMixin:
                     source_uris=list(candidate.get("source_uris", [])),  # type: ignore[arg-type]
                 )
 
-                # For existing entities (BOM skeletons), provide expected_sha256.
+                # Incremental fill-blanks: skip entities whose core section
+                # is already filled (confirmed/published OR draft with real content).
                 existing = self.store.read_entity(concept, class_name or None, actual_object_name)
                 expected_sha = ""
                 if existing is not None:
                     existing_fm = parse_frontmatter(existing)
                     existing_status = str(existing_fm.get("status", "")).strip()
                     if existing_status in ("confirmed", "published"):
-                        # Expert-confirmed content — skip template overwrite.
+                        skipped_existing += 1
+                        continue
+                    # Check if the core section already has real content
+                    core_section = (
+                        "## 工作机理" if concept == "Component"
+                        else "## 失效机理" if concept == "Fault"
+                        else None
+                    )
+                    if core_section and _core_section_filled(existing, core_section):
                         skipped_existing += 1
                         continue
                     expected_sha = sha256(existing.encode("utf-8")).hexdigest()
@@ -760,7 +809,7 @@ class MaterializationMixin:
                     "content": content,
                     "expected_sha256": expected_sha,
                 })
-                batch_meta.append((planned_uri, concept, class_name, actual_object_name))
+                batch_meta.append((planned_uri, concept, class_name, actual_object_name, packet_id))
 
             if not entities_to_write:
                 continue
@@ -771,14 +820,85 @@ class MaterializationMixin:
                 written_list: list[str] = (
                     [str(u) for u in raw_written] if isinstance(raw_written, list) else []
                 )
-                for idx, (planned_uri, _concept, _cls, _obj) in enumerate(batch_meta):
+                for idx, (planned_uri, _concept, _cls, _obj, _pid) in enumerate(batch_meta):
                     actual_uri = written_list[idx] if idx < len(written_list) else planned_uri
                     if actual_uri != planned_uri:
                         resolved_map[planned_uri] = actual_uri
                     written_uris.append(planned_uri)
+                # Create Symptom Profile skeletons with resolved sibling URIs.
+                # A plain skeleton (draft + placeholders) needs no LLM; only
+                # skeleton creation failures fall back to the LLM worker.
+                for planned_uri, _concept, _cls, _obj, packet_id in batch_meta:
+                    if _concept != "Symptom":
+                        continue
+                    try:
+                        symptom_uri = resolved_map.get(planned_uri, planned_uri)
+                        packet = self.store.read_json(self._source_packet_key(packet_id))
+                        if not isinstance(packet, dict):
+                            raise ValueError(f"packet not readable: {packet_id}")
+                        raw_sources = packet.get("source_uris", [])
+                        source_uris = [
+                            str(uri)
+                            for uri in raw_sources
+                            if isinstance(uri, str) and uri.strip()
+                        ]
+                        component = next(
+                            (
+                                entry
+                                for entry in batch_meta
+                                if entry[4] == packet_id and entry[1] == "Component"
+                            ),
+                            None,
+                        )
+                        if component is None:
+                            raise ValueError(
+                                f"no sibling Component in packet {packet_id} for profile skeleton",
+                            )
+                        fault_uris = [
+                            self.store.entity_uri(entry[1], entry[2] or None, entry[3])
+                            for entry in batch_meta
+                            if entry[4] == packet_id and entry[1] == "Fault"
+                        ]
+                        device_uri = ""
+                        if device_model:
+                            try:
+                                device_uri = self.store.entity_uri("Device", None, device_model)
+                            except ValueError:
+                                device_uri = ""
+                        if not device_uri:
+                            device_entities = self.store.list_entities("Device")
+                            if device_entities:
+                                device_uri = device_entities[0][3]
+                        profile_id = (
+                            f"{device_model}_{component[3]}"
+                            .lower()
+                            .replace(" ", "_")
+                            .replace("/", "_")
+                            .replace("\\", "_")
+                            .replace("／", "_")
+                            .replace("＼", "_")[:80]
+                        )
+                        content = self._symptom_profile_skeleton(
+                            profile_id=profile_id,
+                            symptom_uri=symptom_uri,
+                            device_model=device_model,
+                            component_name=component[3],
+                            component_uri=self.store.entity_uri(
+                                component[1], component[2] or None, component[3]
+                            ),
+                            fault_uris=fault_uris,
+                            device_uri=device_uri,
+                            source_uris=source_uris,
+                        )
+                        self.write_symptom_profile(symptom_uri, profile_id, content)
+                    except (ValueError, TypeError, KeyError) as exc:
+                        fallback_to_llm.append({
+                            "entity_uri": planned_uri,
+                            "reason": f"symptom profile creation requires LLM: {exc}",
+                        })
             except (ValueError, TypeError) as exc:
                 # Validation rejected the write — retry per-entity, fallback to LLM only where the single write also fails.
-                for idx, (planned_uri, _concept, _cls, _obj) in enumerate(batch_meta):
+                for idx, (planned_uri, _concept, _cls, _obj, _pid) in enumerate(batch_meta):
                     raw_single = entities_to_write[idx] if idx < len(entities_to_write) else None
                     if isinstance(raw_single, list):
                         try:
@@ -818,6 +938,67 @@ class MaterializationMixin:
             "skipped_existing": skipped_existing,
             "errors": errors,
         }
+
+    def _symptom_profile_skeleton(
+        self,
+        *,
+        profile_id: str,
+        symptom_uri: str,
+        device_model: str,
+        component_name: str,
+        component_uri: str,
+        fault_uris: list[str],
+        device_uri: str,
+        source_uris: list[str],
+    ) -> str:
+        """Build a draft Symptom Profile skeleton with resolved sibling URIs.
+
+        Body sections carry LLM placeholders; a later worker phase fills them
+        with content extracted from the source chapters.
+        """
+        fault_block = "".join(f"  - {uri}\n" for uri in fault_uris) or "  []\n"
+        source_block = "".join(f"  - {uri}\n" for uri in source_uris) or "  []\n"
+        return (
+            "---\n"
+            f"id: PRO-{profile_id}\n"
+            f"profile_id: {profile_id}\n"
+            f"parent_symptom: {symptom_uri}\n"
+            "status: draft\n"
+            "applicable_models:\n"
+            f"  - {device_model}\n"
+            "device_refs:\n"
+            f"  - {device_uri}\n"
+            f"direct_component_uri: {component_uri}\n"
+            "possible_faults:\n"
+            f"{fault_block}"
+            "sources:\n"
+            f"{source_block}"
+            "---\n"
+            "\n"
+            "## 适用配置\n"
+            "\n"
+            f"{device_model} + {component_name}\n"
+            "\n"
+            "## 表现特征\n"
+            "\n"
+            "> 待 LLM 补充：从源章节提取该设备+Component组合下的具体表现特征。\n"
+            "\n"
+            "## 差异\n"
+            "\n"
+            "> 待 LLM 补充：与其他设备/配置组合的差异。\n"
+            "\n"
+            "## 可能失效机理\n"
+            "\n"
+            "> 待 LLM 补充：从源章节提取可能的失效机理。\n"
+            "\n"
+            "## 推荐诊断流程\n"
+            "\n"
+            "> 待 LLM 补充：从源章节提取推荐诊断流程。\n"
+            "\n"
+            "## 来源\n"
+            "\n"
+            + "".join(f"[{uri}]({uri})\n" for uri in source_uris)
+        )
 
     def _source_belongs_to_doc(self, uri: str, doc_id: str) -> bool:
         """Return whether a raw URI belongs to the selected logical document.

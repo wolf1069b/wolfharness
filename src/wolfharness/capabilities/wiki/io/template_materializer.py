@@ -125,17 +125,34 @@ def _format_sources(evidence_map: Any, source_uris: list[str]) -> list[str]:
     return uris
 
 
+def _format_images(images: Any) -> list[str]:
+    """Render ``images`` list as markdown image references."""
+    lines: list[str] = []
+    if not isinstance(images, list):
+        return lines
+    for img in images:
+        if not isinstance(img, dict):
+            continue
+        uri = str(img.get("uri", "")).strip()
+        if not uri:
+            continue
+        caption = str(img.get("caption", "")).strip()
+        lines.append(f"![{caption}]({uri})")
+        lines.append("")
+    return lines
+
+
 def _component_body_sections(
     *,
     source_subject: str,
-    causal_chain: Any,
+    working_mechanism: str,
     parts_and_specs: Any,
 ) -> list[str]:
     """Body sections for Component pages: identity + normal working principle.
 
     Component pages carry no parameter tables, thresholds, wiring info or
     fault propagation.  ``## 工作机理`` is always emitted so missing
-    ``causal_chain.normal_function`` gaps stay visible.
+    ``working_mechanism`` gaps stay visible.
     """
     lines: list[str] = []
     if source_subject:
@@ -146,12 +163,9 @@ def _component_body_sections(
 
     lines.append("## 工作机理")
     lines.append("")
-    normal_function = ""
-    if isinstance(causal_chain, dict):
-        normal_function = str(causal_chain.get("normal_function", "")).strip()
     lines.append(
-        normal_function
-        or "> 工作机理待补充: 当前 packet 未提供 causal_chain.normal_function。"
+        working_mechanism.strip()
+        or "> 工作机理待补充: 当前 packet 未提供 working_mechanism。"
     )
     lines.append("")
 
@@ -167,14 +181,13 @@ def _component_body_sections(
 def _fault_body_sections(
     *,
     source_subject: str,
-    causal_chain: Any,
+    failure_mechanism: str,
 ) -> list[str]:
     """Body sections for Fault pages: failure description + mechanism.
 
-    The causal chain (``failure_mode``, ``initiating_condition``,
-    ``propagation_steps``, ``system_effect``, ``observable_symptoms``) is
-    rendered directly into ``## 失效机理`` / ``## 影响范围``.  ``## 失效机理``
-    is always emitted so missing causal_chain gaps stay visible.
+    ``## 失效机理`` is always emitted so missing ``failure_mechanism``
+    gaps stay visible.  Observable symptoms / 影响范围 are populated by
+    relation workers, not the template path.
     """
     lines: list[str] = []
     if source_subject:
@@ -185,53 +198,11 @@ def _fault_body_sections(
 
     lines.append("## 失效机理")
     lines.append("")
-    if not isinstance(causal_chain, dict) or not causal_chain:
-        lines.append("> 失效机理待补充: 当前 packet 未提供 causal_chain 失效信息。")
-        lines.append("")
-        return lines
-
-    emitted = False
-    failure_mode = str(causal_chain.get("failure_mode", "")).strip()
-    if failure_mode:
-        lines.append(f"- **失效模式**: {failure_mode}")
-        emitted = True
-    initiating_condition = str(causal_chain.get("initiating_condition", "")).strip()
-    if initiating_condition:
-        lines.append(f"- **诱发条件**: {initiating_condition}")
-        emitted = True
-    propagation_steps = causal_chain.get("propagation_steps", "")
-    if propagation_steps:
-        lines.append("- **传播过程**:")
-        if isinstance(propagation_steps, list):
-            lines.extend(
-                f"  - {step}" for step in propagation_steps if str(step).strip()
-            )
-        else:
-            lines.append(f"  - {propagation_steps}")
-        emitted = True
-    system_effect = str(causal_chain.get("system_effect", "")).strip()
-    if system_effect:
-        lines.append(f"- **系统后果**: {system_effect}")
-        emitted = True
-    if not emitted:
-        lines.append("> 失效机理待补充: 当前 packet 未提供 causal_chain 失效信息。")
+    lines.append(
+        failure_mechanism.strip()
+        or "> 失效机理待补充: 当前 packet 未提供 failure_mechanism。"
+    )
     lines.append("")
-
-    observable_symptoms = causal_chain.get("observable_symptoms", "")
-    symptom_lines: list[str] = []
-    if isinstance(observable_symptoms, list):
-        symptom_lines.extend(
-            f"- {symptom}"
-            for symptom in observable_symptoms
-            if str(symptom).strip()
-        )
-    elif str(observable_symptoms).strip():
-        symptom_lines.append(f"- {observable_symptoms}")
-    if symptom_lines:
-        lines.append("## 影响范围")
-        lines.append("")
-        lines.extend(symptom_lines)
-        lines.append("")
     return lines
 
 
@@ -248,7 +219,7 @@ def assemble_template_entity(
 
     Only sections with content are emitted — no empty headings.  Component
     pages are the exception: ``## 工作机理`` is always emitted (with a
-    placeholder when ``causal_chain.normal_function`` is missing) so content
+    placeholder when ``working_mechanism`` is missing) so content
     gaps stay visible.  Fault pages likewise always emit ``## 失效机理``.
     The output is a draft entity page (``status: draft``)
     ready for ``write_entities_batch``.
@@ -268,7 +239,9 @@ def assemble_template_entity(
     parts_and_specs = packet_body.get("parts_and_specs")
     explicit_facts = packet_body.get("explicit_facts")
     ordered_actions = packet_body.get("ordered_actions")
-    causal_chain = packet_body.get("causal_chain")
+    working_mechanism = str(packet_body.get("working_mechanism", ""))
+    failure_mechanism = str(packet_body.get("failure_mechanism", ""))
+    images = packet_body.get("images")
 
     # ── Frontmatter ──────────────────────────────────────────────────────
     id_prefix = _concept_id_prefix(concept)
@@ -293,7 +266,7 @@ def assemble_template_entity(
         body_lines.extend(
             _component_body_sections(
                 source_subject=source_subject,
-                causal_chain=causal_chain,
+                working_mechanism=working_mechanism,
                 parts_and_specs=parts_and_specs,
             )
         )
@@ -301,7 +274,7 @@ def assemble_template_entity(
         body_lines.extend(
             _fault_body_sections(
                 source_subject=source_subject,
-                causal_chain=causal_chain,
+                failure_mechanism=failure_mechanism,
             )
         )
     else:
@@ -332,12 +305,11 @@ def assemble_template_entity(
             body_lines.extend(action_lines)
             body_lines.append("")
 
-        if isinstance(causal_chain, dict) and causal_chain:
-            body_lines.append("## 因果链")
-            body_lines.append("")
-            for key, value in causal_chain.items():
-                if str(key).strip() and str(value).strip():
-                    body_lines.append(f"- **{key}**: {value}")
-            body_lines.append("")
+    # ── Images (shared across all concepts) ──────────────────────────────
+    image_lines = _format_images(images)
+    if image_lines:
+        body_lines.append("## 附图")
+        body_lines.append("")
+        body_lines.extend(image_lines)
 
     return "\n".join(fm_lines) + "\n" + "\n".join(body_lines)

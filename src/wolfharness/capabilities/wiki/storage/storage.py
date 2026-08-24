@@ -47,7 +47,7 @@ class WikiStore:
     }
 
     # Concepts that use a directory + index.md layout instead of a flat .md file.
-    # Symptom uses Symptom/<class>/<object>/index.md with a profiles/ subdirectory
+    # Symptom uses Symptom/<object>/index.md with a profile/ subdirectory
     # per design_717.md §2.1.
     DIRECTORY_CONCEPTS: frozenset[str] = frozenset({"Symptom"})
 
@@ -55,6 +55,11 @@ class WikiStore:
     # only (never produced on write). Component folders now follow the logical
     # class_name path alone.
     _LEGACY_TIERS: tuple[str, ...] = ("关重件/", "普通件/")
+
+    # Parenthetical annotations (full-width ／half-width) stripped from
+    # class_name before path/hash so the same controller always merges
+    # into one directory regardless of LLM uncertainty notes.
+    _PAREN_RE: re.Pattern[str] = re.compile(r"[（(][^）)]*[）)]")
 
     _MAX_OBJECT_NAME_BYTES = 180
 
@@ -171,7 +176,14 @@ class WikiStore:
         is its logical class_name path. Legacy prefixed inputs are stripped so
         old references still resolve to the flat identity.
         """
-        if concept != "Component" or not class_name:
+        if not class_name:
+            return class_name
+        # Strip parenthetical annotations for ALL concepts so the same
+        # entity always merges into one directory/URI.
+        cleaned = cls._PAREN_RE.sub("", class_name).strip()
+        if cleaned != class_name:
+            class_name = cleaned
+        if concept != "Component":
             return class_name
         for prefix in cls._LEGACY_TIERS:
             if class_name.startswith(prefix):
@@ -269,7 +281,7 @@ class WikiStore:
         """Reject encoded path semantics while leaving entity names intact."""
         cls._safe_component(value, "profile_id")
         segments = re.split(r"[／＼]", value)
-        reserved = {"profiles", "index.md", ".", ".."}
+        reserved = {"profile", "index.md", ".", ".."}
         if any(not segment for segment in segments) or any(segment.casefold() in reserved for segment in segments) or len(segments) > 1:
             raise ValueError(f"Invalid profile_id path shape: {value!r}")
 
@@ -306,7 +318,7 @@ class WikiStore:
     def symptom_profile_uri(self, symptom_uri: str, profile_id: str) -> str:
         """Build a stable URI for a profile belonging to a Symptom entity."""
         self.symptom_profile_path(symptom_uri, profile_id)
-        return f"{symptom_uri}/profiles/{profile_id}"
+        return f"{symptom_uri}/profile/{profile_id}"
 
     def symptom_profile_path(self, symptom_uri: str, profile_id: str) -> Path:
         """Return the profile path below an existing canonical Symptom."""
@@ -316,7 +328,7 @@ class WikiStore:
             raise ValueError(f"Unknown canonical Symptom URI: {symptom_uri}")
         concept, class_name, object_name = info
         parent = self.entity_path(concept, class_name, object_name).parent
-        path = parent / "profiles" / f"{profile_id}.md"
+        path = parent / "profile" / f"{profile_id}.md"
         if isinstance(self._fs, LocalFS):
             resolved = path.resolve()
             if not resolved.is_relative_to(self.root):
@@ -325,11 +337,11 @@ class WikiStore:
         return path
 
     def split_symptom_profile_uri(self, uri: str) -> tuple[str, str] | None:
-        """Split ``<symptom_uri>/profiles/<profile_id>`` into its parts.
+        """Split ``<symptom_uri>/profile/<profile_id>`` into its parts.
 
         Supports both legacy hash parents and readable parents.
         """
-        marker = "/profiles/"
+        marker = "/profile/"
         if marker not in uri:
             return None
         symptom_uri, profile_id = uri.rsplit(marker, 1)
@@ -600,9 +612,9 @@ class WikiStore:
         if info is None or info[0] != "Symptom":
             return []
         concept, class_name, object_name = info
-        profile_dir = self.entity_path(concept, class_name, object_name).parent / "profiles"
+        profile_dir = self.entity_path(concept, class_name, object_name).parent / "profile"
         keys = self._fs.list_dir(self._key_of(profile_dir))
-        return [(Path(key).stem, f"{symptom_uri}/profiles/{Path(key).stem}") for key in keys if key.endswith(".md") and Path(key).name != "index.md"]
+        return [(Path(key).stem, f"{symptom_uri}/profile/{Path(key).stem}") for key in keys if key.endswith(".md") and Path(key).name != "index.md"]
 
     def lookup_by_uri(self, uri: str) -> tuple[str, str | None, str] | None:
         """Resolve a wiki URI to ``(concept, class_name, object_name)``.

@@ -13,6 +13,7 @@ import json
 import logging
 from pathlib import Path
 import re
+from uuid import uuid4
 
 from wolfharness.capabilities.wiki._helpers import _entity_batch_limit
 from wolfharness.capabilities.wiki.models import (
@@ -62,7 +63,6 @@ _OPA_CATEGORY_DIRS: dict[str, str] = {
 # (source_missing, controller_identity, etc.) stay in OPA.
 _RELATION_GAP_CODES: frozenset[str] = frozenset({
     # Policy-level relation codes
-    "isolated_entity",
     "dangling_relation_target",
     "dangling_wiki_reference",
     "dangling_reference",
@@ -76,7 +76,6 @@ _RELATION_GAP_CODES: frozenset[str] = frozenset({
     "SymptomProfile.possible_faults",
     "Device.critical_components",
     "Device.symptom_refs",
-    "Device.system_chapters.raw_link",
     "DTC.related_faults",
     "Fault.affected_components",
     "Fault.procedures",
@@ -431,24 +430,15 @@ class OPAMixin(WikiBuildDeps):
         record_build_id = str(frontmatter.get("build_id", "")).strip()
         if record_build_id:
             return record_build_id == build_id
+        # Records without build_id were created before the checkpoint was
+        # initialised (common early in a build).  Accept them as part of the
+        # current build rather than silently dropping current-build OPAs —
+        # the checkpoint build_id match is sufficient scoping.
         checkpoint = self.store.read_json("index/build_checkpoint.json")
-        if (
-            not isinstance(checkpoint, dict)
-            or str(checkpoint.get("build_id", "")).strip() != build_id
-        ):
-            return False
-        started_at = str(checkpoint.get("started_at", "")).strip()
-        if not started_at:
-            return False
-        try:
-            started = datetime.fromisoformat(started_at)
-        except ValueError:
-            return False
-        if started.tzinfo is None:
-            started = started.replace(tzinfo=UTC)
-        started_ns = int(started.timestamp() * 1_000_000_000)
-        modified_ns = self.store._fs.mtime_ns(key)
-        return modified_ns is not None and modified_ns >= started_ns
+        return (
+            isinstance(checkpoint, dict)
+            and str(checkpoint.get("build_id", "")).strip() == build_id
+        )
 
     def _opa_category_from_key(self, key: str) -> str:
         for category, subdir in _OPA_CATEGORY_DIRS.items():
@@ -679,8 +669,13 @@ class OPAMixin(WikiBuildDeps):
 
         ``skip_dedupe_lookup`` 为 True 时跳过全目录去重检索——外部专家
         路径的 target_uri 是确定性输入，不需要扫全库找重复 OPA。
+        ``feedback`` 类别强制按"一次反馈 = 一条记录"处理：不做跨记录
+        去重/合并（同一问题多人反馈应各自成档），自动生成的 id 每次
+        追加随机片段保证记录唯一；仅当调用方显式传入 ``opa_id``
+        （如 ``opa_uri`` 修订）时才对既有记录做原地更新。
         """
         effective_category = category.strip().lower() or "conflict"
+        is_feedback = effective_category == "feedback"
         effective_reason_code = reason_code or infer_opa_reason_code(effective_category)
         effective_target = target_uri.strip()
         if not build_id:
@@ -700,6 +695,10 @@ class OPAMixin(WikiBuildDeps):
             missing=effective_missing,
         )
         existing_by_key: tuple[str, dict] | None = None
+        if is_feedback:
+            # 一次反馈 = 一条记录:同一问题多人反馈应各自成档,不做跨记录
+            # 去重/合并。显式传入 opa_id(如 opa_uri 修订)仍走原地更新。
+            skip_dedupe_lookup = True
         if not skip_dedupe_lookup:
             existing_by_key = self._find_opa_by_dedupe_key(dedupe_key, build_id=build_id)
         if existing_by_key is not None:
@@ -717,6 +716,10 @@ class OPAMixin(WikiBuildDeps):
                 title=title,
                 dedupe_key=dedupe_key,
             )
+            if is_feedback:
+                # 保证每次提交都生成唯一文件名,避免相同 target/章节/标题
+                # 的反馈撞到同一文件被追加合并。
+                opa_id = self._clip_utf8(f"{opa_id}-{uuid4().hex[:8]}", 80).rstrip("-._")
         previous: dict[str, object] = {}
         existing_key = self._find_opa_key(opa_id)
         if existing_key and build_id:
@@ -2500,7 +2503,7 @@ class OPAMixin(WikiBuildDeps):
                 # instead of silently skipping, so the finalize gate can see
                 # the tracked record and the limitation is explicitly recorded.
                 if not reason_code:
-                    reason_code = "content_limitation"
+                    reason_code = "content_missing"
                 disposition_value = IssueDisposition.GAP.value
             if (
                 disposition_value
@@ -2551,9 +2554,7 @@ class OPAMixin(WikiBuildDeps):
             # URI: bind the OPA to the concrete page as observation evidence,
             # while keeping ``missing`` explicit so this is never mistaken for
             # a source citation.
-            if not evidence and code == "source_missing":
-                evidence = [target_uri]
-            elif not evidence:
+            if not evidence:
                 unclassified_count += 1
                 item = {"code": code, "reason": "OPA issue has no readable evidence URI"}
                 skipped.append(item)
@@ -2618,7 +2619,7 @@ class OPAMixin(WikiBuildDeps):
         """Provide a deterministic next action for the worker queue."""
         if reason_code == "fact_conflict":
             return "保留冲突双方及证据，完成裁决前不得静默覆盖或移动实体。"
-        return "回读实体与 raw 来源补齐内容；原文确实缺失时保留 open_gap。"
+        return "读取实体 wiki 页面，基于已有内容补齐缺失字段或修补 URI 引用。仅在实体页面确实缺少必要内容时，才回读单个 raw 章节。"
 
     def resolve_opa(
         self,

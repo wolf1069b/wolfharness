@@ -232,8 +232,8 @@ class MigrationMixin:
         chapter planner has run. The later chapter packets then provide real
         source evidence, but nothing used to backfill the existing Device
         page. This operation updates only the ``system_chapters`` frontmatter
-        field and the ``系统章节引用`` body section; all other Device content,
-        including expert-owned sections, is left untouched.
+        field; all other Device content, including expert-owned sections, is
+        left untouched.
 
         Each entry carries the chapter number, readable title and exact raw
         URI. Re-running the operation is a no-op when the chapter inventory has
@@ -311,11 +311,9 @@ class MigrationMixin:
 
         chapter_rows = list(dict.fromkeys(chapter_rows))
         chapter_uris = [uri for _label, uri in chapter_rows]
-        section_content = "\n".join(f"- [{label}]({uri})" for label, uri in chapter_rows)
         current_hash = sha256(current.encode("utf-8")).hexdigest()
         operations: list[dict[str, object]] = [
             {"op": "fm_set_list", "field": "system_chapters", "values": chapter_uris},
-            {"op": "section_replace", "heading": "系统章节引用", "content": section_content},
         ]
         before = current
         self.patch_entity(

@@ -1,38 +1,40 @@
 """Local filesystem backend that preserves the viking:// URI scheme.
 
 Stores files on local disk (zero HTTP during build) but reports
-``root_uri`` as ``viking://resources/{namespace}``. At finalize, ``finalize_upload()``
-uploads each top-level directory via ``add_resource(semantic_and_vectors)`` so
-entities become both vector-embedded and semantically searchable; per-directory
-uploads run in a worker thread with a hard timeout so a slow Viking upload never
-hangs or 500s the finalize tool call (the wiki is durable locally regardless).
-
-Long entity filenames (OP records exceed 255 bytes) would blow Viking's unzip
-path limit (Errno 36), so each directory is copied to a temp tree with basenames
-capped before upload.
+``root_uri`` as ``viking://resources/{namespace}``. At finalize,
+``finalize_upload()`` uploads each file individually via ``client.write``
+with ``processing_mode='semantic_and_vectors'`` so entities become both
+vector-embedded and semantically searchable while preserving the exact
+canonical URI — no server-side splitting. Each file upload runs in a
+worker thread with a hard timeout so a slow Viking write never hangs the
+finalize tool call (the wiki is durable locally regardless).
 """
 
 from __future__ import annotations
 
 import logging
-import tempfile
-from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
+from typing import TYPE_CHECKING
+
+from openviking_sdk.errors import AlreadyExistsError
 
 from .backend import FSBackend
 from .local_fs import LocalFS
 
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
 logger = logging.getLogger(__name__)
 
-# Viking unzips uploads into a temp dir; a long basename can push the unzip path
-# over the 255-byte limit (Errno 36). Entity/OP filenames must already be short
-# at GENERATION time (id builders clip UTF-8 bytes), because renaming here would
-# silently break every URI reference that points at the original filename.
-# This constant is a hard validation gate, never a renamer.
+# Long entity/OP filenames exceed URI length limits on the Viking server.
+# Filenames must already be short at GENERATION time (id builders clip UTF-8
+# bytes), because renaming here would silently break every URI reference that
+# points at the original filename. This constant is a hard validation gate.
 _MAX_FILENAME_BYTES = 200
-# add_resource(semantic_and_vectors) uploads the zip then waits for the queue to
-# accept the job; on a busy server that can take 1-3min. Longer than this and we
-# give up on this directory (the submit likely still landed server-side).
+# client.write(semantic_and_vectors) writes the file then waits for the
+# server to process it; on a busy server that can take 1-3min per file.
+# Longer than this and we give up on this file (the write likely still
+# landed server-side).
 _UPLOAD_TIMEOUT_S = 180
 
 
@@ -102,85 +104,107 @@ class LocalVikingFS(FSBackend):
         return {"linked": 0, "unlinked": 0, "errors": []}
 
     def finalize_upload(self, client) -> dict:
-        """Upload each top-level directory under the wiki root to Viking.
+        """Upload each file under the wiki root to Viking individually.
 
-        Per-directory ``add_resource(semantic_and_vectors)`` runs in a worker
-        thread with a hard timeout. A slow/failing upload must never hang the
-        finalize tool call — the wiki is already durable locally and the caller
-        reports the result best-effort.
+        Uses ``client.write`` per file (not ``add_resource`` per directory)
+        because ``add_resource`` with ``parse_mode: no_split`` is broken
+        server-side — the MarkdownParser rejects every file. Per-file
+        ``write(processing_mode='semantic_and_vectors')`` preserves the
+        exact canonical URI, creates embeddings, and avoids splitting.
+
+        Each file upload runs in a worker thread with a hard timeout so a
+        slow Viking write never hangs the finalize tool call.
 
         Returns:
-            ``{"status": "completed"|"failed", "uploads": [{"dir": str, "status": "ok"|"failed"}]}``
+            ``{"status": ..., "uploads": [{"path": str, "status": str}]}``
+            where status is ``completed``, ``partial``, or ``failed``.
         """
         uploads: list[dict] = []
         try:
-            for child in sorted(self._local.root.iterdir()):
-                if child.is_dir():
-                    if child.name.startswith(".") or child.name in {"index", "source_packets"}:
-                        continue
+            root = self._local.root
+            all_files = self._collect_files(root)
+            self._ensure_dirs(client, all_files, root)
+
+            # --- upload each file sequentially ---
+            for fp in all_files:
+                rel = fp.relative_to(root).as_posix()
+                uri = f"{self.root_uri}/{rel}"
+                content = fp.read_text(encoding="utf-8")
+                try:
+                    client.write(
+                        uri, content,
+                        mode="create", wait=False,
+                        processing_mode="semantic_and_vectors",
+                        timeout=_UPLOAD_TIMEOUT_S,
+                    )
+                    uploads.append({"path": rel, "status": "ok"})
+                except AlreadyExistsError:
                     try:
-                        safe = self._copy_dir(child)
-                        executor = ThreadPoolExecutor(max_workers=1)
-                        try:
-                            r = executor.submit(
-                                client.add_resource,
-                                path=str(safe),
-                                to=f"viking://resources/{self.namespace}",
-                                processing_mode="semantic_and_vectors",
-                                wait=False,
-                            ).result(timeout=_UPLOAD_TIMEOUT_S)
-                        finally:
-                            executor.shutdown(wait=False)
-                        uploads.append({"dir": child.name, "status": "ok", "detail": str(r)[:200]})
+                        client.write(
+                            uri, content,
+                            mode="replace", wait=False,
+                            processing_mode="semantic_and_vectors",
+                            timeout=_UPLOAD_TIMEOUT_S,
+                        )
+                        uploads.append({"path": rel, "status": "ok"})
                     except Exception:
-                        logger.exception("upload dir %s failed; local content stands", child.name)
-                        uploads.append({"dir": child.name, "status": "failed"})
-                elif child.is_file():
-                    try:
-                        uri = f"{self.root_uri}/{child.name}"
-                        content = child.read_text(encoding="utf-8")
-                        executor = ThreadPoolExecutor(max_workers=1)
-                        try:
-                            executor.submit(
-                                client.write,
-                                uri,
-                                content,
-                                mode="create",
-                                wait=True,
-                                timeout=_UPLOAD_TIMEOUT_S,
-                            ).result(timeout=_UPLOAD_TIMEOUT_S)
-                        finally:
-                            executor.shutdown(wait=False)
-                        uploads.append({"dir": child.name, "status": "ok"})
-                    except Exception:
-                        logger.exception("upload file %s failed", child.name)
-                        uploads.append({"dir": child.name, "status": "failed"})
-            status = "completed" if uploads and all(u["status"] == "ok" for u in uploads) else "failed"
+                        logger.exception("replace write %s failed", rel)
+                        uploads.append({"path": rel, "status": "failed"})
+                except Exception:
+                    logger.exception("write %s failed", rel)
+                    uploads.append({"path": rel, "status": "failed"})
+
+            ok = [u for u in uploads if u["status"] == "ok"]
+            failed = [u for u in uploads if u["status"] == "failed"]
+            if not ok:
+                status = "failed"
+            elif failed:
+                status = "partial"
+            else:
+                status = "completed"
         except Exception:
             logger.exception("finalize_upload failed; local finalize stands")
             return {"status": "failed", "uploads": uploads}
         return {"status": status, "uploads": uploads}
 
-    @staticmethod
-    def _copy_dir(src: Path) -> Path:
-        """Copy one directory to a temp tree for upload.
+    def _collect_files(self, root: Path) -> list[Path]:
+        """Walk ``root`` recursively, returning uploadable files.
 
-        Filenames must already be byte-capped at generation time; if any still
-        exceeds the limit this raises instead of renaming, because renaming
-        would orphan every URI reference that points at the original name.
+        Skips ``index/``, ``source_packets/``, and hidden files. Validates
+        filename byte length against ``_MAX_FILENAME_BYTES``.
         """
-        tmp = Path(tempfile.mkdtemp(prefix="ov_up_"))
-        dst = tmp / src.name
-        dst.mkdir(parents=True)
-        for file_path in src.rglob("*"):
-            if not file_path.is_file():
+        all_files: list[Path] = []
+        for fp in sorted(root.rglob("*")):
+            if not fp.is_file():
                 continue
-            rel = file_path.relative_to(src)
-            target = dst / rel
-            if len(target.name.encode("utf-8")) > _MAX_FILENAME_BYTES:
+            rel = fp.relative_to(root)
+            if any(p in {"index", "source_packets"} or p.startswith(".") for p in rel.parts):
+                continue
+            if len(fp.name.encode("utf-8")) > _MAX_FILENAME_BYTES:
                 raise ValueError(
-                    f"filename {target.name!r} is {len(target.name.encode('utf-8'))} bytes (limit {_MAX_FILENAME_BYTES}); id builders must clip at generation time",
+                    f"filename {fp.name!r} is {len(fp.name.encode('utf-8'))} bytes "
+                    f"(limit {_MAX_FILENAME_BYTES}); id builders must clip at generation time",
                 )
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(file_path.read_text(encoding="utf-8"), encoding="utf-8")
-        return tmp
+            all_files.append(fp)
+        return all_files
+
+    def _ensure_dirs(self, client, files: list[Path], root: Path) -> None:
+        """Create the root namespace dir and all parent dirs on Viking."""
+        try:
+            client.mkdir(self.root_uri)
+        except Exception:
+            logger.debug("mkdir %s failed (may already exist)", self.root_uri, exc_info=True)
+
+        parent_dirs: set[str] = set()
+        for fp in files:
+            rel = fp.relative_to(root)
+            for i in range(1, len(rel.parts)):
+                parent_dirs.add("/".join(rel.parts[:i]))
+        for d in sorted(parent_dirs, key=lambda p: p.count("/")):
+            uri = f"{self.root_uri}/{d}"
+            try:
+                client.mkdir(uri)
+            except Exception:
+                logger.debug("mkdir %s failed (may already exist)", uri, exc_info=True)
+
+

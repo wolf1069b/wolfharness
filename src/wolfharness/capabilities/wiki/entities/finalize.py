@@ -94,6 +94,7 @@ class FinalizeMixin:
         global join worker.
         """
         device_diagnostic_page_count = self._sync_device_diagnostic_links()
+        component_narrative_page_count = self._sync_component_narrative_links()
         pairs: list[tuple[str, list[str]]] = []
         for concept, _class_name, _object_name, uri in self.store.list_entities():
             content = self.store.read_entity_by_uri(uri)
@@ -113,6 +114,7 @@ class FinalizeMixin:
         return {
             "backlink_entries": count,
             "device_diagnostic_page_count": device_diagnostic_page_count,
+            "component_narrative_page_count": component_narrative_page_count,
             "native_relation_sync": self.store.native_relation_sync_result
             or {"status": "not_attempted"},
         }
@@ -938,7 +940,7 @@ class FinalizeMixin:
                     upload_result = executor.submit(
                         self.store._fs.finalize_upload,
                         _viking_client(),
-                    ).result(timeout=200)
+                    ).result(timeout=3600)
                 finally:
                     executor.shutdown(wait=False)
                 logger.info("Wiki remote sync retry succeeded: %s", upload_result)

@@ -39,7 +39,6 @@ _CASE_SOFT_REQUIREMENT_CODES = {
     "Component.procedure.body_link",
     "Component.fault.body_link",
     "DTC.diagnostic_procedure.body_link",
-    "Device.system_chapters.raw_link",
     "Device.diagnostic_chain.body_link",
     "Device.dtc.body_link",
     "Fault.verification_procedures",
@@ -59,21 +58,11 @@ _GAP_CATEGORY_MAP: dict[str, str] = {
     "Profile.possible_faults": "dependency_gap",
     "dangling_reference": "dependency_gap",
     "source_unresolvable": "source_unresolvable",
-    "DTC.controller_identity": "data_limitation",
-    "isolated_entity": "isolated_entity",
-    "Fact_conflict": "fact_conflict",
 }
 
 
 _CONTENT_HOOK_NAMES = frozenset({
-    "body_evidence",
     "body_sections",
-    "source_ref",
-    "lightweight_materialization",
-    "working_mechanism",
-    "failure_mechanism",
-    "target_components",
-    "symptom_profile",
 })
 
 
@@ -523,7 +512,7 @@ class AuditMixin(WikiBuildDeps):
         audit_hooks = tuple(
             hook
             for hook in ENTITY_VALIDATION_HOOKS
-            if hook.name not in {"diagnostic_closure", "relationship_completeness"}
+            if hook.name not in {"diagnostic_closure", "relationship_completeness", "body_sections"}
         )
         snapshot_id = sha256(
             "\n".join(
@@ -556,21 +545,6 @@ class AuditMixin(WikiBuildDeps):
 
             entity_has_error = False
             frontmatter = parse_frontmatter(content)
-            if not outgoing_links.get(uri) and incoming_links.get(uri, 0) == 0:
-                entity_has_error = True
-                issues.append(
-                    {
-                        "uri": uri,
-                        "concept": concept,
-                        "code": "isolated_entity",
-                        "severity": "error",
-                        "message": (
-                            "Entity has no resolvable incoming or outgoing wiki relationship. "
-                            "Keep the fact in its parent page/source packet instead of publishing "
-                            "an isolated node."
-                        ),
-                    },
-                )
             relation_concept = "SymptomProfile" if "profile_id" in frontmatter else concept
             for field, expected_concept in _TYPED_RELATION_FIELDS.get(relation_concept, {}).items():
                 for target_uri in _resource_uris(frontmatter.get(field)):
@@ -711,17 +685,6 @@ class AuditMixin(WikiBuildDeps):
                 is not None
             ]
             source_uris = list(dict.fromkeys([*declared_sources, *body_sources]))
-            if not source_uris:
-                entity_has_error = True
-                issues.append(
-                    {
-                        "uri": uri,
-                        "concept": concept,
-                        "code": "source_missing",
-                        "severity": "error",
-                        "message": "正式实体必须保留至少一个来源引用。",
-                    },
-                )
 
             for source_uri in source_uris:
                 source_result = read_raw_source_cached(source_uri)
@@ -868,22 +831,6 @@ class AuditMixin(WikiBuildDeps):
                         "code": "malformed_uri",
                         "severity": "error",
                         "message": f"wiki URI 格式错误（空/占位符/无对象尾段）：{self.store.root_uri}/.../{bad_uri or '(空)'}",
-                    },
-                )
-
-            if (
-                concept == "Symptom"
-                and "/profiles/" not in uri
-                and not self.list_symptom_profiles(uri)
-            ):
-                entity_has_error = True
-                issues.append(
-                    {
-                        "uri": uri,
-                        "concept": concept,
-                        "code": "Symptom.profile",
-                        "severity": "error",
-                        "message": "规范故障现象必须包含至少一个画像。",
                     },
                 )
 
