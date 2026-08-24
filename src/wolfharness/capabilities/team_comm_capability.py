@@ -400,6 +400,11 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                 parent_session_id=parent_session_id,
                 agent_name=agent_name,
                 agent_type="native",
+                # Team members must survive parent shutdown (e.g. conductor
+                # succession: new conductor must outlive old conductor's
+                # cascade close).  "independent" prevents Step 7 of
+                # _close_session_unlocked from cascading to team members.
+                lifecycle_policy="independent",
                 **metadata,
             )
         child_sid = state.session_id
@@ -2697,8 +2702,8 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         If this is a team member (not lead) with ``in_progress`` tasks,
         routes a reminder message to the member's own session via the same
         delivery mechanism as ``send_message``.  Skipped when the session
-        is being closed (shutdown path).  Limited to one reminder per
-        session to avoid infinite loops.
+        is being closed (shutdown path).  Uses task-id fingerprinting so
+        each task is reminded at most once, capped by ``max_task_reminders``.
         """
         try:
             agent_ctx = self._resolve_agent_context(ctx)
@@ -2730,16 +2735,21 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         if not unfinished:
             return result
 
-        # Avoid infinite loops: max 1 reminder per session.
+        # Fingerprint-based reminder: only remind about tasks not yet
+        # reminded, with a configurable cap on total reminder messages.
+        reminded_ids: set[str] = set(agent_ctx.session.metadata.get("_reminded_task_ids", []))
+        max_reminders: int = self._config.max_task_reminders
         reminder_count: int = agent_ctx.session.metadata.get("_task_reminder_count", 0)
-        if reminder_count >= 1:
+
+        new_unfinished = [t for t in unfinished if t.get("task_id") not in reminded_ids]
+        if not new_unfinished or reminder_count >= max_reminders:
             return result
 
         task_lines = "\n".join(
-            f"  - '{t.get('subject', '?')}' (id={t.get('task_id', '?')})" for t in unfinished
+            f"  - '{t.get('subject', '?')}' (id={t.get('task_id', '?')})" for t in new_unfinished
         )
         reminder_body = (
-            f"You have {len(unfinished)} unfinished task(s) still "
+            f"You have {len(new_unfinished)} unfinished task(s) still "
             f"in_progress:\n{task_lines}\n\n"
             f"Please complete your work and update the task status using "
             f"task_update(task_id=..., status='completed') or "
@@ -2763,6 +2773,10 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                 source="accepted",
                 meta={"from": "system", "team_id": team_id},
             )
+            reminded_ids.update(
+                tid for tid in (t.get("task_id") for t in new_unfinished) if tid is not None
+            )
+            agent_ctx.session.metadata["_reminded_task_ids"] = reminded_ids
             agent_ctx.session.metadata["_task_reminder_count"] = reminder_count + 1
 
         return result

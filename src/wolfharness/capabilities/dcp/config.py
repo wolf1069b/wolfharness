@@ -44,6 +44,8 @@ class DCPConfig(BaseModel):
         meta_tool_retention: How many recent meta-tool returns to keep.
         clear_thinking_enabled: Whether the ``clear_thinking`` parameter
             on the prune tool is active.
+        prune_tool_calls: Whether to also prune ``ToolCallPart`` args
+            when pruning the corresponding ``ToolReturnPart``.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -67,6 +69,7 @@ class DCPConfig(BaseModel):
     protected_tools: set[str] = Field(default_factory=set)
     meta_tool_retention: int = 1
     clear_thinking_enabled: bool = False
+    prune_tool_calls: bool = True
 
     @field_validator("auto_strategy_threshold", mode="before")
     @classmethod

@@ -34,6 +34,9 @@ if TYPE_CHECKING:
 __all__ = [
     "PrunableState",
     "purge_failed_tool_inputs",
+    "_prune_call_part",
+    "_is_call_pruned",
+    "_prune_calls_for_ids",
 ]
 
 #: Minimum occurrences of a tool call signature before deduplication triggers.
@@ -115,6 +118,113 @@ def _is_pruned(part: ToolReturnPart) -> bool:
         ``True`` if the part has been pruned, ``False`` otherwise.
     """
     return isinstance(part.metadata, dict) and "_prune_kind" in part.metadata
+
+
+# ---------------------------------------------------------------------------
+# ToolCallPart pruning helpers (symmetric to ToolReturnPart pruning).
+# ---------------------------------------------------------------------------
+
+
+# Valid JSON strings used as stub replacements for pruned ToolCallPart args.
+# These MUST be valid JSON because the Chat Completions API serialisation
+# path calls ``args_as_json_str()`` which returns string args as-is; if the
+# string is not valid JSON the downstream model server (e.g. sglang) will
+# fail with ``json.loads()`` → JSONDecodeError.
+_PRUNED_CALL_STUB: str = '{"pruned": true}'
+_DEDUP_CALL_STUB: str = '{"dedup": true}'
+
+_PRUNED_CALL_MARKERS: frozenset[str] = frozenset({_PRUNED_CALL_STUB, _DEDUP_CALL_STUB})
+
+
+def _prune_call_part(
+    call_part: ToolCallPart,
+    replacement: str = _PRUNED_CALL_STUB,
+) -> ToolCallPart:
+    """Replace a ``ToolCallPart``'s args with a stub.
+
+    ``ToolCallPart`` has no ``metadata`` field (unlike ``ToolReturnPart``),
+    so the original args are not stored.  Idempotency is detected by
+    checking whether ``args`` is already a known pruned-call marker.
+
+    Uses ``dataclasses.replace`` to create a new part — never mutates
+    the original.
+
+    Args:
+        call_part: The ``ToolCallPart`` to prune.
+        replacement: The new args string (must be valid JSON, e.g.
+            ``'{"pruned": true}'``).
+
+    Returns:
+        A new ``ToolCallPart`` with replaced args.
+    """
+    if _is_call_pruned(call_part):
+        return call_part
+
+    return replace(call_part, args=replacement)
+
+
+def _is_call_pruned(part: ToolCallPart) -> bool:
+    """Check whether a ``ToolCallPart`` has already been pruned.
+
+    A call part is considered pruned if its ``args`` is a string equal
+    to one of the known pruned-call markers (``'{"pruned": true}'`` or
+    ``'{"dedup": true}'``).
+
+    Args:
+        part: The ``ToolCallPart`` to check.
+
+    Returns:
+        ``True`` if the call part has been pruned, ``False`` otherwise.
+    """
+    return isinstance(part.args, str) and part.args in _PRUNED_CALL_MARKERS
+
+
+def _prune_calls_for_ids(
+    messages: list[ModelMessage],
+    tool_call_ids: set[str],
+    replacement: str = _PRUNED_CALL_STUB,
+) -> list[ModelMessage]:
+    """Find and prune ``ToolCallPart`` instances matching the given IDs.
+
+    Scans ``ModelResponse`` messages for ``ToolCallPart`` instances whose
+    ``tool_call_id`` is in ``tool_call_ids`` and replaces their ``args``
+    with a stub via ``_prune_call_part``.
+
+    Args:
+        messages: The conversation message list (not mutated).
+        tool_call_ids: Set of tool call IDs whose call parts should be pruned.
+        replacement: The stub text to replace args with.
+
+    Returns:
+        A new list of messages with matching call parts pruned.
+    """
+    if not tool_call_ids:
+        return messages
+
+    result: list[ModelMessage] = []
+    for msg in messages:
+        if not isinstance(msg, ModelResponse):
+            result.append(msg)
+            continue
+
+        new_parts: list[Any] = []
+        modified = False
+        for part in msg.parts:
+            if isinstance(part, ToolCallPart) and part.tool_call_id in tool_call_ids:
+                if not _is_call_pruned(part):
+                    new_parts.append(_prune_call_part(part, replacement))
+                    modified = True
+                else:
+                    new_parts.append(part)
+            else:
+                new_parts.append(part)
+
+        if modified:
+            result.append(replace(msg, parts=new_parts))  # type: ignore[arg-type]
+        else:
+            result.append(msg)
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -211,15 +321,18 @@ def _apply_pruned_tools(
     messages: list[ModelMessage],
     adapter: _PrunableStateAdapter,
     session_id: str = "default",
+    prune_tool_calls: bool = True,
 ) -> None:
     """Replace ``ToolReturnPart`` content for pruned tool call IDs.
 
     For each ``tool_call_id`` in ``adapter.pruned_tools`` (excluding those
     in ``adapter.applied_action_ids``), replace the ``content`` of the
     matching ``ToolReturnPart`` using ``_prune_part`` with kind
-    ``"dedup"``.  A ``CompressionBlock`` of kind ``"dedup"`` is created
-    and stored in the adapter's block store for each pruned tool.  After
-    processing, ``adapter.pruned_tools`` is cleared.
+    ``"dedup"``.  When ``prune_tool_calls`` is True, also replace the
+    matching ``ToolCallPart`` args with ``'{"pruned": true}'`` via
+    ``_prune_calls_for_ids``.  A ``CompressionBlock`` of kind ``"dedup"``
+    is created and stored in the adapter's block store for each pruned
+    tool.  After processing, ``adapter.pruned_tools`` is cleared.
 
     Messages are mutated in-place at the list level — individual parts are
     replaced via ``dataclasses.replace()`` (never mutated in-place).
@@ -229,6 +342,7 @@ def _apply_pruned_tools(
         adapter: The state adapter with ``pruned_tools`` to apply and
             ``applied_action_ids`` for dedup tracking.
         session_id: The session ID for block store namespace isolation.
+        prune_tool_calls: Whether to also prune matching ToolCallPart args.
     """
     if not adapter.pruned_tools:
         return
@@ -267,6 +381,10 @@ def _apply_pruned_tools(
 
         if modified:
             messages[i] = replace(msg, parts=new_parts)  # type: ignore[arg-type]
+
+    if prune_tool_calls and to_apply:
+        pruned = _prune_calls_for_ids(messages, to_apply, _PRUNED_CALL_STUB)
+        messages[:] = pruned
 
     # Clear pruned_tools after applying.
     adapter.pruned_tools.clear()
@@ -323,7 +441,9 @@ def _dedup_exact(
     for each ``ToolCallPart``.  When the same signature appears multiple
     times, only the **last** occurrence is kept; earlier occurrences have
     their corresponding ``ToolReturnPart`` pruned with ``"[duplicate removed]"``
-    via ``_prune_part``.
+    via ``_prune_part`` and, when ``config.prune_tool_calls`` is True,
+    their ``ToolCallPart`` args replaced with ``'{"dedup": true}'`` via
+    ``_prune_calls_for_ids``.
 
     Protected tools (from ``config.protected_tools``) are exempt from
     deduplication.
@@ -336,7 +456,7 @@ def _dedup_exact(
         messages: The conversation message list (mutated in-place).
         state: The DCP state (not populated — kept for interface
             consistency with the capability's Phase 2 pipeline).
-        config: The config providing ``protected_tools``.
+        config: The config providing ``protected_tools`` and ``prune_tool_calls``.
     """
     if not messages:
         return
@@ -362,6 +482,8 @@ def _dedup_exact(
     # For each signature with multiple occurrences, prune earlier ones.
     # We need to find the ToolReturnPart that corresponds to each
     # ToolCallPart (matched by tool_call_id) and prune it.
+    dedup_call_ids: set[str] = set()
+
     for positions in seen.values():
         if len(positions) < DEDUP_MIN_COUNT:
             continue
@@ -382,6 +504,7 @@ def _dedup_exact(
             tool_call_id = call_part.tool_call_id
             if not tool_call_id:
                 continue
+            dedup_call_ids.add(tool_call_id)
 
             # Find and prune the corresponding ToolReturnPart across
             # all messages (it may be in a different message).
@@ -406,6 +529,10 @@ def _dedup_exact(
 
                 if search_modified:
                     messages[search_idx] = replace(search_msg, parts=new_parts)  # type: ignore[arg-type]
+
+    if dedup_call_ids and config.prune_tool_calls:
+        pruned = _prune_calls_for_ids(messages, dedup_call_ids, _DEDUP_CALL_STUB)
+        messages[:] = pruned
 
 
 # ---------------------------------------------------------------------------

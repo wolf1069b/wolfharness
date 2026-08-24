@@ -75,6 +75,8 @@ from wolfharness.capabilities.dcp.strategies import (
     _dedup_exact,
     _is_pruned,
     _PrunableStateAdapter,
+    _prune_call_part,
+    _prune_calls_for_ids,
     _prune_part,
     _StrategyConfigAdapter,
     _strip_thinking_content,
@@ -185,6 +187,7 @@ class DynamicContextPruningCapability(AbstractCapability[Any]):
         protected_tools: set[str] | None = None,
         meta_tool_retention: int = 1,
         clear_thinking_enabled: bool = False,
+        prune_tool_calls: bool = True,
     ) -> None:
         """Initialize the dynamic context pruning capability.
 
@@ -217,6 +220,8 @@ class DynamicContextPruningCapability(AbstractCapability[Any]):
                 on the prune tool is active.  When ``True``, the model can
                 toggle persistent stripping of ``ThinkingPart`` content from
                 assistant messages before the last user message.
+            prune_tool_calls: Whether to also prune ``ToolCallPart`` args
+                when pruning the corresponding ``ToolReturnPart``.
         """
         self._config: DCPConfig = DCPConfig(
             enabled=enabled,
@@ -238,6 +243,7 @@ class DynamicContextPruningCapability(AbstractCapability[Any]):
             protected_tools=protected_tools if protected_tools is not None else set(),
             meta_tool_retention=meta_tool_retention,
             clear_thinking_enabled=clear_thinking_enabled,
+            prune_tool_calls=prune_tool_calls,
         )
         self._watermark: WatermarkStateMachine = WatermarkStateMachine(
             info_threshold=self._config.info_threshold,
@@ -696,7 +702,12 @@ class DynamicContextPruningCapability(AbstractCapability[Any]):
                 protected_tools=cfg_adapter.protected_tools,
             )
 
-            _apply_pruned_tools(messages, adapter, session_id=session_id)
+            _apply_pruned_tools(
+                messages,
+                adapter,
+                session_id=session_id,
+                prune_tool_calls=self._config.prune_tool_calls,
+            )
             logger.debug(
                 "DynamicContextPruning Phase 2 purge: applied pruned_tools from adapter",
             )
@@ -965,6 +976,7 @@ class DynamicContextPruningCapability(AbstractCapability[Any]):
         prune_set = {(msg_idx, part_idx) for msg_idx, part_idx, _ in to_prune}
 
         result = list(messages)
+        pruned_call_ids: set[str] = set()
         for msg_idx, part_idx in prune_set:
             msg = result[msg_idx]
             parts = getattr(msg, "parts", [])
@@ -976,6 +988,11 @@ class DynamicContextPruningCapability(AbstractCapability[Any]):
             new_part = _prune_part(part, "[pruned]", "auto")
             new_parts = [*parts[:part_idx], new_part, *parts[part_idx + 1 :]]
             result[msg_idx] = dataclasses.replace(msg, parts=new_parts)  # type: ignore[arg-type]
+            if part.tool_call_id:
+                pruned_call_ids.add(part.tool_call_id)
+
+        if self._config.prune_tool_calls and pruned_call_ids:
+            result = _prune_calls_for_ids(result, pruned_call_ids)
 
         logger.info(
             "DynamicContextPruning auto-prune meta-tools: pruned %d/%d "
@@ -1049,6 +1066,9 @@ class DynamicContextPruningCapability(AbstractCapability[Any]):
                 result.append(dataclasses.replace(msg, parts=new_parts))  # type: ignore[arg-type]
             else:
                 result.append(msg)
+
+        if self._config.prune_tool_calls:
+            result = _prune_calls_for_ids(result, state.pruned_tool_ids)
 
         if re_pruned > 0:
             logger.debug(
@@ -1173,6 +1193,9 @@ class DynamicContextPruningCapability(AbstractCapability[Any]):
             else:
                 result.append(msg)
 
+        if self._config.prune_tool_calls and matched_ids:
+            result = _prune_calls_for_ids(result, set(matched_ids))
+
         # Record compression block and mark as applied.
         if matched_ids:
             block = CompressionBlock(
@@ -1184,7 +1207,6 @@ class DynamicContextPruningCapability(AbstractCapability[Any]):
             if state.block_store is not None:
                 state.block_store.put(session_id, block)
             state.applied_action_ids.add(action.source_tool_call_id)
-            # Record for re-pruning across iterations
             state.pruned_tool_ids.update(matched_ids)
             logger.debug(
                 "DynamicContextPruning Phase 1 prune: matched %d tool output(s) ids=%s",
@@ -1250,6 +1272,9 @@ class DynamicContextPruningCapability(AbstractCapability[Any]):
                 result.append(dataclasses.replace(msg, parts=new_parts))  # type: ignore[arg-type]
             else:
                 result.append(msg)
+
+        if self._config.prune_tool_calls and matched_ids:
+            result = _prune_calls_for_ids(result, set(matched_ids))
 
         # Record compression block and mark as applied.
         if matched_ids:

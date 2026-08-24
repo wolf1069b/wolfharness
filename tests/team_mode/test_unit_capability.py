@@ -3583,16 +3583,17 @@ async def test_after_run_no_reminder_when_session_closing(tmp_path: Any) -> None
 
 @pytest.mark.unit
 async def test_after_run_no_duplicate_reminder(tmp_path: Any) -> None:
-    """Given: team member already received a reminder (count=1).
+    """Given: team member's unfinished task already reminded (task id seen before).
 
     When: after_run fires again.
-    Then: no second reminder is sent (max 1 per session).
+
+    Then: no second reminder is sent (fingerprint dedup).
     """
     from wolfharness.capabilities.file_team_state import FileTeamState
 
     _init_team(str(tmp_path))
     team_state = FileTeamState(str(tmp_path))
-    team_state.create_task(
+    task_id = team_state.create_task(
         "team_123",
         {
             "subject": "Translate chapter 1",
@@ -3606,6 +3607,7 @@ async def test_after_run_no_duplicate_reminder(tmp_path: Any) -> None:
     mock_pool.send_message = AsyncMock(return_value="msg_id")
     metadata = _make_session_metadata()
     metadata["_task_reminder_count"] = 1  # Already reminded once.
+    metadata["_reminded_task_ids"] = [task_id]  # Task already reminded.
     ctx = _make_run_context(
         metadata=metadata,
         session_pool=mock_pool,
