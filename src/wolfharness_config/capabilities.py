@@ -30,6 +30,7 @@ KNOWN_CAPABILITY_TYPES: frozenset[str] = frozenset({
     "memory",
     "modality_filter",
     "viking",
+    "strict_tools",
 })
 
 IMPORT_MAP: dict[str, str] = {
@@ -43,6 +44,7 @@ IMPORT_MAP: dict[str, str] = {
     "memory": "wolfharness.capabilities.memory.MemoryCapability",
     "modality_filter": "wolfharness.capabilities.modality_filter.ModalityFilterCapability",
     "viking": "wolfharness.capabilities.viking.VikingCapability",
+    "strict_tools": "wolfharness.capabilities.strict_tools.StrictToolsCapability",
 }
 
 
@@ -139,6 +141,28 @@ class MemoryCapabilityConfig(BaseModel):
     """Config for ``MemoryCapability``."""
 
     type: Literal["memory"] = "memory"
+
+
+class StrictToolsCapabilityConfig(BaseModel):
+    """Config for ``StrictToolsCapability``.
+
+    Forces ``strict=True`` on tool definitions before they reach the
+    provider, fixing malformed tool-call arguments on providers that
+    ignore ``strict=None`` (e.g. LiteLLM → SGLang).
+
+    Example YAML::
+
+        capabilities:
+          - type: strict_tools
+            enabled: true
+            apply_to_output_tools: false
+    """
+
+    type: Literal["strict_tools"] = "strict_tools"
+    enabled: bool = True
+    """Master switch — when ``False``, definitions pass through unchanged."""
+    apply_to_output_tools: bool = False
+    """Also force ``strict`` on output-tool (structured output) definitions."""
 
 
 class ModalityFilterCapabilityConfig(BaseModel):
@@ -464,7 +488,8 @@ BuiltinCapabilityConfig = Annotated[
     | SkillActivationCapabilityConfig
     | MemoryCapabilityConfig
     | ModalityFilterCapabilityConfig
-    | VikingCapabilityConfig,
+    | VikingCapabilityConfig
+    | StrictToolsCapabilityConfig,
     Field(discriminator="type"),
 ]
 
@@ -563,6 +588,8 @@ def build_capability(config: CapabilityConfig) -> Any:  # noqa: PLR0911, RET503
             return _import_and_instantiate(IMPORT_MAP["modality_filter"], config)
         case VikingCapabilityConfig():
             return _import_and_instantiate(IMPORT_MAP["viking"], config)
+        case StrictToolsCapabilityConfig():
+            return _import_and_instantiate(IMPORT_MAP["strict_tools"], config)
         case _ as unreachable:
             from typing import assert_never
 
