@@ -272,16 +272,23 @@ class OPAMixin(WikiBuildDeps):
         conflict or the source corpus that surfaced the conflict).  Formats
         are checked; existence is not (the record may be filed before the
         entity is merged).
+
+        Accepts provider resource references outside the active write store.
+        OPA/OPS records are written to the provider-owned ticket scope, while
+        ``target_uri`` and ``evidence_uris`` are read/citation references and
+        may point at a different provider-owned resource scope.
         """
         uris = [uri for uri in (target_uri, *evidence_uris) if uri]
-        raw_prefix = self._raw_fs.root_uri + "/"
         if not uris:
             raise ValueError(
-                f"OPA must reference at least one URI: set target_uri ({self.store.root_uri}/...) or evidence_uris ({raw_prefix}... source chapters).",
+                f"OPA must reference at least one URI: set target_uri "
+                f"({self.store.root_uri}/...) or evidence_uris "
+                f"(viking://resources/... source chapters).",
             )
         for uri in uris:
             if (
-                not self.store.is_wiki_uri(uri)
+                not uri.startswith("viking://resources/")
+                and not self.store.is_wiki_uri(uri)
                 and classify_raw_source_uri(
                     uri,
                     raw_root_uri=self._raw_fs.root_uri,
@@ -289,7 +296,7 @@ class OPAMixin(WikiBuildDeps):
                 is None
             ):
                 raise ValueError(
-                    f"OPA URI must be a {self.store.root_uri}/ or {raw_prefix} URI, got {uri!r}.",
+                    f"OPA URI must be a provider resource URI or local wiki/raw URI, got {uri!r}.",
                 )
 
     @staticmethod
@@ -869,6 +876,7 @@ class OPAMixin(WikiBuildDeps):
             uri
             for uri in dict.fromkeys([*evidence_uris, *related_uris])
             if uri
+            and not uri.startswith("viking://resources/")
             and self.read_resource(uri) is None
             and classify_raw_source_uri(uri, raw_root_uri=self._raw_fs.root_uri) is None
         ]

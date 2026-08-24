@@ -797,7 +797,7 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
             """
             try:
                 client = await cap._ensure_client()
-                if err := cap._check_uri_allowed(uri, tool_name="viking_write"):
+                if err := cap._check_write_uri_allowed(uri, tool_name="viking_write"):
                     return ToolReturn(return_value=err)
                 await client.write(uri, content, mode=mode)
                 return ToolReturn(
@@ -818,7 +818,8 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
             Uses a read-modify-write cycle: reads the current content,
             replaces ``old_string`` with ``new_string``, then writes back.
             The URI must be under ``memories/`` or ``resources/`` (same
-            restriction as ``viking_write``).
+            read-side restriction as ``viking_read`` because it must fetch
+            the existing content before writing the replacement.
 
             Args:
                 uri: Full viking:// URI of the document to edit.
@@ -834,6 +835,8 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
             try:
                 client = await cap._ensure_client()
                 if err := cap._check_uri_allowed(uri, tool_name="viking_edit"):
+                    return ToolReturn(return_value=err)
+                if err := cap._check_write_uri_allowed(uri, tool_name="viking_edit"):
                     return ToolReturn(return_value=err)
                 current = await client.read(uri)
                 count = current.count(old_string)
@@ -873,7 +876,7 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
             """
             try:
                 client = await cap._ensure_client()
-                if err := cap._check_uri_allowed(uri, tool_name="viking_mkdir"):
+                if err := cap._check_write_uri_allowed(uri, tool_name="viking_mkdir"):
                     return ToolReturn(return_value=err)
                 await client.mkdir(uri, description=description)
                 return ToolReturn(return_value=f"Created directory {uri}.")
@@ -914,7 +917,10 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                 client = await cap._ensure_client()
                 for target, label in ((to, "to"), (parent, "parent")):
                     if target and (
-                        err := cap._check_uri_allowed(target, tool_name="viking_add_resource")
+                        err := cap._check_write_uri_allowed(
+                            target,
+                            tool_name="viking_add_resource",
+                        )
                     ):
                         return ToolReturn(return_value=f"{err} ({label})")
                 # SDK add_resource() does not accept processing_mode;
@@ -968,6 +974,10 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                 temp_root = _copy_upload_tree(path)
                 try:
                     client = await cap._ensure_client()
+                    if to and (
+                        err := cap._check_write_uri_allowed(to, tool_name="viking_upload_tree")
+                    ):
+                        return ToolReturn(return_value=err)
                     result = await client.add_resource(
                         path=temp_root,
                         to=to,
@@ -997,7 +1007,7 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
             """
             try:
                 client = await cap._ensure_client()
-                if err := cap._check_uri_allowed(uri, tool_name="viking_forget"):
+                if err := cap._check_write_uri_allowed(uri, tool_name="viking_forget"):
                     return ToolReturn(return_value=err)
                 await client.rm(uri, recursive=recursive)
                 return ToolReturn(return_value=f"Removed {uri}.")
@@ -1042,11 +1052,11 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
             """
             try:
                 client = await cap._ensure_client()
-                if err := cap._check_uri_allowed(from_uri, tool_name="viking_link"):
+                if err := cap._check_write_uri_allowed(from_uri, tool_name="viking_link"):
                     return ToolReturn(return_value=f"{err} (from_uri)")
                 targets = to_uris if isinstance(to_uris, list) else [to_uris]
                 for t in targets:
-                    if err := cap._check_uri_allowed(t, tool_name="viking_link"):
+                    if err := cap._check_write_uri_allowed(t, tool_name="viking_link"):
                         return ToolReturn(return_value=f"{err} (to_uris)")
                 await client.link(from_uri, to_uris, reason=reason)
                 return ToolReturn(
@@ -1178,7 +1188,7 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
             """
             try:
                 client = await cap._ensure_client()
-                if err := cap._check_uri_allowed(uri, tool_name="viking_set_tags"):
+                if err := cap._check_write_uri_allowed(uri, tool_name="viking_set_tags"):
                     return ToolReturn(return_value=err)
                 await client.set_tags(uri, tags, mode="replace", recursive=recursive)
                 return ToolReturn(return_value=f"Set {len(tags)} tag(s) on {uri}.")

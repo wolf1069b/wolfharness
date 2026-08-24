@@ -205,17 +205,20 @@ class VikingCapability(AbstractCapability[Any]):
     """Tool names protected by the URI guard. When ``uri_guard_enabled`` is
     ``True``, these tools are blocked from accessing ``viking://`` URIs."""
     allowed_uri_prefixes: list[str] = field(default_factory=list)
-    """URI prefix allowlist for the ``viking://resources/`` namespace only.
+    """Read/search URI prefix allowlist for ``viking://resources/`` only.
 
-    When non-empty, knowledge-base access (all ``viking_*`` tools + the
-    @-mention flow) rejects ``viking://resources/...`` URIs outside the
-    listed prefixes. All other namespaces — ``viking://user/...``
-    (the agent's own memories, sessions, skills, and other users'
-    namespaces), ``viking://skills/``, etc. — are always allowed and
-    governed by their own feature flags. Skills discovery
-    (``list_skills``/``read_skill``/``skill_exists``) only lists the
-    skills URI, so it is unaffected by this allowlist.
-    Empty list (default) means unrestricted — backward compatible."""
+    When non-empty, read-side knowledge access rejects
+    ``viking://resources/...`` URIs outside the listed prefixes. This scopes
+    retrieval, citation lookup, listing, and @-mention discovery. It does not
+    constrain write tools; configure ``write_allowed_uri_prefixes`` when a
+    deployment needs an explicit write allowlist.
+    Empty list (default) means unrestricted."""
+    write_allowed_uri_prefixes: list[str] = field(default_factory=list)
+    """Optional write URI prefix allowlist for ``viking://resources/``.
+
+    Empty list (default) means writes are not constrained by URI prefix.
+    This is intentionally separate from ``allowed_uri_prefixes`` so read
+    scopes cannot be mistaken for provider-owned submission scopes."""
     profile_enabled: bool = False
     """Enable first-turn profile injection from Viking memories. When True,
     the capability queries Viking for memory search results on the first
@@ -471,7 +474,7 @@ class VikingCapability(AbstractCapability[Any]):
         return f"viking://user/{user_id}/skills/"
 
     def _check_uri_allowed(self, uri: str, *, tool_name: str = "") -> str | None:
-        """Return an error message if ``uri`` is outside the allowed prefixes.
+        """Return an error message if ``uri`` is outside read prefixes.
 
         When ``allowed_uri_prefixes`` is empty (unrestricted), always returns
         ``None``. The allowlist applies **only** to the
@@ -495,7 +498,30 @@ class VikingCapability(AbstractCapability[Any]):
         if any(uri.startswith(prefix) for prefix in self.allowed_uri_prefixes):
             return None
         name = tool_name or "viking"
-        return f"{name}: URI {uri!r} is outside the allowed prefixes ({self.allowed_uri_prefixes})."
+        return (
+            f"{name}: read_scope_denied: URI {uri!r} is outside the read allowed "
+            f"prefixes ({self.allowed_uri_prefixes})."
+        )
+
+    def _check_write_uri_allowed(self, uri: str, *, tool_name: str = "") -> str | None:
+        """Return an error message if ``uri`` is outside write prefixes.
+
+        Write prefixes are opt-in and independent from
+        ``allowed_uri_prefixes``. When no ``write_allowed_uri_prefixes`` are
+        configured, writes are not constrained by URI prefix here; backend
+        path rules and provider-specific submission scopes still apply.
+        """
+        if not self.write_allowed_uri_prefixes:
+            return None
+        if not uri or not uri.startswith("viking://resources/"):
+            return None
+        if any(uri.startswith(prefix) for prefix in self.write_allowed_uri_prefixes):
+            return None
+        name = tool_name or "viking"
+        return (
+            f"{name}: write_scope_denied: URI {uri!r} is outside the write allowed "
+            f"prefixes ({self.write_allowed_uri_prefixes})."
+        )
 
     def _allowed_prefix_for(self, uri: str) -> str | None:
         """Return the allowed prefix matched by ``uri``, or ``None``.
@@ -595,7 +621,7 @@ class VikingCapability(AbstractCapability[Any]):
         """Return the Viking workflow instructions.
 
         When ``allowed_uri_prefixes`` is configured, appends a dynamic
-        block listing the allowed prefixes so the model can pass a
+        block listing the read prefixes so the model can pass a
         ``target_uri`` and skip discovery probing.
 
         Returns:

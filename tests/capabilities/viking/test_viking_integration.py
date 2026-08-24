@@ -885,7 +885,7 @@ async def test_l2_allowed_uri_prefixes_block_read_outside_scope() -> None:
     ctx = _make_run_context()
     result = await read_tool(ctx, uris="viking://resources/raw/engine.md")
 
-    assert "outside the allowed prefixes" in result.return_value
+    assert "read_scope_denied" in result.return_value
     client.read.assert_not_called()
 
 
@@ -1017,6 +1017,58 @@ agents:
         "viking://resources/wiki/",
         "viking://resources/raw/",
     ]
+    assert cfg.write_allowed_uri_prefixes == []
+
+
+@pytest.mark.asyncio
+async def test_l2_write_allowed_uri_prefixes_config_roundtrip() -> None:
+    """L2: write_allowed_uri_prefixes propagates independently from read prefixes."""
+    from wolfharness import AgentsManifest
+
+    yaml_str = """
+agents:
+  test_agent:
+    type: native
+    model: test
+    capabilities:
+      - type: viking
+        mode: all
+        allowed_uri_prefixes:
+          - viking://resources/wiki/
+        write_allowed_uri_prefixes:
+          - viking://resources/tickets/
+"""
+    d = yamling.load_yaml(yaml_str, verify_type=dict)
+    manifest = AgentsManifest.model_validate(d)
+    cap_configs = manifest.agents["test_agent"].capabilities
+    assert len(cap_configs) == 1
+    cfg = cap_configs[0]
+    assert isinstance(cfg, VikingCapabilityConfig)
+    assert cfg.allowed_uri_prefixes == ["viking://resources/wiki/"]
+    assert cfg.write_allowed_uri_prefixes == ["viking://resources/tickets/"]
+
+
+@pytest.mark.asyncio
+async def test_l2_allowed_uri_prefixes_do_not_block_write_by_default() -> None:
+    """L2: read prefixes do not constrain viking_write without an explicit write guard."""
+    client = _make_mock_client()
+    cfg = VikingCapabilityConfig(
+        mode="all",
+        allowed_uri_prefixes=["viking://resources/wiki/"],
+    )
+    cap = _build_cap_from_config(cfg, client)
+    tools = build_tools(cap)
+    write_tool = next(t for t in tools if t.__name__ == "viking_write")
+
+    ctx = _make_run_context()
+    result = await write_tool(
+        ctx,
+        uri="viking://resources/810test/Procedure/tickets/OPA-001.md",
+        content="ticket",
+    )
+
+    assert "Wrote" in result.return_value
+    client.write.assert_called_once()
 
 
 @pytest.mark.asyncio
