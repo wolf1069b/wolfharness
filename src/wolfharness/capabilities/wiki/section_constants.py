@@ -7,6 +7,7 @@ To adapt for a different manual/schema, update these constants.
 
 import re
 
+
 # --- Model detection patterns ---
 # Generic pattern: uppercase letters followed by digits + optional alphanumeric suffix
 # Covers SANY (SY/SE/SK), Komatsu (PC), Hitachi (ZX/EX), Caterpillar (CAT),
@@ -15,13 +16,36 @@ MODEL_TOKEN_RE = re.compile(r"^[A-Z]{2,4}\d+[A-Z0-9-]*$", re.IGNORECASE)
 
 # Known model prefixes for stricter validation (extendable)
 MODEL_PREFIXES: tuple[str, ...] = (
-    "SY", "SE", "SK", "PC", "EX", "ZX", "CAT", "HD", "DX", "EC", "JCB", "R",
+    "SY",
+    "SE",
+    "SK",
+    "PC",
+    "EX",
+    "ZX",
+    "CAT",
+    "HD",
+    "DX",
+    "EC",
+    "JCB",
+    "R",
 )
 
 # Engine/controller codes that indicate config-specific content
 CONFIG_SPECIFIC_PATTERNS: tuple[str, ...] = (
-    "QSB", "4M50", "SC9D", "CM2150", "MCU", "ECU", "K3V", "K5V", "KMX",
-    "SAA", "S6K", "4TNV", "J05", "D1146",
+    "QSB",
+    "4M50",
+    "SC9D",
+    "CM2150",
+    "MCU",
+    "ECU",
+    "K3V",
+    "K5V",
+    "KMX",
+    "SAA",
+    "S6K",
+    "4TNV",
+    "J05",
+    "D1146",
 )
 
 # --- Section heading constants (from default_schema.yaml) ---
@@ -47,7 +71,15 @@ SECTION_COMMON_FAILURE_MODES = "常见失效模式"
 SECTION_DISASSEMBLY_STEPS = "拆装步骤"
 
 # Admin sections (low-value chapters to skip)
-ADMIN_SECTION_KEYWORDS: tuple[str, ...] = ("安全", "前言", "cover", "intro", "safety", "foreword", "preface")
+ADMIN_SECTION_KEYWORDS: tuple[str, ...] = (
+    "安全",
+    "前言",
+    "cover",
+    "intro",
+    "safety",
+    "foreword",
+    "preface",
+)
 
 # Placeholder/gap text patterns (regex-escaped)
 GAP_RE = r"open_gap|来源未说明|待补充|来源缺失|未物化|未提供|未确认|未说明|未知"

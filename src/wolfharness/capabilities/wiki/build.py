@@ -185,6 +185,7 @@ class WikiBuildCapability(
 
         try:
             from wolfharness.capabilities.wiki.build_logger import WikiBuildLogger
+
             from .wiki_build_tools import WikiBuildTools
 
             library_root = (

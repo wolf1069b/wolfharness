@@ -2736,9 +2736,7 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             for mname, member in members.items():
                 if mname == lead_member_name:
                     continue
-                member_sid = (
-                    member.get("session_id", "") if isinstance(member, dict) else ""
-                )
+                member_sid = member.get("session_id", "") if isinstance(member, dict) else ""
                 if member_sid and self._session_has_live_run(session_pool, member_sid):
                     active_count += 1
             if active_count >= max_parallel:

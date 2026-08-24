@@ -21,6 +21,7 @@ from wolfharness.capabilities.wiki.section_constants import (
 
 from .base import BaseHook, HookResult
 
+
 # ── Design_717.md directory rules ─────────────────────────────────────────
 
 _FAULT_CLASSES: frozenset[str] = frozenset({
@@ -52,28 +53,54 @@ _PROHIBITED_CONCEPTS: frozenset[str] = frozenset({
 })
 
 _VALID_CONCEPTS: frozenset[str] = frozenset({
-    "Device", "Component", "DTC",
-    "Symptom", "Fault", "Procedure", "OP",
+    "Device",
+    "Component",
+    "DTC",
+    "Symptom",
+    "Fault",
+    "Procedure",
+    "OP",
 })
 
 # Chinese class names that should be English (Fault)
 _CHINESE_FAULT_INDICATORS: frozenset[str] = frozenset({
-    "液压故障", "机械故障", "电气故障", "控制故障",
-    "流体故障", "热故障", "结构故障",
-    "传感器故障", "电气系统", "液压系统",
+    "液压故障",
+    "机械故障",
+    "电气故障",
+    "控制故障",
+    "流体故障",
+    "热故障",
+    "结构故障",
+    "传感器故障",
+    "电气系统",
+    "液压系统",
 })
 
 # Chinese class names that should be English (Procedure)
 _CHINESE_PROCEDURE_INDICATORS: frozenset[str] = frozenset({
-    "发动机", "操作规程", "拆装", "测试", "检查",
-    "测量", "保养", "调整", "诊断", "维修",
-    "测试与调整", "标定", "calibration", "disassembly",
+    "发动机",
+    "操作规程",
+    "拆装",
+    "测试",
+    "检查",
+    "测量",
+    "保养",
+    "调整",
+    "诊断",
+    "维修",
+    "测试与调整",
+    "标定",
+    "calibration",
+    "disassembly",
 })
 
 # DTC class names that use the old MCU-SYC215 / ECU-QSB6.7 pattern.
 # These should be 系列代号_控制器功能角色 (e.g. SY215_主控制器).
 _DTC_LEGACY_PATTERNS: tuple[str, ...] = (
-    "MCU-", "ECU-", "HCU-", "VCU-",
+    "MCU-",
+    "ECU-",
+    "HCU-",
+    "VCU-",
 )
 
 # Device model prefixes that must NOT appear in Component object_name.
@@ -247,9 +274,7 @@ class DirectoryStructureHook(BaseHook):
                 # specific model codes, component names, or numeric specs,
                 # it's inline config content that belongs in a Profile.
                 # Patterns are centralized in section_constants.CONFIG_SPECIFIC_PATTERNS.
-                found_patterns = [
-                    p for p in CONFIG_SPECIFIC_PATTERNS if p in section_text
-                ]
+                found_patterns = [p for p in CONFIG_SPECIFIC_PATTERNS if p in section_text]
                 if found_patterns:
                     issues.append(
                         f"Symptom index.md '## 产品配置差异' contains "

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import Any
 
+
 __all__ = [
     "assemble_template_entity",
     "strip_device_prefix",
@@ -34,7 +35,7 @@ def strip_device_prefix(object_name: str, device_id: str, series_id: str) -> str
         if not prefix:
             continue
         if object_name.startswith(prefix):
-            stripped = object_name[len(prefix):].lstrip("-_/ :")
+            stripped = object_name[len(prefix) :].lstrip("-_/ :")
             if stripped:
                 return stripped
     return object_name
@@ -43,7 +44,29 @@ def strip_device_prefix(object_name: str, device_id: str, series_id: str) -> str
 def _yaml_escape(value: str) -> str:
     """Escape a string for safe YAML scalar usage."""
     # Wrap in quotes if it contains characters that would confuse YAML parsing.
-    if any(ch in value for ch in (":", "#", "'", '"', "\n", "{", "}", "[", "]", ",", "&", "*", "!", "|", ">", "%", "@", "`")):
+    if any(
+        ch in value
+        for ch in (
+            ":",
+            "#",
+            "'",
+            '"',
+            "\n",
+            "{",
+            "}",
+            "[",
+            "]",
+            ",",
+            "&",
+            "*",
+            "!",
+            "|",
+            ">",
+            "%",
+            "@",
+            "`",
+        )
+    ):
         escaped = value.replace("'", "''")
         return f"'{escaped}'"
     return value
@@ -164,8 +187,7 @@ def _component_body_sections(
     lines.append("## 工作机理")
     lines.append("")
     lines.append(
-        working_mechanism.strip()
-        or "> 工作机理待补充: 当前 packet 未提供 working_mechanism。"
+        working_mechanism.strip() or "> 工作机理待补充: 当前 packet 未提供 working_mechanism。"
     )
     lines.append("")
 
@@ -199,8 +221,7 @@ def _fault_body_sections(
     lines.append("## 失效机理")
     lines.append("")
     lines.append(
-        failure_mechanism.strip()
-        or "> 失效机理待补充: 当前 packet 未提供 failure_mechanism。"
+        failure_mechanism.strip() or "> 失效机理待补充: 当前 packet 未提供 failure_mechanism。"
     )
     lines.append("")
     return lines

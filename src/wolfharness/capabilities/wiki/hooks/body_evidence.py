@@ -38,6 +38,7 @@ from wolfharness.capabilities.wiki.section_constants import (
 
 from .base import BaseHook, HookResult
 
+
 _LIST_ITEM_RE = re.compile(r"^\s*(?:\d+[.)]|[-*])\s+(.+?)\s*$")
 _TOP_LEVEL_LIST_ITEM_RE = re.compile(r"^(?:\d+[.)]|[-*])\s+(.+?)\s*$")
 _TABLE_SEPARATOR_RE = re.compile(r"^\s*\|?(?:\s*:?-+:?\s*\|)+\s*$")
@@ -109,8 +110,7 @@ def _section_source_has_raw(frontmatter: dict[str, object], section_name: str) -
         section = record.get("section", record.get("target_section"))
         values = record.get("source_uri", record.get("source_uris", record.get("sources")))
         if section == section_name and any(
-            is_raw_source_uri(uri)
-            for uri in extract_source_uris(str(values))
+            is_raw_source_uri(uri) for uri in extract_source_uris(str(values))
         ):
             return True
     return False
@@ -164,7 +164,10 @@ class BodyEvidenceHook(BaseHook):
                     step
                     for step in steps
                     if not _has_gap(step)
-                    and not any(uri.startswith(wiki_uri_prefix() + "/Procedure/") for uri in extract_wiki_uris(step))
+                    and not any(
+                        uri.startswith(wiki_uri_prefix() + "/Procedure/")
+                        for uri in extract_wiki_uris(step)
+                    )
                 ]
                 if missing:
                     issues.append(
@@ -181,7 +184,9 @@ class BodyEvidenceHook(BaseHook):
                     continue
                 if _has_gap(section):
                     continue
-                if section_name == SECTION_JUDGMENT_CRITERIA and not has_usable_procedure_criteria(section):
+                if section_name == SECTION_JUDGMENT_CRITERIA and not has_usable_procedure_criteria(
+                    section
+                ):
                     issues.append(
                         f"Procedure section '{SECTION_JUDGMENT_CRITERIA}' contains only a source pointer; write the actual pass/fail criterion in the body.",
                     )
@@ -198,7 +203,9 @@ class BodyEvidenceHook(BaseHook):
                         f"Procedure section '{section_name}' has parameter rows without a row-local raw-source locator: "
                         + "; ".join(parameter_rows[:3]),
                     )
-                elif not _has_raw_citation(section) and not _section_source_has_raw(frontmatter, section_name):
+                elif not _has_raw_citation(section) and not _section_source_has_raw(
+                    frontmatter, section_name
+                ):
                     issues.append(
                         f"Procedure section '{section_name}' contains executable facts but no raw-source citation.",
                     )
@@ -209,15 +216,21 @@ class BodyEvidenceHook(BaseHook):
                 item
                 for item in mechanisms
                 if not _has_gap(item)
-                and not any(uri.startswith(wiki_uri_prefix() + "/Fault/") for uri in extract_wiki_uris(item))
+                and not any(
+                    uri.startswith(wiki_uri_prefix() + "/Fault/") for uri in extract_wiki_uris(item)
+                )
             ]
             if missing_faults:
                 issues.append(
                     "Profile mechanisms without a Fault URI or explicit open_gap: "
                     + "; ".join(missing_faults[:3]),
                 )
-            missing_mechanism_evidence = _missing_item_evidence(sections.get(SECTION_POSSIBLE_FAILURE, ""))
-            if missing_mechanism_evidence and not _section_source_has_raw(frontmatter, SECTION_POSSIBLE_FAILURE):
+            missing_mechanism_evidence = _missing_item_evidence(
+                sections.get(SECTION_POSSIBLE_FAILURE, "")
+            )
+            if missing_mechanism_evidence and not _section_source_has_raw(
+                frontmatter, SECTION_POSSIBLE_FAILURE
+            ):
                 issues.append(
                     "Profile mechanism items without local raw-source evidence: "
                     + "; ".join(missing_mechanism_evidence[:3]),
@@ -228,7 +241,10 @@ class BodyEvidenceHook(BaseHook):
                 item
                 for item in diagnostic_steps
                 if not _has_gap(item)
-                and not any(uri.startswith(wiki_uri_prefix() + "/Procedure/") for uri in extract_wiki_uris(item))
+                and not any(
+                    uri.startswith(wiki_uri_prefix() + "/Procedure/")
+                    for uri in extract_wiki_uris(item)
+                )
             ]
             if missing_procedures:
                 issues.append(
@@ -238,11 +254,17 @@ class BodyEvidenceHook(BaseHook):
             if (
                 diagnostic_steps
                 and not _has_raw_citation(sections.get(SECTION_DIAGNOSTIC_FLOW, ""))
-and not _section_source_has_raw(frontmatter, SECTION_DIAGNOSTIC_FLOW)
+                and not _section_source_has_raw(frontmatter, SECTION_DIAGNOSTIC_FLOW)
             ):
-                issues.append(f"Profile section '{SECTION_DIAGNOSTIC_FLOW}' has no raw-source citation.")
-            missing_diagnostic_evidence = _missing_item_evidence(sections.get(SECTION_DIAGNOSTIC_FLOW, ""))
-            if missing_diagnostic_evidence and not _section_source_has_raw(frontmatter, SECTION_DIAGNOSTIC_FLOW):
+                issues.append(
+                    f"Profile section '{SECTION_DIAGNOSTIC_FLOW}' has no raw-source citation."
+                )
+            missing_diagnostic_evidence = _missing_item_evidence(
+                sections.get(SECTION_DIAGNOSTIC_FLOW, "")
+            )
+            if missing_diagnostic_evidence and not _section_source_has_raw(
+                frontmatter, SECTION_DIAGNOSTIC_FLOW
+            ):
                 issues.append(
                     "Profile diagnostic items without local raw-source evidence: "
                     + "; ".join(missing_diagnostic_evidence[:3]),

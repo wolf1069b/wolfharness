@@ -1,1 +1,1 @@
-"""wiki capability subpackage: planning"""
+"""wiki capability subpackage: planning."""

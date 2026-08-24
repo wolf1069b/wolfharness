@@ -7,11 +7,11 @@ from hashlib import sha256
 import logging
 from pathlib import Path
 
+from wolfharness.capabilities.wiki.auto_repair import materialize_body_links
 from wolfharness.capabilities.wiki.io.text_parsers import (
     _ENTITY_URI_HEADING_RE,
     _parse_forward_links,
 )
-from wolfharness.capabilities.wiki.auto_repair import materialize_body_links
 from wolfharness.capabilities.wiki.quality import (
     entity_status,
     parse_frontmatter,
@@ -23,7 +23,7 @@ from wolfharness.capabilities.wiki.validation import (
 
 logger = logging.getLogger(__name__)
 
-from .._helpers import _FORMAL_WRITE_HOOKS, _entity_batch_limit
+from wolfharness.capabilities.wiki._helpers import _FORMAL_WRITE_HOOKS, _entity_batch_limit
 
 
 class PatchMixin:

@@ -25,6 +25,7 @@ from pydantic_ai import (
     ThinkingPart,
     ThinkingPartDelta,
 )
+
 from wolfharness.agents.events import (
     CompactionEvent,
     RunErrorEvent,
@@ -36,6 +37,7 @@ from wolfharness.agents.events import (
     ToolCallStartEvent,
     UserMessageInsertedEvent,
 )
+
 
 if TYPE_CHECKING:
     from wolfharness.agents.context import AgentContext
@@ -113,7 +115,7 @@ def _content_to_str(content: str | list[Any]) -> str:
     return " ".join(parts)
 
 
-def _truncate(content: Any, max_chars: int | float = _MAX_TOOL_RESULT_CHARS) -> str:
+def _truncate(content: Any, max_chars: float = _MAX_TOOL_RESULT_CHARS) -> str:
     """Truncate content to *max_chars*, appending a notice if truncated.
 
     ``max_chars`` accepts ``float('inf')`` to disable truncation entirely.
@@ -167,14 +169,20 @@ async def per_session_file_handler(
             )
             file_handle.flush()
 
-        case PartStartEvent(part=TextPart(content=delta)) | PartDeltaEvent(delta=TextPartDelta(content_delta=delta)):
+        case (
+            PartStartEvent(part=TextPart(content=delta))
+            | PartDeltaEvent(delta=TextPartDelta(content_delta=delta))
+        ):
             # Flush any pending thinking before writing text output
             _flush_thinking(agent_name, session_id, file_handle)
             if delta:
                 file_handle.write(delta)
                 file_handle.flush()
 
-        case PartStartEvent(part=ThinkingPart(content=delta)) | PartDeltaEvent(delta=ThinkingPartDelta(content_delta=delta)):
+        case (
+            PartStartEvent(part=ThinkingPart(content=delta))
+            | PartDeltaEvent(delta=ThinkingPartDelta(content_delta=delta))
+        ):
             # Buffer thinking fragments instead of writing each one separately
             if delta:
                 key = f"{agent_name}_{session_id}"

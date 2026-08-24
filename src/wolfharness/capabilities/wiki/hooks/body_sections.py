@@ -28,12 +28,12 @@ import re
 
 import yaml
 
-from ..quality import is_case_source_uri
-from ..schema_loader import (
+from wolfharness.capabilities.wiki.quality import is_case_source_uri
+from wolfharness.capabilities.wiki.schema_loader import (
     get_all_concept_body_sections,
     get_profile_body_sections,
 )
-from ..section_constants import (
+from wolfharness.capabilities.wiki.section_constants import (
     SECTION_DIAGNOSIS_FLOW,
     SECTION_JUDGMENT_CRITERIA,
     SECTION_MECHANISM,
@@ -42,7 +42,9 @@ from ..section_constants import (
     SECTION_POSSIBLE_FAILURE,
     SECTION_SOURCE,
 )
+
 from .base import BaseHook, HookResult
+
 
 # ── Required body sections ───────────────────────────────────────────────
 # Loaded once from the YAML schema (cached via lru_cache in schema_loader).
@@ -57,8 +59,19 @@ _PROFILE_SECTIONS: frozenset[str] = get_profile_body_sections()
 # is a policy decision, not a schema property.
 _CASE_REQUIRED_SECTIONS: dict[str, frozenset[str]] = {
     "Component": frozenset({SECTION_OVERVIEW, SECTION_MECHANISM, SECTION_SOURCE}),
-    "DTC": frozenset({"故障码定义", SECTION_POSSIBLE_FAILURE, SECTION_DIAGNOSIS_FLOW, SECTION_SOURCE}),
-    "Procedure": frozenset({"操作目的", SECTION_OPERATION_STEPS, SECTION_JUDGMENT_CRITERIA, "后续处理", SECTION_SOURCE}),
+    "DTC": frozenset({
+        "故障码定义",
+        SECTION_POSSIBLE_FAILURE,
+        SECTION_DIAGNOSIS_FLOW,
+        SECTION_SOURCE,
+    }),
+    "Procedure": frozenset({
+        "操作目的",
+        SECTION_OPERATION_STEPS,
+        SECTION_JUDGMENT_CRITERIA,
+        "后续处理",
+        SECTION_SOURCE,
+    }),
     "Device": frozenset({"基础信息", "包含系统", SECTION_SOURCE}),
 }
 
@@ -162,8 +175,14 @@ class BodySectionsHook(BaseHook):
         else:
             frontmatter = _parse_frontmatter_for_source(content)
             source_values = frontmatter.get("sources", [])
-            is_case_source = isinstance(source_values, list) and any(isinstance(source, str) and is_case_source_uri(source) for source in source_values)
-            required = _CASE_REQUIRED_SECTIONS.get(concept) if is_case_source else _REQUIRED_SECTIONS.get(concept)
+            is_case_source = isinstance(source_values, list) and any(
+                isinstance(source, str) and is_case_source_uri(source) for source in source_values
+            )
+            required = (
+                _CASE_REQUIRED_SECTIONS.get(concept)
+                if is_case_source
+                else _REQUIRED_SECTIONS.get(concept)
+            )
 
         if not required:
             return HookResult(
@@ -187,7 +206,11 @@ class BodySectionsHook(BaseHook):
                         mechanism_gap.append(heading)
                     else:
                         empty.append(heading)
-                elif concept == "Component" and heading == SECTION_MECHANISM and self._is_bare_mechanism_gap(body_text):
+                elif (
+                    concept == "Component"
+                    and heading == SECTION_MECHANISM
+                    and self._is_bare_mechanism_gap(body_text)
+                ):
                     mechanism_gap.append(heading)
 
         issues: list[str] = []
@@ -222,7 +245,9 @@ class BodySectionsHook(BaseHook):
         return HookResult(
             hook_name=self.name,
             passed=True,
-            message=(f"All {len(required)} required sections present and non-empty{' (Profile)' if is_profile else ''}."),
+            message=(
+                f"All {len(required)} required sections present and non-empty{' (Profile)' if is_profile else ''}."
+            ),
         )
 
     def _is_placeholder(self, text: str) -> bool:

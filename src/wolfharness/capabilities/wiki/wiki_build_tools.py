@@ -7,7 +7,6 @@ validation, and doc-prefix methods.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -21,13 +20,7 @@ from urllib.parse import unquote, urlsplit
 
 from httpx import HTTPError
 from openviking_sdk.errors import OpenVikingError
-from wolfharness.capabilities.wiki.build_logger import WikiBuildLogger
-from wolfharness.capabilities.wiki.storage import (
-    FSBackend,
-    create_raw_reader,
-    create_wiki_store,
-    viking_read,
-)
+
 from wolfharness.capabilities.wiki.auto_repair import batch_auto_repair
 from wolfharness.capabilities.wiki.quality import (
     BuildProfile,
@@ -44,6 +37,12 @@ from wolfharness.capabilities.wiki.quality import (
     set_raw_source_root_uri,
 )
 from wolfharness.capabilities.wiki.schema_loader import get_concept_schema, get_schema_version
+from wolfharness.capabilities.wiki.storage import (
+    FSBackend,
+    create_raw_reader,
+    create_wiki_store,
+    viking_read,
+)
 from wolfharness.capabilities.wiki.validation import (
     require_valid_entity,
 )
@@ -51,24 +50,30 @@ from wolfharness.capabilities.wiki.validation import (
 from .io.audit import AuditCache, AuditMixin
 from .io.children import ChildrenMixin
 from .io.model_mapping import ModelMappingMixin
-from .tickets.opa import OPAMixin
 from .io.text_parsers import TextParsersMixin
+from .tickets.opa import OPAMixin
 
 
 logger = logging.getLogger(__name__)
 
+from typing import TYPE_CHECKING
+
 from ._helpers import _FORMAL_WRITE_HOOKS, _io_worker_limit
-
-
-from .planning.bom import BomMixin
-from .planning.chapters import ChapterMixin
 from .entities.entities import EntityWriteMixin
 from .entities.finalize import FinalizeMixin
-from .planning.materialization import MaterializationMixin
-from .io.migration import MigrationMixin
 from .entities.packets import PacketMixin
 from .entities.patches import PatchMixin
+from .io.migration import MigrationMixin
+from .planning.bom import BomMixin
+from .planning.chapters import ChapterMixin
+from .planning.materialization import MaterializationMixin
 from .planning.relations import RelationMixin
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from wolfharness.capabilities.wiki.build_logger import WikiBuildLogger
 
 
 class WikiBuildTools(

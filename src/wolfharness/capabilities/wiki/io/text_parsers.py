@@ -8,12 +8,16 @@ dependencies, so the mixin can be reused without instantiating
 
 from __future__ import annotations
 
-from collections.abc import Callable
 import logging
-from pathlib import Path
 import re
+from typing import TYPE_CHECKING
 
 from wolfharness.capabilities.wiki.quality import extract_source_uris
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
 
 
 logger = logging.getLogger(__name__)

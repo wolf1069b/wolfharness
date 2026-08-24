@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import re
 
-from wolfharness.capabilities.wiki.wiki_build_deps import WikiBuildDeps
-from wolfharness.capabilities.wiki.storage import viking_list_children
 from wolfharness.capabilities.wiki.quality import (
     extract_sections,
     extract_source_uris,
@@ -16,6 +14,8 @@ from wolfharness.capabilities.wiki.quality import (
     is_source_uri_scheme,
     parse_frontmatter,
 )
+from wolfharness.capabilities.wiki.storage import viking_list_children
+from wolfharness.capabilities.wiki.wiki_build_deps import WikiBuildDeps
 
 
 _RELATION_FIELDS: dict[str, tuple[str, ...]] = {

@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from hashlib import sha256
 import json
 import logging
 import os
-from pathlib import Path
 import re
 import time
 
@@ -28,7 +26,14 @@ from wolfharness.capabilities.wiki.schema_loader import get_schema_version
 
 logger = logging.getLogger(__name__)
 
-from .._helpers import _with_publication_state
+from typing import TYPE_CHECKING
+
+from wolfharness.capabilities.wiki._helpers import _with_publication_state
+
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+    from pathlib import Path
 
 
 # Core-path publication blockers: the diagnostic backbone a Wiki page
@@ -42,10 +47,10 @@ from .._helpers import _with_publication_state
 # non-required relations; the finalize gate must not self-lock on relation
 # edges the schema itself treats as optional.
 _CORE_PATH_BLOCKER_CODES = frozenset({
-    "Component.working_mechanism",   # content: body ## 工作机理
-    "Fault.failure_mechanism",        # content: body ## 失效机理
-    "Device.critical_components",     # relation: frontmatter (BOM-filled) + body fallback
-    "DTC.related_faults",             # relation: frontmatter OR body ## 可能失效机理
+    "Component.working_mechanism",  # content: body ## 工作机理
+    "Fault.failure_mechanism",  # content: body ## 失效机理
+    "Device.critical_components",  # relation: frontmatter (BOM-filled) + body fallback
+    "DTC.related_faults",  # relation: frontmatter OR body ## 可能失效机理
     # ponytail: SymptomProfile.device_refs removed — schema-optional, no body
     # fallback, closure defers it.  Blocking on it contradicts the backbone
     # policy and body-first design.  DTC→Device has no field-level code
@@ -577,15 +582,16 @@ class FinalizeMixin:
             # and committed locally; only the remote upload failed.  Skip audit
             # and promotion (re-auditing confirmed entities would self-lock the
             # gate via strict hooks) and retry just the upload.
-            if ckpt_stage == "remote_sync_pending" and ckpt_snapshot == self._current_entity_snapshot_id():
+            if (
+                ckpt_stage == "remote_sync_pending"
+                and ckpt_snapshot == self._current_entity_snapshot_id()
+            ):
                 logger.info(
                     "finalize_wiki: retrying remote sync only (build_id=%s, snapshot=%s).",
                     current_checkpoint.get("build_id", ""),
                     ckpt_snapshot,
                 )
-                return self._retry_remote_sync(
-                    current_checkpoint, audit_profile
-                )
+                return self._retry_remote_sync(current_checkpoint, audit_profile)
         device_chapter_sync = self.sync_device_system_chapters(doc_id, device_id)
         self._invalidate_audit_cache()
         audit_started = time.perf_counter()
@@ -640,7 +646,9 @@ class FinalizeMixin:
             }
             for record in self._formal_entity_snapshot_records()
         ]
-        provided_uris = {str(entity.get("uri", "")) for entity in (entities or []) if entity.get("uri")}
+        provided_uris = {
+            str(entity.get("uri", "")) for entity in (entities or []) if entity.get("uri")
+        }
         indexed_uris = {str(entity["uri"]) for entity in indexed_entities}
         if provided_uris and provided_uris != indexed_uris:
             missing = sorted(indexed_uris - provided_uris)
@@ -858,10 +866,10 @@ class FinalizeMixin:
         # a failed upload returns ``finalized_local`` and leaves a durable
         # ``remote_sync_pending`` checkpoint instead of authorizing phase=done.
         upload_result: dict | None = None
-        from ..storage.local_viking_fs import LocalVikingFS
+        from wolfharness.capabilities.wiki.storage.local_viking_fs import LocalVikingFS
 
         if isinstance(self.store._fs, LocalVikingFS):
-            from ..storage import _viking_client
+            from wolfharness.capabilities.wiki.storage import _viking_client
 
             try:
                 executor = ThreadPoolExecutor(max_workers=1)
@@ -926,11 +934,11 @@ class FinalizeMixin:
         Entities are already promoted and committed locally; re-auditing would
         activate strict hooks on confirmed entities and self-lock the gate.
         """
-        from ..storage.local_viking_fs import LocalVikingFS
+        from wolfharness.capabilities.wiki.storage.local_viking_fs import LocalVikingFS
 
         upload_result: dict | None = None
         if isinstance(self.store._fs, LocalVikingFS):
-            from ..storage import _viking_client
+            from wolfharness.capabilities.wiki.storage import _viking_client
 
             try:
                 from concurrent.futures import ThreadPoolExecutor

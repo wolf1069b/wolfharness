@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from hashlib import sha256
 import json
 import logging
 import os
 import re
+from typing import TYPE_CHECKING
 
 from wolfharness.capabilities.wiki.quality import (
     parse_frontmatter,
@@ -17,6 +17,10 @@ from wolfharness.capabilities.wiki.validation import (
     ENTITY_VALIDATION_HOOKS,
     FORMAL_WRITE_EXCLUDED_HOOKS,
 )
+
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 logger = logging.getLogger(__name__)
@@ -214,11 +218,11 @@ def _humanize_fact_key(key: str) -> str:
     """Render a machine fact key as a human-readable Chinese label."""
     if key.startswith("parameter:"):
         _, label, dimension = key.split(":", 2)
-        return f'参数「{label}」的{_DIMENSION_CN.get(dimension, "数值")}'
+        return f"参数「{label}」的{_DIMENSION_CN.get(dimension, '数值')}"
     if key.startswith("fm:"):
-        return f'frontmatter 字段「{key.split(":", 1)[1]}」'
+        return f"frontmatter 字段「{key.split(':', 1)[1]}」"
     if key.startswith("body-state:"):
-        return f'状态描述「{key.split(":", 1)[1]}」'
+        return f"状态描述「{key.split(':', 1)[1]}」"
     return key
 
 

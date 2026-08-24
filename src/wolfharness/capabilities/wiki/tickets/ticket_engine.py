@@ -544,8 +544,7 @@ class TicketEngine:
         # the checkpoint build_id match is sufficient scoping.
         checkpoint = self.store.read_json("index/build_checkpoint.json")
         return (
-            isinstance(checkpoint, dict)
-            and str(checkpoint.get("build_id", "")).strip() == build_id
+            isinstance(checkpoint, dict) and str(checkpoint.get("build_id", "")).strip() == build_id
         )
 
     def _opa_category_from_key(self, key: str) -> str:
@@ -738,7 +737,7 @@ class TicketEngine:
             record.get("category", "")
         ).strip().lower() == "gap" and self._is_explicit_tracked_record(record)
 
-    def create_opa(  # noqa: PLR0915 - CRUD entry point with sequential validation phases
+    def create_opa(
         self,
         *,
         title: str,
@@ -1600,9 +1599,7 @@ class TicketEngine:
         result["updated"] = True
         return result
 
-    def apply_ops(  # noqa: PLR0911 - state-machine dispatch with early-exit guards
-        self, ops_id: str
-    ) -> dict[str, object]:
+    def apply_ops(self, ops_id: str) -> dict[str, object]:
         """Apply a confirmed OPS candidate with optimistic locking.
 
         This is deliberately separate from OPS creation and review.  No
@@ -1933,7 +1930,7 @@ class TicketEngine:
             100,
         ).rstrip("-._")
 
-    def ingest_external_opl(  # noqa: PLR0915 - sequential CRUD entry point
+    def ingest_external_opl(
         self,
         *,
         title: str,
@@ -2158,9 +2155,7 @@ class TicketEngine:
             resolved += 1
         return resolved
 
-    def apply_opl(  # noqa: PLR0911 - apply-state machine with early-exit guards
-        self, opl_id: str
-    ) -> dict[str, object]:
+    def apply_opl(self, opl_id: str) -> dict[str, object]:
         """Apply a stored external OPL exactly once when it is machine-ready."""
         key = self._find_op_key("OPL", opl_id)
         if not key:
@@ -2540,7 +2535,7 @@ class TicketEngine:
             "remaining_count": remaining_count,  # NEW
         }
 
-    def op_flow_report(  # noqa: PLR0915
+    def op_flow_report(
         self,
         *,
         persist: bool = True,
@@ -2692,7 +2687,7 @@ class TicketEngine:
             self.store.write_json("index/op_flow_report.json", report)
         return report
 
-    def discover_opa(  # noqa: PLR0915 - audit→OPA pipeline with pagination loop
+    def discover_opa(
         self,
         *,
         profile: BuildProfile = "manual",

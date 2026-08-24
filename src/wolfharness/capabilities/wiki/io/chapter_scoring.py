@@ -26,11 +26,12 @@ strip — plain text without markup works unchanged.
 
 from __future__ import annotations
 
+from collections import Counter
 import math
 import re
-from collections import Counter
 
 from wolfharness.capabilities.wiki.section_constants import ADMIN_SECTION_KEYWORDS
+
 
 _HTML_STRIP_RE = re.compile(r"<[^>]+>")
 _KEEP_RE = re.compile(r"[^A-Za-z0-9\u4e00-\u9fff]")  # letters + digits only
@@ -93,7 +94,9 @@ def build_fingerprint(
             inverse = idf.get(gram)
             if inverse is not None:
                 weight[gram] = weight.get(gram, 0.0) + (count / total) * inverse
-    return frozenset(gram for gram, _ in sorted(weight.items(), key=lambda kv: kv[1], reverse=True)[:size])
+    return frozenset(
+        gram for gram, _ in sorted(weight.items(), key=lambda kv: kv[1], reverse=True)[:size]
+    )
 
 
 def classify_score(score: float, *, skip_below: float = 10.0, read_above: float = 25.0) -> str:

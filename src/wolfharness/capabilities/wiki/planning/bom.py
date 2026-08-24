@@ -9,6 +9,7 @@ import re
 
 from httpx import HTTPError
 from openviking_sdk.errors import OpenVikingError
+
 from wolfharness.capabilities.wiki.section_constants import (
     SECTION_MECHANISM,
     SECTION_OVERVIEW,
@@ -18,7 +19,7 @@ from wolfharness.capabilities.wiki.section_constants import (
 
 logger = logging.getLogger(__name__)
 
-from .._helpers import _BOM_PATH_PLACEHOLDER_RE, _entity_batch_limit
+from wolfharness.capabilities.wiki._helpers import _BOM_PATH_PLACEHOLDER_RE, _entity_batch_limit
 
 
 class BomMixin:

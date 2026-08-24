@@ -25,6 +25,7 @@ from wolfharness.capabilities.wiki.section_constants import (
 
 from .base import BaseHook, HookResult
 
+
 _MEASURED_VALUE_RE = re.compile(
     r"(?<![A-Za-z])[-+]?\d+(?:\.\d+)?\s*"
     r"(?:mV|kV|V|mA|A|Ω|ohm|MPa|kPa|bar|rpm|r/min|℃|°C|mm|cm|kg|"
@@ -72,7 +73,8 @@ def _unstable_detail_lines(text: str) -> list[str]:
 
 class LightweightMaterializationHook(BaseHook):
     """Block parameter-heavy Procedure nodes and general pages carrying
-    model-specific measured values or wiring maps."""
+    model-specific measured values or wiring maps.
+    """
 
     @property
     def name(self) -> str:
@@ -100,15 +102,19 @@ class LightweightMaterializationHook(BaseHook):
 
             checked_text = "\n".join(
                 sections.get(name, "")
-                for name in (SECTION_PREREQUISITES, SECTION_REQUIRED_TOOLS, SECTION_OPERATION_STEPS, SECTION_JUDGMENT_CRITERIA)
+                for name in (
+                    SECTION_PREREQUISITES,
+                    SECTION_REQUIRED_TOOLS,
+                    SECTION_OPERATION_STEPS,
+                    SECTION_JUDGMENT_CRITERIA,
+                )
             )
             unstable = _unstable_detail_lines(checked_text)
             if unstable:
                 issues.append(
                     "Procedure contains unstable numeric/wiring detail; keep the reusable action "
                     "and delegate model-specific values, wire numbers, colors and pin maps to the "
-                    "cited raw chapter: "
-                    + "; ".join(unstable[:3]),
+                    "cited raw chapter: " + "; ".join(unstable[:3]),
                 )
 
         elif concept in {"Component", "Device", "DTC", "Symptom"}:
@@ -122,8 +128,7 @@ class LightweightMaterializationHook(BaseHook):
             if unstable:
                 issues.append(
                     f"{concept} contains unstable numeric/wiring detail; retain the general fact "
-                    "and raw source link instead: "
-                    + "; ".join(unstable[:3]),
+                    "and raw source link instead: " + "; ".join(unstable[:3]),
                 )
 
         if issues:

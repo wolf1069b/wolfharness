@@ -1,1 +1,1 @@
-"""wiki capability subpackage: tickets"""
+"""wiki capability subpackage: tickets."""

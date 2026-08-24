@@ -1,1 +1,1 @@
-"""wiki capability subpackage: io"""
+"""wiki capability subpackage: io."""

@@ -768,8 +768,12 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
             ``op_flow`` state.
         """
         opas = await asyncio.to_thread(tools.get_opas, target_uri=target_uri, limit=limit)
-        ops = await asyncio.to_thread(tools.get_ops, parent_opa=parent_opa, target_uri=target_uri, limit=limit)
-        opls = await asyncio.to_thread(tools.get_opls, parent_opa=parent_opa, target_uri=target_uri, limit=limit)
+        ops = await asyncio.to_thread(
+            tools.get_ops, parent_opa=parent_opa, target_uri=target_uri, limit=limit
+        )
+        opls = await asyncio.to_thread(
+            tools.get_opls, parent_opa=parent_opa, target_uri=target_uri, limit=limit
+        )
         # op_flow_status is a global scan (get_opas 500 + get_ops 10000) — skip
         # it when a single target_uri is queried; it's irrelevant to per-target
         # ticket lookup and dominates latency on remote backends.

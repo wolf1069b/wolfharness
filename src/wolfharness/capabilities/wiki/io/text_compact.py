@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import re
 
+
 # Table rows and image placeholders contribute noise, not entities.
 _TABLE_TAG_RE = re.compile(r"</?(?:td|th|tr|table)\b[^>]*>", flags=re.IGNORECASE)
 _IMAGE_TOKEN_RE = re.compile(r"<image_token\b[^>]*/?>", flags=re.IGNORECASE)
@@ -27,7 +28,9 @@ _HTML_TAG_RE = re.compile(r"<[a-zA-Z/][^>]*>")
 # evidence, not boilerplate.
 _FOOTNOTE_OPEN_RE = re.compile(r"<div\b[^>]*class=\"footnote\"[^>]*>\s*", flags=re.IGNORECASE)
 _FOOTNOTE_CLOSE_RE = re.compile(r"</div>\s*", flags=re.IGNORECASE)
-_EMPTY_CELL_RE = re.compile(r"<\s*(?:td|th|tr|table)\s*([^>]*?)\s*>\s*</\s*(?:td|th|tr|table)\s*>", flags=re.IGNORECASE)
+_EMPTY_CELL_RE = re.compile(
+    r"<\s*(?:td|th|tr|table)\s*([^>]*?)\s*>\s*</\s*(?:td|th|tr|table)\s*>", flags=re.IGNORECASE
+)
 
 # Rows that repeat verbatim across every chapter (safety notices, torque
 # reminders).  Dropping them removes up to ~26% of duplicated input.
@@ -44,7 +47,9 @@ _NOISE_LINE_RE = re.compile(
     r"警告[：:][^\n]*"
     r")\s*$",
 )
-_EMPTY_TABLE_ROW_RE = re.compile(r"^\s*(?:<td[^>]*>\s*</td>|<td colspan=[\"']?\d+[\"']?\s*</td>\s*)+$")
+_EMPTY_TABLE_ROW_RE = re.compile(
+    r"^\s*(?:<td[^>]*>\s*</td>|<td colspan=[\"']?\d+[\"']?\s*</td>\s*)+$"
+)
 
 
 def compact_chapter(content: str) -> str:
@@ -76,7 +81,9 @@ def compact_chapter(content: str) -> str:
         stripped_line = original_line.rstrip()
         if not stripped_line.strip():
             continue
-        if stripped_line.lstrip().startswith("★") and not _HAS_NUMERIC_FINGERPRINT.search(stripped_line):
+        if stripped_line.lstrip().startswith("★") and not _HAS_NUMERIC_FINGERPRINT.search(
+            stripped_line
+        ):
             # Template safety/torque reminder without any value → noise.
             continue
         if _NOISE_LINE_RE.match(stripped_line):

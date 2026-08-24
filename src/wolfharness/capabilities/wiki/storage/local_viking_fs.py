@@ -13,8 +13,6 @@ finalize tool call (the wiki is durable locally regardless).
 from __future__ import annotations
 
 import logging
-from pathlib import Path
-import tempfile
 from typing import TYPE_CHECKING
 
 from openviking_sdk.errors import AlreadyExistsError  # type: ignore[import-untyped]
@@ -24,6 +22,8 @@ from .local_fs import LocalFS
 
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from .viking_fs import VikingClient
 
 logger = logging.getLogger(__name__)
@@ -134,8 +134,10 @@ class LocalVikingFS(FSBackend):
                 content = fp.read_text(encoding="utf-8")
                 try:
                     client.write(
-                        uri, content,
-                        mode="create", wait=False,
+                        uri,
+                        content,
+                        mode="create",
+                        wait=False,
                         processing_mode="semantic_and_vectors",
                         timeout=_UPLOAD_TIMEOUT_S,
                     )
@@ -143,8 +145,10 @@ class LocalVikingFS(FSBackend):
                 except AlreadyExistsError:
                     try:
                         client.write(
-                            uri, content,
-                            mode="replace", wait=False,
+                            uri,
+                            content,
+                            mode="replace",
+                            wait=False,
                             processing_mode="semantic_and_vectors",
                             timeout=_UPLOAD_TIMEOUT_S,
                         )
@@ -208,5 +212,3 @@ class LocalVikingFS(FSBackend):
                 client.mkdir(uri)
             except Exception:
                 logger.debug("mkdir %s failed (may already exist)", uri, exc_info=True)
-
-

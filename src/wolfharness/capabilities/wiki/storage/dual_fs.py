@@ -19,6 +19,7 @@ import logging
 
 from .backend import FSBackend
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -125,5 +126,5 @@ class DualFS(FSBackend):
                 getattr(self.remote, method)(key, **kwargs)
             else:
                 getattr(self.remote, method)(**kwargs)
-        except Exception as exc:  # noqa: BLE001 - remote mirror is best-effort by contract
+        except Exception as exc:
             logger.warning("DualFS remote mirror %s failed (key=%s): %s", method, key, exc)

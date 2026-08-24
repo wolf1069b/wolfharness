@@ -8,6 +8,7 @@ from pydantic_ai.capabilities import AbstractCapability
 from pydantic_ai.exceptions import ModelRetry
 from pydantic_ai.tools import AgentDepsT
 
+
 if TYPE_CHECKING:
     from pydantic_ai.capabilities.abstract import WrapToolExecuteHandler
     from pydantic_ai.messages import ToolCallPart

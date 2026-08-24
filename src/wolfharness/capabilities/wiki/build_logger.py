@@ -20,15 +20,17 @@ All events are written as newline-delimited JSON (``.jsonl``) to
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import json
 import logging
-from datetime import datetime, timezone
 from pathlib import Path
+from typing import Self
+
 
 logger = logging.getLogger(__name__)
 
 # Re-export for convenience.
-UTC = timezone.utc
+UTC = UTC
 
 
 class WikiBuildLogger:
@@ -58,7 +60,7 @@ class WikiBuildLogger:
         if self._file and not self._file.closed:
             self._file.close()
 
-    def __enter__(self) -> WikiBuildLogger:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *exc: object) -> None:
@@ -227,15 +229,15 @@ class WikiBuildLogger:
             error=error,
         )
 
-
     def phase_timing(self, phase: str, elapsed_ms: float) -> None:
         """Record one evaluated build phase duration."""
         self._log("phase_timing", phase=phase, elapsed_ms=round(elapsed_ms, 1))
 
-
     def source_packet_recorded(self, packet_id: str, doc_id: str, source_count: int) -> None:
         """A source packet was persisted for a document."""
-        self._log("source_packet_recorded", packet_id=packet_id, doc_id=doc_id, source_count=source_count)
+        self._log(
+            "source_packet_recorded", packet_id=packet_id, doc_id=doc_id, source_count=source_count
+        )
 
     def mutation_attempt(self, uri: str, op: str) -> None:
         """An entity write was attempted."""

@@ -1,4 +1,4 @@
-"""models — 知识库核心数据模型
+"""models — 知识库核心数据模型.
 
 对应 design.md §三 概念层与实体层设计。
 包含统一的数据模型、抽取结果容器和自校验逻辑。
@@ -9,15 +9,16 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 import hashlib
 import json
 import logging
 import re
-from dataclasses import dataclass, field
 from typing import Any, ClassVar
 from urllib.parse import quote
 
 from wolfharness.capabilities.wiki.namespaces import wiki_resources_root
+
 
 logger = logging.getLogger(__name__)
 
@@ -215,7 +216,9 @@ class OPAModel:
 
     def to_markdown(self, *, ops_uri: str = "") -> str:
         """Render a durable OPA record with KB-addressable evidence."""
-        evidence = "\n".join(f"- [{uri}]({uri})" for uri in self.evidence_uris) or "- 尚无可解析证据 URI"
+        evidence = (
+            "\n".join(f"- [{uri}]({uri})" for uri in self.evidence_uris) or "- 尚无可解析证据 URI"
+        )
         frontmatter = ["---", f"id: {_yaml_quote(self.opa_id)}"]
         frontmatter += _fm_lines(
             [
@@ -282,16 +285,7 @@ class OPAModel:
                 "",
             ]
         lines += [
-            "> 状态：{}（{}）· 类型：{}（{}）· 原因：{}（{}）· 关闭状态：{}（{}）".format(
-                zh_status(self.status),
-                self.status,
-                zh_category(self.category),
-                self.category,
-                zh_reason(self.reason_code),
-                self.reason_code,
-                zh_closure(self.closure_status),
-                self.closure_status,
-            ),
+            f"> 状态：{zh_status(self.status)}（{self.status}）· 类型：{zh_category(self.category)}（{self.category}）· 原因：{zh_reason(self.reason_code)}（{self.reason_code}）· 关闭状态：{zh_closure(self.closure_status)}（{self.closure_status}）",
             "",
         ]
         return "\n".join(lines)
@@ -509,19 +503,19 @@ class OPLModel:
 
 
 def _wiki_resource_hash(*parts: str) -> str:
-    """生成确定性的 SHA256 哈希 ID（24 字符），用于 viking:// URI。"""
+    """生成确定性的 SHA256 哈希 ID（24 字符），用于 viking:// URI。."""
     raw = "\x1f".join(parts).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()[:24]
 
 
 def concept_kb_uri(concept_name: str) -> str:
-    """生成概念的 viking:// URI。"""
+    """生成概念的 viking:// URI。."""
     resource_id = _wiki_resource_hash("concept", concept_name)
     return f"{wiki_resources_root()}/{resource_id}"
 
 
 def entity_kb_uri(entity_type: str, entity_name: str, model_id: str = "") -> str:
-    """生成实体的 viking:// URI。"""
+    """生成实体的 viking:// URI。."""
     resource_id = _wiki_resource_hash("entity", entity_type, entity_name, model_id)
     return f"{wiki_resources_root()}/{resource_id}"
 
@@ -531,7 +525,7 @@ def entity_kb_uri(entity_type: str, entity_name: str, model_id: str = "") -> str
 
 @dataclass
 class SourceRef:
-    """来源引用，指向 library/ 中的原始章节。"""
+    """来源引用，指向 library/ 中的原始章节。."""
 
     library_path: str  # e.g. "library/sy215/ch05/chapter.md"
     section: str  # e.g. "§5.2 液压泵结构与工作原理"
@@ -551,7 +545,7 @@ class SourceRef:
 
 @dataclass
 class ConceptModel:
-    """概念层数据模型 — 对应 concepts/{category}/{组件名}.md 文件。"""
+    """概念层数据模型 — 对应 concepts/{category}/{组件名}.md 文件。."""
 
     name: str  # 组件通用名, e.g. "液压泵"
     file_path: str  # wiki 中的相对路径, e.g. "concepts/液压泵/液压泵.md"
@@ -561,7 +555,9 @@ class ConceptModel:
     models: list[dict[str, Any]] = field(default_factory=list)  # 型号明细
     properties: dict[str, Any] = field(default_factory=dict)  # 结构化属性（schema 定义 + 自由扩展）
     relations: list[dict[str, Any]] = field(default_factory=list)  # schema-whitelisted typed edges
-    references: list[Any] = field(default_factory=list)  # 引用列表 (str | dict with title/file_path/kb_uri)
+    references: list[Any] = field(
+        default_factory=list
+    )  # 引用列表 (str | dict with title/file_path/kb_uri)
     sources: list[SourceRef] = field(default_factory=list)  # 来源追踪
 
     def __post_init__(self) -> None:
@@ -569,7 +565,7 @@ class ConceptModel:
             self.kb_uri = concept_kb_uri(self.name)
 
     def validate(self) -> list[str]:
-        """校验概念模型完整性。"""
+        """校验概念模型完整性。."""
         errors: list[str] = []
         if not self.name:
             errors.append("ConceptModel.name 不能为空")
@@ -589,7 +585,7 @@ class ConceptModel:
         model_id: str | None = None,
         referenced_by: list[str] | None = None,
     ) -> str:
-        """生成概念页 Markdown，包含反向实体引用与来源证据。"""
+        """生成概念页 Markdown，包含反向实体引用与来源证据。."""
         lines: list[str] = [f"# {self.name}", ""]
 
         if self.aliases:
@@ -662,7 +658,7 @@ class ConceptModel:
 
 @dataclass
 class EntityModel:
-    """实体层数据模型 — 对应 private/{model}/{type}/{name}.md 文件。"""
+    """实体层数据模型 — 对应 private/{model}/{type}/{name}.md 文件。."""
 
     entity_type: str  # "system", "dtc", "symptom", "testaction", etc.
     name: str  # e.g. "hydraulic-system"
@@ -683,7 +679,7 @@ class EntityModel:
             self.kb_uri = entity_kb_uri(self.entity_type, self.name, self.model_id)
 
     def validate(self) -> list[str]:
-        """校验实体模型完整性。"""
+        """校验实体模型完整性。."""
         errors: list[str] = []
         if not self.name:
             errors.append("EntityModel.name 不能为空")
@@ -706,7 +702,7 @@ class EntityModel:
         reverse_relations: dict[str, list[str]] | None = None,
         template: str = "",
     ) -> str:
-        """生成实体页 Markdown。
+        """生成实体页 Markdown。.
 
         When a template string is provided (from the schema entity type definition),
         the page is rendered following the template structure with header fields
@@ -716,7 +712,9 @@ class EntityModel:
         mid = model_id or self.model_id
 
         if template:
-            return self._render_template(template, model_id=mid, reverse_relations=reverse_relations)
+            return self._render_template(
+                template, model_id=mid, reverse_relations=reverse_relations
+            )
 
         lines: list[str] = []
 
@@ -774,7 +772,12 @@ class EntityModel:
             lines.append("")
 
         if reverse_relations:
-            related = {path for paths in reverse_relations.values() for path in paths if path not in (self.file_path, self.kb_uri)}
+            related = {
+                path
+                for paths in reverse_relations.values()
+                for path in paths
+                if path not in (self.file_path, self.kb_uri)
+            }
             if related:
                 lines += ["## 相关实体", ""]
                 for rel_uri in sorted(related):
@@ -809,15 +812,34 @@ class EntityModel:
         concepts_str = "、".join(self.concepts_used) if self.concepts_used else "—"
 
         # Build source string
-        source_str = "；".join(f"{src.section}{' ' + src.page_range if src.page_range else ''}" for src in self.sources) if self.sources else "—"
+        source_str = (
+            "；".join(
+                f"{src.section}{' ' + src.page_range if src.page_range else ''}"
+                for src in self.sources
+            )
+            if self.sources
+            else "—"
+        )
 
         # Build related entities string from reverse relations
         related_str = ""
         if reverse_relations:
-            related = sorted({path for paths in reverse_relations.values() for path in paths if path not in (self.file_path, self.kb_uri)})
+            related = sorted({
+                path
+                for paths in reverse_relations.values()
+                for path in paths
+                if path not in (self.file_path, self.kb_uri)
+            })
             related_str = "\n".join(f"- {uri}" for uri in related) if related else ""
         if not related_str and self.relations:
-            related_str = "\n".join(f"- {rel.get('relation', '')} → {rel.get('target', '')}" for rel in self.relations if rel.get("relation") != "member_of_concept") or ""
+            related_str = (
+                "\n".join(
+                    f"- {rel.get('relation', '')} → {rel.get('target', '')}"
+                    for rel in self.relations
+                    if rel.get("relation") != "member_of_concept"
+                )
+                or ""
+            )
 
         # Build related system for DTC/Schematic
         related_system = ""
@@ -842,7 +864,7 @@ class EntityModel:
 
         # Map content_* placeholders: try properties first, then fall back to content
         # Extract all placeholder names from template
-        import re  # noqa: PLC0415
+        import re
 
         placeholders = re.findall(r"\{([a-z_]+)\}", template)
         for ph in placeholders:
@@ -867,7 +889,7 @@ class EntityModel:
     @staticmethod
     def _safe_format(template: str, variables: dict[str, str]) -> str:
         """Format template with variables, replacing unknown placeholders with empty string."""
-        import re  # noqa: PLC0415
+        import re
 
         def replacer(match: re.Match[str]) -> str:
             key = match.group(1)
@@ -910,7 +932,7 @@ class EntityModel:
         Looks for a markdown heading matching section_name (via keyword mapping)
         and returns the content under it. Falls back to the full content.
         """
-        import re  # noqa: PLC0415
+        import re
 
         keywords = self._SECTION_KEYWORDS.get(section_name, section_name)
         # Match: ## heading containing keywords, then capture until next ##+ heading or end
@@ -947,7 +969,7 @@ class EntityModel:
 
 @dataclass
 class ExtractionResult:
-    """知识抽取结果 — 规则引擎与 LLM 抽取器共用。"""
+    """知识抽取结果 — 规则引擎与 LLM 抽取器共用。."""
 
     concepts: dict[str, ConceptModel] = field(default_factory=dict)
     entities: list[EntityModel] = field(default_factory=list)
@@ -960,12 +982,14 @@ class ExtractionResult:
         *,
         relation_cardinalities: dict[tuple[str, str], str] | None = None,
     ) -> None:
-        """将 other 的结果合并到 self（原地修改）。"""
+        """将 other 的结果合并到 self（原地修改）。."""
         for name, concept in other.concepts.items():
             if name in self.concepts:
                 existing_concept = self.concepts[name]
                 existing_concept.sources.extend(concept.sources)
-                existing_concept.aliases = list(dict.fromkeys([*existing_concept.aliases, *concept.aliases]))
+                existing_concept.aliases = list(
+                    dict.fromkeys([*existing_concept.aliases, *concept.aliases])
+                )
                 if concept.overview and concept.overview != existing_concept.overview:
                     opa_id = f"opa-concept-{_wiki_resource_hash(name, 'overview')}"
                     if not any(item.opa_id == opa_id for item in self.opas):
@@ -979,27 +1003,38 @@ class ExtractionResult:
                                 target_uri=existing_concept.kb_uri,
                                 target_path=existing_concept.file_path,
                                 evidence_uris=list(
-                                    dict.fromkeys(src.library_path for src in [*existing_concept.sources, *concept.sources]),
+                                    dict.fromkeys(
+                                        src.library_path
+                                        for src in [*existing_concept.sources, *concept.sources]
+                                    ),
                                 ),
                                 status="pending",
                             ),
                         )
                 for key, value in concept.properties.items():
-                    if key in existing_concept.properties and existing_concept.properties[key] != value:
+                    if (
+                        key in existing_concept.properties
+                        and existing_concept.properties[key] != value
+                    ):
                         opa_id = f"opa-concept-property-{_wiki_resource_hash(name, key)}"
                         if not any(item.opa_id == opa_id for item in self.opas):
                             self.opas.append(
                                 OPAModel(
                                     opa_id=opa_id,
                                     title=f"概念 {name} 属性冲突",
-                                    description=(f"属性 `{key}` 在不同章节中出现不同取值：{existing_concept.properties[key]!s}；{value!s}"),
+                                    description=(
+                                        f"属性 `{key}` 在不同章节中出现不同取值：{existing_concept.properties[key]!s}；{value!s}"
+                                    ),
                                     category="conflict",
                                     scope="concept",
                                     target_uri=existing_concept.kb_uri,
                                     target_path=existing_concept.file_path,
                                     target_section=key,
                                     evidence_uris=list(
-                                        dict.fromkeys(src.library_path for src in [*existing_concept.sources, *concept.sources]),
+                                        dict.fromkeys(
+                                            src.library_path
+                                            for src in [*existing_concept.sources, *concept.sources]
+                                        ),
                                     ),
                                     status="pending",
                                 ),
@@ -1007,7 +1042,11 @@ class ExtractionResult:
                     existing_concept.properties[key] = value
                 existing_concept.relations = [
                     *existing_concept.relations,
-                    *[relation for relation in concept.relations if relation not in existing_concept.relations],
+                    *[
+                        relation
+                        for relation in concept.relations
+                        if relation not in existing_concept.relations
+                    ],
                 ]
                 for model in concept.models:
                     self._record_model_conflicts(existing_concept, model)
@@ -1017,7 +1056,9 @@ class ExtractionResult:
                 self.concepts[name] = concept
 
         self._detect_entity_conflicts(other.entities)
-        existing_entities = {(entity.entity_type, entity.name, entity.model_id): entity for entity in self.entities}
+        existing_entities = {
+            (entity.entity_type, entity.name, entity.model_id): entity for entity in self.entities
+        }
         for incoming in other.entities:
             key = (incoming.entity_type, incoming.name, incoming.model_id)
             existing = existing_entities.get(key)
@@ -1026,15 +1067,23 @@ class ExtractionResult:
                 existing_entities[key] = incoming
                 continue
             if incoming.content and incoming.content != existing.content:
-                existing.content = f"{existing.content.rstrip()}\n\n---\n\n{incoming.content.lstrip()}"
+                existing.content = (
+                    f"{existing.content.rstrip()}\n\n---\n\n{incoming.content.lstrip()}"
+                )
             if incoming.title and not existing.title:
                 existing.title = incoming.title
             if incoming.summary and not existing.summary:
                 existing.summary = incoming.summary
-            existing.concepts_used = list(dict.fromkeys([*existing.concepts_used, *incoming.concepts_used]))
+            existing.concepts_used = list(
+                dict.fromkeys([*existing.concepts_used, *incoming.concepts_used])
+            )
             existing.relations = [
                 *existing.relations,
-                *[relation for relation in incoming.relations if relation not in existing.relations],
+                *[
+                    relation
+                    for relation in incoming.relations
+                    if relation not in existing.relations
+                ],
             ]
             existing.properties = {**existing.properties, **incoming.properties}
             existing.sources.extend(incoming.sources)
@@ -1053,7 +1102,7 @@ class ExtractionResult:
         self,
         relation_cardinalities: dict[tuple[str, str], str],
     ) -> None:
-        """约束合并后的关系基数，并把违反 Schema 的边记录为 OPA。
+        """约束合并后的关系基数，并把违反 Schema 的边记录为 OPA。.
 
         单章节抽取时 ``one`` 关系可能合法，但跨章节合并会产生多个目标。
         这里保留稳定顺序中的第一个目标，同时把被裁剪的候选和证据写入 OPA，
@@ -1120,7 +1169,9 @@ class ExtractionResult:
                     OPAModel(
                         opa_id=opa_id,
                         title=f"{owner_name} 的 {relation_name} 关系基数冲突",
-                        description=(f"Schema 要求关系 `{relation_name}` cardinality=one，但跨章节抽取到多个目标：{'、'.join(targets)}；已保留首个目标，其余目标需要人工确认。"),
+                        description=(
+                            f"Schema 要求关系 `{relation_name}` cardinality=one，但跨章节抽取到多个目标：{'、'.join(targets)}；已保留首个目标，其余目标需要人工确认。"
+                        ),
                         category="conflict",
                         scope="concept" if owner_type == "concept" else "entity",
                         target_uri=owner_uri,
@@ -1160,7 +1211,12 @@ class ExtractionResult:
                     continue
                 evidence = list(
                     dict.fromkeys(
-                        [sib.kb_uri, new_ent.kb_uri, *(src.library_path for src in sib.sources), *(src.library_path for src in new_ent.sources)],
+                        [
+                            sib.kb_uri,
+                            new_ent.kb_uri,
+                            *(src.library_path for src in sib.sources),
+                            *(src.library_path for src in new_ent.sources),
+                        ],
                     ),
                 )
                 self.opas.append(
@@ -1228,7 +1284,10 @@ class ExtractionResult:
         """Persist contradictory claims for the same machine/component variant."""
         identity_keys = ("配套机型", "型号")
         for existing in concept.models:
-            if any(existing.get(key) and incoming.get(key) and existing.get(key) != incoming.get(key) for key in identity_keys):
+            if any(
+                existing.get(key) and incoming.get(key) and existing.get(key) != incoming.get(key)
+                for key in identity_keys
+            ):
                 continue
             for key in sorted((existing.keys() & incoming.keys()) - set(identity_keys)):
                 old_value = existing.get(key)
@@ -1236,7 +1295,10 @@ class ExtractionResult:
                 if old_value in (None, "") or new_value in (None, "") or old_value == new_value:
                     continue
                 title = f"{concept.name}{key}取值冲突"
-                if any(opa.title == title and opa.description.endswith(f"{new_value!s}") for opa in self.opas):
+                if any(
+                    opa.title == title and opa.description.endswith(f"{new_value!s}")
+                    for opa in self.opas
+                ):
                     continue
                 self.opas.append(
                     OPAModel(
@@ -1248,12 +1310,14 @@ class ExtractionResult:
                         target_uri=concept.kb_uri,
                         target_path=concept.file_path,
                         target_section="各机型细化参数记录",
-                        evidence_uris=list(dict.fromkeys(src.library_path for src in concept.sources)),
+                        evidence_uris=list(
+                            dict.fromkeys(src.library_path for src in concept.sources)
+                        ),
                     ),
                 )
 
     def validate(self) -> list[str]:
-        """校验抽取结果中所有模型的完整性。"""
+        """校验抽取结果中所有模型的完整性。."""
         errors: list[str] = []
         for concept in self.concepts.values():
             errors.extend(concept.validate())
@@ -1267,7 +1331,7 @@ class ExtractionResult:
 
 @dataclass
 class WikiBuildResult:
-    """构建结果。"""
+    """构建结果。."""
 
     model_id: str
     concepts: list[ConceptModel] = field(default_factory=list)
@@ -1289,7 +1353,7 @@ class WikiBuildResult:
         return len(self.opas)
 
     def validate(self) -> list[str]:
-        """校验构建结果。"""
+        """校验构建结果。."""
         errors: list[str] = []
         if not self.model_id:
             errors.append("WikiBuildResult.model_id 不能为空")
@@ -1316,7 +1380,7 @@ def build_wiki_resource_manifest(
     entities: list[EntityModel],
     opas: list[OPAModel] | None = None,
 ) -> dict[str, Any]:
-    """构建 wiki 的 resource.json。
+    """构建 wiki 的 resource.json。.
 
     每个 concept/entity/opa 对应一个 resource 条目：
     - resource_id: viking:// URI 中的 hash ID
@@ -1387,7 +1451,7 @@ def build_wiki_resource_manifest(
 
 
 def build_wiki_resource_index(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """从 resource manifest 构建 resource_id → entry 索引。"""
+    """从 resource manifest 构建 resource_id → entry 索引。."""
     resources = manifest.get("resources")
     if not isinstance(resources, list):
         return {}

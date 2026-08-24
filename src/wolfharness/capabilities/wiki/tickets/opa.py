@@ -24,7 +24,6 @@ from wolfharness.capabilities.wiki.models import (
     OPSModel,
     infer_opa_reason_code,
 )
-from wolfharness.capabilities.wiki.wiki_build_deps import WikiBuildDeps
 from wolfharness.capabilities.wiki.quality import (
     BuildProfile,
     IssueDisposition,
@@ -44,6 +43,7 @@ from wolfharness.capabilities.wiki.section_constants import (
     SECTION_REPAIR_METHOD,
     SECTION_VERIFICATION,
 )
+from wolfharness.capabilities.wiki.wiki_build_deps import WikiBuildDeps
 
 
 logger = logging.getLogger(__name__)
@@ -171,9 +171,8 @@ class OPAMixin(WikiBuildDeps):
             if self.store.read_text(key) is not None:
                 return key
         for key in self.store.list_dir(base, recursive=True):
-            if key.endswith(f"/{opa_id}.md"):
-                if self.store.read_text(key) is not None:
-                    return key
+            if key.endswith(f"/{opa_id}.md") and self.store.read_text(key) is not None:
+                return key
         return None
 
     def _op_dir_key(self, concept: str) -> str:
@@ -443,8 +442,7 @@ class OPAMixin(WikiBuildDeps):
         # the checkpoint build_id match is sufficient scoping.
         checkpoint = self.store.read_json("index/build_checkpoint.json")
         return (
-            isinstance(checkpoint, dict)
-            and str(checkpoint.get("build_id", "")).strip() == build_id
+            isinstance(checkpoint, dict) and str(checkpoint.get("build_id", "")).strip() == build_id
         )
 
     def _opa_category_from_key(self, key: str) -> str:
@@ -666,7 +664,7 @@ class OPAMixin(WikiBuildDeps):
         closure_reason: str = "",
         skip_dedupe_lookup: bool = False,
     ) -> dict:
-        """结构化落盘一条 OPA 冲突/问题记录，替代手写 md。
+        """结构化落盘一条 OPA 冲突/问题记录，替代手写 md。.
 
         存入 ``OP/OpA/<opa_id>.md``（YAML frontmatter + 证据 + 可解析 URI），
         不注册 natural key，因此不会进入 finalize/audit 的实体索引。
@@ -895,9 +893,10 @@ class OPAMixin(WikiBuildDeps):
         target = target_uri.strip()
         evidence = [str(uri).strip() for uri in evidence_uris if str(uri).strip()]
         related = [str(uri).strip() for uri in related_uris if str(uri).strip()]
-        canonical = lambda uri: (
-            self.store.resolve_redirect(uri) if self.store.is_wiki_uri(uri) else uri
-        )
+
+        def canonical(uri):
+            return self.store.resolve_redirect(uri) if self.store.is_wiki_uri(uri) else uri
+
         evidence_keys = [canonical(uri) for uri in evidence]
         related_keys = [canonical(uri) for uri in related]
         target_key = canonical(target) if target else ""
@@ -1085,7 +1084,9 @@ class OPAMixin(WikiBuildDeps):
                         # merges into a prior suggestion.
                         uuid4().hex[:8]
                         if external_submission
-                        else sha256(f"{opa_uri}\x1f{effective_target}\x1f{title}".encode()).hexdigest()[:8]
+                        else sha256(
+                            f"{opa_uri}\x1f{effective_target}\x1f{title}".encode()
+                        ).hexdigest()[:8]
                     ),
                 ),
                 80,
@@ -2454,7 +2455,7 @@ class OPAMixin(WikiBuildDeps):
             self.store.write_json("index/op_flow_report.json", report)
         return report
 
-    def discover_opa(  # noqa: PLR0915 - audit→OPA pipeline with pagination loop
+    def discover_opa(
         self,
         *,
         profile: BuildProfile = "manual",
@@ -2831,7 +2832,7 @@ class OPAMixin(WikiBuildDeps):
         include_superseded: bool = False,
         build_id: str = "",
     ) -> list[dict]:
-        """读取 ``OP/OpA/`` 下匹配条件的 OPA 记录。
+        """读取 ``OP/OpA/`` 下匹配条件的 OPA 记录。.
 
         可按 ``target_uri`` / ``status`` / ``category`` / ``reason_code`` / ``scope`` 过滤，
         返回结构化 frontmatter（含 ``uri`` 键，供证据链提取）。

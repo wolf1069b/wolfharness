@@ -19,9 +19,8 @@ from typing import Any
 
 import yaml
 
-_SCHEMA_PATH = (
-    Path(__file__).resolve().parent / "templates" / "default_schema.yaml"
-)
+
+_SCHEMA_PATH = Path(__file__).resolve().parent / "templates" / "default_schema.yaml"
 
 
 @lru_cache(maxsize=1)
@@ -92,20 +91,13 @@ def get_concept_frontmatter_fields(concept: str) -> frozenset[str]:
     fm = entry.get("frontmatter")
     if not isinstance(fm, list):
         return frozenset()
-    fields = frozenset(
-        item["name"]
-        for item in fm
-        if isinstance(item, dict) and "name" in item
-    )
+    fields = frozenset(item["name"] for item in fm if isinstance(item, dict) and "name" in item)
     return fields | _shared_frontmatter_fields()
 
 
 def get_all_concept_frontmatter_fields() -> dict[str, frozenset[str]]:
     """Return ``{concept: frozenset(field_names)}`` for all concepts."""
-    return {
-        name: get_concept_frontmatter_fields(name)
-        for name in _concepts()
-    }
+    return {name: get_concept_frontmatter_fields(name) for name in _concepts()}
 
 
 def get_profile_frontmatter_fields() -> frozenset[str]:
@@ -125,11 +117,7 @@ def get_profile_frontmatter_fields() -> frozenset[str]:
     fm = profiles.get("frontmatter")
     if not isinstance(fm, list):
         return frozenset()
-    fields = frozenset(
-        item["name"]
-        for item in fm
-        if isinstance(item, dict) and "name" in item
-    )
+    fields = frozenset(item["name"] for item in fm if isinstance(item, dict) and "name" in item)
     return fields | _shared_frontmatter_fields()
 
 
@@ -146,10 +134,7 @@ def get_concept_body_sections(concept: str) -> frozenset[str]:
 
 def get_all_concept_body_sections() -> dict[str, frozenset[str]]:
     """Return ``{concept: frozenset(section_titles)}`` for all concepts."""
-    return {
-        name: get_concept_body_sections(name)
-        for name in _concepts()
-    }
+    return {name: get_concept_body_sections(name) for name in _concepts()}
 
 
 def get_profile_body_sections() -> frozenset[str]:
