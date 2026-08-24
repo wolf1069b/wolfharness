@@ -8,17 +8,10 @@ case aliases readable during rolling migration.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
 
-
-if TYPE_CHECKING:
-    from .backend import FSBackend
-
+from .backend import FSBackend
 
 WikiIdentity = tuple[str, str | None, str]
-
-_NATURAL_KEY_SEGMENTS = 3  # concept:class:object
-_MIN_PATH_SEGMENTS = 2
 
 
 class LegacyWikiIndex:
@@ -34,7 +27,8 @@ class LegacyWikiIndex:
             return {}
         data = json.loads(raw)
         if not isinstance(data, dict) or not all(
-            isinstance(key, str) and isinstance(value, str) for key, value in data.items()
+            isinstance(key, str) and isinstance(value, str)
+            for key, value in data.items()
         ):
             raise ValueError(f"Invalid legacy wiki mapping: {key}")
         return data
@@ -42,7 +36,7 @@ class LegacyWikiIndex:
     @staticmethod
     def _parse_natural_key(key: str) -> WikiIdentity | None:
         parts = key.split(":", 2)
-        if len(parts) != _NATURAL_KEY_SEGMENTS:
+        if len(parts) != 3:
             return None
         concept, class_name, object_name = parts
         return concept, class_name or None, object_name
@@ -65,7 +59,7 @@ class LegacyWikiIndex:
         if not uri.startswith(prefix):
             return None
         parts = uri[len(prefix) :].strip("/").split("/")
-        if len(parts) < _MIN_PATH_SEGMENTS:
+        if len(parts) < 2:
             return None
         entry = self._read_mapping("class_keys.json").get(parts[-1])
         if entry is None or ":" not in entry:

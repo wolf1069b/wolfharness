@@ -34,6 +34,11 @@ def __getattr__(name: str) -> object:
     return getattr(wolfharness_commands, name)
 
 
+# NOTE: _AliasLoader is intentionally duplicated across all agentpool* shim
+# modules. These shims redirect to wolfharness* and must work before
+# wolfharness is imported, so the loader cannot be shared from a common
+# utility module. This duplication will be removed when the deprecated
+# shims are dropped.
 class _AliasLoader(abc.Loader):
     """Loader that returns an already-imported target module as-is.
 

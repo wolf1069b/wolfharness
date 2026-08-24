@@ -100,6 +100,12 @@ class BaseServer:
         """
         await self._task_group.__aenter__()
         try:
+            # Prefetch the LLM pricing table in the background so turn end
+            # (StreamCompleteEvent → end_turn) is never blocked on a lazy
+            # cost-lookup download. Failures are logged and ignored.
+            from wolfharness.messaging.messages import prefetch_token_cost_cache
+
+            self._task_group.start_soon(prefetch_token_cost_cache)
             self.log.info("Starting server")
             await self._start_async()
         except Exception as e:

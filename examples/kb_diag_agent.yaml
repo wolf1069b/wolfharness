@@ -18,7 +18,7 @@ agents:
           config:
             type: streamable-http
             name: knowledge_diag
-            url: https://sprouts-dev-app-frontend.sany.com.cn/api-mcp/knowledge_diag/mcp
+            url: https://mcp.example.com/knowledge_diag/mcp
             # 去掉 search_kb 接口：若仍需保留该工具，删除下一行即可
             disabled_tools:
               - search_kb

@@ -21,6 +21,7 @@ from pathlib import Path
 import re
 from typing import TYPE_CHECKING
 
+from wolfharness.capabilities.wiki._helpers import _entity_batch_limit
 from wolfharness.capabilities.wiki.models import (
     OPA_CLOSURE_STATUSES,
     OPA_REASON_CODES,
@@ -69,7 +70,6 @@ _MAX_DISCOVERY_LIMIT = 500
 # (source_missing, controller_identity, etc.) stay in OPA.
 _RELATION_GAP_CODES: frozenset[str] = frozenset({
     # Policy-level relation codes
-    "isolated_entity",
     "dangling_relation_target",
     "dangling_wiki_reference",
     "dangling_reference",
@@ -83,7 +83,6 @@ _RELATION_GAP_CODES: frozenset[str] = frozenset({
     "SymptomProfile.possible_faults",
     "Device.critical_components",
     "Device.symptom_refs",
-    "Device.system_chapters.raw_link",
     "DTC.related_faults",
     "Fault.affected_components",
     "Fault.procedures",
@@ -337,11 +336,10 @@ class TicketEngine:
         th = self._target_hash(target_uri)
         base = self._opa_dir_key()
         if th:
+            records: list[tuple[str, str]] = []
             for subdir in _OPA_CATEGORY_DIRS.values():
-                th_records = self._read_md_dir(f"{base}/{subdir}/{th}")
-                if th_records:
-                    return sorted(th_records)
-            return []
+                records.extend(self._read_md_dir(f"{base}/{subdir}/{th}"))
+            return sorted(records)
         records: list[tuple[str, str]] = []
         for key in self.store.list_dir(base, recursive=True):
             if not key.endswith(".md"):
@@ -503,7 +501,7 @@ class TicketEngine:
         if not dedupe_key:
             return None
         for key, content in self._opa_files():
-            frontmatter = parse_frontmatter(content)
+            frontmatter = self._record_from_content(content)
             if str(frontmatter.get("status", "")).strip().lower() in {"superseded", "rejected"}:
                 continue
             if build_id and not self._opa_matches_build(key, frontmatter, build_id):
@@ -531,24 +529,15 @@ class TicketEngine:
         record_build_id = str(frontmatter.get("build_id", "")).strip()
         if record_build_id:
             return record_build_id == build_id
+        # Records without build_id were created before the checkpoint was
+        # initialised (common early in a build).  Accept them as part of the
+        # current build rather than silently dropping current-build OPAs —
+        # the checkpoint build_id match is sufficient scoping.
         checkpoint = self.store.read_json("index/build_checkpoint.json")
-        if (
-            not isinstance(checkpoint, dict)
-            or str(checkpoint.get("build_id", "")).strip() != build_id
-        ):
-            return False
-        started_at = str(checkpoint.get("started_at", "")).strip()
-        if not started_at:
-            return False
-        try:
-            started = datetime.fromisoformat(started_at)
-        except ValueError:
-            return False
-        if started.tzinfo is None:
-            started = started.replace(tzinfo=UTC)
-        started_ns = int(started.timestamp() * 1_000_000_000)
-        modified_ns = self.store._fs.mtime_ns(key)
-        return modified_ns is not None and modified_ns >= started_ns
+        return (
+            isinstance(checkpoint, dict)
+            and str(checkpoint.get("build_id", "")).strip() == build_id
+        )
 
     def _opa_category_from_key(self, key: str) -> str:
         for category, subdir in _OPA_CATEGORY_DIRS.items():
@@ -587,6 +576,32 @@ class TicketEngine:
         slug = re.sub(r"-+", "-", slug).strip("-._")
         return TicketEngine._clip_utf8(slug, 60).rstrip("-._") or fallback
 
+    @staticmethod
+    def _record_from_content(content: str) -> dict[str, object]:
+        """Parse an OPA record, recovering prose fields from the markdown body.
+
+        Returns the frontmatter merged with:
+        - ``title`` from the first H1 heading when the frontmatter lacks it
+        - ``description`` / ``finding`` / ``missing`` / ``recommendation``
+          from the body sections ``问题描述`` / ``冲突点`` / ``缺失点`` / ``建议``
+          when the frontmatter lacks them (legacy YAML wins).
+        """
+        record = dict(parse_frontmatter(content or ""))
+        if not str(record.get("title", "")).strip():
+            match = re.search(r"^#\s+(.+)$", content or "", re.MULTILINE)
+            if match is not None:
+                record["title"] = match.group(1).strip()
+        sections = extract_sections(content or "")
+        for field, heading in (
+            ("description", "问题描述"),
+            ("finding", "冲突点"),
+            ("missing", "缺失点"),
+            ("recommendation", "建议"),
+        ):
+            if not str(record.get(field, "")).strip() and heading in sections:
+                record[field] = sections[heading]
+        return record
+
     def _readable_opa_id(
         self,
         *,
@@ -600,20 +615,20 @@ class TicketEngine:
     ) -> str:
         """Build a short, human-readable, dedupe-stable OPA filename.
 
-        Only the issue type and the target name go into the filename; the
-        dedupe hash keeps it stable per logical issue without packing the
-        whole record into the name (the old 8-slug format truncated to
-        unreadable garbage).
+        The readable target and title slugs keep the filename searchable,
+        while the short dedupe suffix keeps it stable per logical issue
+        without packing the whole record into the name.
         """
         target = target_uri.rstrip("/").rsplit("/", 1)[-1] if target_uri else (target_path or title)
-        target_slug = self._readable_slug(target, fallback="target")[:24].rstrip("-._") or "target"
+        target_slug = self._readable_slug(target, fallback="target")[:20].rstrip("-._") or "target"
+        title_slug = self._readable_slug(title, fallback="title")[:20].rstrip("-._") or "title"
         base = dedupe_key.removeprefix("opa-dedupe-") if dedupe_key else ""
-        suffix = base[:10] if len(base) >= _DEDUPE_KEY_MIN_LEN else ""
+        suffix = base[:8] if len(base) >= _DEDUPE_KEY_MIN_LEN else ""
         if not suffix:
             source = f"{category}\x1f{reason_code}\x1f{target_uri}\x1f{target_section}\x1f{title}"
-            suffix = sha256(source.encode("utf-8")).hexdigest()[:10]
+            suffix = sha256(source.encode("utf-8")).hexdigest()[:8]
         kind = self._readable_slug(category, fallback="issue")[:12].rstrip("-._") or "issue"
-        return self._clip_utf8(f"opa-{kind}-{target_slug}-{suffix}", 80).rstrip("-._")
+        return self._clip_utf8(f"opa-{kind}-{target_slug}-{title_slug}-{suffix}", 80).rstrip("-._")
 
     @staticmethod
     def _opa_open_for_gate(record: dict[str, object]) -> bool:
@@ -634,7 +649,7 @@ class TicketEngine:
         """Return active OPA records for the selected build scope."""
         records: list[dict[str, object]] = []
         for key, content in self._opa_files():
-            frontmatter = parse_frontmatter(content)
+            frontmatter = self._record_from_content(content)
             opa_id = Path(key).stem
             if str(frontmatter.get("status", "")).lower() not in {
                 "resolved",
@@ -793,7 +808,7 @@ class TicketEngine:
         existing_key = self._find_opa_key(opa_id)
         if existing_key and build_id:
             existing_content = self.store.read_text(existing_key)
-            existing_frontmatter = parse_frontmatter(existing_content or "")
+            existing_frontmatter = self._record_from_content(existing_content or "")
             existing_build_id = str(existing_frontmatter.get("build_id", "")).strip()
             if existing_build_id != build_id:
                 # Readable OPA IDs are intentionally stable within a build.
@@ -804,7 +819,7 @@ class TicketEngine:
                 existing_key = self._find_opa_key(opa_id)
         existing = self.store.read_text(existing_key) if existing_key else None
         if existing is not None:
-            previous = parse_frontmatter(existing)
+            previous = self._record_from_content(existing)
             dedupe_key = str(previous.get("dedupe_key", "")).strip() or dedupe_key
         allowed_statuses = {"pending", "resolved", "rejected", "superseded"}
         if status not in allowed_statuses:
@@ -937,8 +952,10 @@ class TicketEngine:
         self._validate_opa_uris("", [*evidence_uris, *related_uris])
         unreadable = [
             uri
-            for uri in dict[str, object].fromkeys([*evidence_uris, *related_uris])
-            if uri and self.read_resource(uri) is None
+            for uri in dict.fromkeys([*evidence_uris, *related_uris])
+            if uri
+            and self.read_resource(uri) is None
+            and classify_raw_source_uri(uri, raw_root_uri=self._raw_fs.root_uri) is None
         ]
         if unreadable:
             raise ValueError(f"OP records require readable evidence/related URIs: {unreadable}")
@@ -1114,7 +1131,7 @@ class TicketEngine:
         if not ops_id:
             normalized_query = self._normalize_dedupe_text(retrieval_query)
             for existing_key, existing_content in self._op_files("OPS"):
-                existing_fm = parse_frontmatter(existing_content)
+                existing_fm = self._record_from_content(existing_content)
                 existing_parent = str(existing_fm.get("parent_opa", ""))
                 existing_target = str(existing_fm.get("target_uri", ""))
                 if (
@@ -1143,7 +1160,7 @@ class TicketEngine:
                     80,
                 ).rstrip("-._")
         key = self._op_key("OPS", ops_id, target_uri=effective_target)
-        previous = parse_frontmatter(self.store.read_text(key) or "")
+        previous = self._record_from_content(self.store.read_text(key) or "")
         model = OPSModel(
             ops_id=ops_id,
             parent_opa=opa_uri,
@@ -1218,7 +1235,7 @@ class TicketEngine:
                 parent_uri = self._opa_uri(parent_id)
         out: list[dict[str, object]] = []
         for path, content in self._op_files("OPS", target_uri=target_uri):
-            fm = parse_frontmatter(content)
+            fm = self._record_from_content(content)
             record_parent = str(fm.get("parent_opa", ""))
             if parent_uri and record_parent not in {parent_uri, parent_id}:
                 continue
@@ -2254,7 +2271,7 @@ class TicketEngine:
                 parent_uri = self._opa_uri(parent_id)
         out: list[dict[str, object]] = []
         for path, content in self._op_files("OPL", target_uri=target_uri):
-            fm = parse_frontmatter(content)
+            fm = self._record_from_content(content)
             sections = extract_sections(content)
             if target_uri and str(fm.get("target_uri", "")) != target_uri:
                 continue
@@ -2397,14 +2414,27 @@ class TicketEngine:
             "blockers": blockers,
         }
 
-    def ops_dispatch_plan(self, *, limit: int = 1000) -> dict[str, object]:
+    def ops_dispatch_plan(
+        self,
+        *,
+        limit: int = 1000,
+        max_parallel_shards: int | None = None,
+    ) -> dict[str, object]:
         """Code-generated, domain-grouped OPS dispatch plan for the conductor.
 
         Returns every open OPA that has no OPS draft yet, sorted cheapest
         repair first (``relation_missed`` before ``source_incomplete``) and
         grouped by target class so the conductor can dispatch the whole plan
         in one ``task_create_batch`` instead of hand-enumerating.
+
+        The plan also exposes a sharded view (``shards``): items grouped by
+        target class and chunked into ``_entity_batch_limit()``-sized OPS
+        work batches. ``max_parallel_shards`` caps how many shards are
+        dispatched in the current wave; ``remaining_count`` reports how many
+        shards are left for later waves.
         """
+        if max_parallel_shards is not None and max_parallel_shards < 1:
+            raise ValueError("max_parallel_shards must be positive when provided")
         checkpoint = self.store.read_json("index/build_checkpoint.json")
         build_id = (
             str(checkpoint.get("build_id", "")).strip() if isinstance(checkpoint, dict) else ""
@@ -2451,13 +2481,53 @@ class TicketEngine:
         by_domain: dict[str, int] = {}
         for row in items:
             by_domain[str(row["target_class"])] = by_domain.get(str(row["target_class"]), 0) + 1
+        grouped_by_class: dict[str, list[dict[str, object]]] = {}
+        for row in items:
+            grouped_by_class.setdefault(str(row["target_class"]), []).append(row)
+        all_shards: list[dict[str, object]] = []
+        shard_index = 0
+        for target_class in sorted(grouped_by_class):
+            class_items = grouped_by_class[target_class]
+            for start in range(0, len(class_items), _entity_batch_limit()):
+                shard_index += 1
+                chunk = class_items[start : start + _entity_batch_limit()]
+                opa_ids = [str(row["opa_id"]) for row in chunk]
+                shard_id = f"ops_{target_class.casefold()}_{shard_index}"
+                task_description = "\n".join(
+                    [
+                        "worker_role: wiki_ops_worker",
+                        "depends_on_stage: opa_discovered",
+                        "ops_planner: ops_dispatch_plan",
+                        f"ops_shard_id: {shard_id}",
+                        f"write_scope: ops_draft:{shard_id}",
+                        f"opa_ids: {json.dumps(opa_ids, ensure_ascii=False)}",
+                        (
+                            "worker_task: read each OPA and its evidence, then create an "
+                            "unconfirmed OPS draft proposing the repair for that OPA"
+                        ),
+                        "expected_artifacts: unconfirmed_ops_drafts",
+                    ],
+                )
+                all_shards.append(
+                    {
+                        "shard_id": shard_id,
+                        "worker_role": "wiki_ops_worker",
+                        "opa_ids": opa_ids,
+                        "item_count": len(chunk),
+                        "task_description": task_description,
+                    },
+                )
+        shards = all_shards[:max_parallel_shards] if max_parallel_shards is not None else all_shards
+        remaining_count = len(all_shards) - len(shards)
         return {
             "build_id": build_id,
             "open_opa_count": len(open_opas),
             "to_dispatch": len(items),
             "already_has_ops": len(open_opas) - len(items),
             "by_domain": by_domain,
-            "items": items,
+            "items": items,  # keep flat list for backward compat
+            "shards": shards,  # NEW: sharded view
+            "remaining_count": remaining_count,  # NEW
         }
 
     def op_flow_report(  # noqa: PLR0915
@@ -2656,6 +2726,7 @@ class TicketEngine:
         unclassified: list[dict[str, str]] = []
         repair_only_count = 0
         unclassified_count = 0
+        skipped_low_value = 0
         # Cross-issue caches: avoid re-reading the same entity / raw source
         # for every issue that targets the same URI.  Without these caches
         # discover_opa makes ~1500+ HTTP round-trips for a 500-issue audit.
@@ -2702,9 +2773,13 @@ class TicketEngine:
                     disposition_value = policy.disposition.value
                     reason_code = reason_code or policy.opa_reason_code
             if disposition_value == IssueDisposition.REPAIR_ONLY.value:
-                repair_only_count += 1
-                skipped.append({"code": code, "reason": "repair_only audit issue"})
-                continue
+                # repair_only means the target concept is already materialized
+                # but a content/link gap remains. Convert to an open_gap OPA
+                # instead of silently skipping, so the finalize gate can see
+                # the tracked record and the limitation is explicitly recorded.
+                if not reason_code:
+                    reason_code = "content_missing"
+                disposition_value = IssueDisposition.GAP.value
             if (
                 disposition_value
                 not in {
@@ -2718,8 +2793,28 @@ class TicketEngine:
                 skipped.append(item)
                 unclassified.append(item)
                 continue
-            category = disposition_value
+            # Skip known low-value issue classes before materializing an OPA.
+            # The audit prompt already avoids these; enforce it in code so a
+            # prompt drift cannot flood the OPA ledger with noise.
             target_section = self._opa_target_section(message, code)
+            root_prefix = self.store.root_uri.rstrip("/") + "/"
+            target_class = target_uri.removeprefix(root_prefix).split("/")[0] if target_uri else ""
+            is_low_value = (
+                reason_code == "relation_missed"
+                or (
+                    target_section.startswith("frontmatter:")
+                    and reason_code not in {"content_missing", "fact_conflict"}
+                )
+                or (
+                    target_class in {"Procedure", "DTC", "Part"}
+                    and reason_code in {"relation_missed", "extraction_missed"}
+                )
+            )
+            if is_low_value:
+                skipped_low_value += 1
+                skipped.append({"code": code, "reason": "low-value audit issue"})
+                continue
+            category = disposition_value
             content = _cached_read_entity(target_uri) or ""
             frontmatter = parse_frontmatter(content)
             evidence = self._list_value(frontmatter.get("sources"))
@@ -2734,9 +2829,7 @@ class TicketEngine:
             # URI: bind the OPA to the concrete page as observation evidence,
             # while keeping ``missing`` explicit so this is never mistaken for
             # a source citation.
-            if not evidence and code == "source_missing":
-                evidence = [target_uri]
-            elif not evidence:
+            if not evidence:
                 unclassified_count += 1
                 item = {"code": code, "reason": "OPA issue has no readable evidence URI"}
                 skipped.append(item)
@@ -2751,8 +2844,14 @@ class TicketEngine:
             )
             category_label = "内容缺失" if category == "gap" else "知识冲突"
             issue_concept = str(issue.get("concept", "")).strip()
+            entity_name = target_uri.rstrip("/").rsplit("/", 1)[-1].removesuffix(".md")
+            if entity_name and entity_name not in issue_concept:
+                prefix = f"{category_label}: {entity_name}"
+            else:
+                prefix = f"{category_label}:"
+            title = f"{prefix} {issue_concept} {target_section}".strip()
             result = self.create_opa(
-                title=f"{category_label}: {issue_concept} {target_section}".strip(),
+                title=title,
                 description=message,
                 category=category,
                 reason_code=reason_code,
@@ -2773,6 +2872,7 @@ class TicketEngine:
             "profile": profile,
             "repair_only_count": repair_only_count,
             "unclassified_count": unclassified_count,
+            "skipped_low_value": skipped_low_value,
             "created": created,
             "skipped": skipped,
             "unclassified": unclassified,
@@ -2819,7 +2919,7 @@ class TicketEngine:
         content = self.store.read_text(key)
         if content is None:
             raise FileNotFoundError(f"OPA not found: {opa_id}")
-        frontmatter = parse_frontmatter(content)
+        frontmatter = self._record_from_content(content)
         return self.create_opa(
             opa_id=opa_id,
             title=str(frontmatter.get("title", opa_id)),
@@ -2867,7 +2967,7 @@ class TicketEngine:
         stored = self.store.read_text(key)
         if stored is None:
             raise FileNotFoundError(f"OPA not found: {opa_id}")
-        frontmatter = parse_frontmatter(stored)
+        frontmatter = self._record_from_content(stored)
         target_uri = str(frontmatter.get("target_uri", ""))
         expected_uri = self.store.entity_uri(concept, class_name or None, object_name)
         if target_uri and self.store.resolve_redirect(target_uri) != self.store.resolve_redirect(
@@ -2922,7 +3022,7 @@ class TicketEngine:
         content = self.store.read_text(key)
         if content is None:
             raise FileNotFoundError(f"OPA not found: {opa_id}")
-        frontmatter = parse_frontmatter(content)
+        frontmatter = self._record_from_content(content)
         effective_closure = closure_status or str(frontmatter.get("closure_status", ""))
         if effective_closure and effective_closure not in OPA_CLOSURE_STATUSES:
             raise ValueError(f"Unsupported closure_status: {effective_closure!r}")
@@ -2972,7 +3072,7 @@ class TicketEngine:
         """
         out: list[dict[str, object]] = []
         for path, content in self._opa_files(target_uri=target_uri):
-            fm = parse_frontmatter(content)
+            fm = self._record_from_content(content)
             opa_id = str(fm.get("id", Path(path).stem))
             if not include_superseded and str(fm.get("status", "")).strip().lower() in {
                 "superseded",

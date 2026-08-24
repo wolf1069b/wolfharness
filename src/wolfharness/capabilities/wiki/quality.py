@@ -2,30 +2,28 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import StrEnum
 import os
 import re
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Literal, NotRequired, TypedDict, get_args
 
 import yaml
 
 from wolfharness.capabilities.wiki.namespaces import resources_root
-
-
-try:
-    from xeno_adp_harness.schema_loader import get_concept_schema
-except ImportError:
-    # ponytail: schema_loader lives in xeno_adp_harness which may not be installed
-    # when wolfharness is used standalone. Functions that need it already catch
-    # KeyError, so raising KeyError makes them return their conservative default.
-    def get_concept_schema(concept: str) -> dict[str, object]:
-        raise KeyError(concept)
-
+from wolfharness.capabilities.wiki.schema_loader import get_concept_schema
+from wolfharness.capabilities.wiki.section_constants import (
+    PLACEHOLDER_TEXT_RE,
+    SECTION_FAILURE_MECHANISM,
+    SECTION_IMPACT_SCOPE,
+    SECTION_MECHANISM,
+    SECTION_POSSIBLE_FAILURE,
+    SECTION_REPAIR_METHOD,
+    SECTION_VERIFICATION,
+)
 
 _SECTION_RE = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
 _WIKI_CONCEPTS = frozenset({"Device", "Component", "DTC", "Symptom", "Fault", "Procedure", "OP"})
-_MIN_URI_SEGMENTS = 2
 
 
 def _configured_root(env_name: str) -> str:
@@ -39,6 +37,33 @@ def _configured_root(env_name: str) -> str:
 # library code while still allowing modules to import before runtime config loads.
 _wiki_root_uri = _configured_root("VIKING_NAMESPACE")
 _raw_source_root_uri = _configured_root("VIKING_RAW_NAMESPACE")
+
+# (concept or "_Profile") → {frontmatter_field: (body_section_heading, target_concept)}
+_BODY_LINK_MAP: dict[str, dict[str, tuple[str, str]]] = {
+    "Fault": {
+        "affected_components": (SECTION_IMPACT_SCOPE, "Component"),
+        "verification_procedures": (SECTION_VERIFICATION, "Procedure"),
+        "repair_procedures": (SECTION_REPAIR_METHOD, "Procedure"),
+    },
+    "DTC": {
+        "related_faults": (SECTION_POSSIBLE_FAILURE, "Fault"),
+    },
+    "_Profile": {
+        "possible_faults": (SECTION_POSSIBLE_FAILURE, "Fault"),
+    },
+    "Procedure": {
+        "target_components": ("操作目的", "Component"),
+    },
+    "Device": {
+        "critical_components": ("关重件清单", "Component"),
+    },
+}
+
+
+def _is_profile(content: str) -> bool:
+    """Detect Symptom Profile by presence of ``profile_id`` in frontmatter."""
+    fm = parse_frontmatter(content)
+    return "profile_id" in fm
 
 _WIKI_URI_RE: re.Pattern[str]
 _MALFORMED_WIKI_URI_RE: re.Pattern[str]
@@ -57,7 +82,7 @@ def _compile_wiki_regexes(root_uri: str) -> None:
         rf"{esc}/(?:Device|Component|DTC|Symptom|Fault|Procedure|OP)/"
         r"(?![0-9a-f]{24}(?:#|$))"
         r"([^/#\s\)\]\"'\u3000\u3001\u3002]*)"
-        r"(?=$|[<{\)\]\s,;:!?。,;:!?])",
+        r"(?=$|[<{\)\]\s,;:!?。，；：！？])",
     )
 
 
@@ -89,7 +114,7 @@ _compile_wiki_regexes(_wiki_root_uri)
 # Agents fetch source content from arbitrary MCP providers; the scheme is
 # an opaque provenance identifier, not a hardcoded file-backend selector.
 _URI_START_RE = re.compile(r"[a-z][a-z0-9+.\-]*://")
-_URI_TRAILING_PUNCTUATION = ".,;:!?,。;:!?、"
+_URI_TRAILING_PUNCTUATION = ".,;:!?，。；：！？、"
 
 # Raw manual chapter URIs.  Addressable backend paths
 # ``viking://.../chapters/<subdir>/chapter.md``, which may contain CJK
@@ -160,7 +185,7 @@ class SourceReadResult:
     error_code: str = ""
 
 
-def classify_raw_source_uri(  # noqa: PLR0911 - classifier with many guard-rail branches
+def classify_raw_source_uri(
     uri: str,
     *,
     raw_root_uri: str | None = None,
@@ -170,23 +195,31 @@ def classify_raw_source_uri(  # noqa: PLR0911 - classifier with many guard-rail 
     The active raw root is supplied by the caller, so local and remote builds
     share the same contract.  A chapter leaf is a manual source; any other
     Markdown leaf under the active raw root is a single-file case source.
-    Cross-namespace raw libraries are recognized by their public resource
-    shape rather than a configured namespace or collection identifier.
+    Directory URIs accept the shape of their conventional ``chapter.md``
+    leaf.  Cross-namespace raw libraries are recognized by their public
+    resource shape rather than a configured namespace or collection
+    identifier.
     """
     if not isinstance(uri, str):
         return None
     value = uri.strip()
     if not value:
         return None
+    # Workers may pass directory URIs (no ``.md`` leaf) or fragment-anchored
+    # chapter URIs; normalize both before matching.
+    value = value.partition("#")[0].rstrip("/")
     if value in _RAW_CHAPTER_URIS:
         return RawSourceKind.MANUAL_CHAPTER
-    cross_namespace = _CROSS_NAMESPACE_RAW_URI_RE.fullmatch(value)
+    # A directory URI maps to its conventional leaf, mirroring the
+    # ``chapters/<subdir>/chapter.md`` layout without a backend read.
+    leaf = value if value.endswith(".md") else f"{value}/chapter.md"
+    cross_namespace = _CROSS_NAMESPACE_RAW_URI_RE.fullmatch(leaf)
     if cross_namespace is not None:
         relative = cross_namespace.group("relative")
         if "/chapters/" in f"/{relative}" and relative.endswith("/chapter.md"):
             return RawSourceKind.MANUAL_CHAPTER
         return RawSourceKind.CASE
-    if _CROSS_NAMESPACE_BOM_URI_RE.fullmatch(value) is not None:
+    if _CROSS_NAMESPACE_BOM_URI_RE.fullmatch(leaf) is not None:
         return RawSourceKind.CASE
     root = (raw_root_uri if raw_root_uri is not None else _raw_source_root_uri).rstrip("/")
     if not root or not value.startswith(root + "/"):
@@ -194,12 +227,14 @@ def classify_raw_source_uri(  # noqa: PLR0911 - classifier with many guard-rail 
             return RawSourceKind.EXTERNAL
         return None
     relative = value.removeprefix(root + "/")
-    if not relative or relative.endswith("/") or not relative.endswith(".md"):
+    if not relative:
         if _EXTERNAL_URI_RE.match(value):
             return RawSourceKind.EXTERNAL
         return None
     if "/chapters/" in f"/{relative}" and relative.endswith("/chapter.md"):
         return RawSourceKind.MANUAL_CHAPTER
+    # A non-``.md`` path under the raw root is a directory source; classify by
+    # shape — the caller verifies existence downstream.
     return RawSourceKind.CASE
 
 
@@ -212,11 +247,7 @@ def is_raw_chapter_uri(uri: str) -> bool:
     """
     if not isinstance(uri, str):
         return False
-    return (
-        uri in _RAW_CHAPTER_URIS
-        or uri.startswith(_RAW_CHAPTER_PREFIXES)
-        or ("/chapters/" in uri and uri.endswith("chapter.md"))
-    )
+    return uri in _RAW_CHAPTER_URIS or uri.startswith(_RAW_CHAPTER_PREFIXES) or ("/chapters/" in uri and uri.endswith("chapter.md"))
 
 
 def is_external_source_uri(uri: str) -> bool:
@@ -353,19 +384,16 @@ _FACT_CONFLICT = AuditIssuePolicy(IssueDisposition.CONFLICT, "fact_conflict")
 AUDIT_ISSUE_POLICIES: dict[str, AuditIssuePolicy] = {
     "entity_target_missing": _REPAIR_ONLY,
     "unconfirmed_entity": _REPAIR_ONLY,
-    "isolated_entity": _REFERENCE_GAP,
     "dangling_relation_target": _REFERENCE_GAP,
     "typed_relation_wrong_concept": _FACT_CONFLICT,
     "dangling_wiki_reference": _REFERENCE_GAP,
     "Procedure.specification_ref_unresolvable": _REFERENCE_GAP,
     "Profile.direct_component_not_in_device_bom": _FACT_CONFLICT,
     "Profile.parent_symptom_not_indexed_by_device": _REFERENCE_GAP,
-    "source_missing": _SOURCE_GAP,
     "source_unresolvable": _SOURCE_GAP,
     "unresolved_placeholder": _REPAIR_ONLY,
     "dangling_reference": _REFERENCE_GAP,
     "malformed_uri": _REPAIR_ONLY,
-    "Symptom.profile": _CONTENT_GAP,
     "Component.working_mechanism": _CONTENT_GAP,
     "Fault.failure_mechanism": _CONTENT_GAP,
     "empty_wiki": _REPAIR_ONLY,
@@ -419,12 +447,7 @@ def extract_sections(content: str) -> dict[str, str]:
             body = "\n".join(lines[end + 1 :])
 
     matches = list(_SECTION_RE.finditer(body))
-    return {
-        match.group(1).strip(): body[
-            match.end() : matches[index + 1].start() if index + 1 < len(matches) else len(body)
-        ].strip()
-        for index, match in enumerate(matches)
-    }
+    return {match.group(1).strip(): body[match.end() : matches[index + 1].start() if index + 1 < len(matches) else len(body)].strip() for index, match in enumerate(matches)}
 
 
 def has_usable_procedure_criteria(section: str) -> bool:
@@ -437,11 +460,8 @@ def has_usable_procedure_criteria(section: str) -> bool:
     return _section_has_substance(section, min_chars=0)
 
 
-_PLACEHOLDER_TEXT_RE = re.compile(
-    r"^(?:见|参见|详见|按|按照|依据)?"
-    r"(?:来源|原文|手册|规范|标准|同上|上述|说明|无|—|--|未知"
-    r"|未提供|未确认|未说明|open_?gap|待补充|TODO|TBD)?$",
-)
+# Placeholder phrase detector (pattern centralized in section_constants).
+_PLACEHOLDER_TEXT_RE = re.compile(PLACEHOLDER_TEXT_RE)
 
 
 def _section_has_substance(section: str, *, min_chars: int = 10) -> bool:
@@ -451,7 +471,7 @@ def _section_has_substance(section: str, *, min_chars: int = 10) -> bool:
     optionally enforces a minimum character count on the remainder.
     """
     without_uris = re.sub(r"[a-z][a-z0-9+.\-]*://[^\s)\]>]+", "", section)
-    normalized = re.sub(r"[\s\[\]()()<>::,,。;;、|#*_\-]+", "", without_uris)
+    normalized = re.sub(r"[\s\[\]（）()<>:：,，。；;、|#*_\-]+", "", without_uris)
     if not normalized:
         return False
     if min_chars and len(normalized) < min_chars:
@@ -472,12 +492,47 @@ def extract_wiki_uris(content: str) -> set[str]:
         remainder = uri.removeprefix(_wiki_root_uri + "/")
         path, _, fragment = remainder.partition("#")
         parts = path.split("/")
-        if len(parts) < _MIN_URI_SEGMENTS or not all(parts) or parts[0] not in _WIKI_CONCEPTS:
+        if len(parts) < 2 or not all(parts) or parts[0] not in _WIKI_CONCEPTS:
             continue
         if fragment and any(character.isspace() for character in fragment):
             continue
         result.add(uri)
     return result
+
+
+def all_relation_uris(
+    content: str, concept: str, field: str, root_uri: str = ""
+) -> set[str]:
+    """Get URIs for a relation field from frontmatter AND body section.
+
+    Checks frontmatter first; also extracts ``viking://`` URIs from the
+    corresponding body section per ``_BODY_LINK_MAP``.  Returns the
+    combined set (fragment-anchors stripped).
+    """
+    uris: set[str] = set()
+    frontmatter = parse_frontmatter(content)
+
+    # From frontmatter
+    fm_value = frontmatter.get(field)
+    prefix = root_uri.rstrip("/") + "/" if root_uri else ""
+    if isinstance(fm_value, str) and fm_value.strip():
+        if not prefix or fm_value.startswith(prefix):
+            uris.add(fm_value.split("#", 1)[0])
+    elif isinstance(fm_value, list):
+        for item in fm_value:
+            if isinstance(item, str) and item.strip() and (not prefix or item.startswith(prefix)):
+                uris.add(item.split("#", 1)[0])
+
+    # From body section (fallback for fields in _BODY_LINK_MAP)
+    body_key = "_Profile" if _is_profile(content) else concept
+    field_info = _BODY_LINK_MAP.get(body_key, {}).get(field)
+    if field_info:
+        heading, _ = field_info
+        sections = extract_sections(content)
+        section_text = sections.get(heading, "")
+        uris.update(u.split("#", 1)[0] for u in extract_wiki_uris(section_text))
+
+    return uris
 
 
 def extract_malformed_wiki_uris(content: str) -> list[str]:
@@ -494,7 +549,7 @@ def extract_malformed_wiki_uris(content: str) -> list[str]:
         if not parts or parts[0] not in _WIKI_CONCEPTS:
             continue
         if (
-            len(parts) < _MIN_URI_SEGMENTS
+            len(parts) < 2
             or not all(parts[1:])
             or any(part.startswith(("<", "{")) for part in parts[1:])
             # ``open_gap: ...`` is body prose, not a navigable entity URI.
@@ -600,13 +655,14 @@ def confirmation_requirements(
     sections = extract_sections(content)
     checks: list[RequirementCheck] = []
 
-    def field_present(
-        code: str, field: str, message: str, *, target_concepts: tuple[str, ...] = ()
-    ) -> None:
+    def field_present(code: str, field: str, message: str, *, target_concepts: tuple[str, ...] = ()) -> None:
+        fm_present = _has_value(frontmatter.get(field)) or bool(
+            all_relation_uris(content, concept, field)
+        )
         checks.append(
             RequirementCheck(
                 code=code,
-                complete=_has_value(frontmatter.get(field)),
+                complete=fm_present,
                 message=message,
                 disposition=IssueDisposition.GAP,
                 opa_reason_code="content_missing",
@@ -614,56 +670,7 @@ def confirmation_requirements(
             ),
         )
 
-    def section_link(
-        code: str,
-        heading: str,
-        target_concepts: tuple[str, ...],
-        message: str,
-    ) -> None:
-        section = sections.get(heading, "")
-        complete = all(_has_concept_uri(section, target) for target in target_concepts)
-        checks.append(
-            RequirementCheck(
-                code=code,
-                complete=complete,
-                message=f"{message} (section: {heading})",
-                disposition=IssueDisposition.GAP,
-                opa_reason_code="content_missing",
-                target_concepts=target_concepts,
-            ),
-        )
-
     if _has_value(frontmatter.get("profile_id")):
-        field_present(
-            "SymptomProfile.device_refs",
-            "device_refs",
-            "故障现象画像必须引用其适用的具体设备实体。",
-            target_concepts=("Device",),
-        )
-        field_present(
-            "SymptomProfile.direct_component_uri",
-            "direct_component_uri",
-            "故障现象画像必须通过 URI 引用其直接关联的部件。",
-            target_concepts=("Component",),
-        )
-        field_present(
-            "SymptomProfile.possible_faults",
-            "possible_faults",
-            "故障现象画像必须至少引用一个故障实体。",
-            target_concepts=("Fault",),
-        )
-        section_link(
-            "SymptomProfile.possible_faults.body_link",
-            "可能失效机理",
-            ("Fault",),
-            "故障现象画像的可能失效机理文本必须链接到故障实体 URI。",
-        )
-        section_link(
-            "SymptomProfile.diagnostic_procedure.body_link",
-            "推荐诊断流程",
-            ("Procedure",),
-            "故障现象画像的诊断流程必须链接可复用的流程实体。",
-        )
         return tuple(checks)
 
     if concept == "Device":
@@ -673,31 +680,6 @@ def confirmation_requirements(
             "设备必须引用其关重件清单。",
             target_concepts=("Component",),
         )
-        field_present(
-            "Device.symptom_refs",
-            "symptom_refs",
-            "设备必须索引适用于该机型的故障现象实体。",
-            target_concepts=("Symptom",),
-        )
-        checks.append(
-            RequirementCheck(
-                code="Device.system_chapters.raw_link",
-                complete=any(
-                    is_raw_chapter_uri(uri) or is_external_source_uri(uri)
-                    for uri in extract_source_uris(sections.get("系统章节引用", ""))
-                ),
-                message="设备系统章节条目必须引用原始章节 URI(章节:系统章节引用)。",
-            ),
-        )
-        section_link(
-            "Device.diagnostic_chain.body_link",
-            "常见故障及故障机理",
-            ("Symptom", "Fault", "Component"),
-            "设备诊断表必须链接故障现象、故障和部件实体。",
-        )
-        # A Device may legitimately have no DTC material in the current raw
-        # scope.  Do not force an empty controller/DTC node just to satisfy a
-        # schema example; graph isolation and source coverage remain hard.
     elif concept == "Component":
         # Component associations are commonly owned by Device, Fault and
         # Procedure pages.  They are validated corpus-wide through
@@ -706,122 +688,36 @@ def confirmation_requirements(
         # Working mechanism is the terminal node of the diagnostic chain:
         # Symptom → Fault → Component → 工作机理.  Without substantive
         # content here the chain dead-ends and the OPA is actionable.
-        working = sections.get("工作机理", "")
+        working = sections.get(SECTION_MECHANISM, "")
         checks.append(
             RequirementCheck(
                 code="Component.working_mechanism",
                 complete=_section_has_substance(working),
-                message="部件必须包含工作机理章节的实质性内容,描述其工作原理。",
+                message="部件必须包含工作机理章节的实质性内容，描述其工作原理。",
                 disposition=IssueDisposition.GAP,
                 opa_reason_code="content_missing",
             ),
         )
     elif concept == "DTC":
         field_present(
-            "DTC.controller_role",
-            "controller_role",
-            "DTC 必须保留源文档确认的控制器功能角色。",
-        )
-        controller_identity = sections.get("控制器身份", "")
-        checks.append(
-            RequirementCheck(
-                code="DTC.controller_identity",
-                complete=_has_value(frontmatter.get("controller_component"))
-                or bool(
-                    re.search(
-                        r"open_gap|未提供|未确认|未说明|未知", controller_identity, re.IGNORECASE
-                    )
-                ),
-                message=(
-                    "DTC 必须引用已知的控制器部件,或明确记录源文档未标识硬件型号(章节:控制器身份)。"
-                ),
-            ),
-        )
-        field_present(
             "DTC.related_faults",
             "related_faults",
             "DTC 必须至少引用一个故障实体。",
             target_concepts=("Fault",),
         )
-        section_link(
-            "DTC.related_faults.body_link",
-            "可能失效机理",
-            ("Fault",),
-            "DTC 可能失效机理文本必须链接故障实体。",
-        )
-        section_link(
-            "DTC.diagnostic_procedure.body_link",
-            "诊断流程",
-            ("Procedure",),
-            "DTC 诊断步骤必须生成为流程实体并建立链接。",
-        )
     elif concept == "Fault":
-        field_present(
-            "Fault.affected_components",
-            "affected_components",
-            "故障必须引用受影响的部件。",
-            target_concepts=("Component",),
-        )
-        checks.append(
-            RequirementCheck(
-                code="Fault.procedures",
-                complete=_has_value(frontmatter.get("verification_procedures"))
-                or _has_value(frontmatter.get("repair_procedures")),
-                message="故障必须至少引用一个验证或修复流程。",
-                target_concepts=("Procedure",),
-            ),
-        )
-        section_link(
-            "Fault.component.body_link",
-            "影响范围",
-            ("Component",),
-            "故障影响范围文本必须链接受影响的部件。",
-        )
-        section_link(
-            "Fault.symptom.body_link",
-            "关联故障现象",
-            ("Symptom",),
-            "故障必须链接其可能引发的故障现象实体。",
-        )
-        if _has_value(frontmatter.get("verification_procedures")):
-            section_link(
-                "Fault.verification_procedure.body_link",
-                "验证方法",
-                ("Procedure",),
-                "故障验证方法文本必须链接流程实体。",
-            )
-        if _has_value(frontmatter.get("repair_procedures")):
-            section_link(
-                "Fault.repair_procedure.body_link",
-                "修复方式",
-                ("Procedure",),
-                "故障修复方式文本必须链接流程实体。",
-            )
         # Failure mechanism is the core diagnostic content: without it
         # the page is a label, not an explanation of how the part fails.
-        failure_mechanism = sections.get("失效机理", "")
+        failure_mechanism = sections.get(SECTION_FAILURE_MECHANISM, "")
         checks.append(
             RequirementCheck(
                 code="Fault.failure_mechanism",
                 complete=_section_has_substance(failure_mechanism),
-                message="故障必须包含失效机理章节的实质性内容,描述部件以何种方式失效。",
+                message="故障必须包含失效机理章节的实质性内容，描述部件以何种方式失效。",
                 disposition=IssueDisposition.GAP,
                 opa_reason_code="content_missing",
             ),
         )
-    elif concept == "Procedure":
-        field_present(
-            "Procedure.target_components",
-            "target_components",
-            "流程必须引用其目标部件。",
-            target_concepts=("Component",),
-        )
-        if class_name == "diagnosis":
-            field_present(
-                "Procedure.procedure_scope",
-                "procedure_scope",
-                "诊断流程必须声明其为原子流程还是复合流程。",
-            )
 
     return tuple(checks)
 

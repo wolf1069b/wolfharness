@@ -5,3 +5,15 @@ without requiring xeno-adp-agentic at runtime.
 """
 
 from __future__ import annotations
+
+from wolfharness.capabilities.wiki.build import WikiBuildCapability, WikiBuildConfig
+from wolfharness.capabilities.wiki.tools import ALL_WIKI_TOOLS, ROLE_TOOLS, RoleFilter, WIKI_AGENT_ROLES
+
+__all__ = [
+    "WikiBuildCapability",
+    "WikiBuildConfig",
+    "ALL_WIKI_TOOLS",
+    "ROLE_TOOLS",
+    "RoleFilter",
+    "WIKI_AGENT_ROLES",
+]

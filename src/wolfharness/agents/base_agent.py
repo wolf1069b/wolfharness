@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
     from contextvars import Token
     from datetime import datetime
+    from types import TracebackType
 
     from evented_config import EventConfig
     from exxec import ExecutionEnvironment
@@ -576,11 +577,20 @@ class BaseAgent[TDeps = None, TResult = str](MessageNode[TDeps, TResult]):
             # Only check cap.client (no lazy connection) to avoid
             # triggering _ensure_client() during status reporting.
             if cap.client is not None:
-                tool_entries = await cap.list_tools()
-                tools = [t.name for t in tool_entries]
-                info = cap.client.server_info
-                server_name = info.get("name") if info else None
-                server_version = info.get("version") if info else None
+                try:
+                    tool_entries = await cap.list_tools()
+                    tools = [t.name for t in tool_entries]
+                    info = cap.client.server_info
+                    server_name = info.get("name") if info else None
+                    server_version = info.get("version") if info else None
+                except Exception:
+                    logger.exception(
+                        "Failed to list tools from config-defined MCP capability",
+                        extra={"capability": cap},
+                    )
+                    tools = []
+                    server_name = None
+                    server_version = None
             else:
                 tools = []
                 server_name = None
@@ -716,6 +726,37 @@ class BaseAgent[TDeps = None, TResult = str](MessageNode[TDeps, TResult]):
             yield
         finally:
             self._session_capabilities.clear()
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        """Clean up external capabilities before base cleanup.
+
+        Config-defined capabilities (e.g. ``type: mcp`` created via
+        ``EntryPointCapabilityConfig.build()``) are stored in
+        ``_external_capabilities`` and never registered with an
+        ``MCPManager``. Their async context manager ``__aexit__`` is
+        called here so that resources like direct ``MCPClient``
+        connections (created by the ``_ensure_client`` fallback) are
+        properly closed instead of leaking on process exit.
+        """
+        from wolfharness.capabilities.combined_toolset import _LifecycleCapable
+
+        for cap in self._external_capabilities:
+            if not isinstance(cap, _LifecycleCapable):
+                continue
+            try:
+                await cap.__aexit__(exc_type, exc_val, exc_tb)
+            except Exception:
+                logger.warning(
+                    "Error during capability cleanup",
+                    exc_info=True,
+                    extra={"capability": cap},
+                )
+        await super().__aexit__(exc_type, exc_val, exc_tb)
 
     @asynccontextmanager
     async def _temporary_tools(
