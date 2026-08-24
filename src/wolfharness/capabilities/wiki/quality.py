@@ -65,6 +65,9 @@ def _is_profile(content: str) -> bool:
     fm = parse_frontmatter(content)
     return "profile_id" in fm
 
+_WIKI_URI_RE: re.Pattern[str]
+_MALFORMED_WIKI_URI_RE: re.Pattern[str]
+
 
 def _compile_wiki_regexes(root_uri: str) -> None:
     """Recompile URI-matching regexes against a root URI prefix."""

@@ -612,7 +612,8 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             return match.group(1).casefold() if match else ""
 
         explicit = field("idempotency_key") or field("task_key")
-        # ponytail: "0" is a conductor placeholder — fall through to packet_id to avoid collapsing distinct chapters
+        # ponytail: "0" is a conductor placeholder — fall through to
+        # packet_id to avoid collapsing distinct chapters
         if explicit == "0":
             explicit = ""
         packet = field("packet_id") or field("packet_ids")

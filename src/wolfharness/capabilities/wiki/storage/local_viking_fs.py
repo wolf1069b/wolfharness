@@ -13,16 +13,18 @@ finalize tool call (the wiki is durable locally regardless).
 from __future__ import annotations
 
 import logging
+from pathlib import Path
+import tempfile
 from typing import TYPE_CHECKING
 
-from openviking_sdk.errors import AlreadyExistsError
+from openviking_sdk.errors import AlreadyExistsError  # type: ignore[import-untyped]
 
 from .backend import FSBackend
 from .local_fs import LocalFS
 
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from .viking_fs import VikingClient
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +97,7 @@ class LocalVikingFS(FSBackend):
     def move(self, src: str, dst: str) -> None:
         self._local.move(src, dst)
 
-    def sync_native_relations(self, pairs: list[tuple[str, list[str]]]) -> dict:
+    def sync_native_relations(self, pairs: list[tuple[str, list[str]]]) -> dict[str, object]:
         """No-op: local backends have no remote graph API to sync.
 
         Relations are stored in entity frontmatter only; the native
@@ -103,7 +105,7 @@ class LocalVikingFS(FSBackend):
         """
         return {"linked": 0, "unlinked": 0, "errors": []}
 
-    def finalize_upload(self, client) -> dict:
+    def finalize_upload(self, client: VikingClient) -> dict[str, object]:
         """Upload each file under the wiki root to Viking individually.
 
         Uses ``client.write`` per file (not ``add_resource`` per directory)
@@ -119,7 +121,7 @@ class LocalVikingFS(FSBackend):
             ``{"status": ..., "uploads": [{"path": str, "status": str}]}``
             where status is ``completed``, ``partial``, or ``failed``.
         """
-        uploads: list[dict] = []
+        uploads: list[dict[str, object]] = []
         try:
             root = self._local.root
             all_files = self._collect_files(root)
@@ -188,7 +190,7 @@ class LocalVikingFS(FSBackend):
             all_files.append(fp)
         return all_files
 
-    def _ensure_dirs(self, client, files: list[Path], root: Path) -> None:
+    def _ensure_dirs(self, client: VikingClient, files: list[Path], root: Path) -> None:
         """Create the root namespace dir and all parent dirs on Viking."""
         try:
             client.mkdir(self.root_uri)

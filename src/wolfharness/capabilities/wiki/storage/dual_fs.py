@@ -64,17 +64,21 @@ class DualFS(FSBackend):
     def fingerprint(self, key: str) -> tuple[int | None, int | None]:
         return self.local.fingerprint(key)
 
-    def find(self, query, *, target_uri: str = "", limit: int = 10, deep: bool = False) -> list[dict]:
+    def find(
+        self, query: str, *, target_uri: str = "", limit: int = 10, deep: bool = False
+    ) -> list[dict[str, object]]:
         """Semantic retrieval only exists on the remote backend — delegate."""
         return self.remote.find(query, target_uri=target_uri, limit=limit, deep=deep)
 
-    def search(self, query: str, *, limit: int = 10) -> list[dict]:
+    def search(self, query: str, *, limit: int = 10) -> list[dict[str, object]]:
         return self.remote.search(query, limit=limit)
 
-    def grep(self, pattern: str, *, limit: int = 256, target_uri: str = "") -> list[dict]:
+    def grep(
+        self, pattern: str, *, limit: int = 256, target_uri: str = ""
+    ) -> list[dict[str, object]]:
         return self.remote.grep(pattern, limit=limit, target_uri=target_uri)
 
-    def relations(self, uri: str) -> list[dict]:
+    def relations(self, uri: str) -> list[dict[str, object]]:
         return self.remote.relations(uri)
 
     # ── writes: mirror to both backends, remote is best-effort ──────────

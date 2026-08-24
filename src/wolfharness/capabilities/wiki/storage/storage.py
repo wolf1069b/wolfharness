@@ -77,7 +77,8 @@ class WikiStore:
         ``LocalVikingFS`` enforces 200 bytes at upload). The 180-byte cap
         leaves room for the ``.md`` extension and path components.
         """
-        sanitized = object_name.translate(str.maketrans({"/": "／", "\\": "＼"}))
+        trans_table: dict[str, str | int | None] = {"/": "／", "\\": "＼"}
+        sanitized = object_name.translate(str.maketrans(trans_table))
         encoded = sanitized.encode("utf-8")
         if len(encoded) <= WikiStore._MAX_OBJECT_NAME_BYTES:
             return sanitized
@@ -413,7 +414,8 @@ class WikiStore:
         scan = getattr(self._fs, "scan_frontmatter", None)
         if scan is None:
             return []
-        return scan(key, keys=keys, node_limit=node_limit)
+        result = scan(key, keys=keys, node_limit=node_limit)
+        return list(result) if isinstance(result, list) else []
 
     def fingerprint(self, key: str) -> tuple[int | None, int | None]:
         """Return a cheap backend-native freshness marker for one file key."""
@@ -437,7 +439,7 @@ class WikiStore:
 
     def remove_empty_dir(self, key: str) -> bool:
         """Remove an empty directory key; returns ``True`` if removed."""
-        removed = self._fs.remove_empty_dir(key)
+        removed = bool(self._fs.remove_empty_dir(key))
         if removed:
             self._invalidate_entity_discovery_cache()
             self._invalidate_entity_content_cache()
@@ -458,7 +460,7 @@ class WikiStore:
     def write_json(
         self,
         key: str,
-        data: dict[str, object] | dict,
+        data: dict[str, object],
         *,
         durable: bool = False,
     ) -> None:

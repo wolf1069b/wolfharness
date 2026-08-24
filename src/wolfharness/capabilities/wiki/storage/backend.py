@@ -131,13 +131,20 @@ class FSBackend(ABC):
     def delete(self, key: str) -> None:
         """Remove a file path-key (no-op if absent)."""
 
+    def remove_empty_dir(self, key: str) -> bool:
+        """Remove an empty directory path-key; return ``True`` if removed.
+
+        Default returns ``False``; backends with real filesystems override.
+        """
+        return False
+
     @abstractmethod
     def move(self, src: str, dst: str) -> None:
         """Move/rename a file path-key."""
 
     # ── semantic retrieval (optional, VikingFS only) ─────────────────────
 
-    def search(self, query: str, *, limit: int = 10) -> list[dict]:
+    def search(self, query: str, *, limit: int = 10) -> list[dict[str, object]]:
         """Semantic search within this backend's root.  Default: unsupported."""
         return []
 
@@ -148,7 +155,7 @@ class FSBackend(ABC):
         target_uri: str = "",
         limit: int = 10,
         deep: bool = False,
-    ) -> list[dict]:
+    ) -> list[dict[str, object]]:
         """Retrieve ranked resources through the backend's native search API.
 
         ``find`` is the OpenViking fast semantic primitive.  Local storage has
@@ -157,15 +164,17 @@ class FSBackend(ABC):
         """
         return []
 
-    def grep(self, pattern: str, *, limit: int = 256, target_uri: str = "") -> list[dict]:
+    def grep(
+        self, pattern: str, *, limit: int = 256, target_uri: str = ""
+    ) -> list[dict[str, object]]:
         """Regex text search within this backend's root.  Default: unsupported."""
         return []
 
-    def relations(self, uri: str) -> list[dict]:
+    def relations(self, uri: str) -> list[dict[str, object]]:
         """Return backend-native relations for one resource, if supported."""
         return []
 
-    def sync_native_relations(self, pairs: list[tuple[str, list[str]]]) -> dict:
+    def sync_native_relations(self, pairs: list[tuple[str, list[str]]]) -> dict[str, object]:
         """Sync entity relations to the backend's native graph API.
 
         Local backends have no remote graph — relations live in entity

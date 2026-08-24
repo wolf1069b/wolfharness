@@ -19,7 +19,7 @@ import logging
 import os
 from pathlib import Path
 
-from openviking_sdk.errors import NotFoundError, OpenVikingError
+from openviking_sdk.errors import NotFoundError, OpenVikingError  # type: ignore[import-untyped]
 from wolfharness.capabilities.wiki.namespaces import raw_namespace, wiki_namespace
 
 from .backend import FSBackend, _strip_control_chars
@@ -27,7 +27,7 @@ from .dual_fs import DualFS
 from .local_fs import LocalFS
 from .local_viking_fs import LocalVikingFS
 from .storage import WikiStore
-from .viking_fs import VikingFS
+from .viking_fs import VikingClient, VikingFS
 
 logger = logging.getLogger(__name__)
 
@@ -44,10 +44,10 @@ __all__ = [
 
 _VIKING_DEFAULT_URL = "http://viking.ai.rootcloud.info/"
 
-_client_cache = None
+_client_cache: VikingClient | None = None
 
 
-def _viking_client():
+def _viking_client() -> VikingClient:
     """Return a memoized OpenViking HTTP client (shared by wiki + raw backends)."""
     global _client_cache  # noqa: PLW0603 - process-wide memoized singleton
     if _client_cache is None:
