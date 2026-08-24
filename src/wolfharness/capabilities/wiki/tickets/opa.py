@@ -984,7 +984,13 @@ class OPAMixin(WikiBuildDeps):
         expected_sha256: str = "",
         source_type: str = "pipeline",
     ) -> dict:
-        """Persist one source-backed expert recommendation for an OPA."""
+        """Persist one source-backed expert recommendation for an OPA.
+
+        ``source_type="external_expert"`` submissions always mint a fresh
+        record (one submission = one OPS) unless an explicit ``ops_id`` is
+        supplied; the pipeline default consolidates concurrent workers on
+        the same retrieval task into one record.
+        """
         opa_id, opa_fm, opa_uri = self._opa_record(parent_opa)
         if status != "unconfirmed":
             raise ValueError("New OPS records must remain status=unconfirmed")
@@ -1038,7 +1044,10 @@ class OPAMixin(WikiBuildDeps):
             raise ValueError(
                 f"OPS retrieved_uris must also appear in evidence_uris or related_uris: {unbound_hits}",
             )
-        if not ops_id:
+        external_submission = source_type == "external_expert"
+        if not ops_id and not external_submission:
+            # Pipeline: consolidate concurrent workers scoped to the same OPA
+            # target + retrieval task into one record.
             normalized_query = self._normalize_dedupe_text(retrieval_query)
             for existing_key, existing_content in self._op_files("OPS"):
                 existing_fm = parse_frontmatter(existing_content)
@@ -1054,21 +1063,25 @@ class OPAMixin(WikiBuildDeps):
                 ):
                     ops_id = Path(existing_key).stem
                     break
-            if not ops_id:
-                title_slug = (
-                    self._readable_slug(title, fallback="recommendation")[:20].rstrip("-._")
-                    or "recommendation"
-                )
-                ops_id = self._clip_utf8(
-                    "ops-{}-{}-{}".format(
-                        opa_id.removeprefix("opa-")[:20],
-                        title_slug,
-                        sha256(f"{opa_uri}\x1f{effective_target}\x1f{title}".encode()).hexdigest()[
-                            :8
-                        ],
+        if not ops_id:
+            title_slug = (
+                self._readable_slug(title, fallback="recommendation")[:20].rstrip("-._")
+                or "recommendation"
+            )
+            ops_id = self._clip_utf8(
+                "ops-{}-{}-{}".format(
+                    opa_id.removeprefix("opa-")[:20],
+                    title_slug,
+                    (
+                        # external_expert: one submission = one record, never
+                        # merges into a prior suggestion.
+                        uuid4().hex[:8]
+                        if external_submission
+                        else sha256(f"{opa_uri}\x1f{effective_target}\x1f{title}".encode()).hexdigest()[:8]
                     ),
-                    80,
-                ).rstrip("-._")
+                ),
+                80,
+            ).rstrip("-._")
         key = self._op_key("OPS", ops_id, target_uri=effective_target)
         previous = self._record_from_content(self.store.read_text(key) or "")
         model = OPSModel(
@@ -1216,6 +1229,11 @@ class OPAMixin(WikiBuildDeps):
         the same URI overwrite content (analysis / solution / evidence).
         ``parent_opa`` is only required on first creation; revisions inherit
         it from the existing record.
+
+        Without ``ops_uri`` every submission mints its own OPS record (the
+        auto id carries a fresh random fragment), so one expert opinion is
+        one record — repeated or multi-person suggestions are never merged
+        into a prior one.
         """
         if not title.strip() or not analysis.strip() or not solution.strip():
             raise ValueError("External OPS requires title, analysis, and solution")
@@ -1290,7 +1308,9 @@ class OPAMixin(WikiBuildDeps):
                 "ops-external-"
                 + self._readable_slug(title, fallback="expert")[:20].rstrip("-._")
                 + "-"
-                + sha256(payload.encode("utf-8")).hexdigest()[:10],
+                + sha256(payload.encode("utf-8")).hexdigest()[:10]
+                + "-"
+                + uuid4().hex[:6],
                 100,
             ).rstrip("-._")
         key = self._find_op_key("OPS", ops_id)
@@ -1654,6 +1674,11 @@ class OPAMixin(WikiBuildDeps):
         (``archive_reason``) may persist one, and every referenced OPS must
         already be ``confirmed`` — an unconfirmed OPS means the proposal is
         still being reviewed and cannot be archived yet.
+
+        ``source_type="external_expert"`` snapshots always mint a fresh
+        record (one snapshot = one OPL) unless an explicit ``opl_id`` is
+        supplied; the pipeline default consolidates concurrent workers on
+        the same OPS set into one record.
         """
         opa_id, opa_fm, opa_uri = self._opa_record(parent_opa)
         if status != "unconfirmed":
@@ -1716,9 +1741,12 @@ class OPAMixin(WikiBuildDeps):
             or (not evidence and not target_is_readable)
         ):
             raise ValueError("OPL requires detailed proposal, rationale, and evidence URIs")
+        external_snapshot = source_type == "external_expert"
         if not opl_id and opl_uri:
             opl_id = self._record_id(opl_uri, "opl")
-        if not opl_id:
+        if not opl_id and not external_snapshot:
+            # Pipeline: consolidate concurrent workers archiving the same
+            # OPS set into one snapshot record.
             requested_ops = set(dict.fromkeys(uri.strip() for uri in ops_uris if uri.strip()))
             for existing_key, existing_content in self._op_files("OPL"):
                 existing_fm = parse_frontmatter(existing_content)
@@ -1731,20 +1759,26 @@ class OPAMixin(WikiBuildDeps):
                 ):
                     opl_id = Path(existing_key).stem
                     break
-            if not opl_id:
-                title_slug = (
-                    self._readable_slug(title, fallback="proposal")[:20].rstrip("-._") or "proposal"
-                )
-                opl_id = self._clip_utf8(
-                    "opl-{}-{}-{}".format(
-                        opa_id.removeprefix("opa-")[:20],
-                        title_slug,
-                        sha256(f"{opa_uri}\x1f{effective_target}\x1f{title}".encode()).hexdigest()[
-                            :8
-                        ],
+        if not opl_id:
+            title_slug = (
+                self._readable_slug(title, fallback="proposal")[:20].rstrip("-._") or "proposal"
+            )
+            opl_id = self._clip_utf8(
+                "opl-{}-{}-{}".format(
+                    opa_id.removeprefix("opa-")[:20],
+                    title_slug,
+                    (
+                        # external_expert: one snapshot = one record, never
+                        # merges into a prior proposal.
+                        uuid4().hex[:8]
+                        if external_snapshot
+                        else sha256(
+                            f"{opa_uri}\x1f{effective_target}\x1f{title}".encode()
+                        ).hexdigest()[:8]
                     ),
-                    80,
-                ).rstrip("-._")
+                ),
+                80,
+            ).rstrip("-._")
         key = self._op_key("OPL", opl_id, target_uri=effective_target)
         previous = self._record_from_content(self.store.read_text(key) or "")
         model = OPLModel(
