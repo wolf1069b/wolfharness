@@ -202,7 +202,7 @@ async def test_fallback_model_intersection_injects_filter() -> None:
     # Verify image content is degraded by this capability.
     # None is treated as unsupported via ``is True`` check → text-only behavior.
     img = _binary_image()
-    degraded = filter_caps[0]._filter_tool_result(None, img)  # type: ignore[arg-type]
+    degraded = await filter_caps[0]._filter_tool_result(None, img)  # type: ignore[arg-type]
     assert isinstance(degraded, str)
     assert "image/png" in degraded
     assert "unsupported" in degraded
