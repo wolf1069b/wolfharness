@@ -450,11 +450,24 @@ class ModalityFilterCapability(AbstractCapability[Any]):
         if not isinstance(content, BinaryImage) and not content.media_type.startswith("image/"):
             return describe_multimodal_content(content)
 
-        # Byte-size guard: reject payloads too large for a vision call.
+        # Normalize image bytes before vision call — resize/re-encode to
+        # keep the request fast and within model resolution limits. Reuses
+        # the same ImageNormalizer as the user-attachment path (RFC-0059)
+        # so all images go through one unified processing pipeline.
+        from wolfharness.images.normalizer import ImageNormalizer
+
+        normalizer = ImageNormalizer()
+        normalized_data, normalized_mime = normalizer.normalize_bytes(
+            content.data, content.media_type
+        )
+        if normalized_data is not content.data:
+            content = BinaryImage(data=normalized_data, media_type=normalized_mime)
+
+        # Byte-size guard: reject payloads still too large after normalization.
         if len(content.data) > _VISION_MAX_BYTES:
             return self._reference_content(content, ctx)
 
-        # Per-instance dedup cache keyed by content hash.
+        # Per-instance dedup cache keyed by (normalized) content hash.
         key = hashlib.sha256(content.data, usedforsecurity=False).digest()
         if key in self._vision_cache:
             return f"[Image analysis: {self._vision_cache[key]}]"
