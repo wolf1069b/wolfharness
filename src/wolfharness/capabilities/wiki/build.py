@@ -451,7 +451,7 @@ class WikiBuildCapability(
 
         with logfire.span("wiki_build.before_model_request"):
             try:
-                from wolfharness.capabilities.wiki.index import (
+                from wolfharness.capabilities.wiki.tickets.index import (
                     _format_index_block,
                 )
 
