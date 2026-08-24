@@ -212,6 +212,9 @@ class TeamModeConfig(Schema):
             (broadcast_on_create, team_add_member notices, send_message).
             ``"steer"`` (default) injects mid-turn; ``"queue"`` waits
             for next turn.
+        max_task_reminders: Cap on task-reminder messages sent to a
+            member session. Each distinct task is reminded at most once
+            (tracked via task-id fingerprinting in session metadata).
         defaults: Optional default team members for team_create.
         broadcast_on_create: Whether to auto-broadcast a notification to
             all team members (excluding the lead) when a new member is
@@ -240,6 +243,11 @@ class TeamModeConfig(Schema):
     notice_delivery_mode: Literal["steer", "queue"] = Field(
         default="steer",
         title="Notice delivery mode",
+    )
+    max_task_reminders: int = Field(
+        default=3,
+        ge=1,
+        title="Max task reminders",
     )
     defaults: TeamDefaultsConfig | None = Field(
         default=None,
