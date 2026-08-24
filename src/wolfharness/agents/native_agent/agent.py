@@ -1288,6 +1288,7 @@ class Agent[TDeps = None, OutputDataT = str](BaseAgent[TDeps, OutputDataT]):
                         audio_strategy=cap.audio_strategy,
                         video_strategy=cap.video_strategy,
                         document_strategy=cap.document_strategy,
+                        vision_model=cap.vision_model,
                     )
                     tool_capabilities[i] = populated
                     # Also replace in _external_capabilities so listing

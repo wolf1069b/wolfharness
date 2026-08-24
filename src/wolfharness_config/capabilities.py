@@ -30,6 +30,7 @@ KNOWN_CAPABILITY_TYPES: frozenset[str] = frozenset({
     "memory",
     "modality_filter",
     "viking",
+    "tool_arg_sanitize",
 })
 
 IMPORT_MAP: dict[str, str] = {
@@ -43,6 +44,7 @@ IMPORT_MAP: dict[str, str] = {
     "memory": "wolfharness.capabilities.memory.MemoryCapability",
     "modality_filter": "wolfharness.capabilities.modality_filter.ModalityFilterCapability",
     "viking": "wolfharness.capabilities.viking.VikingCapability",
+    "tool_arg_sanitize": ("wolfharness.capabilities.tool_arg_sanitize.ToolArgSanitizeCapability"),
 }
 
 
@@ -151,14 +153,43 @@ class ModalityFilterCapabilityConfig(BaseModel):
     """
 
     type: Literal["modality_filter"] = "modality_filter"
-    image_strategy: Literal["describe", "reference", "drop", "pass"] = "describe"
-    """Degradation strategy for unsupported image content."""
+    image_strategy: Literal["describe", "reference", "drop", "pass", "understand"] = "describe"
+    """Degradation strategy for unsupported image content.
+
+    ``"understand"`` replaces the image with a real text description
+    produced by a vision LLM (see ``vision_model``). When no
+    ``vision_model`` is configured, ``"understand"`` falls back to
+    ``"describe"`` at runtime.
+    """
     audio_strategy: Literal["describe", "reference", "drop", "pass"] = "describe"
     """Degradation strategy for unsupported audio content."""
     video_strategy: Literal["describe", "reference", "drop", "pass"] = "describe"
     """Degradation strategy for unsupported video content."""
     document_strategy: Literal["describe", "reference", "drop", "pass"] = "describe"
     """Degradation strategy for unsupported document content."""
+    vision_model: str | None = None
+    """Vision model used by the ``"understand"`` image strategy.
+
+    Either a model variant name (resolved via the manifest) or a
+    namespaced string such as ``"openai:gpt-4o"`` (resolved via
+    ``infer_model``). When ``None`` and ``image_strategy ==
+    "understand"``, the strategy falls back to ``"describe"`` at runtime.
+    """
+
+
+class ToolArgSanitizeCapabilityConfig(BaseModel):
+    """Config for ``ToolArgSanitizeCapability``.
+
+    Sanitizes invalid-JSON tool call arguments in message history before
+    every model request. Some models (e.g. deepseek-v4-flash) occasionally
+    emit tool call arguments that are not valid JSON; the provider rejects
+    the poisoned history with HTTP 400 on the next request. This capability
+    replaces such arguments with ``{}`` so bad JSON never reaches the provider.
+    """
+
+    type: Literal["tool_arg_sanitize"] = "tool_arg_sanitize"
+    enabled: bool = True
+    """Master switch. Set to ``false`` to observe without sanitizing."""
 
 
 class VikingCapabilityConfig(BaseModel):
@@ -464,6 +495,7 @@ BuiltinCapabilityConfig = Annotated[
     | SkillActivationCapabilityConfig
     | MemoryCapabilityConfig
     | ModalityFilterCapabilityConfig
+    | ToolArgSanitizeCapabilityConfig
     | VikingCapabilityConfig,
     Field(discriminator="type"),
 ]
@@ -561,6 +593,8 @@ def build_capability(config: CapabilityConfig) -> Any:  # noqa: PLR0911, RET503
             return _import_and_instantiate(IMPORT_MAP["memory"], config)
         case ModalityFilterCapabilityConfig():
             return _import_and_instantiate(IMPORT_MAP["modality_filter"], config)
+        case ToolArgSanitizeCapabilityConfig():
+            return _import_and_instantiate(IMPORT_MAP["tool_arg_sanitize"], config)
         case VikingCapabilityConfig():
             return _import_and_instantiate(IMPORT_MAP["viking"], config)
         case _ as unreachable:
