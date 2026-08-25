@@ -1663,7 +1663,9 @@ class TicketEngine:
                 object_name,
                 candidate,
                 expected_sha256=expected_sha256,
-                conflict_policy="detect",
+                # Expert apply path: the confirmed record's own authority must
+                # not revert its candidate (mirrors apply_opl).
+                conflict_policy="external_authority",
             )
         except (FileNotFoundError, OSError, ValueError) as error:
             return self._update_ops_apply_status(current_id, "failed", str(error))

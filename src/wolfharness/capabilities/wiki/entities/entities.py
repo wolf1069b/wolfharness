@@ -29,6 +29,25 @@ logger = logging.getLogger(__name__)
 from .._helpers import _FORMAL_WRITE_HOOKS, _conflicting_facts, _entity_batch_limit, _internal_conflicting_facts
 
 
+def _empty_fm_value(value: object) -> bool:
+    """Return whether a parsed frontmatter value is absent or empty.
+
+    Falsy scalars like ``False``/``0`` are real values and must not be
+    treated as empty (avoids the ``0 == False`` membership trap).
+    """
+    return value is None or value in ("", [], {})
+
+
+def _render_fm_value(value: object) -> str:
+    """Render a parsed frontmatter value back into valid YAML.
+
+    JSON is a strict YAML subset, so ``json.dumps`` round-trips every value
+    shape ``parse_frontmatter`` can emit (scalars, lists, maps, booleans)
+    with correct quoting.
+    """
+    return json.dumps(value, ensure_ascii=False)
+
+
 class EntityWriteMixin:
     """Entity read/write and symptom profile operations."""
 
@@ -150,30 +169,64 @@ class EntityWriteMixin:
         lines.insert(end, rendered)
         return "".join(lines)
 
-    def _assert_expert_authority_preserved(
+    def _preserve_expert_sections(
         self,
         *,
         target_uri: str,
         current: str,
         candidate: str,
-        reference_replacements: list[tuple[str, str]] | None = None,
-    ) -> None:
-        """Verify that expert-confirmed sections are not removed by a candidate write."""
+    ) -> str:
+        """Preserve expert-confirmed content across pipeline writes.
+
+        Expert authority is section ownership: any section claimed by an
+        applied OPL (or confirmed OPS) keeps its current content verbatim
+        whenever a pipeline write would change it.  An empty or phantom
+        ``target_section`` claims the whole entity: every existing section
+        is frozen, the candidate may only add new sections, and frontmatter
+        keys the candidate would drop or empty are re-inserted so expert
+        corrections survive regenerated relation fields.
+        """
         try:
             authorities = self.get_expert_authority(target_uri=target_uri)
-        except (OSError, ValueError, KeyError):
-            return
+        except (OSError, ValueError, KeyError) as error:
+            logger.warning("Expert authority lookup failed for %s: %s", target_uri, error)
+            return candidate
         if not authorities:
-            return
-        current_sections = {name for name, _ in extract_sections(current)}
+            return candidate
+        current_sections = extract_sections(current)
+        candidate_sections = extract_sections(candidate)
+        restored: list[str] = []
+        full_entity = False
         for authority in authorities:
             section = authority.get("target_section", "")
-            if section and section in current_sections:
-                candidate_sections = {name for name, _ in extract_sections(candidate)}
-                if section not in candidate_sections:
-                    raise ValueError(
-                        f"Expert-confirmed section '{section}' would be removed from {target_uri}",
-                    )
+            if section in ("", "external_opl"):
+                full_entity = True
+                owned = list(current_sections)
+            elif section in current_sections:
+                owned = [section]
+            else:
+                continue
+            for name in owned:
+                current_body = current_sections[name]
+                if candidate_sections.get(name) != current_body:
+                    candidate = self._replace_h2_section(candidate, name, current_body)
+                    candidate_sections = extract_sections(candidate)
+                    restored.append(name)
+        if full_entity:
+            current_fm = parse_frontmatter(current)
+            candidate_fm = parse_frontmatter(candidate)
+            for key, value in current_fm.items():
+                # Conflict bookkeeping is owned by _mark_merge_conflict, not the
+                # expert authority; never gap-fill stale flags back in.
+                if key in ("conflict_pending", "conflict_refs"):
+                    continue
+                if _empty_fm_value(value) or not _empty_fm_value(candidate_fm.get(key)):
+                    continue
+                candidate = self._set_frontmatter_value(candidate, key, _render_fm_value(value))
+                restored.append(f"frontmatter:{key}")
+        if restored:
+            logger.info("Restored expert-owned content on %s: %s", target_uri, ", ".join(restored))
+        return candidate
 
     def write_entity(
         self,
@@ -240,11 +293,10 @@ class EntityWriteMixin:
         content = self.store.dedup_citations(content)
         content = self._dedupe_h2_sections(content)
         if current is not None and conflict_policy == "detect":
-            self._assert_expert_authority_preserved(
+            content = self._preserve_expert_sections(
                 target_uri=uri,
                 current=current,
                 candidate=content,
-                reference_replacements=reference_replacements,
             )
         self._validate_formal_write(
             content=content,
@@ -283,11 +335,10 @@ class EntityWriteMixin:
                         f"Entity changed before commit; rerun diff_entity before merge (expected={expected_sha256}, actual={latest_sha256}).",
                     )
                 if conflict_policy == "detect":
-                    self._assert_expert_authority_preserved(
+                    content = self._preserve_expert_sections(
                         target_uri=uri,
                         current=latest or "",
                         candidate=content,
-                        reference_replacements=reference_replacements,
                     )
             self.store.write_entity(concept, clz, object_name, content)
         if self._log:
@@ -398,6 +449,12 @@ class EntityWriteMixin:
             self._reject_malformed_wiki_refs(normalized)
             normalized = self.store.dedup_citations(normalized)
             normalized = self._dedupe_h2_sections(normalized)
+            if current is not None:
+                normalized = self._preserve_expert_sections(
+                    target_uri=self.store.entity_uri(concept, class_name or None, object_name),
+                    current=current,
+                    candidate=normalized,
+                )
             self._validate_formal_write(
                 content=normalized,
                 concept=concept,
@@ -441,6 +498,23 @@ class EntityWriteMixin:
             )
             for concept, class_name, object_name, content, expected_sha256, char_before in prepared
         ]
+        # Materialization may append links inside expert-owned sections; restore
+        # expert content once more before publication (mirrors write_entity's
+        # locked double-check).
+        protected: list[tuple[str, str, str, str, str, int | None]] = []
+        for concept, class_name, object_name, content, expected_sha256, char_before in prepared:
+            current = self.store.read_entity(concept, class_name or None, object_name)
+            merged = content
+            if current is not None:
+                merged = self._preserve_expert_sections(
+                    target_uri=self.store.entity_uri(concept, class_name or None, object_name),
+                    current=current,
+                    candidate=content,
+                )
+            protected.append(
+                (concept, class_name, object_name, merged, expected_sha256, char_before),
+            )
+        prepared = protected
 
         uris: list[str] = []
         sync_targets: set[str] = set()
@@ -544,6 +618,12 @@ class EntityWriteMixin:
         self._reject_malformed_wiki_refs(content)
         content = self.store.dedup_citations(content)
         content = self._dedupe_h2_sections(content)
+        if current is not None:
+            content = self._preserve_expert_sections(
+                target_uri=profile_uri,
+                current=current,
+                candidate=content,
+            )
         parent_info = self.store.lookup_by_uri(symptom_uri)
         if parent_info is None or parent_info[0] != "Symptom":
             raise ValueError(f"Unknown canonical Symptom URI: {symptom_uri}")

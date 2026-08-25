@@ -225,6 +225,13 @@ class RelationMixin:
             return
         updated = self.store.resolve_body_refs(updated, None)
         updated = self.store.dedup_citations(updated)
+        updated = self._preserve_expert_sections(
+            target_uri=component_uri,
+            current=content,
+            candidate=updated,
+        )
+        if updated == content:
+            return
         self.store.write_entity(concept, class_name, object_name, updated)
         self.store.register_natural_key(concept, class_name, object_name, component_uri)
         logger.info(
@@ -284,6 +291,13 @@ class RelationMixin:
             return
         updated = self.store.resolve_body_refs(updated, None)
         updated = self.store.dedup_citations(updated)
+        updated = self._preserve_expert_sections(
+            target_uri=symptom_uri,
+            current=content,
+            candidate=updated,
+        )
+        if updated == content:
+            return
         self.store.write_entity(concept, class_name, object_name, updated)
         self.store.register_natural_key(concept, class_name, object_name, symptom_uri)
         logger.info("Synced Symptom profile index: %s (%d profiles)", symptom_uri, len(rows))
@@ -483,6 +497,12 @@ class RelationMixin:
                         )
                         updated = self._dedupe_h2_sections(updated)
                     if updated != content:
+                        updated = self._preserve_expert_sections(
+                            target_uri=device_uri,
+                            current=content,
+                            candidate=updated,
+                        )
+                    if updated != content:
                         self.store.write_entity("Device", class_name, object_name, updated)
                         synced += 1
                     continue
@@ -521,6 +541,12 @@ class RelationMixin:
                         updated, "控制器与故障码", "\n".join(dtc_table)
                     )
                     updated = self._dedupe_h2_sections(updated)
+                if updated != content:
+                    updated = self._preserve_expert_sections(
+                        target_uri=device_uri,
+                        current=content,
+                        candidate=updated,
+                    )
                 if updated != content:
                     self.store.write_entity("Device", class_name, object_name, updated)
                     synced += 1
