@@ -13,7 +13,6 @@ import asyncio
 from typing import TYPE_CHECKING, Any, cast
 
 from wolfharness.agents.events.events import (
-    CustomEvent,
     RunErrorEvent,
     RunFailedEvent,
     RunStartedEvent,
@@ -149,6 +148,32 @@ class OpenCodeEventBridgeMixin:
             The subscription scope string.
         """
         return "session"
+
+    def _get_subscription_replay(self) -> bool:
+        """Return whether the session consumer replays buffered events on subscribe.
+
+        Overridden to ``False`` so the session consumer matches the SSE
+        endpoint's first-connect policy (``global_routes`` subscribes with
+        ``replay=False`` when no ``Last-Event-ID`` is present). The client
+        loads full session state via ``sync()``; replaying buffered native
+        events would re-convert them into duplicate projections for messages
+        the client has already loaded — the duplication race documented in
+        issue #380 and ``test_duplication_reproduction.py``.
+
+        Crash-recovery paths that genuinely need historical events MUST opt
+        in by overriding this back to ``True``.
+        """
+        return False
+
+    def _get_subscription_exclude_source(self) -> frozenset[str] | None:
+        """Return sources whose published events this consumer must not receive.
+
+        Overridden to exclude the OpenCode projection bridge source so this
+        consumer can never re-consume its own loopback output. Belt-and-
+        suspenders on top of removing the loopback republish (see the
+        ``fix-opencode-eventbus-loopback`` change).
+        """
+        return frozenset({"opencode_event_bridge"})
 
     def _create_assistant_message(self, session_id: str) -> tuple[str, MessageWithParts]:
         """Create a fresh assistant message for a new turn.
@@ -679,16 +704,6 @@ class OpenCodeEventBridgeMixin:
                     await self._persist_context_for_resume(session_id)
                 case _:
                     pass
-
-            # C4: CustomEvent wraps SSE broadcast events (e.g.
-            # SessionCreatedEvent) republished from the OpenCodeEventBridge.
-            # These are not real agent events and must NOT trigger assistant
-            # message registration. Only skip bridge-wrapped CustomEvents
-            # (source="opencode_event_bridge"); tool-emitted CustomEvents
-            # (source=None or tool name) may carry meaningful payload and
-            # should fall through to adapter processing.
-            if isinstance(event, CustomEvent) and event.source == "opencode_event_bridge":
-                return
 
             ctx = self._contexts.get(session_id)
             if ctx is None:

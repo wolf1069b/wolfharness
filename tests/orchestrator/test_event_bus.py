@@ -578,6 +578,79 @@ async def test_event_ordering_mixed_sessions() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Source provenance (source_hint / exclude_source)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_publish_source_hint_stored_on_envelope(event_bus: EventBus) -> None:
+    """Envelope carries the publish-time source_hint for provenance filtering."""
+    stream = await event_bus.subscribe("sess-1")
+    await event_bus.publish(
+        "sess-1",
+        RunStartedEvent(session_id="sess-1", run_id="run-1"),
+        source_hint="opencode_event_bridge",
+    )
+    received = await _receive_one(stream)
+    assert received is not None
+    assert received.source_hint == "opencode_event_bridge"
+    # Native events without a hint default to None
+    await event_bus.publish("sess-1", RunStartedEvent(session_id="sess-1", run_id="run-2"))
+    received2 = await _receive_one(stream)
+    assert received2 is not None
+    assert received2.source_hint is None
+
+
+@pytest.mark.anyio
+async def test_subscribe_exclude_source_filters_fanout(event_bus: EventBus) -> None:
+    """Subscriber with exclude_source never receives events from that source."""
+    # Control subscriber receives everything.
+    control = await event_bus.subscribe("sess-1")
+    # Excluding subscriber must not see opencode_event_bridge events.
+    excluding = await event_bus.subscribe(
+        "sess-1", exclude_source=frozenset({"opencode_event_bridge"})
+    )
+
+    await event_bus.publish(
+        "sess-1",
+        RunStartedEvent(session_id="sess-1", run_id="bridge-run"),
+        source_hint="opencode_event_bridge",
+    )
+    # Live fanout: excluded subscriber gets nothing, control gets the event.
+    assert await _receive_one(excluding, timeout=0.1) is None
+    control_received = await _receive_one(control)
+    assert control_received is not None
+    assert control_received.event.run_id == "bridge-run"
+
+
+@pytest.mark.anyio
+async def test_exclude_source_does_not_block_native_events(event_bus: EventBus) -> None:
+    """Native events (no source_hint) still reach the excluding subscriber."""
+    stream = await event_bus.subscribe(
+        "sess-1", exclude_source=frozenset({"opencode_event_bridge"})
+    )
+    await event_bus.publish("sess-1", RunStartedEvent(session_id="sess-1", run_id="native-run"))
+    received = await _receive_one(stream)
+    assert received is not None
+    assert received.event.run_id == "native-run"
+
+
+@pytest.mark.anyio
+async def test_exclude_source_filters_replayed_events(event_bus: EventBus) -> None:
+    """Replay buffer delivery honors exclude_source (loopback isolation)."""
+    await event_bus.publish(
+        "sess-1",
+        RunStartedEvent(session_id="sess-1", run_id="bridge-run"),
+        source_hint="opencode_event_bridge",
+    )
+    stream = await event_bus.subscribe(
+        "sess-1", exclude_source=frozenset({"opencode_event_bridge"})
+    )
+    received = await _drain_stream(stream)
+    assert len(received) == 0
+
+
+# ---------------------------------------------------------------------------
 # Descendants scope
 # ---------------------------------------------------------------------------
 
