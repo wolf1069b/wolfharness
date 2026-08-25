@@ -1344,6 +1344,51 @@ class TestWriteTools:
         assert "linked=0, failed=0" in result.return_value
 
     @pytest.mark.asyncio
+    async def test_viking_link_relations_skips_outside_write_prefix(
+        self, mock_client: AsyncMock, tmp_path: Path
+    ) -> None:
+        """viking_link_relations respects the explicit write-side allowlist."""
+        rel = tmp_path / "backlinks_index.json"
+        rel.write_text(
+            '{"viking://resources/wiki/Profile/A": ["viking://resources/wiki/Fault/X"], '
+            '"viking://resources/raw/Profile/B": ["viking://resources/wiki/Fault/Y"], '
+            '"viking://resources/wiki/Profile/C": ["viking://resources/raw/Fault/Z"]}',
+            encoding="utf-8",
+        )
+        cap = VikingCapability(
+            mode="all",
+            enable_link=True,
+            write_allowed_uri_prefixes=["viking://resources/wiki/"],
+        )
+        cap._client = mock_client
+        tools = build_tools(cap)
+        link_tool = _get_tool(tools, "viking_link_relations")
+
+        result = await link_tool(
+            _make_ctx(),
+            relations_file=str(rel),
+            namespace_base="viking://resources/",
+        )
+
+        calls = [
+            (c.args[0], list(c.args[1]), c.kwargs.get("reason"))
+            for c in mock_client.link.call_args_list
+        ]
+        assert calls == [
+            (
+                "viking://resources/wiki/Profile/A",
+                ["viking://resources/wiki/Fault/X"],
+                "wiki:referenced-by",
+            ),
+            (
+                "viking://resources/wiki/Fault/X",
+                ["viking://resources/wiki/Profile/A"],
+                "wiki:references",
+            ),
+        ]
+        assert "linked=2, failed=0, skipped=2" in result.return_value
+
+    @pytest.mark.asyncio
     async def test_viking_link_relations_retries_on_busy(
         self,
         viking_cap: VikingCapability,

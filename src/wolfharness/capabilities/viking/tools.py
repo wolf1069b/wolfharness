@@ -1114,18 +1114,40 @@ def build_tools(cap: VikingCapability) -> list[Callable[..., Any]]:
                     if not isinstance(target, str) or not target.startswith(base):
                         skipped += 1
                         continue
+                    if cap._check_write_uri_allowed(
+                        target,
+                        tool_name="viking_link_relations",
+                    ):
+                        skipped += 1
+                        continue
                     # Resolve both directions to the server's actual node
                     # paths (markdown imports get wrapped: .md -> stem/stem.md).
                     resolved_target = await _resolve_uri(client, target)
                     if resolved_target is None:
                         skipped += 1
                         continue
+                    if cap._check_write_uri_allowed(
+                        resolved_target,
+                        tool_name="viking_link_relations",
+                    ):
+                        skipped += 1
+                        continue
                     resolved_sources = []
                     for s in sources if isinstance(sources, list) else []:
                         if not isinstance(s, str) or not s.startswith(base):
                             continue
+                        if cap._check_write_uri_allowed(
+                            s,
+                            tool_name="viking_link_relations",
+                        ):
+                            continue
                         resolved = await _resolve_uri(client, s)
                         if resolved is not None:
+                            if cap._check_write_uri_allowed(
+                                resolved,
+                                tool_name="viking_link_relations",
+                            ):
+                                continue
                             resolved_sources.append(resolved)
                     if not resolved_sources:
                         skipped += 1
