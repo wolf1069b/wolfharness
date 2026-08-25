@@ -13,7 +13,6 @@ from __future__ import annotations
 from pathlib import Path
 import types
 from typing import Any, ClassVar
-from unittest.mock import patch
 
 import pytest
 
