@@ -662,8 +662,10 @@ class AgentPool[TPoolDeps = None]:
 
         # Unregister and close old SkillManagerCap from ExtensionRegistry if present.
         pool_scope = Scope(level=ScopeLevel.POOL)
+        scheme_registry = self._extension_registry.scheme_registry
         for existing_cap in list(self._skill_capabilities):
             if isinstance(existing_cap, SkillManagerCap):
+                scheme_registry.unregister(existing_cap)
                 self._extension_registry.unregister(existing_cap, pool_scope)
                 # Close child McpServerCap instances to release MCP connections.
                 try:
@@ -685,12 +687,27 @@ class AgentPool[TPoolDeps = None]:
         # Register the new SkillManagerCap with ExtensionRegistry at POOL scope.
         self._extension_registry.register(cap, pool_scope)
 
+        # Register SkillManagerCap's owned schemes in the URI scheme registry.
+        if cap.owned_schemes:
+            scheme_registry.register(
+                provider_name="SkillManagerCap",
+                schemes=cap.owned_schemes,
+                provider=cap,
+            )
+
         # Register each top-level McpServerCap independently at POOL scope so
         # they are directly discoverable via get_resource_access() for ``@``
         # mention and ResourceCapability (RFC-0058). They no longer live only
         # inside SkillManagerCap.children.
         for provider in self.mcp.providers:
             self._extension_registry.register(provider, pool_scope)
+            # Register provider's owned schemes in the URI scheme registry.
+            if provider.owned_schemes:
+                scheme_registry.register(
+                    provider_name=getattr(provider, "server_name", type(provider).__name__),
+                    schemes=provider.owned_schemes,
+                    provider=provider,
+                )
 
         logger.debug(
             "Rebuilt skill capabilities",
@@ -720,10 +737,12 @@ class AgentPool[TPoolDeps = None]:
     async def _setup_resource_capability(self) -> None:
         """Create the ``ResourceCapability`` instance.
 
-        The capability provides 5 agent-facing tools (``list_resources``,
-        ``read_resource``, ``resource_exists``, ``list_resource_templates``,
-        ``complete_resource_template``) that aggregate resource access
-        across all visible providers in the ``ExtensionRegistry``.
+        The capability provides three model-facing MCP Resource tools
+        (``list_mcp_resources``, ``list_mcp_resource_templates``, and
+        ``read_mcp_resource``) that aggregate resource access across all
+        visible MCP providers in the ``ExtensionRegistry``. Legacy five-method
+        Python helpers remain available for internal compatibility but are not
+        registered in the model toolset.
 
         The capability is stateless — it reads ``AgentContext`` at runtime
         to resolve providers. Per-agent opt-out is handled in

@@ -160,10 +160,20 @@ async def _resolve_resource(
     resource_caps = registry.get_resource_access(scope)
     skill_caps = registry.get_skill_resources(scope)
 
-    content = await resolve_resource_content(source.uri, resource_caps, skill_caps)
+    content = await resolve_resource_content(
+        source.uri,
+        resource_caps,
+        skill_caps,
+        client_name=source.client_name,
+    )
     if content is None:
         logger.warning("Resource not found", client_name=source.client_name, uri=source.uri)
-    return content
+        return None
+
+    # Prepend the server source so the agent knows which MCP server to use
+    # for follow-up operations on URIs in this resource content.
+    header = f"[Resource from {source.client_name} server] {source.uri}"
+    return [header, *content]
 
 
 async def extract_user_prompt_from_parts(

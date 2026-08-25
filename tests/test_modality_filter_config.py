@@ -98,3 +98,56 @@ def test_invalid_strategy_raises_validation_error() -> None:
             "type": "modality_filter",
             "image_strategy": "invalid",
         })
+
+
+@pytest.mark.unit
+def test_vision_model_defaults_to_none() -> None:
+    """``vision_model`` defaults to ``None``."""
+    config = TypeAdapter(BuiltinCapabilityConfig).validate_python({"type": "modality_filter"})
+    assert isinstance(config, ModalityFilterCapabilityConfig)
+    assert config.vision_model is None
+
+
+@pytest.mark.unit
+def test_vision_model_accepts_string() -> None:
+    """``vision_model`` accepts a model variant name / namespaced string."""
+    config = TypeAdapter(BuiltinCapabilityConfig).validate_python({
+        "type": "modality_filter",
+        "vision_model": "openai:gpt-4o",
+    })
+    assert isinstance(config, ModalityFilterCapabilityConfig)
+    assert config.vision_model == "openai:gpt-4o"
+
+
+@pytest.mark.unit
+def test_image_strategy_understand_accepted() -> None:
+    """``image_strategy: "understand"`` passes config validation."""
+    config = TypeAdapter(BuiltinCapabilityConfig).validate_python({
+        "type": "modality_filter",
+        "image_strategy": "understand",
+        "vision_model": "openai:gpt-4o",
+    })
+    assert isinstance(config, ModalityFilterCapabilityConfig)
+    assert config.image_strategy == "understand"
+
+
+@pytest.mark.unit
+def test_audio_strategy_understand_rejected() -> None:
+    """``audio_strategy: "understand"`` raises ``ValidationError`` (vision is image-only)."""
+    with pytest.raises(ValidationError):
+        TypeAdapter(BuiltinCapabilityConfig).validate_python({
+            "type": "modality_filter",
+            "audio_strategy": "understand",
+        })
+
+
+@pytest.mark.unit
+def test_build_capability_passes_vision_model() -> None:
+    """``build_capability()`` forwards ``vision_model`` to the capability."""
+    config = ModalityFilterCapabilityConfig(
+        image_strategy="understand",
+        vision_model="openai:gpt-4o",
+    )
+    capability = build_capability(config)
+    assert capability.image_strategy == "understand"
+    assert capability.vision_model == "openai:gpt-4o"

@@ -199,13 +199,13 @@ class NodeConfig(Schema):
 class ResourceConfig(Schema):
     """Configuration for resource access tools.
 
-    Controls whether the ``ResourceCapability`` (unified resource access
-    via ``list_resources``, ``read_resource``, ``resource_exists``,
-    ``list_resource_templates``, ``complete_resource_template``) is
-    automatically attached to the agent.
+    Controls whether the ``ResourceCapability`` (the three model-facing MCP
+    Resource tools ``list_mcp_resources``, ``list_mcp_resource_templates``,
+    and ``read_mcp_resource``) is automatically attached to the agent.
 
     Attributes:
-        enabled: When ``True`` (default), the resource tools are available.
+        enabled: When ``True`` (default), the three model-facing MCP Resource
+            tools are available.
             Set to ``False`` to opt out.
 
     Example:
@@ -358,9 +358,8 @@ class BaseAgentConfig(NodeConfig):
     """Configuration for unified resource access tools.
 
     When ``enabled`` is ``True`` (default), the ``ResourceCapability``
-    providing ``list_resources``, ``read_resource``, ``resource_exists``,
-    ``list_resource_templates``, and ``complete_resource_template`` tools
-    is automatically attached to the agent.
+    providing ``list_mcp_resources``, ``list_mcp_resource_templates``, and
+    ``read_mcp_resource`` is automatically attached to the agent.
 
     Set ``enabled: false`` to opt out:
 

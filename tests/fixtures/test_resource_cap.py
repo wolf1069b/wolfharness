@@ -52,6 +52,10 @@ class TestResourceAccessCap(AbstractCapability[Any]):
     read_uri: str = "test://doc.md"
     _owns_client: bool = field(default=False, repr=False)
 
+    @property
+    def owned_schemes(self) -> frozenset[str]:
+        return frozenset()
+
     def __post_init__(self) -> None:
         pass
 
@@ -120,6 +124,10 @@ class TestToolAndResourceCap(AbstractCapability[Any]):
     read_text: str = "tool+resource content"
     read_uri: str = "test://tool-doc.md"
     _owns_client: bool = field(default=False, repr=False)
+
+    @property
+    def owned_schemes(self) -> frozenset[str]:
+        return frozenset()
 
     def __post_init__(self) -> None:
         pass

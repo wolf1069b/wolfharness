@@ -190,6 +190,15 @@ class AgentFactory:
         from wolfharness.models.agents import NativeAgentConfig
         from wolfharness_config.capabilities import build_config_capabilities
 
+        # MCP connections created with the pool have POOL lifetime. Register
+        # their Resource providers independently of the model-tool feature gate
+        # so Host catalogs and ResourceSource injection remain available when
+        # resources.enabled is false.
+        pool_scope = Scope(level=ScopeLevel.POOL)
+        for provider in host_context.mcp.get_mcp_providers():
+            if provider.resources_supported is not False:
+                self._pool.extension_registry.register(provider, pool_scope)
+
         for agent_name, cfg in manifest.agents.items():
             if not isinstance(cfg, NativeAgentConfig) or not cfg.capabilities:
                 continue
@@ -197,6 +206,15 @@ class AgentFactory:
             agent_scope = Scope(level=ScopeLevel.AGENT, agent_name=agent_name)
             for cap in config_caps:
                 self._pool.extension_registry.register(cap, agent_scope)
+                # Register config-defined capability's owned schemes in the
+                # URI scheme registry (e.g. VikingCapability owns "viking").
+                owned: frozenset[str] = getattr(cap, "owned_schemes", frozenset())
+                if owned:
+                    self._pool.extension_registry.scheme_registry.register(
+                        provider_name=type(cap).__name__,
+                        schemes=owned,
+                        provider=cap,
+                    )
 
     @staticmethod
     def _build_agent_descriptions(

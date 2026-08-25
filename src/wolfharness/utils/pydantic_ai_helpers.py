@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlparse
 
@@ -17,6 +18,35 @@ if TYPE_CHECKING:
     from fsspec.asyn import AsyncFileSystem
     from pydantic_ai import FileUrl, MultiModalContent, UserContent
     from pydantic_ai.messages import ToolCallPartDelta
+
+
+def has_invalid_json_args(part: BaseToolCallPart | ToolCallPartDelta) -> bool:
+    """Check if a tool call part has invalid JSON string arguments.
+
+    Args are invalid when they are a non-empty string that cannot be parsed
+    as JSON. Dict args and None are always valid. Empty strings are treated
+    as valid (equivalent to no args).
+
+    Some models (e.g. deepseek-v4-flash) occasionally emit tool call
+    arguments that are not valid JSON. Sending such poisoned history back
+    to the provider causes a hard 400 rejection; this check is the shared
+    predicate used by sanitization paths to detect that defect.
+
+    Args:
+        part: A tool call part (complete or delta).
+
+    Returns:
+        True when the part carries invalid JSON string arguments.
+    """
+    if not isinstance(part, BaseToolCallPart):
+        return False
+    if not isinstance(part.args, str) or not part.args.strip():
+        return False
+    try:
+        json.loads(part.args)
+    except (json.JSONDecodeError, ValueError):
+        return True
+    return False
 
 
 def safe_args_as_dict(

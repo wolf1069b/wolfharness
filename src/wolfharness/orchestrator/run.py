@@ -59,25 +59,13 @@ except ImportError:  # pragma: no cover
 
 
 def _has_invalid_json_args(part: Any) -> bool:
-    """Check if a ToolCallPart has invalid JSON string arguments.
+    """Backward-compatible alias for the shared invalid-JSON check.
 
-    Args are invalid when they are a non-empty string that cannot be parsed
-    as JSON. Dict args and None are always valid. Empty strings are treated
-    as valid (equivalent to no args).
+    Delegates to :func:`wolfharness.utils.pydantic_ai_helpers.has_invalid_json_args`.
     """
-    import json
+    from wolfharness.utils.pydantic_ai_helpers import has_invalid_json_args
 
-    from pydantic_ai.messages import ToolCallPart
-
-    if not isinstance(part, ToolCallPart):
-        return False
-    if not isinstance(part.args, str) or not part.args.strip():
-        return False
-    try:
-        json.loads(part.args)
-    except (json.JSONDecodeError, ValueError):
-        return True
-    return False
+    return has_invalid_json_args(part)
 
 
 def inject_cancelled_tool_results(messages: list[ModelMessage]) -> list[ModelMessage]:
