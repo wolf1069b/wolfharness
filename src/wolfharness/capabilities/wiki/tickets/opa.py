@@ -264,6 +264,22 @@ class OPAMixin(WikiBuildDeps):
             return f"{self.store.root_uri}/{key}"
         return f"{self.store.root_uri}/{self.store.CONCEPT_DIRS[concept]}/{record_id}.md"
 
+    def is_valid_op_uri(self, uri: str) -> bool:
+        """Return whether *uri* is an acceptable OPA/OPS reference URI.
+
+        Mirrors the format rules enforced by ``_validate_opa_uris``: a
+        ``viking://resources/...`` provider reference (any namespace), a URI
+        inside the active wiki store's namespace, or a raw-source library
+        URI all pass.  Existence is not checked -- the record may be filed
+        before the entity is merged, and reference scopes may live outside
+        the write store's namespace.
+        """
+        return (
+            uri.startswith("viking://resources/")
+            or self.store.is_wiki_uri(uri)
+            or classify_raw_source_uri(uri, raw_root_uri=self._raw_fs.root_uri) is not None
+        )
+
     def _validate_opa_uris(self, target_uri: str, evidence_uris: list[str]) -> None:
         """Require and validate the URI association of an OPA.
 
@@ -285,15 +301,7 @@ class OPAMixin(WikiBuildDeps):
                 f"(viking://resources/... source chapters).",
             )
         for uri in uris:
-            if (
-                not uri.startswith("viking://resources/")
-                and not self.store.is_wiki_uri(uri)
-                and classify_raw_source_uri(
-                    uri,
-                    raw_root_uri=self._raw_fs.root_uri,
-                )
-                is None
-            ):
+            if not self.is_valid_op_uri(uri):
                 raise ValueError(
                     f"OPA URI must be a provider resource URI or local wiki/raw URI, got {uri!r}.",
                 )
