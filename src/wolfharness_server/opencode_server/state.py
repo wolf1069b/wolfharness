@@ -197,36 +197,21 @@ class ServerState:
         - ``SessionCreatedEvent`` / ``SessionUpdatedEvent`` → ``properties.info.id``
         - ``MessageUpdatedEvent`` → ``properties.info.session_id``
 
+        The typed ``match`` implementation in ``global_routes._extract_session_id``
+        is the single source of truth; it is imported lazily to avoid a circular
+        import (same pattern as :meth:`get_event_factory`).
+
         Args:
             event: The OpenCode event to inspect.
 
         Returns:
             The session ID string, or ``None`` if the event is global.
         """
-        properties = getattr(event, "properties", None)
-        if properties is None:
-            return None
+        from wolfharness_server.opencode_server.routes.global_routes import (
+            _extract_session_id,
+        )
 
-        # Fast path: direct session_id (SessionIdProperties subclasses)
-        session_id = getattr(properties, "session_id", None)
-        if isinstance(session_id, str):
-            return session_id
-
-        # PartUpdatedEvent: session_id is at properties.part.session_id
-        part = getattr(properties, "part", None)
-        if part is not None:
-            sid = getattr(part, "session_id", None)
-            if isinstance(sid, str):
-                return sid
-
-        # SessionCreated / SessionUpdated: session_id is at properties.info.id
-        info = getattr(properties, "info", None)
-        if info is not None:
-            sid = getattr(info, "id", None)
-            if isinstance(sid, str):
-                return sid
-
-        return None
+        return _extract_session_id(event)
 
     def get_event_factory(self) -> GlobalEventFactory:
         """Get or lazily create the GlobalEventFactory for event wrapping.
@@ -426,15 +411,44 @@ class ServerState:
                 event,
             ))
 
+        # Fanout is atomic on the event loop (no await in the loop). A
+        # stalled/slow SSE client must not abort delivery to the other
+        # subscribers, so overflow is handled per-queue with a drop-oldest
+        # policy (mirrors EventBus._enqueue). Dead queues are collected and
+        # pruned after the loop.
         dead_queues: list[asyncio.Queue[tuple[int, Event]]] = []
+        overflow_count = 0
         for queue in self.event_subscribers:
             try:
                 queue.put_nowait((event_id, event))
             except asyncio.QueueShutDown:
                 dead_queues.append(queue)
+            except asyncio.QueueFull:
+                # Evict the oldest buffered item and retry once; if still
+                # full the client is irrecoverably stalled, so drop the
+                # event for it and keep fanning out to everyone else.
+                with contextlib.suppress(asyncio.QueueEmpty):
+                    queue.get_nowait()
+                try:
+                    queue.put_nowait((event_id, event))
+                except asyncio.QueueFull:
+                    overflow_count += 1
+                    logger.warning(
+                        "SSE subscriber queue overflow — dropping event for stalled client",
+                        event_type=getattr(event, "type", "unknown"),
+                        queue_size=queue.qsize(),
+                    )
         for queue in dead_queues:
             with contextlib.suppress(ValueError):
                 self.event_subscribers.remove(queue)
+        logger.debug(
+            "SSE: Broadcast event to subscribers",
+            event_type=getattr(event, "type", "unknown"),
+            event_id=event_id,
+            session_id=session_id or "-",
+            subscriber_count=len(self.event_subscribers),
+            dropped=overflow_count,
+        )
 
     def replay_projections(
         self,
@@ -443,18 +457,34 @@ class ServerState:
     ) -> None:
         """Enqueue buffered projections with ``event_id > last_event_id``.
 
-        Used by the global SSE generator on reconnect (client sends
-        ``Last-Event-ID``) to replay missed projections before live events.
+        The per-session buffers are merged and sorted by the single global
+        projection counter so a reconnecting client receives a monotonic
+        ``id:`` sequence.
 
         Args:
             queue: The subscriber queue to enqueue replayed events into.
             last_event_id: The client's last seen projection id.
         """
+        # Merge all session buffers and replay in global event_id order.
+        buffered: list[tuple[int, Event]] = []
         for session_buf in self._projection_buffers.values():
-            for event_id, event in session_buf:
-                if event_id > last_event_id:
-                    with contextlib.suppress(asyncio.QueueFull):
-                        queue.put_nowait((event_id, event))
+            buffered.extend(session_buf)
+        for event_id, event in sorted(buffered, key=lambda item: item[0]):
+            if event_id <= last_event_id:
+                continue
+            try:
+                queue.put_nowait((event_id, event))
+            except asyncio.QueueShutDown:
+                return
+            except asyncio.QueueFull:
+                # Reconnecting client stalled mid-replay — stop instead of
+                # silently dropping a suffix of the sequence.
+                logger.warning(
+                    "SSE replay queue full — aborting replay for stalled client",
+                    last_event_id=last_event_id,
+                    event_id=event_id,
+                )
+                return
 
     async def mark_session_idle(self, session_id: str) -> None:
         """Mark a session idle and broadcast the matching status events."""

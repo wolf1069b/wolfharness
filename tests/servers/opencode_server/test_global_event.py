@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 import contextlib
 import json
 from pathlib import Path
@@ -271,7 +272,7 @@ class _MockState:
     def __init__(self, working_dir: str = "/tmp/test_wd") -> None:
         self.working_dir = working_dir
         self.event_subscribers: list[asyncio.Queue[tuple[int, Event]]] = []
-        self._projection_buffers: dict[str, list[tuple[int, Event]]] = {}
+        self._projection_buffers: dict[str, deque[tuple[int, Event]]] = {}
         self._projection_counter = 0
         self._event_factory: GlobalEventFactory | None = None
         self._first_subscriber_triggered = False
@@ -298,42 +299,51 @@ class _MockState:
     @staticmethod
     def extract_session_id(event: Event) -> str | None:
         """Mirror ServerState.extract_session_id for mock-state tests."""
-        properties = getattr(event, "properties", None)
-        if properties is None:
-            return None
-        session_id = getattr(properties, "session_id", None)
-        if isinstance(session_id, str):
-            return session_id
-        part = getattr(properties, "part", None)
-        if part is not None:
-            sid = getattr(part, "session_id", None)
-            if isinstance(sid, str):
-                return sid
-        info = getattr(properties, "info", None)
-        if info is not None:
-            sid = getattr(info, "id", None)
-            if isinstance(sid, str):
-                return sid
-        return None
+        from wolfharness_server.opencode_server.routes.global_routes import (
+            _extract_session_id,
+        )
+
+        return _extract_session_id(event)
 
     async def broadcast_event(self, event: Event) -> None:
-        """Direct-wire fanout to subscriber queues (mirrors ServerState)."""
+        """Direct-wire fanout to subscriber queues (mirrors ServerState).
+
+        Overflow uses the same drop-oldest policy as production so the mock
+        does not hide queue-full behavior from the suite.
+        """
         self._projection_counter += 1
         event_id = self._projection_counter
         session_id = self.extract_session_id(event)
         if session_id is not None:
-            self._projection_buffers.setdefault(session_id, []).append((event_id, event))
+            self._projection_buffers.setdefault(session_id, deque(maxlen=100)).append((
+                event_id,
+                event,
+            ))
         for queue in self.event_subscribers:
-            with contextlib.suppress(asyncio.QueueFull):
+            try:
                 queue.put_nowait((event_id, event))
+            except asyncio.QueueShutDown:
+                continue
+            except asyncio.QueueFull:
+                with contextlib.suppress(asyncio.QueueEmpty):
+                    queue.get_nowait()
+                try:
+                    queue.put_nowait((event_id, event))
+                except asyncio.QueueFull:
+                    continue
 
     def replay_projections(self, queue: asyncio.Queue[Any], last_event_id: int) -> None:
         """Enqueue buffered projections with event_id > last_event_id."""
+        buffered: list[tuple[int, Event]] = []
         for session_buf in self._projection_buffers.values():
-            for event_id, event in session_buf:
-                if event_id > last_event_id:
-                    with contextlib.suppress(asyncio.QueueFull):
-                        queue.put_nowait((event_id, event))
+            buffered.extend(session_buf)
+        for event_id, event in sorted(buffered, key=lambda item: item[0]):
+            if event_id <= last_event_id:
+                continue
+            try:
+                queue.put_nowait((event_id, event))
+            except (asyncio.QueueShutDown, asyncio.QueueFull):
+                return
 
     # get_next_event_id() removed — event_id now comes from EventBus
     # (EventEnvelope.event_id assigned at publish time, not ServerState).

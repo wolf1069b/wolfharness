@@ -1,13 +1,13 @@
 """E2E tests for the OpenCode event pipeline.
 
 Simulates a full agent streaming session from agent event emission through
-EventBus → session-scoped consumer → event_bridge → EventBus → SSE subscriber.
-Verifies every OpenCode event type produced by the pipeline reaches the scope="all"
-subscriber (representing the SSE frontend).
+EventBus → session-scoped consumer → adapter → ``ServerState.broadcast_event``
+→ SSE subscriber queues. Verifies every OpenCode event type produced by the
+pipeline reaches the subscriber queues (representing the SSE frontend).
 
 Covers the regression where PartUpdatedEvent (which has session_id at
 properties.part.session_id, not properties.session_id) was silently dropped
-by event_bridge._extract_session_id().
+by the session-id extractor.
 """
 
 from __future__ import annotations
@@ -440,7 +440,8 @@ class TestEventPipelineE2E:
     ) -> None:
         """RunStartedEvent → SessionStatusEvent (busy).
 
-        Verifies lifecycle events pass through event_bridge correctly.
+        Verifies lifecycle events pass through the consumer → adapter →
+        broadcast path correctly.
         """
         integration = OpenCodeSessionPoolIntegration(
             session_pool=session_pool,
@@ -475,7 +476,8 @@ class TestEventPipelineE2E:
     ) -> None:
         """RunErrorEvent → SessionErrorEvent.
 
-        Verifies error events pass through event_bridge correctly.
+        Verifies error events pass through the consumer → adapter →
+        broadcast path correctly.
         """
         from wolfharness.agents.events import RunErrorEvent
 
@@ -508,7 +510,7 @@ class TestEventPipelineE2E:
         await integration._stop_event_consumer(session_id)
 
     @pytest.mark.asyncio
-    async def test_event_bridge_extracts_nested_session_id(
+    async def test_extract_session_id_nested_part_session(
         self,
         session_pool: SessionPool,
         server_state: ServerState,
@@ -545,9 +547,10 @@ class TestEventPipelineE2E:
         """Verify the consumer doesn't process the OpenCode events it publishes back.
 
         When _handle_event converts an agent event to an OpenCode event and
-        broadcasts it via event_bridge, the event_bridge publishes back to the
-        SAME EventBus. The consumer should NOT try to convert these OpenCode
-        events again (they're not RichAgentStreamEvent instances).
+        broadcasts it via ``ServerState.broadcast_event``, the projection goes
+        directly to SSE subscriber queues — never back into the EventBus. The
+        consumer should NOT try to convert these OpenCode events again (they're
+        not RichAgentStreamEvent instances).
         """
         integration = OpenCodeSessionPoolIntegration(
             session_pool=session_pool,

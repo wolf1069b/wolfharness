@@ -106,6 +106,14 @@ class ProtocolEventConsumerMixin(ABC):
         projections into the EventBus (loopback) should override to exclude
         that source so a producer can never re-consume its own output.
 
+        !!! note
+            Currently inert in production: the OpenCode server delivers
+            projections direct-wire to SSE queues and no producer calls
+            ``publish(..., source_hint=...)`` anymore (the loopback bridge
+            that did was removed). The hook is kept as defense-in-depth for
+            any future producer that re-enters the EventBus; unit tests
+            exercise both the hook and the ``exclude_source`` filter.
+
         Returns:
             A frozenset of ``source_hint`` values to exclude, or ``None``.
         """

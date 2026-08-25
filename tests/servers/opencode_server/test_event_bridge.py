@@ -34,7 +34,10 @@ from wolfharness_server.opencode_server.models import (
     SessionStatus,
     SessionStatusEvent,
 )
-from wolfharness_server.opencode_server.models.events import ServerConnectedEvent
+from wolfharness_server.opencode_server.models.events import (
+    ServerConnectedEvent,
+    ServerHeartbeatEvent,
+)
 from wolfharness_server.opencode_server.opencode_event_bridge import (
     OpenCodeEventBridgeMixin,
 )
@@ -88,6 +91,44 @@ async def test_broadcast_event_fans_out_to_subscriber_queues(
         assert received is event
         assert event_id > 0
     assert queue_a.qsize() == 0
+
+
+@pytest.mark.anyio
+async def test_broadcast_event_drop_oldest_on_queue_full(
+    state_with_pool: ServerState,
+) -> None:
+    """A full subscriber queue drops its oldest item, never aborts fanout.
+
+    Regression test for the review finding that ``broadcast_event`` only
+    caught ``QueueShutDown``: a stalled SSE client filling its
+    ``maxsize`` queue would propagate ``QueueFull`` into every call site
+    and abort delivery to the *other* subscribers. Production now applies
+    the same drop-oldest policy as ``EventBus._enqueue``.
+    """
+    stalled: asyncio.Queue[Any] = asyncio.Queue(maxsize=1)
+    healthy: asyncio.Queue[Any] = asyncio.Queue()
+    state_with_pool.event_subscribers.extend([stalled, healthy])
+
+    first = SessionStatusEvent.create("sess-1", SessionStatus(type="busy"))
+    await state_with_pool.broadcast_event(first)
+    # Stall the client: fill its single-slot queue (holds the first event).
+    assert stalled.qsize() == 1
+
+    second = SessionIdleEvent.create("sess-1")
+    # Must not raise QueueFull; the stalled queue evicts its oldest item
+    # (drop-oldest policy), the healthy queue receives the new event.
+    await state_with_pool.broadcast_event(second)
+
+    # Stalled queue: oldest (first) evicted, second delivered.
+    _event_id, received = stalled.get_nowait()
+    assert received is second
+    assert stalled.qsize() == 0
+
+    # Healthy queue received both events in order.
+    _id1, got_first = healthy.get_nowait()
+    _id2, got_second = healthy.get_nowait()
+    assert got_first is first
+    assert got_second is second
 
 
 @pytest.mark.anyio
@@ -170,10 +211,9 @@ async def test_extract_session_id_variations() -> None:
 
     assert ServerState.extract_session_id(ServerConnectedEvent()) is None
 
-    class NoProperties:
-        pass
-
-    assert ServerState.extract_session_id(NoProperties()) is None  # type: ignore[arg-type]
+    # Events whose properties carry no session association return None.
+    heartbeat = ServerHeartbeatEvent()
+    assert ServerState.extract_session_id(heartbeat) is None
 
 
 # =============================================================================

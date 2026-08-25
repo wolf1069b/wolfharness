@@ -591,7 +591,7 @@ def mock_agent(mock_env: Mock, mock_pool: Mock, storage_manager: StorageManager)
 def server_state(tmp_project_dir: Path, mock_agent: Mock) -> ServerState:
     """Create a server state for testing."""
     # Extract session_controller from mock pool so _event_generator can
-    # subscribe to the EventBus and receive events broadcast via event_bridge.
+    # reach state fields (event_subscribers) and broadcast via broadcast_event.
     session_controller = None
     session_pool = getattr(mock_agent.host_context, "session_pool", None)
     if session_pool is not None:
