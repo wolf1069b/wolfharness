@@ -228,6 +228,21 @@ def test_to_transport_sse():
     assert transport.headers == {"Authorization": "Bearer token"}
 
 
+def test_to_transport_sse_expands_header_env_vars(monkeypatch: pytest.MonkeyPatch):
+    """SSEMCPServerConfig.to_transport() should expand environment variables in headers."""
+    from fastmcp.client.transports import SSETransport
+
+    monkeypatch.setenv("TEST_MCP_TOKEN", "expanded-token")
+    config = SSEMCPServerConfig(
+        url=HttpUrl("http://localhost:8080/sse"),
+        headers={"Authorization": "Bearer ${TEST_MCP_TOKEN}"},
+    )
+    transport = config.to_transport()
+
+    assert isinstance(transport, SSETransport)
+    assert transport.headers == {"Authorization": "Bearer expanded-token"}
+
+
 def test_to_transport_http():
     """StreamableHTTPMCPServerConfig.to_transport() should return StreamableHttpTransport."""
     from fastmcp.client.transports import StreamableHttpTransport
@@ -243,34 +258,19 @@ def test_to_transport_http():
     assert transport.headers == {"X-Api-Key": "secret"}
 
 
-def test_to_transport_sse_expands_env_in_headers(monkeypatch):
-    """to_transport() expands ${VAR} in SSE header values (repro for #365)."""
-    from fastmcp.client.transports import SSETransport
-
-    monkeypatch.setenv("VIKING_MCP_API_KEY", "actual-token")
-    config = SSEMCPServerConfig(
-        url=HttpUrl("http://localhost:8080/sse"),
-        headers={"Authorization": "Bearer ${VIKING_MCP_API_KEY}"},
-    )
-    transport = config.to_transport()
-
-    assert isinstance(transport, SSETransport)
-    assert transport.headers == {"Authorization": "Bearer actual-token"}
-
-
-def test_to_transport_http_expands_env_in_headers(monkeypatch):
-    """StreamableHttp to_transport() expands ${VAR} in header values (#365)."""
+def test_to_transport_http_expands_header_env_vars(monkeypatch: pytest.MonkeyPatch):
+    """StreamableHTTPMCPServerConfig.to_transport() should expand env vars in headers."""
     from fastmcp.client.transports import StreamableHttpTransport
 
-    monkeypatch.setenv("VIKING_MCP_API_KEY", "actual-token")
+    monkeypatch.setenv("TEST_MCP_TOKEN", "expanded-token")
     config = StreamableHTTPMCPServerConfig(
         url=HttpUrl("https://api.example.com/mcp"),
-        headers={"Authorization": "Bearer ${VIKING_MCP_API_KEY}"},
+        headers={"Authorization": "Bearer ${TEST_MCP_TOKEN}"},
     )
     transport = config.to_transport()
 
     assert isinstance(transport, StreamableHttpTransport)
-    assert transport.headers == {"Authorization": "Bearer actual-token"}
+    assert transport.headers == {"Authorization": "Bearer expanded-token"}
 
 
 def test_to_transport_acp_raises():

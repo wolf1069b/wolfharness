@@ -8,9 +8,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import contextlib
+import os
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
-from pydantic import ConfigDict, Field, ImportString
+from pydantic import ConfigDict, Field, ImportString, field_validator
 from pydantic_ai import ModelSettings as PyAIModelSettings
 from pydantic_ai.models.test import TestModel
 from schemez import Schema
@@ -20,6 +21,9 @@ from tokonomics.model_names.gemini import GeminiModelName
 from tokonomics.model_names.openai import OpenaiModelName
 
 from wolfharness_config.model_capabilities import ModelCapabilities
+
+
+ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
 
 
 if TYPE_CHECKING:
@@ -194,6 +198,18 @@ class StringModelConfig(BaseModelConfig):
     if not set.
     """
 
+    api_key_env: str | None = Field(
+        default=None,
+        pattern=r"^[A-Z_][A-Z0-9_]*$",
+        title="API key environment variable",
+    )
+    """Environment variable containing the endpoint API key.
+
+    This allows multiple OpenAI-compatible endpoints to use independent
+    credentials without placing secret values in a manifest. It takes
+    precedence over ``api_key`` when configured.
+    """
+
     max_tokens: int | None = Field(
         default=None,
         ge=1,
@@ -285,6 +301,12 @@ class StringModelConfig(BaseModelConfig):
     )
     """Extra body to send to the model."""
 
+    reasoning_effort: ReasoningEffort | None = Field(
+        default=None,
+        title="Reasoning effort",
+    )
+    """Constrains reasoning effort for OpenAI-compatible reasoning models."""
+
     def get_model_settings(self) -> PyAIModelSettings:
         """Get model settings in pydantic-ai format."""
         from pydantic_ai.settings import ModelSettings
@@ -302,6 +324,7 @@ class StringModelConfig(BaseModelConfig):
             "stop_sequences": self.stop_sequences,
             "extra_headers": self.extra_headers,
             "extra_body": self.extra_body,
+            "openai_reasoning_effort": self.reasoning_effort,
         }
         return ModelSettings(**{k: v for k, v in settings.items() if v is not None})  # type: ignore[typeddict-item, no-any-return]
 
@@ -312,10 +335,16 @@ class StringModelConfig(BaseModelConfig):
         # model pointing to that endpoint — this is the most common pattern
         # for custom/private model providers.
         if self.base_url:
+            api_key = self.api_key
+            if self.api_key_env is not None:
+                api_key = os.environ.get(self.api_key_env)
+                if not api_key:
+                    msg = f"Required model credential {self.api_key_env} is not set"
+                    raise ValueError(msg)
             return _get_openai_based_model(
                 str(self.identifier),
                 base_url=self.base_url,
-                api_key=self.api_key,
+                api_key=api_key,
             )
         return infer_model(self.identifier)
 
@@ -410,6 +439,28 @@ class FallbackModelConfig(BaseModelConfig):
         examples=[["openai:gpt-5-nano", "anthropic:claude-sonnet-4-5"]],
     )
     """Ordered list of models to try in sequence."""
+
+    @field_validator("models", mode="before")
+    @classmethod
+    def parse_nested_model_configs(cls, value: object) -> object:
+        """Parse discriminated config dictionaries inside fallback chains."""
+        if not isinstance(value, list):
+            return value
+        parsed: list[object] = []
+        for model in value:
+            if not isinstance(model, dict):
+                parsed.append(model)
+                continue
+            model_type = model.get("type")
+            if not isinstance(model_type, str):
+                parsed.append(model)
+                continue
+            config_class = _MODEL_CONFIG_TYPES.get(model_type)
+            if config_class is None:
+                parsed.append(model)
+                continue
+            parsed.append(config_class.model_validate(model))
+        return parsed
 
     def get_model(self) -> FallbackModel:
         from pydantic_ai.models.fallback import FallbackModel
@@ -600,7 +651,7 @@ class OpenAIModelConfig(BaseModelConfig):
     )
     """Extra body to send to the model."""
 
-    reasoning_effort: Literal["none", "minimal", "low", "medium", "high", "xhigh"] | None = Field(
+    reasoning_effort: ReasoningEffort | None = Field(
         default=None,
         title="Reasoning effort",
     )
@@ -1256,3 +1307,15 @@ AnyModelConfig = Annotated[
     | GeminiModelConfig,
     Field(discriminator="type"),
 ]
+
+_MODEL_CONFIG_TYPES: dict[str, type[BaseModelConfig]] = {
+    "fallback": FallbackModelConfig,
+    "function": FunctionModelConfig,
+    "import": ImportModelConfig,
+    "input": InputModelConfig,
+    "string": StringModelConfig,
+    "test": TestModelConfig,
+    "openai": OpenAIModelConfig,
+    "anthropic": AnthropicModelConfig,
+    "gemini": GeminiModelConfig,
+}

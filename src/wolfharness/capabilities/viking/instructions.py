@@ -19,12 +19,13 @@ if TYPE_CHECKING:
 
 
 def format_allowed_prefixes_block(prefixes: Sequence[str]) -> str:
-    """Build the allowed-prefix instruction block.
+    """Build the read allowed-prefix instruction block.
 
     Appended to the base instructions when ``allowed_uri_prefixes`` is
     configured. Rendered dynamically at ``get_instructions()`` time so the
-    model sees the exact prefixes this session may access — it can then pass
-    the most specific prefix as ``target_uri`` and skip discovery probing.
+    model sees the exact prefixes this session may read/search — it can then
+    pass the most specific prefix as ``target_uri`` and skip discovery
+    probing.
 
     Args:
         prefixes: The configured allowed URI prefixes.
@@ -34,14 +35,16 @@ def format_allowed_prefixes_block(prefixes: Sequence[str]) -> str:
     """
     allowed = "\n".join(f"  - `{p}`" for p in prefixes)
     return (
-        "\n### Allowed URI Prefixes (this session)\n"
-        "Your Viking access is restricted to these prefixes:\n"
+        "\n### Read URI Prefixes (this session)\n"
+        "Your Viking read/search access is restricted to these prefixes:\n"
         f"{allowed}\n"
         "When calling `viking_search` / `viking_find`, ALWAYS pass the most "
         "specific matching prefix as `target_uri` — it scopes the search and "
         "is faster. Omitting it searches all allowed prefixes, which is slower. "
         "Use `viking_ls` on these prefixes to see what is in scope. Do not "
-        "probe outside them — you will get access errors."
+        "probe outside them for reads — you will get read_scope_denied errors. "
+        "These prefixes are not write destinations and must not be compared "
+        "with provider-owned ticket submission scopes."
     )
 
 
@@ -100,6 +103,7 @@ Use `viking_glob` for filename discovery (which files exist under this path?).
 | Create new content | `viking_write` | New document at a specific URI |
 | Edit existing content | `viking_edit` | Replace a specific string within a document |
 | Ingest external files | `viking_add_resource` | Add local files or remote URLs to the Viking graph |
+| Upload an entire tree | `viking_upload_tree` | Upload a local directory tree in ONE `wait=True` call (embeddings built before return) |
 | Create directory | `viking_mkdir` | Organize content hierarchically |
 | Delete content | `viking_forget` | Remove a document or directory (irreversible — confirm before calling) |
 
@@ -113,6 +117,9 @@ Viking enforces path restrictions on write operations:
   - Example: `viking://resources/wiki/Device/SY215.md`
 - **`viking_add_resource`**: The `to` parameter must target a URI under
   `viking://resources/`.
+- **`viking_upload_tree`**: The `to` parameter must target a URI under
+  `viking://resources/`. Skipped at the top level: dot-prefixed names,
+  `index/`, `source_packets/`.
 - **`viking_link`**: Both `from_uri` and all `to_uris` must point to
   existing nodes. The backend rejects links to non-existent nodes.
   Create entities before linking them.
@@ -121,15 +128,15 @@ Viking enforces path restrictions on write operations:
 Always use **full** `viking://` URIs. Never use relative paths.
 Use `viking_ls` to discover available URIs when unsure.
 
-### Access Restrictions (URI Prefixes)
+### Read Access Restrictions (URI Prefixes)
 
-This agent's Viking access may be restricted to a configured set of URI
-prefixes. URIs outside those prefixes are rejected by the tools with an
-error. When an access error appears, do not retry with modified URIs —
-use `viking_ls` on the allowed prefixes to see what is in scope, or use
-`viking_search`/`viking_find` without a `target_uri` (the search is
-scoped automatically). Never attempt to bypass the restriction by
-guessing paths.
+This agent's Viking read/search access may be restricted to a configured set of
+URI prefixes. These prefixes scope retrieval and evidence discovery only; they
+are not write destinations and must not be treated as provider-owned submission
+scopes. When a read access error appears, do not retry with modified URIs — use
+`viking_ls` on the read prefixes to see what is in scope, or use
+`viking_search`/`viking_find` without a `target_uri` (the search is scoped
+automatically). Never infer write paths from citation or read prefixes.
 
 ### Memory Tools
 
@@ -151,6 +158,10 @@ guessing paths.
 - **`viking_link`**: Create typed links between nodes. Both source and
   target must exist. Use `reason` to label the relationship type
   (e.g., "depends-on", "references", "causes").
+- **`viking_link_relations`**: Push a local relations file
+  (`{target_uri: [source_uri, ...]}`) as bidirectional `link()` relations —
+  `{reason_prefix}:referenced-by` at each target, `{reason_prefix}:references`
+  at each source. URIs outside `namespace_base` are skipped.
 - **`viking_set_tags`**: Add `key=value` tags to nodes for categorization
   (e.g., `status=active`, `priority=high`). Use `recursive=True` to
   tag all children.
@@ -230,4 +241,6 @@ permanently removes documents from the Viking knowledge graph. It is
   (`viking_remember`, `viking_recall`) does not enable `viking_forget`.
 - Even when enabled, always confirm with the user before deleting
   content. Deletion is irreversible.
+
+An `<openviking-index>` block may be present in the first turn, listing live resource namespaces under `viking://resources/` for direct exploration via `viking_ls`.
 """

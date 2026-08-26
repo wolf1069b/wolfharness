@@ -8,6 +8,43 @@ from schemez import Schema
 from wolfharness_config.durable import CheckpointConfig
 
 
+class ACPVikingArchiveConfig(Schema):
+    """Configuration for ACP event archiving to Viking."""
+
+    enabled: bool = Field(default=False, title="Enable ACP Viking archive")
+    """Whether ACP session updates are archived to Viking."""
+
+    url: str | None = Field(default=None, title="Viking URL")
+    """Viking server URL. Falls back to ``VIKING_MCP_URL``."""
+
+    api_key: str | None = Field(default=None, title="Viking API key")
+    """Viking API key. Environment variables are expanded at runtime."""
+
+    user: str | None = Field(default=None, title="Viking user")
+    """Optional Viking user namespace."""
+
+    session_prefix: str = Field(default="iroot-acp-session", title="Session prefix")
+    """Prefix used for archived ACP session IDs."""
+
+    batch_size: int = Field(default=25, ge=1, title="Archive batch size")
+    """Number of events to buffer before writing to Viking."""
+
+    flush_on_turn_complete: bool = Field(default=True, title="Flush on turn complete")
+    """Whether to flush pending events when a turn_complete update is observed."""
+
+    transcript_enabled: bool = Field(default=True, title="Enable ACP transcript archive")
+    """Whether ACP session updates are also written as readable Viking session messages."""
+
+    transcript_keep_recent_count: int = Field(
+        default=0,
+        ge=0,
+        title="Transcript keep recent count",
+    )
+    """Recent transcript messages retained in the live session after commit. 0 keeps all."""
+
+    model_config = ConfigDict(frozen=True)
+
+
 class SessionPoolConfig(Schema):
     """Configuration for the SessionPool orchestration layer.
 
@@ -40,6 +77,12 @@ class SessionPoolConfig(Schema):
     """Configuration for agent checkpointing (durable execution).
     When set, enables persistence of agent state for recovery.
     """
+
+    acp_viking_archive: ACPVikingArchiveConfig = Field(
+        default_factory=ACPVikingArchiveConfig,
+        title="ACP Viking archive",
+    )
+    """Configuration for full ACP session update archiving to Viking."""
 
     model_config = ConfigDict(frozen=True)
 

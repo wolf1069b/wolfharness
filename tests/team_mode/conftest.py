@@ -312,6 +312,7 @@ def make_mock_pool() -> MagicMock:
     pool.create_child_session = AsyncMock(return_value=mock_child_state)
     pool.sessions = MagicMock()
     pool.sessions.get_or_create_session_agent = AsyncMock()
+    pool.sessions.get_live_run = MagicMock(return_value=None)
     pool.event_bus = None
     return pool
 
