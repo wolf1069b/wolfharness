@@ -52,6 +52,20 @@ if TYPE_CHECKING:
 _PAGE_RANGE_RE = re.compile(r"#p(\d+)-(\d+)")
 
 
+def _strip_source_prefix(doc_id: str) -> str:
+    """Strip the ``viking:`` / ``fixmaster:`` source prefix from ``doc_id``.
+
+    The conductor prompt mandates ``doc_id`` format ``{source}:{identifier}``
+    for checkpoint identity, but filesystem path resolution needs the bare
+    document directory name.  This strips a single leading ``viking:`` or
+    ``fixmaster:`` prefix; all other values pass through unchanged.
+    """
+    for prefix in ("viking:", "fixmaster:"):
+        if doc_id.startswith(prefix):
+            return doc_id[len(prefix) :]
+    return doc_id
+
+
 def _parse_page_range(uri: str) -> tuple[int, int] | None:
     """Extract (start, end) page numbers from a kb:// URI fragment."""
     m = _PAGE_RANGE_RE.search(uri)
@@ -167,21 +181,22 @@ class ChapterMixin:
         cached = self._chapters_cache.get(doc_id)
         if cached is not None and not refresh:
             return [dict(chapter) for chapter in cached]
+        doc_name = _strip_source_prefix(doc_id)
         if doc_id not in self._raw_doc_prefixes and (self._doc_prefix_index is None or refresh):
             # If the full index is already built (batch path via
             # _library_doc_ids), a miss here means the doc genuinely isn't
             # in the namespace — skip the targeted search. Otherwise do a
             # cheap iterative-deepening lookup instead of a full walk.
-            resolved = self._resolve_doc_prefix(doc_id)
+            resolved = self._resolve_doc_prefix(doc_name)
             if resolved:
                 self._raw_doc_prefixes[doc_id] = resolved
         if doc_id in self._raw_doc_prefixes:
             document_prefix = self._raw_doc_prefixes[doc_id] or ""
         else:
-            document_prefix = doc_id
+            document_prefix = doc_name
         keys = self._raw_fs.list_dir(document_prefix, recursive=True)
-        if not keys and document_prefix == doc_id:
-            document_prefix, keys = self._discover_nonstandard_doc_files(doc_id)
+        if not keys and document_prefix == doc_name:
+            document_prefix, keys = self._discover_nonstandard_doc_files(doc_name)
             if document_prefix:
                 self._raw_doc_prefixes[doc_id] = document_prefix
         legacy_prefix = f"{document_prefix}/chapters" if document_prefix else "chapters"
@@ -220,7 +235,7 @@ class ChapterMixin:
                     continue
                 rel = key.removeprefix(doc_prefix)
                 parts = [part for part in rel.split("/") if part]
-                if parts and parts[0].casefold() == doc_id.casefold():
+                if parts and parts[0].casefold() == doc_name.casefold():
                     logical_parts = parts[1:]
                 else:
                     logical_parts = parts
@@ -403,26 +418,40 @@ class ChapterMixin:
     def browse_chapters(self, doc_id: str, path: str = "") -> dict:
         """Browse one level of a document's chapter tree, per-level drill-down.
 
-        Resolves to ``{doc_id}/chapters`` (or ``{doc_id}/chapters/{path}``) and
-        lists that single directory via a lightweight non-recursive
-        ``list_entries`` — no deep-tree traversal, so the output is just the
-        direct children (far smaller than ``list_chapters``'s full listing).
+        Resolves the document directory via :meth:`_resolve_doc_prefix` (which
+        handles catalog-nested layouts like ``menu/{model}/{doc}/{doc}/``)
+        and lists a single directory level — no deep-tree traversal, so the
+        output is just the direct children.
+
         ``browse_chapters(doc_id)`` → top-level rootsections;
         ``browse_chapters(doc_id, path)`` → subdirectories at *path*.
 
-        For browsing an arbitrary URI/library (not bound to the manual
-        ``chapters`` convention), use :meth:`browse`.
+        For browsing an arbitrary URI/library (not bound to a specific
+        document), use :meth:`browse`.
 
         Returns ``{type: "branch", path, children: [{title, path, has_children, uri?}]}``,
         ``{type: "leaf", title, uri}``, or ``{type: "not_found", error}``.
         """
-        # ``browse_chapters`` is manual-chapter-scoped; resolve against the
-        # raw manual library only.  A full raw root URI is accepted verbatim.
-        base = f"{doc_id}/chapters" if doc_id else ""
-        rel = f"{base}/{path.strip('/')}".strip("/") if path.strip("/") else base
+        # A full raw root URI in path bypasses doc_id resolution entirely.
         prefix = self._raw_fs.root_uri.rstrip("/") + "/"
         if path.startswith(prefix):
-            rel = path[len(prefix) :].strip("/")
+            return self._browse_dir(path[len(prefix) :].strip("/"), self._raw_fs)
+        # Strip source prefix (viking:/fixmaster:) and resolve the actual
+        # document directory in the raw library.
+        doc_name = _strip_source_prefix(doc_id)
+        if doc_id in self._raw_doc_prefixes:
+            document_prefix = self._raw_doc_prefixes[doc_id] or ""
+        else:
+            document_prefix = self._resolve_doc_prefix(doc_name)
+            if document_prefix:
+                self._raw_doc_prefixes[doc_id] = document_prefix
+            else:
+                document_prefix = doc_name
+        rel = (
+            f"{document_prefix}/{path.strip('/')}".strip("/")
+            if path.strip("/")
+            else document_prefix
+        )
         return self._browse_dir(rel, self._raw_fs)
 
     def browse(self, uri: str = "") -> dict:
