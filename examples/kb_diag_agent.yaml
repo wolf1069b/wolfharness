@@ -19,9 +19,6 @@ agents:
             type: streamable-http
             name: knowledge_diag
             url: https://mcp.example.com/knowledge_diag/mcp
-            # 去掉 search_kb 接口：若仍需保留该工具，删除下一行即可
-            disabled_tools:
-              - search_kb
           # servers 段的键必须与该 name 一致（缺省时回退 config 的 client_id）
           name: knowledge_diag
 
@@ -30,18 +27,123 @@ agents:
         args:
           servers:
             knowledge_diag:
+              # ── 检索工具（retrieval-first 工作流的主入口）──────────────
+              search_kb:
+                description: |-
+                  对知识库执行语义检索，返回按相关性排序的命中结果。
+
+                  这是检索工作流的第一步（retrieval-first），典型路径：
+                  search_kb(query) → 复制命中结果中的 chapter_uri 或 primary_uri →
+                  get_doc_toc(doc_uri) 了解章节结构 → read_chapter_page(doc_uri, start_page) 读正文。
+
+                  何时使用：
+                  - 用户提出语义问题（如"SY215C 液压系统压力标准值是多少"），
+                    且你还不知道应该读哪个文档或章节时，先用本工具检索；
+                  - 已知具体文档 ID 或章节 URI 时，可跳过检索直接 get_doc_toc 或 read_resource。
+
+                  检索模式（methods 参数）：
+                  - FULL：多路检索 + 重排（默认，精度最高，延迟较高约 7s）；
+                  - FAST：快速模式（低延迟，适合简单关键词查询）；
+                  - WIKI：结构化参数检索 v2.0，适合查询明确的参数标准值
+                    （如压力、流量、间隙等），返回 entity_type=WIKI_PAGE 的结构化参数条目。
+
+                  使用要求：
+                  - query 是自然语言查询或关键词，不确定机型时可写在 query 里；
+                  - 尽量通过 equipment_model 缩小检索范围，提升命中精度；
+                  - 返回结果中的 chapter_uri / primary_uri / document_id 必须直接复制，
+                    供后续 get_doc_toc / read_chapter_page / read_resource 使用。
+                param_descriptions:
+                  query: |-
+                    自然语言查询或关键词。例如"液压系统压力标准值"、"换向压力检查步骤"。
+                    不确定机型时可写在 query 里。
+                  dataset_id: |-
+                    知识库 ID 过滤条件，支持传入多个，用英文逗号分隔。
+                    不确定时留空，让检索跨所有知识库执行。
+                  lang: |-
+                    语言过滤，如 zh_CN、en_US。不传则不限语言。
+                  equipment_model: |-
+                    设备型号精确过滤，如 SY215C、SY75C。尽量传入以缩小检索范围。
+                  limit: |-
+                    最大返回条数，数字类型，如 5。建议 3-5 条，过多会占用上下文。
+                  methods: |-
+                    检索模式：FULL（多路+重排，默认，精度最高）、
+                    FAST（快速模式，低延迟）、WIKI（结构化参数检索，适合查参数标准值）。
+
+              # ── 目录工具（了解手册章节结构）────────────────────────────
+              get_doc_toc:
+                description: |-
+                  获取单个手册的章节目录树，每个目录条目带有全文页码。
+
+                  这是检索后定位章节的结构步骤，两条路径都会用到：
+                  路径 A（检索优先）：search_kb(query) → get_doc_toc(doc_uri) →
+                    read_chapter_page(doc_uri, start_page)；
+                  路径 B（浏览优先）：list_resources() → 选定知识库 →
+                    list_resources(knowledge_id) → 选定文档 →
+                    get_doc_toc(kb://documents/{document_id})。
+
+                  何时使用：
+                  - 已通过 search_kb 获得 document_id，想了解该手册的章节结构
+                    以便按页码阅读时；
+                  - 已通过 list_resources 选定文档，想获取目录树时。
+
+                  使用要求：
+                  - doc_uri 格式为 kb://documents/{document_id}，document_id 从
+                    search_kb 或 list_resources 结果中直接复制；
+                  - 目录条目包含章节标题与 page_no（全文页码），将 page_no 直接
+                    用于 read_chapter_page 的 start_page 参数。
+                param_descriptions:
+                  doc_uri: |-
+                    手册文档 URI，格式 kb://documents/{document_id}。
+                    document_id 从 search_kb 的结果或 list_resources 的文档列表中直接复制。
+
+              # ── 翻页读取工具（按页码范围读正文）────────────────────────
+              read_chapter_page:
+                description: |-
+                  按全文页码范围读取手册正文。
+
+                  这是读取正文的主要工具（page-based 工作流），典型路径：
+                  search_kb(query) → get_doc_toc(doc_uri) →
+                  read_chapter_page(doc_uri, start_page, offset)。
+
+                  何时使用：
+                  - 已通过 get_doc_toc 获得章节页码，想读取该页附近的正文时；
+                  - 已通过 search_kb 获得命中的 page_start，想读取该页内容时。
+
+                  使用要求：
+                  - doc_uri 格式为 kb://documents/{document_id}，从 search_kb 或
+                    list_resources 结果中直接复制；
+                  - start_page 是全文页码（1 起始），从 get_doc_toc 的目录条目或
+                    search_kb 的 page_start 字段获取；
+                  - offset 是读取的页数（默认 9，即一次读 9 页）。内容过长时可
+                    减小 offset；需要继续翻页时用 start_page + offset 作为新的 start_page。
+                param_descriptions:
+                  doc_uri: |-
+                    手册文档 URI，格式 kb://documents/{document_id}。
+                    从 search_kb 或 list_resources 结果中直接复制。
+                  start_page: |-
+                    起始页码（1 起始）。从 get_doc_toc 的目录条目 page_no 或
+                    search_kb 的 page_start 字段获取。
+                  offset: |-
+                    读取页数（默认 9）。一次读 start_page 到 start_page+offset-1 页。
+                    内容过长时可减小；继续翻页用 start_page+offset 作为新 start_page。
+
+              # ── URI 读取工具（按 kb:// URI 读资源）────────────────────
               read_resource:
                 description: |-
                   按 URI 读取知识库资源的完整内容（章节正文、章节目录树、文本片段、表格或图片）。
 
-                  这是检索工作流的主要跟进工具，典型路径：
-                  1. 目录浏览路径：list_resources() → 选定知识库与文档 →
+                  这是 URI 寻址的读取工具（resource-based 路径），与 read_chapter_page
+                  （page-based 路径）互补：
+                  - 知道页码 → 用 read_chapter_page；
+                  - 知道 URI（来自 search_kb / list_resources 的输出）→ 用 read_resource。
+
+                  典型路径：
+                  1. 检索路径：search_kb(query) → 复制 primary_uri 或 chapter_uri →
+                     read_resource(uri)；
+                  2. 目录浏览路径：list_resources() → 选定知识库与文档 →
                      read_resource(kb://documents/{document_id}/toc) 获取目录树 →
                      复制章节/图片 URI → read_resource(uri)；
-                  2. 检索路径：若环境中提供语义检索工具（如 search_kb），复制其结果中的
-                     primary_uri 或 chapter_uri → read_resource(uri)；
-                  3. 对来源不明的 URI（用户口述、历史陈旧结果、手工选择的目录条目），
-                     可先 check_resource_exists(uri) 预检，再读取。
+                  3. 对来源不明的 URI，可先 check_resource_exists(uri) 预检再读取。
 
                   使用要求：
                   - uri 是唯一入参，必须直接复制上一步工具输出中的 URI
@@ -63,9 +165,10 @@ agents:
                   page_start / page_end 等），可据此读取相邻章节或继续翻页。
                 param_descriptions:
                   uri: |-
-                    要读取的资源 URI（kb:// 协议，英文格式）。直接从 list_resources /
-                    check_resource_exists 或检索工具的输出中复制（如 primary_uri、
-                    chapter_uri、toc_uri、图片 URI），不要自行编造 ID 或改写 URI 结构。
+                    要读取的资源 URI（kb:// 协议，英文格式）。直接从 search_kb /
+                    list_resources / check_resource_exists 的输出中复制
+                    （如 primary_uri、chapter_uri、toc_uri、图片 URI），
+                    不要自行编造 ID 或改写 URI 结构。
 
               check_resource_exists:
                 description: |-
@@ -74,7 +177,7 @@ agents:
                   这是 read_resource 之前的可选防护步骤，不是主要检索工具：
                   - URI 来自用户口述、历史陈旧结果或手工选择的目录条目时，先用本工具
                     确认存在再读取，避免 read_resource 读取失败；
-                  - URI 是 list_resources 或检索工具刚返回的，可以跳过本工具直接
+                  - URI 是 search_kb 或 list_resources 刚返回的，可以跳过本工具直接
                     read_resource。
 
                   支持的 URI 形式与 read_resource 一致：
@@ -95,9 +198,9 @@ agents:
                 description: |-
                   列出当前环境的快照知识库及其包含的文档（按机型组织）。
 
-                  这是尚无任何 URI 时的第一步发现工具：
+                  这是尚无任何 URI 时的第一步发现工具（浏览优先路径）：
                   list_resources() → 选定知识库 → list_resources(knowledge_id) →
-                  选定文档 → read_resource(kb://documents/{document_id}/toc)。
+                  选定文档 → get_doc_toc(kb://documents/{document_id})。
 
                   何时使用：
                   - 不知道环境里有哪些知识库：不带参数（或 knowledge_id 留空）调用，
@@ -108,7 +211,7 @@ agents:
                   返回说明：
                   - 知识库记录包含 id 与名称；文档记录包含 document_id
                     （拼成 kb://documents/{document_id} 使用）、名称、适用机型与页数；
-                  - 将文档的 document_id 直接用于构造 toc URI 或 read_resource，
+                  - 将文档的 document_id 直接用于构造 toc URI 或 get_doc_toc，
                     不要编造文档 ID。
                 param_descriptions:
                   knowledge_id: |-

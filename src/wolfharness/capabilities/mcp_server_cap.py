@@ -148,6 +148,9 @@ class McpServerCap(
         self._resources_cache: list[ResourceEntry] | None = None
         self._resource_templates_cache: list[ResourceTemplateEntry] | None = None
         self._connect_cooldown_until: float = 0.0
+        # URIs subscribed for resources/updated notifications (subscribe-on-read).
+        # Best-effort: only populated when the server declares subscribe support.
+        self._subscribed_uris: set[str] = set()
 
     # ---- Properties ----
 
@@ -307,12 +310,32 @@ class McpServerCap(
             self._resources_cache = None
             self._resource_templates_cache = None
             self._client = client
+            # Re-subscribe to previously tracked URIs after reconnect.
+            await self._resubscribe_all(client)
             return client
 
         self._connect_cooldown_until = time.monotonic() + _CONNECT_COOLDOWN
         raise RuntimeError(
             f"Failed to connect MCP server {self._name!r} after {_DEFAULT_MAX_RETRIES} attempts"
         ) from last_error
+
+    async def _resubscribe_all(self, client: MCPClient) -> None:
+        """Re-subscribe to tracked URIs after a reconnect.
+
+        Args:
+            client: The newly connected MCP client.
+        """
+        if not self._subscribed_uris:
+            return
+        for uri in list(self._subscribed_uris):
+            try:
+                await client.subscribe_resource(uri)
+            except Exception:
+                logger.debug(
+                    "Could not re-subscribe to resource %r after reconnect",
+                    uri,
+                    exc_info=True,
+                )
 
     # ---- AbstractCapability overrides ----
 
@@ -582,6 +605,18 @@ class McpServerCap(
         except Exception:
             logger.warning("Failed to read resource %r", uri, exc_info=True)
             return None
+        # Best-effort subscribe for future resources/updated notifications.
+        # Servers that don't support subscribe silently reject this.
+        if uri not in self._subscribed_uris:
+            try:
+                await client.subscribe_resource(uri)
+                self._subscribed_uris.add(uri)
+            except Exception:
+                logger.debug(
+                    "Could not subscribe to resource %r (server may not support subscriptions)",
+                    uri,
+                    exc_info=True,
+                )
         return self._convert_resource_contents(uri, contents)
 
     async def resource_exists(self, uri: str) -> bool:
@@ -852,9 +887,21 @@ class McpServerCap(
         The cached client reference is cleared so a new client will be
         obtained on next use.
         """
+        # Best-effort unsubscribe all tracked URIs before closing.
+        if self._client is not None and self._subscribed_uris:
+            for uri in list(self._subscribed_uris):
+                try:
+                    await self._client.unsubscribe_resource(uri)
+                except Exception:
+                    logger.debug(
+                        "Could not unsubscribe from resource %r during cleanup",
+                        uri,
+                        exc_info=True,
+                    )
         if self._session_pool is None and self._client is not None:
             await self._client.__aexit__(exc_type, exc_val, exc_tb)
         self._client = None
         self._resources_cache = None
         self._resource_templates_cache = None
         self._change_queues.clear()
+        self._subscribed_uris.clear()

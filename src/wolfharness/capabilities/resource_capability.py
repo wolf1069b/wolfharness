@@ -38,6 +38,7 @@ from wolfharness.capabilities.resource_protocols import (
     ResourceTemplateEntry,
     TextResourceContent,
 )
+from wolfharness.capabilities.resource_resolver import _DEFAULT_MAX_TEXT_CHARS, _truncate_text
 
 
 if TYPE_CHECKING:
@@ -51,8 +52,11 @@ _HEADER_LINE_COUNT = 2
 
 # Default pagination limits.
 _DEFAULT_LIST_LIMIT = 50
-_DEFAULT_READ_TEXT_LIMIT = 10_000
+_DEFAULT_READ_TEXT_LIMIT = _DEFAULT_MAX_TEXT_CHARS
 _MAX_LIST_LIMIT = 100
+
+# Minimum max_text_chars, mirroring ``ResourceConfig.max_text_chars`` ge=100.
+_MIN_MAX_TEXT_CHARS = 100
 _CURSOR_VERSION = 2
 _MAX_COMPLETION_SUGGESTIONS = 100
 _MAX_BLOB_BYTES = 10 * 1024 * 1024
@@ -82,13 +86,26 @@ class ResourceCapability(AbstractCapability[AgentDepsT]):
     ``resource_resolver.resolve_resource_content``) for protocol consumers.
     """
 
-    def __init__(self, *, toolset_id: str = "resource_access") -> None:
+    def __init__(
+        self,
+        *,
+        toolset_id: str = "resource_access",
+        max_text_chars: int = _DEFAULT_READ_TEXT_LIMIT,
+    ) -> None:
         """Initialize the resource capability.
 
         Args:
             toolset_id: Identifier for the produced ``FunctionToolset``.
+            max_text_chars: Maximum text characters per resource read before
+                truncation. Content exceeding this limit is truncated with a
+                guidance suffix; the tail is not retrievable via the resource
+                read path.
         """
         self._toolset_id = toolset_id
+        self._max_text_chars = max_text_chars
+        if max_text_chars < _MIN_MAX_TEXT_CHARS:
+            msg = f"max_text_chars must be >= 100, got {max_text_chars}"
+            raise ValueError(msg)
 
     @property
     def name(self) -> str:
@@ -757,8 +774,8 @@ class ResourceCapability(AbstractCapability[AgentDepsT]):
             if isinstance(content, TextResourceContent):
                 original_char_count += len(content.text)
                 text = content.text
-                if len(text) > _DEFAULT_READ_TEXT_LIMIT:
-                    text = text[:_DEFAULT_READ_TEXT_LIMIT]
+                if len(text) > self._max_text_chars:
+                    text = _truncate_text(text, self._max_text_chars)
                     truncated = True
                 content_entry = self._content_entry_with_meta(
                     {
@@ -1004,7 +1021,11 @@ class ResourceCapability(AbstractCapability[AgentDepsT]):
         skill_caps = registry.get_skill_resources(scope)
 
         content = await resolve_resource_content(
-            uri, resource_caps, skill_caps, scheme_registry=registry.scheme_registry
+            uri,
+            resource_caps,
+            skill_caps,
+            max_text_chars=self._max_text_chars,
+            scheme_registry=registry.scheme_registry,
         )
         if content is None:
             return ToolReturn(return_value=f"Resource not found: {uri}")
@@ -1202,25 +1223,6 @@ class ResourceCapability(AbstractCapability[AgentDepsT]):
             return self._format_completion_result(result)
 
         return f"Completion not supported for template: {uri_template}"
-
-    @staticmethod
-    def _truncate_text(
-        text: str,
-        limit: int = _DEFAULT_READ_TEXT_LIMIT,
-    ) -> str:
-        """Truncate text content if it exceeds the limit.
-
-        Args:
-            text: The text to potentially truncate.
-            limit: Maximum number of characters to keep.
-
-        Returns:
-            The original text if within limit, or a truncated version
-            with a suffix indicating the total length.
-        """
-        if len(text) <= limit:
-            return text
-        return text[:limit] + f"\n\n... [truncated: {len(text)} chars total, showing first {limit}]"
 
     @staticmethod
     def _format_completion_result(result: CompletionResult) -> str:
