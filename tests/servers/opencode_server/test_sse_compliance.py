@@ -15,6 +15,7 @@ Validates that the SSE event stream conforms to the OpenCode TUI protocol:
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 import json
 from typing import TYPE_CHECKING, Any
 
@@ -147,15 +148,13 @@ class _MockState:
 
     def __init__(self, working_dir: str = "/tmp/test_wd") -> None:
         self.working_dir = working_dir
-        self.event_subscribers: list[asyncio.Queue[Event]] = []
+        self.event_subscribers: list[asyncio.Queue[tuple[int, Event]]] = []
+        self._projection_buffers: dict[str, deque[tuple[int, Event]]] = {}
+        self._projection_counter = 0
         self._event_factory: GlobalEventFactory | None = None
         self._first_subscriber_triggered = False
         self.on_first_subscriber: Any = None
-        # Provide EventBus-based infrastructure so _event_generator uses
-        # the EventBus path instead of the heartbeat-only fallback.
-        self._mock_event_bus = _MockEventBus()
         self.session_controller = _MockSessionController()
-        self.pool = _MockPool(_MockSessionPool(self._mock_event_bus))
 
     def get_event_factory(self) -> GlobalEventFactory:
         if self._event_factory is None:
@@ -171,11 +170,57 @@ class _MockState:
     def create_background_task(self, coro: Any, name: str = "") -> asyncio.Task[Any]:
         return asyncio.ensure_future(coro)
 
-    # get_next_event_id() removed — event_id now comes from EventBus
-    # (EventEnvelope.event_id assigned at publish time, not ServerState).
-
     def cancel_all_pending_questions(self) -> list[str]:
         return []
+
+    @staticmethod
+    def extract_session_id(event: Event) -> str | None:
+        """Mirror ServerState.extract_session_id for mock-state tests."""
+        from wolfharness_server.opencode_server.routes.global_routes import (
+            _extract_session_id,
+        )
+
+        return _extract_session_id(event)
+
+    async def broadcast_event(self, event: Event) -> None:
+        """Direct-wire fanout to subscriber queues (mirrors ServerState).
+
+        Overflow uses the same drop-oldest policy as production so the mock
+        does not hide queue-full behavior from the suite.
+        """
+        self._projection_counter += 1
+        event_id = self._projection_counter
+        session_id = self.extract_session_id(event)
+        if session_id is not None:
+            self._projection_buffers.setdefault(session_id, deque(maxlen=100)).append((
+                event_id,
+                event,
+            ))
+        for queue in self.event_subscribers:
+            try:
+                queue.put_nowait((event_id, event))
+            except asyncio.QueueShutDown:
+                continue
+            except asyncio.QueueFull:
+                with contextlib.suppress(asyncio.QueueEmpty):
+                    queue.get_nowait()
+                try:
+                    queue.put_nowait((event_id, event))
+                except asyncio.QueueFull:
+                    continue
+
+    def replay_projections(self, queue: asyncio.Queue[Any], last_event_id: int) -> None:
+        """Enqueue buffered projections with event_id > last_event_id."""
+        buffered: list[tuple[int, Event]] = []
+        for session_buf in self._projection_buffers.values():
+            buffered.extend(session_buf)
+        for event_id, event in sorted(buffered, key=lambda item: item[0]):
+            if event_id <= last_event_id:
+                continue
+            try:
+                queue.put_nowait((event_id, event))
+            except (asyncio.QueueShutDown, asyncio.QueueFull):
+                return
 
 
 async def _collect_events(
@@ -189,9 +234,9 @@ async def _collect_events(
     # Get the initial connected event
     item = await gen.__anext__()
     results.append(json.loads(item["data"]))
-    # Send additional events through the mock EventBus
+    # Send additional events through the direct-wire broadcast system
     for event in events_to_send:
-        await state._mock_event_bus.publish("__global_sse__", event)
+        await state.broadcast_event(event)
         item = await gen.__anext__()
         results.append(json.loads(item["data"]))
     return results

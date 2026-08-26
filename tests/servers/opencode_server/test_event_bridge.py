@@ -1,8 +1,9 @@
-"""Tests for OpenCodeEventBridge behavior parity.
+"""Tests for ServerState direct-wire projection delivery.
 
-Validates that the event bridge correctly dual-publishes events to both
-legacy SSE subscribers and the SessionPool EventBus, while preserving
-backward compatibility for the legacy path.
+Validates that ``broadcast_event`` delivers OpenCode protocol projections
+directly to SSE subscriber queues (no EventBus round-trip), buffers them
+per-session for ``Last-Event-ID`` replay, and never republishes projections
+into the SessionPool EventBus (loopback elimination, issue #380).
 """
 
 from __future__ import annotations
@@ -14,7 +15,6 @@ from unittest.mock import MagicMock, Mock
 import pytest
 
 from wolfharness.agents.events.events import (
-    CustomEvent,
     RunFailedEvent,
     RunStartedEvent,
     StreamCompleteEvent,
@@ -34,7 +34,10 @@ from wolfharness_server.opencode_server.models import (
     SessionStatus,
     SessionStatusEvent,
 )
-from wolfharness_server.opencode_server.models.events import ServerConnectedEvent
+from wolfharness_server.opencode_server.models.events import (
+    ServerConnectedEvent,
+    ServerHeartbeatEvent,
+)
 from wolfharness_server.opencode_server.opencode_event_bridge import (
     OpenCodeEventBridgeMixin,
 )
@@ -48,8 +51,6 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
     from pathlib import Path
 
-    from wolfharness_server.opencode_server.models.events import Event
-
 
 # =============================================================================
 # Fixtures
@@ -57,260 +58,162 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture
-def bridged_state(tmp_project_dir: Path, mock_agent: Mock) -> ServerState:
-    """Create a ServerState with an active OpenCodeEventBridge."""
-    from wolfharness.orchestrator.core import EventBus
-
-    # Wire a real EventBus into the mock pool so __post_init__ can discover it
+def state_with_pool(tmp_project_dir: Path, mock_agent: Mock) -> ServerState:
+    """Create a ServerState wired to a real SessionPool EventBus."""
     mock_agent.host_context.session_pool.event_bus = EventBus()
 
     return ServerState(
         working_dir=str(tmp_project_dir),
         agent=mock_agent,
-        session_controller=Mock(),  # non-None triggers bridge instantiation
+        session_controller=Mock(),
     )
 
 
-@pytest.fixture
-def event_bus(bridged_state: ServerState) -> EventBus:
-    """Return the EventBus attached to the bridged state."""
-    assert bridged_state.event_bridge is not None
-    return bridged_state.event_bridge._event_bus
-
-
 # =============================================================================
-# Legacy path tests (no session_controller)
+# Direct-wire delivery tests
 # =============================================================================
 
 
 @pytest.mark.anyio
-async def test_legacy_path_no_event_push(
-    tmp_project_dir: Path,
-    mock_agent: Mock,
+async def test_broadcast_event_fans_out_to_subscriber_queues(
+    state_with_pool: ServerState,
 ) -> None:
-    """Without a session_controller, broadcast_event is a no-op (no queue push).
+    """Projections are delivered to every registered SSE subscriber queue."""
+    queue_a: asyncio.Queue[Any] = asyncio.Queue()
+    queue_b: asyncio.Queue[Any] = asyncio.Queue()
+    state_with_pool.event_subscribers.extend([queue_a, queue_b])
 
-    The legacy path that pushed events directly to event_subscribers queues
-    has been removed. Event delivery now flows exclusively through the EventBus
-    via the event bridge. When no bridge is available, broadcast_event logs
-    a debug message and returns without pushing to any queues.
+    event = SessionStatusEvent.create("sess-1", SessionStatus(type="busy"))
+    await state_with_pool.broadcast_event(event)
+
+    for queue in (queue_a, queue_b):
+        event_id, received = queue.get_nowait()
+        assert received is event
+        assert event_id > 0
+    assert queue_a.qsize() == 0
+
+
+@pytest.mark.anyio
+async def test_broadcast_event_drop_oldest_on_queue_full(
+    state_with_pool: ServerState,
+) -> None:
+    """A full subscriber queue drops its oldest item, never aborts fanout.
+
+    Regression test for the review finding that ``broadcast_event`` only
+    caught ``QueueShutDown``: a stalled SSE client filling its
+    ``maxsize`` queue would propagate ``QueueFull`` into every call site
+    and abort delivery to the *other* subscribers. Production now applies
+    the same drop-oldest policy as ``EventBus._enqueue``.
     """
-    state = ServerState(
-        working_dir=str(tmp_project_dir),
-        agent=mock_agent,
-        session_controller=None,
+    stalled: asyncio.Queue[Any] = asyncio.Queue(maxsize=1)
+    healthy: asyncio.Queue[Any] = asyncio.Queue()
+    state_with_pool.event_subscribers.extend([stalled, healthy])
+
+    first = SessionStatusEvent.create("sess-1", SessionStatus(type="busy"))
+    await state_with_pool.broadcast_event(first)
+    # Stall the client: fill its single-slot queue (holds the first event).
+    assert stalled.qsize() == 1
+
+    second = SessionIdleEvent.create("sess-1")
+    # Must not raise QueueFull; the stalled queue evicts its oldest item
+    # (drop-oldest policy), the healthy queue receives the new event.
+    await state_with_pool.broadcast_event(second)
+
+    # Stalled queue: oldest (first) evicted, second delivered.
+    _event_id, received = stalled.get_nowait()
+    assert received is second
+    assert stalled.qsize() == 0
+
+    # Healthy queue received both events in order.
+    _id1, got_first = healthy.get_nowait()
+    _id2, got_second = healthy.get_nowait()
+    assert got_first is first
+    assert got_second is second
+
+
+@pytest.mark.anyio
+async def test_broadcast_event_never_republishes_to_event_bus(
+    state_with_pool: ServerState,
+) -> None:
+    """EventBus receives ZERO projection events (loopback eliminated)."""
+    event_bus = state_with_pool.pool.session_pool.event_bus
+    subscriber = await event_bus.subscribe("sess-1")
+
+    await state_with_pool.broadcast_event(
+        SessionStatusEvent.create("sess-1", SessionStatus(type="busy"))
     )
-    queue: asyncio.Queue[Any] = asyncio.Queue()
-    state.event_subscribers.append(queue)
-
-    event = SessionStatusEvent.create("sess-legacy", SessionStatus(type="busy"))
-    await state.broadcast_event(event)
-
-    # No events should be pushed to subscriber queues
-    assert queue.qsize() == 0
-
-
-@pytest.mark.anyio
-async def test_legacy_path_no_bridge_created(
-    tmp_project_dir: Path,
-    mock_agent: Mock,
-) -> None:
-    """ServerState without session_controller has no event_bridge."""
-    state = ServerState(
-        working_dir=str(tmp_project_dir),
-        agent=mock_agent,
-        session_controller=None,
-    )
-    assert state.event_bridge is None
-
-
-# =============================================================================
-# SessionPool path tests (bridge active)
-# =============================================================================
-
-
-@pytest.mark.anyio
-async def test_session_pool_path_does_not_push_to_sse_queues(
-    bridged_state: ServerState,
-) -> None:
-    """With the bridge active, events flow through EventBus only (not SSE queues).
-
-    The legacy event_subscribers queue push has been removed from
-    event_bridge.publish(). Events are delivered exclusively through
-    the EventBus subscription mechanism.
-    """
-    queue: asyncio.Queue[Any] = asyncio.Queue()
-    bridged_state.event_subscribers.append(queue)
-
-    event = SessionStatusEvent.create("sess-pool", SessionStatus(type="busy"))
-    await bridged_state.broadcast_event(event)
-
-    # SSE subscriber queues should NOT receive events (dead code removed)
-    assert queue.qsize() == 0
-
-
-@pytest.mark.anyio
-async def test_bridge_republishes_to_event_bus(
-    bridged_state: ServerState,
-    event_bus: EventBus,
-) -> None:
-    """Events are republished to the EventBus as CustomEvent wrappers."""
-    subscriber = await event_bus.subscribe("sess-pool")
-
-    event = SessionStatusEvent.create("sess-pool", SessionStatus(type="busy"))
-    await bridged_state.broadcast_event(event)
-
-    # Allow the async publish to propagate
-    await asyncio.sleep(0.05)
-
-    envelope = subscriber.get_nowait()
-    assert isinstance(envelope, EventEnvelope)
-    wrapped = envelope.event
-    assert isinstance(wrapped, CustomEvent)
-    assert wrapped.event_data is event
-    assert wrapped.event_type == "opencode:session.status"
-
-
-@pytest.mark.anyio
-async def test_bridge_wraps_different_event_types(
-    bridged_state: ServerState,
-    event_bus: EventBus,
-) -> None:
-    """Various OpenCode event types are correctly wrapped."""
-    subscriber = await event_bus.subscribe("sess-mixed")
-
-    events: list[Event] = [
-        SessionStatusEvent.create("sess-mixed", SessionStatus(type="busy")),
-        SessionIdleEvent.create("sess-mixed"),
-    ]
-
-    for evt in events:
-        await bridged_state.broadcast_event(evt)
+    await state_with_pool.broadcast_event(SessionIdleEvent.create("sess-1"))
 
     await asyncio.sleep(0.05)
 
-    for _i, evt in enumerate(events):
-        envelope = subscriber.get_nowait()
-        assert isinstance(envelope, EventEnvelope)
-        wrapped = envelope.event
-        assert isinstance(wrapped, CustomEvent)
-        assert wrapped.event_data is evt
-        expected_type = f"opencode:{evt.type}"
-        assert wrapped.event_type == expected_type
-
-
-@pytest.mark.anyio
-async def test_global_event_not_republished_to_event_bus(
-    bridged_state: ServerState,
-    event_bus: EventBus,
-) -> None:
-    """Global events without session_id are NOT republished to EventBus."""
-    # Use a dummy session just to have a subscriber queue; the event itself
-    # has no session_id so it should not be published there.
-    subscriber = await event_bus.subscribe("global-session")
-
-    event = ServerConnectedEvent()
-    await bridged_state.broadcast_event(event)
-
-    await asyncio.sleep(0.05)
-
-    # EventBus should receive nothing because the event has no session_id
     with pytest.raises(asyncio.QueueEmpty):
         subscriber.get_nowait()
 
-    # SSE subscriber queues also do NOT receive events (dead code removed)
-    queue: asyncio.Queue[Any] = asyncio.Queue()
-    bridged_state.event_subscribers.append(queue)
-    await bridged_state.broadcast_event(event)
-    assert queue.qsize() == 0
-
-
-# =============================================================================
-# Bridge unit tests
-# =============================================================================
-
 
 @pytest.mark.anyio
-async def test_bridge_publish_does_not_push_to_sse_queues(
-    bridged_state: ServerState,
+async def test_projection_buffer_per_session_for_replay(
+    state_with_pool: ServerState,
 ) -> None:
-    """Bridge.publish does NOT push to SSE subscriber queues (dead code removed).
-
-    Event delivery flows exclusively through the EventBus. The legacy
-    event_subscribers queue push has been removed.
-    """
-    queue: asyncio.Queue[Any] = asyncio.Queue()
-    bridged_state.event_subscribers.append(queue)
-
-    event = SessionStatusEvent.create("sess-unit", SessionStatus(type="idle"))
-    assert bridged_state.event_bridge is not None
-    await bridged_state.event_bridge.publish(event)
-
-    # SSE subscriber queues should NOT receive events
-    assert queue.qsize() == 0
-
-
-@pytest.mark.anyio
-async def test_bridge_extract_session_id_variations(
-    bridged_state: ServerState,
-) -> None:
-    """_extract_session_id handles events with and without session_id."""
-    bridge = bridged_state.event_bridge
-    assert bridge is not None
-
-    # Event with session_id
-    status_event = SessionStatusEvent.create("sess-1", SessionStatus(type="busy"))
-    assert bridge._extract_session_id(status_event) == "sess-1"
-
-    # Event without session_id
-    connected_event = ServerConnectedEvent()
-    assert bridge._extract_session_id(connected_event) is None
-
-    # Edge case: object with no properties attribute
-    class NoProperties:
-        pass
-
-    assert bridge._extract_session_id(NoProperties()) is None  # type: ignore[arg-type]
-
-
-@pytest.mark.anyio
-async def test_bridge_wrap_event_format(
-    bridged_state: ServerState,
-) -> None:
-    """_wrap_event produces a correctly formatted CustomEvent."""
-    bridge = bridged_state.event_bridge
-    assert bridge is not None
-
-    event = SessionIdleEvent.create("sess-wrap")
-    wrapped = bridge._wrap_event(event)
-
-    assert isinstance(wrapped, CustomEvent)
-    assert wrapped.event_data is event
-    assert wrapped.event_type == "opencode:session.idle"
-    assert wrapped.source == "opencode_event_bridge"
-
-
-@pytest.mark.anyio
-async def test_bridge_isolation_between_sessions(
-    bridged_state: ServerState,
-    event_bus: EventBus,
-) -> None:
-    """Events for session A do not leak into session B's EventBus subscription."""
-    sub_a = await event_bus.subscribe("sess-a")
-    sub_b = await event_bus.subscribe("sess-b")
-
-    await bridged_state.broadcast_event(
+    """Replayed projections honor event_id > last_event_id per session."""
+    await state_with_pool.broadcast_event(
         SessionStatusEvent.create("sess-a", SessionStatus(type="busy"))
     )
-    await asyncio.sleep(0.05)
+    await state_with_pool.broadcast_event(
+        SessionStatusEvent.create("sess-a", SessionStatus(type="idle"))
+    )
+    await state_with_pool.broadcast_event(
+        SessionStatusEvent.create("sess-b", SessionStatus(type="busy"))
+    )
 
-    envelope = sub_a.get_nowait()
-    assert isinstance(envelope, EventEnvelope)
-    wrapped = envelope.event
-    assert wrapped.event_data.properties.session_id == "sess-a"
+    # Replay all: three projections across two sessions
+    queue: asyncio.Queue[Any] = asyncio.Queue()
+    state_with_pool.replay_projections(queue, last_event_id=0)
+    replayed: list[tuple[int, Any]] = []
+    while not queue.empty():
+        replayed.append(queue.get_nowait())
+    assert len(replayed) == 3
+    ids = [event_id for event_id, _ in replayed]
+    assert ids == sorted(ids), "replay must preserve broadcast order"
 
-    with pytest.raises(asyncio.QueueEmpty):
-        sub_b.get_nowait()
+    # Conditional replay: only projections after the first are replayed
+    queue2: asyncio.Queue[Any] = asyncio.Queue()
+    state_with_pool.replay_projections(queue2, last_event_id=ids[0])
+    replayed2: list[tuple[int, Any]] = []
+    while not queue2.empty():
+        replayed2.append(queue2.get_nowait())
+    assert [event_id for event_id, _ in replayed2] == ids[1:]
+
+
+@pytest.mark.anyio
+async def test_global_event_not_buffered_for_replay(
+    state_with_pool: ServerState,
+) -> None:
+    """Events without a session_id are delivered but not buffered."""
+    queue: asyncio.Queue[Any] = asyncio.Queue()
+    state_with_pool.event_subscribers.append(queue)
+
+    await state_with_pool.broadcast_event(ServerConnectedEvent())
+
+    _event_id, received = queue.get_nowait()
+    assert isinstance(received, ServerConnectedEvent)
+
+    # Nothing buffered under any session → no replay
+    queue2: asyncio.Queue[Any] = asyncio.Queue()
+    state_with_pool.replay_projections(queue2, last_event_id=0)
+    assert queue2.empty()
+
+
+@pytest.mark.anyio
+async def test_extract_session_id_variations() -> None:
+    """extract_session_id handles events with and without session_id."""
+    status_event = SessionStatusEvent.create("sess-1", SessionStatus(type="busy"))
+    assert ServerState.extract_session_id(status_event) == "sess-1"
+
+    assert ServerState.extract_session_id(ServerConnectedEvent()) is None
+
+    # Events whose properties carry no session association return None.
+    heartbeat = ServerHeartbeatEvent()
+    assert ServerState.extract_session_id(heartbeat) is None
 
 
 # =============================================================================
