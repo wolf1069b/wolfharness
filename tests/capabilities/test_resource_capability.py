@@ -408,7 +408,9 @@ async def test_formal_read_truncates_text_and_omits_unsupported_or_large_blobs()
 
     assert result.return_value.truncated is True
     assert result.return_value.original_char_count == 10_001
-    assert len(result.return_value.contents[0]["text"]) == 10_000
+    truncated_text = result.return_value.contents[0]["text"]
+    assert truncated_text.startswith("x" * 10_000)
+    assert "Use a narrower resource URI" in truncated_text
     assert result.return_value.errors[0].code == "unsupported_mime_type"
 
     blob_result = await cap.read_mcp_resource(
@@ -416,6 +418,32 @@ async def test_formal_read_truncates_text_and_omits_unsupported_or_large_blobs()
     )
     assert blob_result.return_value.contents[-1]["attached"] is False
     assert blob_result.return_value.errors[0].code == "unsupported_mime_type"
+
+
+def test_max_text_chars_validation() -> None:
+    """ResourceCapability validates ``max_text_chars >= 100`` to match ResourceConfig."""
+    with pytest.raises(ValueError, match="max_text_chars must be >= 100, got 50"):
+        ResourceCapability(max_text_chars=50)
+    cap = ResourceCapability(max_text_chars=100)
+    assert cap._max_text_chars == 100
+
+
+async def test_read_mcp_resource_uses_max_text_chars() -> None:
+    """read_mcp_resource truncates to the capability's ``max_text_chars`` with guidance suffix."""
+    provider = FakeMcpResourceProvider(
+        "server",
+        read_contents=[TextResourceContent(uri="kb:///long", text="x" * 1_000)],
+    )
+    registry = _make_registry_with_caps(provider)
+    cap = ResourceCapability(max_text_chars=500)
+    result = await cap.read_mcp_resource(
+        _make_ctx(_make_agent_context(registry)), server="server", uri="kb:///long"
+    )
+
+    assert result.return_value.truncated is True
+    truncated_text = result.return_value.contents[0]["text"]
+    assert truncated_text.startswith("x" * 500)
+    assert "Use a narrower resource URI" in truncated_text
 
 
 async def test_stateless_lifecycle() -> None:

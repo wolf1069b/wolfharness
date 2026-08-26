@@ -231,6 +231,16 @@ class ResourceConfig(Schema):
     )
     """When ``True``, resource access tools are attached to the agent."""
 
+    max_text_chars: int = Field(
+        default=10_000,
+        title="Maximum text characters per resource read",
+        ge=100,
+    )
+    """Maximum text characters returned per ``read_resource`` call before
+    truncation. Content exceeding this limit is truncated with a guidance
+    suffix; the tail is not retrievable via the resource read path.
+    Increase for knowledge-base sources with long chapters."""
+
 
 class BaseAgentConfig(NodeConfig):
     """Base configuration for agents."""
