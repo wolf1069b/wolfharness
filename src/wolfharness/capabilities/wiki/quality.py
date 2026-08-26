@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import os
-import re
 from dataclasses import dataclass
 from enum import StrEnum
+import os
+import re
 from typing import Literal, NotRequired, TypedDict, get_args
 
 import yaml
@@ -21,6 +21,7 @@ from wolfharness.capabilities.wiki.section_constants import (
     SECTION_REPAIR_METHOD,
     SECTION_VERIFICATION,
 )
+
 
 _SECTION_RE = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
 _WIKI_CONCEPTS = frozenset({"Device", "Component", "DTC", "Symptom", "Fault", "Procedure", "OP"})
@@ -64,6 +65,7 @@ def _is_profile(content: str) -> bool:
     """Detect Symptom Profile by presence of ``profile_id`` in frontmatter."""
     fm = parse_frontmatter(content)
     return "profile_id" in fm
+
 
 _WIKI_URI_RE: re.Pattern[str]
 _MALFORMED_WIKI_URI_RE: re.Pattern[str]
@@ -247,7 +249,11 @@ def is_raw_chapter_uri(uri: str) -> bool:
     """
     if not isinstance(uri, str):
         return False
-    return uri in _RAW_CHAPTER_URIS or uri.startswith(_RAW_CHAPTER_PREFIXES) or ("/chapters/" in uri and uri.endswith("chapter.md"))
+    return (
+        uri in _RAW_CHAPTER_URIS
+        or uri.startswith(_RAW_CHAPTER_PREFIXES)
+        or ("/chapters/" in uri and uri.endswith("chapter.md"))
+    )
 
 
 def is_external_source_uri(uri: str) -> bool:
@@ -447,7 +453,12 @@ def extract_sections(content: str) -> dict[str, str]:
             body = "\n".join(lines[end + 1 :])
 
     matches = list(_SECTION_RE.finditer(body))
-    return {match.group(1).strip(): body[match.end() : matches[index + 1].start() if index + 1 < len(matches) else len(body)].strip() for index, match in enumerate(matches)}
+    return {
+        match.group(1).strip(): body[
+            match.end() : matches[index + 1].start() if index + 1 < len(matches) else len(body)
+        ].strip()
+        for index, match in enumerate(matches)
+    }
 
 
 def has_usable_procedure_criteria(section: str) -> bool:
@@ -500,9 +511,7 @@ def extract_wiki_uris(content: str) -> set[str]:
     return result
 
 
-def all_relation_uris(
-    content: str, concept: str, field: str, root_uri: str = ""
-) -> set[str]:
+def all_relation_uris(content: str, concept: str, field: str, root_uri: str = "") -> set[str]:
     """Get URIs for a relation field from frontmatter AND body section.
 
     Checks frontmatter first; also extracts ``viking://`` URIs from the
@@ -655,7 +664,9 @@ def confirmation_requirements(
     sections = extract_sections(content)
     checks: list[RequirementCheck] = []
 
-    def field_present(code: str, field: str, message: str, *, target_concepts: tuple[str, ...] = ()) -> None:
+    def field_present(
+        code: str, field: str, message: str, *, target_concepts: tuple[str, ...] = ()
+    ) -> None:
         fm_present = _has_value(frontmatter.get(field)) or bool(
             all_relation_uris(content, concept, field)
         )

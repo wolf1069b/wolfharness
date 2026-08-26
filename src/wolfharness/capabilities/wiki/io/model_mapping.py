@@ -5,8 +5,12 @@ from __future__ import annotations
 from datetime import UTC, datetime
 import re
 
+from wolfharness.capabilities.wiki.quality import (
+    RawSourceKind,
+    SourceReadStatus,
+    classify_raw_source_uri,
+)
 from wolfharness.capabilities.wiki.wiki_build_deps import WikiBuildDeps
-from wolfharness.capabilities.wiki.quality import RawSourceKind, SourceReadStatus, classify_raw_source_uri
 
 
 class ModelMappingMixin(WikiBuildDeps):

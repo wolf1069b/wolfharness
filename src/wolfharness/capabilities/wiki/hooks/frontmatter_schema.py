@@ -14,11 +14,13 @@ from __future__ import annotations
 
 import re
 
-from ..schema_loader import (
+from wolfharness.capabilities.wiki.schema_loader import (
     get_all_concept_frontmatter_fields,
     get_profile_frontmatter_fields,
 )
+
 from .base import BaseHook, HookResult
+
 
 # ── Allowed frontmatter fields ───────────────────────────────────────────
 # Loaded once from the YAML schema (cached via lru_cache in schema_loader).
@@ -144,7 +146,9 @@ class FrontmatterSchemaHook(BaseHook):
                 return HookResult(
                     hook_name=self.name,
                     passed=False,
-                    message=(f"Profile frontmatter has {len(extra)} non-schema field(s): {', '.join(sorted(extra))}. Fix the field names to match the schema; write is blocked."),
+                    message=(
+                        f"Profile frontmatter has {len(extra)} non-schema field(s): {', '.join(sorted(extra))}. Fix the field names to match the schema; write is blocked."
+                    ),
                     severity="error",
                 )
             return HookResult(

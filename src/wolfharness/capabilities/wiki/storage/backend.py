@@ -12,9 +12,10 @@ metadata may use independent JSON records, but entity identity does not.
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 import logging
 import re
-from abc import ABC, abstractmethod
+
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ _CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 
 
 def _strip_control_chars(text: str) -> str:
-    """Remove JSON-illegal control characters (preserving \\n, \\r, \\t)."""
+    r"""Remove JSON-illegal control characters (preserving \\n, \\r, \\t)."""
     return _CONTROL_CHAR_RE.sub("", text)
 
 
@@ -53,7 +54,8 @@ class FSBackend(ABC):
     @abstractmethod
     def write_text(self, key: str, content: str, *, overwrite: bool = True) -> None:
         """Atomically write text.  ``overwrite=False`` does not clobber an
-        existing file (first-write-wins)."""
+        existing file (first-write-wins).
+        """
 
     def write_text_durable(self, key: str, content: str) -> None:
         """Write text with a durability guarantee (fsync or remote ack).

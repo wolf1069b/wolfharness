@@ -107,6 +107,8 @@ class TestVikingCapabilityConfig:
         assert cfg.uploads_uri is None
         assert cfg.public_download_base_url is None
         assert cfg.resource_read_level == "overview"
+        assert cfg.allowed_uri_prefixes == []
+        assert cfg.write_allowed_uri_prefixes == []
 
     def test_default_support_vision_none(self) -> None:
         """support_vision defaults to None (auto-detect from model capabilities)."""
@@ -1340,6 +1342,51 @@ class TestWriteTools:
 
         assert mock_client.link.call_count == 0
         assert "linked=0, failed=0" in result.return_value
+
+    @pytest.mark.asyncio
+    async def test_viking_link_relations_skips_outside_write_prefix(
+        self, mock_client: AsyncMock, tmp_path: Path
+    ) -> None:
+        """viking_link_relations respects the explicit write-side allowlist."""
+        rel = tmp_path / "backlinks_index.json"
+        rel.write_text(
+            '{"viking://resources/wiki/Profile/A": ["viking://resources/wiki/Fault/X"], '
+            '"viking://resources/raw/Profile/B": ["viking://resources/wiki/Fault/Y"], '
+            '"viking://resources/wiki/Profile/C": ["viking://resources/raw/Fault/Z"]}',
+            encoding="utf-8",
+        )
+        cap = VikingCapability(
+            mode="all",
+            enable_link=True,
+            write_allowed_uri_prefixes=["viking://resources/wiki/"],
+        )
+        cap._client = mock_client
+        tools = build_tools(cap)
+        link_tool = _get_tool(tools, "viking_link_relations")
+
+        result = await link_tool(
+            _make_ctx(),
+            relations_file=str(rel),
+            namespace_base="viking://resources/",
+        )
+
+        calls = [
+            (c.args[0], list(c.args[1]), c.kwargs.get("reason"))
+            for c in mock_client.link.call_args_list
+        ]
+        assert calls == [
+            (
+                "viking://resources/wiki/Profile/A",
+                ["viking://resources/wiki/Fault/X"],
+                "wiki:referenced-by",
+            ),
+            (
+                "viking://resources/wiki/Fault/X",
+                ["viking://resources/wiki/Profile/A"],
+                "wiki:references",
+            ),
+        ]
+        assert "linked=2, failed=0, skipped=2" in result.return_value
 
     @pytest.mark.asyncio
     async def test_viking_link_relations_retries_on_busy(
@@ -2700,10 +2747,10 @@ class TestGetInstructions:
         cap = VikingCapability(mode="all")
         instructions = cap.get_instructions()
         assert instructions is not None
-        assert "Allowed URI Prefixes" not in instructions
+        assert "Read URI Prefixes" not in instructions
 
     def test_instructions_include_prefix_block_when_restricted(self) -> None:
-        """get_instructions() lists the allowed prefixes.
+        """get_instructions() lists the read allowed prefixes.
 
         So the model can pass a target_uri and skip discovery probing.
         """
@@ -2716,7 +2763,7 @@ class TestGetInstructions:
         )
         instructions = cap.get_instructions()
         assert instructions is not None
-        assert "Allowed URI Prefixes" in instructions
+        assert "Read URI Prefixes" in instructions
         assert "viking://resources/wiki/" in instructions
         assert "viking://resources/raw/" in instructions
 
@@ -2947,16 +2994,26 @@ class TestResourceAccessProtocol:
         mock_client.download_bytes.assert_called_once_with("viking://resources/photo.png")
         mock_client.overview.assert_not_called()
 
-    async def test_read_resource_image_text_only_model_no_bytes(
+    async def test_read_resource_image_bytes_regardless_of_support_vision(
         self, viking_cap: VikingCapability, mock_client: AsyncMock
     ) -> None:
-        """Text-only model (default) never downloads image bytes — text path."""
+        """read_resource is programmatic — image bytes even when text-only.
+
+        ``support_vision`` only gates the ``viking_read`` LLM tool (which
+        returns content to the model conversation); ``read_resource`` always
+        returns the actual payload, so programmatic consumers (e.g.
+        AnalyzeImageCapability) receive image bytes regardless of the
+        capability's vision setting.
+        """
+        import base64
+
         mock_client.download_bytes = AsyncMock(return_value=b"\x89PNG-fake")
-        mock_client.overview = AsyncMock(return_value="overview content")
         result = await viking_cap.read_resource("viking://resources/photo.png")
         assert result is not None
-        assert result[0].text == "overview content"
-        mock_client.download_bytes.assert_not_called()
+        assert result[0].mime_type == "image/png"
+        assert result[0].blob == base64.b64encode(b"\x89PNG-fake").decode("ascii")
+        mock_client.download_bytes.assert_called_once_with("viking://resources/photo.png")
+        mock_client.overview.assert_not_called()
 
     async def test_read_resource_oversize_image_degrades_to_hint(
         self, viking_cap: VikingCapability, mock_client: AsyncMock
@@ -4820,7 +4877,8 @@ class TestAllowedUriPrefixes:
         cap = VikingCapability(allowed_uri_prefixes=["viking://resources/wiki/"])
         err = cap._check_uri_allowed("viking://resources/raw/engine.md")
         assert err is not None
-        assert "outside the allowed prefixes" in err
+        assert "read_scope_denied" in err
+        assert "read allowed prefixes" in err
         assert "viking://resources/raw/engine.md" in err
 
     def test_multiple_prefixes(self) -> None:
@@ -4888,7 +4946,7 @@ class TestAllowedUriPrefixes:
         ctx = _make_ctx()
         result = await read_tool(ctx, uris="viking://resources/raw/engine.md")
 
-        assert "outside the allowed prefixes" in result.return_value
+        assert "read_scope_denied" in result.return_value
         mock_client.read.assert_not_called()
 
     @pytest.mark.asyncio
@@ -4919,12 +4977,15 @@ class TestAllowedUriPrefixes:
             ctx, uris=["viking://resources/wiki/a.md", "viking://resources/raw/b.md"]
         )
 
-        assert "outside the allowed prefixes" in result.return_value
+        assert "read_scope_denied" in result.return_value
         mock_client.read.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_viking_write_blocks_outside_prefix(self, mock_client: AsyncMock) -> None:
-        """viking_write rejects URIs outside the allowed prefixes."""
+    async def test_viking_write_ignores_read_prefixes_by_default(
+        self,
+        mock_client: AsyncMock,
+    ) -> None:
+        """viking_write is not constrained by read-side allowed_uri_prefixes."""
         cap = VikingCapability(mode="all", allowed_uri_prefixes=["viking://resources/wiki/"])
         cap._client = mock_client
         tools = build_tools(cap)
@@ -4933,8 +4994,82 @@ class TestAllowedUriPrefixes:
         ctx = _make_ctx()
         result = await write_tool(ctx, uri="viking://resources/raw/note.md", content="hi")
 
-        assert "outside the allowed prefixes" in result.return_value
+        assert "Wrote" in result.return_value
+        mock_client.write.assert_called_once()
+        assert mock_client.write.call_args.args[0] == "viking://resources/raw/note.md"
+
+    @pytest.mark.asyncio
+    async def test_viking_write_blocks_outside_explicit_write_prefix(
+        self,
+        mock_client: AsyncMock,
+    ) -> None:
+        """viking_write uses write_allowed_uri_prefixes when explicitly configured."""
+        cap = VikingCapability(
+            mode="all",
+            allowed_uri_prefixes=["viking://resources/wiki/"],
+            write_allowed_uri_prefixes=["viking://resources/tickets/"],
+        )
+        cap._client = mock_client
+        tools = build_tools(cap)
+        write_tool = _get_tool(tools, "viking_write")
+
+        ctx = _make_ctx()
+        result = await write_tool(ctx, uri="viking://resources/raw/note.md", content="hi")
+
+        assert "write_scope_denied" in result.return_value
+        assert "write allowed prefixes" in result.return_value
         mock_client.write.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_viking_add_resource_ignores_read_prefixes_by_default(
+        self,
+        mock_client: AsyncMock,
+    ) -> None:
+        """viking_add_resource is not constrained by read-side prefixes."""
+        mock_client.add_resource = AsyncMock(return_value={"status": "ok"})
+        cap = VikingCapability(mode="all", allowed_uri_prefixes=["viking://resources/wiki/"])
+        cap._client = mock_client
+        tools = build_tools(cap)
+        add_tool = _get_tool(tools, "viking_add_resource")
+
+        ctx = _make_ctx()
+        result = await add_tool(
+            ctx,
+            path="/local/file.txt",
+            to="viking://resources/810test/tickets/",
+        )
+
+        assert "Added resource" in result.return_value
+        assert mock_client.add_resource.call_args.kwargs["to"] == (
+            "viking://resources/810test/tickets/"
+        )
+
+    @pytest.mark.asyncio
+    async def test_viking_add_resource_blocks_outside_explicit_write_prefix(
+        self,
+        mock_client: AsyncMock,
+    ) -> None:
+        """viking_add_resource uses write_allowed_uri_prefixes when configured."""
+        mock_client.add_resource = AsyncMock(return_value={"status": "ok"})
+        cap = VikingCapability(
+            mode="all",
+            allowed_uri_prefixes=["viking://resources/wiki/"],
+            write_allowed_uri_prefixes=["viking://resources/tickets/"],
+        )
+        cap._client = mock_client
+        tools = build_tools(cap)
+        add_tool = _get_tool(tools, "viking_add_resource")
+
+        ctx = _make_ctx()
+        result = await add_tool(
+            ctx,
+            path="/local/file.txt",
+            to="viking://resources/810test/tickets/",
+        )
+
+        assert "write_scope_denied" in result.return_value
+        assert "write allowed prefixes" in result.return_value
+        mock_client.add_resource.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_viking_search_defaults_to_first_prefix(self, mock_client: AsyncMock) -> None:
@@ -5010,7 +5145,7 @@ class TestAllowedUriPrefixes:
         ctx = _make_ctx()
         result = await search_tool(ctx, query="hydraulic", target_uri="viking://resources/raw/")
 
-        assert "outside the allowed prefixes" in result.return_value
+        assert "read_scope_denied" in result.return_value
         mock_client.search.assert_not_called()
 
     @pytest.mark.asyncio

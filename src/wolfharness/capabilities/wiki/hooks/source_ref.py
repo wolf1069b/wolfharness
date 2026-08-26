@@ -19,6 +19,7 @@ import re
 
 from .base import BaseHook, HookResult
 
+
 # Bare source tags: [Menu] or [Case] NOT followed by a [scheme://...] URI
 # Matches [Menu] or [Case] that are not immediately followed by a recognised
 # source URI scheme.
@@ -84,7 +85,6 @@ class SourceReferenceHook(BaseHook):
             hook_name=self.name,
             passed=True,
             message=(
-                f"All source reference tags have URIs. "
-                f"({valid_count} valid reference(s) found.)"
+                f"All source reference tags have URIs. ({valid_count} valid reference(s) found.)"
             ),
         )

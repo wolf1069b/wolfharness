@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from hashlib import sha256
 import json
@@ -11,6 +10,7 @@ from pathlib import Path
 import time
 
 from openviking_sdk.errors import OpenVikingError
+
 from wolfharness.capabilities.wiki.io.chapter_scoring import (
     build_fingerprint,
     score_chapter_record,
@@ -22,9 +22,6 @@ from wolfharness.capabilities.wiki.io.text_parsers import (
     _CHAPTER_PREFIX_RE,
     _dir_to_clean_title,
 )
-from wolfharness.capabilities.wiki.storage import (
-    FSBackend,
-)
 from wolfharness.capabilities.wiki.quality import (
     register_raw_chapter_uris,
 )
@@ -35,7 +32,22 @@ from wolfharness.capabilities.wiki.section_constants import (
 
 logger = logging.getLogger(__name__)
 
-from .._helpers import _BOM_ENRICH_PLACEHOLDER_MARKERS, _chapter_idempotency_key, _entity_batch_limit, _io_worker_limit
+from typing import TYPE_CHECKING
+
+from wolfharness.capabilities.wiki._helpers import (
+    _BOM_ENRICH_PLACEHOLDER_MARKERS,
+    _chapter_idempotency_key,
+    _entity_batch_limit,
+    _io_worker_limit,
+)
+
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from wolfharness.capabilities.wiki.storage import (
+        FSBackend,
+    )
 
 
 class ChapterMixin:

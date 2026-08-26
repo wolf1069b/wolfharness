@@ -9,10 +9,10 @@ import logging
 import re
 import time
 
+from wolfharness.capabilities.wiki.auto_repair import materialize_body_links
 from wolfharness.capabilities.wiki.io.text_parsers import (
     _ENTITY_URI_HEADING_RE,
 )
-from wolfharness.capabilities.wiki.auto_repair import materialize_body_links
 from wolfharness.capabilities.wiki.quality import (
     entity_status,
     extract_sections,
@@ -26,7 +26,12 @@ from wolfharness.capabilities.wiki.validation import (
 
 logger = logging.getLogger(__name__)
 
-from .._helpers import _FORMAL_WRITE_HOOKS, _conflicting_facts, _entity_batch_limit, _internal_conflicting_facts
+from wolfharness.capabilities.wiki._helpers import (
+    _FORMAL_WRITE_HOOKS,
+    _conflicting_facts,
+    _entity_batch_limit,
+    _internal_conflicting_facts,
+)
 
 
 def _empty_fm_value(value: object) -> bool:

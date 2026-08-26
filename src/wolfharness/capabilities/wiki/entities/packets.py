@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from datetime import UTC, datetime
 from hashlib import sha256
 import json
@@ -10,6 +9,7 @@ import logging
 import os
 from pathlib import Path
 import re
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -17,6 +17,10 @@ from wolfharness.capabilities.wiki.quality import (
     RawSourceKind,
     classify_raw_source_uri,
 )
+
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 logger = logging.getLogger(__name__)
@@ -69,9 +73,7 @@ class PacketBody(BaseModel):
         has_component = any(
             str(c.get("concept", "")).lower() == "component" for c in all_candidates
         )
-        has_fault = any(
-            str(c.get("concept", "")).lower() == "fault" for c in all_candidates
-        )
+        has_fault = any(str(c.get("concept", "")).lower() == "fault" for c in all_candidates)
 
         if has_component and not self.working_mechanism.strip():
             raise ValueError(

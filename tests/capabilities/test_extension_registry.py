@@ -71,6 +71,10 @@ class FakeMcpResource(FakeCapability):
     of ``str | None``.
     """
 
+    @property
+    def owned_schemes(self) -> frozenset[str]:
+        return frozenset()
+
     def __init__(self, name: str = "mcp_cap", resources: dict[str, str] | None = None) -> None:
         super().__init__(name)
         self._resources = resources or {"mcp://server/path": "resource content"}

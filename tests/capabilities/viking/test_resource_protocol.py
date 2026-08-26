@@ -13,7 +13,6 @@ from __future__ import annotations
 from pathlib import Path
 import types
 from typing import Any, ClassVar
-from unittest.mock import patch
 
 import pytest
 
@@ -286,8 +285,10 @@ def wiki_cap(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> WikiBuildCapabi
         wiki_root=str(tmp_path / "wiki"),
         library_root=str(tmp_path / "library"),
     )
-    with patch.dict("sys.modules", _fake_xeno_modules()):
-        cap._ensure_tools()
+    cap._tools = FakeWikiBuildTools(
+        wiki_root=str(tmp_path / "wiki"),
+        library_root=str(tmp_path / "library"),
+    )
     assert isinstance(cap.tools, FakeWikiBuildTools)
     return cap
 

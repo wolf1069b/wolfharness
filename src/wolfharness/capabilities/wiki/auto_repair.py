@@ -12,9 +12,9 @@ are left for agent iteration.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 import logging
 import re
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from wolfharness.capabilities.wiki.quality import (
@@ -24,6 +24,7 @@ from wolfharness.capabilities.wiki.quality import (
     extract_wiki_uris,
     parse_frontmatter,
 )
+
 
 if TYPE_CHECKING:
     from wolfharness.capabilities.wiki.wiki_build_tools import WikiBuildTools

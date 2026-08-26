@@ -26,6 +26,7 @@ from wolfharness.capabilities.resource_protocols import (
     TextResourceContent,
 )
 from wolfharness.capabilities.resource_resolver import resolve_resource_content
+from wolfharness.capabilities.uri_scheme_registry import UriSchemeRegistry
 
 
 if TYPE_CHECKING:
@@ -47,6 +48,10 @@ class FakeResourceAccess:
     protocol: ``list_resources``, ``read_resource``, ``resource_exists``.
     """
 
+    @property
+    def owned_schemes(self) -> frozenset[str]:
+        return frozenset()
+
     def __init__(
         self,
         read_result: list[TextResourceContent | BlobResourceContent] | None = None,
@@ -67,6 +72,24 @@ class FakeResourceAccess:
 
     async def resource_exists(self, uri: str) -> bool:
         return self._read_result is not None
+
+
+class FakeOwnedResourceAccess(FakeResourceAccess):
+    """Resource provider that explicitly owns one URI scheme."""
+
+    def __init__(
+        self,
+        *,
+        scheme: str,
+        read_result: list[TextResourceContent | BlobResourceContent] | None = None,
+        raise_exc: Exception | None = None,
+    ) -> None:
+        super().__init__(read_result=read_result, raise_exc=raise_exc)
+        self._scheme = scheme
+
+    @property
+    def owned_schemes(self) -> frozenset[str]:
+        return frozenset({self._scheme})
 
 
 class FakeSkillResource:
@@ -212,6 +235,33 @@ async def test_resolve_resource_mixed_text_and_binary() -> None:
     assert result[3] == "\n</resource>"
 
 
+async def test_resolve_resource_uses_visible_owner_when_global_owner_not_visible() -> None:
+    """Agent-scoped duplicate scheme owners route to the visible provider."""
+    first_agent_cap = FakeOwnedResourceAccess(
+        scheme="viking",
+        read_result=[TextResourceContent(text="first", uri="viking://doc.md")],
+    )
+    visible_agent_cap = FakeOwnedResourceAccess(
+        scheme="viking",
+        read_result=[TextResourceContent(text="visible", uri="viking://doc.md")],
+    )
+    scheme_registry = UriSchemeRegistry()
+    scheme_registry.register(
+        provider_name="FirstAgentViking",
+        schemes=frozenset({"viking"}),
+        provider=first_agent_cap,
+    )
+
+    result = await resolve_resource_content(
+        "viking://doc.md",
+        resource_caps=[visible_agent_cap],
+        skill_caps=[],
+        scheme_registry=scheme_registry,
+    )
+
+    assert result == ['<resource uri="viking://doc.md">\nvisible\n</resource>']
+
+
 async def test_resolve_resource_multiple_providers() -> None:
     """First provider returns None, second returns content → returns content from second."""
     cap1 = FakeResourceAccess(read_result=None)
@@ -221,6 +271,27 @@ async def test_resolve_resource_multiple_providers() -> None:
     )
     assert result is not None
     assert result == ['<resource uri="viking://doc">\nfound\n</resource>']
+
+
+async def test_resolve_resource_routes_same_uri_by_server_name() -> None:
+    """A ResourceSource server name must prevent same-URI provider mixing."""
+
+    class NamedResourceAccess(FakeResourceAccess):
+        def __init__(self, server_name: str, text: str) -> None:
+            super().__init__(read_result=[TextResourceContent(uri="kb:///same", text=text)])
+            self.server_name = server_name
+
+    first = NamedResourceAccess("alpha", "alpha content")
+    second = NamedResourceAccess("beta", "beta content")
+
+    result = await resolve_resource_content(
+        "kb:///same",
+        resource_caps=[first, second],
+        skill_caps=[],
+        client_name="beta",
+    )
+
+    assert result == ['<resource uri="kb:///same">\nbeta content\n</resource>']
 
 
 async def test_resolve_resource_skill_uri() -> None:
@@ -485,12 +556,13 @@ async def test_extract_user_prompt_with_binary_resource() -> None:
 
     result = await extract_user_prompt_from_parts([part], "test-session", agent=agent)
     result_list = list(result)
-    assert len(result_list) == 3
-    assert result_list[0] == '<resource uri="viking://img.png">\n'
-    assert isinstance(result_list[1], BinaryContent)
-    assert result_list[1].data == b"img"
-    assert result_list[1].media_type == "image/png"
-    assert result_list[2] == "\n</resource>"
+    assert len(result_list) == 4
+    assert result_list[0] == "[Resource from viking server] viking://img.png"
+    assert result_list[1] == '<resource uri="viking://img.png">\n'
+    assert isinstance(result_list[2], BinaryContent)
+    assert result_list[2].data == b"img"
+    assert result_list[2].media_type == "image/png"
+    assert result_list[3] == "\n</resource>"
 
 
 async def test_extract_user_prompt_resource_no_agent() -> None:
@@ -547,11 +619,12 @@ async def test_extract_user_prompt_mixed_parts() -> None:
         [text_part, resource_part, agent_part], "test-session", agent=agent
     )
     result_list = list(result)
-    # 1 text + 1 resource (XML-wrapped) + 1 agent instruction
-    assert len(result_list) == 3
+    # 1 text + 1 header + 1 resource (XML-wrapped) + 1 agent instruction
+    assert len(result_list) == 4
     assert result_list[0] == "prefix text"
-    assert result_list[1] == '<resource uri="viking://doc">\nresource content\n</resource>'
-    assert "researcher" in result_list[2]
+    assert result_list[1] == "[Resource from viking server] viking://doc"
+    assert result_list[2] == '<resource uri="viking://doc">\nresource content\n</resource>'
+    assert "researcher" in result_list[3]
 
 
 # =============================================================================
@@ -653,9 +726,10 @@ async def test_resolve_resource_timing_bug() -> None:
         result = await extract_user_prompt_from_parts([part], "test-session", agent=agent)
         result_list = list(result)
 
-        # Should resolve the resource content — not drop it silently.
-        assert len(result_list) == 1
-        assert result_list[0] == '<resource uri="test://doc.md">\nhello world\n</resource>'
+        # Should prepend a server-source header and resolve the resource content.
+        assert len(result_list) == 2
+        assert result_list[0] == "[Resource from test server] test://doc.md"
+        assert result_list[1] == '<resource uri="test://doc.md">\nhello world\n</resource>'
 
 
 # =============================================================================
@@ -733,8 +807,9 @@ async def test_e2e_at_mention_resolves_resource() -> None:
         result = await extract_user_prompt_from_parts([part], "test-session", agent=agent)
         result_list = list(result)
 
-        assert len(result_list) == 1
-        assert result_list[0] == '<resource uri="test://doc.md">\nhello world\n</resource>'
+        assert len(result_list) == 2
+        assert result_list[0] == "[Resource from test server] test://doc.md"
+        assert result_list[1] == '<resource uri="test://doc.md">\nhello world\n</resource>'
 
 
 async def test_e2e_at_mention_wrong_uri_returns_empty() -> None:
@@ -871,8 +946,9 @@ async def test_e2e_skill_resource_resolution() -> None:
         result = await extract_user_prompt_from_parts([part], "test-session", agent=agent)
         result_list = list(result)
 
-        assert len(result_list) == 1
-        assert "skill body" in result_list[0]
+        assert len(result_list) == 2
+        assert result_list[0] == "[Resource from test server] skill://test-skill"
+        assert "skill body" in result_list[1]
 
 
 # =============================================================================

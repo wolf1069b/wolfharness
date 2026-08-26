@@ -24,7 +24,6 @@ from wolfharness.capabilities.wiki.models import (
     OPSModel,
     infer_opa_reason_code,
 )
-from wolfharness.capabilities.wiki.wiki_build_deps import WikiBuildDeps
 from wolfharness.capabilities.wiki.quality import (
     BuildProfile,
     IssueDisposition,
@@ -44,6 +43,7 @@ from wolfharness.capabilities.wiki.section_constants import (
     SECTION_REPAIR_METHOD,
     SECTION_VERIFICATION,
 )
+from wolfharness.capabilities.wiki.wiki_build_deps import WikiBuildDeps
 
 
 logger = logging.getLogger(__name__)
@@ -171,9 +171,8 @@ class OPAMixin(WikiBuildDeps):
             if self.store.read_text(key) is not None:
                 return key
         for key in self.store.list_dir(base, recursive=True):
-            if key.endswith(f"/{opa_id}.md"):
-                if self.store.read_text(key) is not None:
-                    return key
+            if key.endswith(f"/{opa_id}.md") and self.store.read_text(key) is not None:
+                return key
         return None
 
     def _op_dir_key(self, concept: str) -> str:
@@ -265,6 +264,22 @@ class OPAMixin(WikiBuildDeps):
             return f"{self.store.root_uri}/{key}"
         return f"{self.store.root_uri}/{self.store.CONCEPT_DIRS[concept]}/{record_id}.md"
 
+    def is_valid_op_uri(self, uri: str) -> bool:
+        """Return whether *uri* is an acceptable OPA/OPS reference URI.
+
+        Mirrors the format rules enforced by ``_validate_opa_uris``: a
+        ``viking://resources/...`` provider reference (any namespace), a URI
+        inside the active wiki store's namespace, or a raw-source library
+        URI all pass.  Existence is not checked -- the record may be filed
+        before the entity is merged, and reference scopes may live outside
+        the write store's namespace.
+        """
+        return (
+            uri.startswith("viking://resources/")
+            or self.store.is_wiki_uri(uri)
+            or classify_raw_source_uri(uri, raw_root_uri=self._raw_fs.root_uri) is not None
+        )
+
     def _validate_opa_uris(self, target_uri: str, evidence_uris: list[str]) -> None:
         """Require and validate the URI association of an OPA.
 
@@ -272,24 +287,23 @@ class OPAMixin(WikiBuildDeps):
         conflict or the source corpus that surfaced the conflict).  Formats
         are checked; existence is not (the record may be filed before the
         entity is merged).
+
+        Accepts provider resource references outside the active write store.
+        OPA/OPS records are written to the provider-owned ticket scope, while
+        ``target_uri`` and ``evidence_uris`` are read/citation references and
+        may point at a different provider-owned resource scope.
         """
         uris = [uri for uri in (target_uri, *evidence_uris) if uri]
-        raw_prefix = self._raw_fs.root_uri + "/"
         if not uris:
             raise ValueError(
-                f"OPA must reference at least one URI: set target_uri ({self.store.root_uri}/...) or evidence_uris ({raw_prefix}... source chapters).",
+                f"OPA must reference at least one URI: set target_uri "
+                f"({self.store.root_uri}/...) or evidence_uris "
+                f"(viking://resources/... source chapters).",
             )
         for uri in uris:
-            if (
-                not self.store.is_wiki_uri(uri)
-                and classify_raw_source_uri(
-                    uri,
-                    raw_root_uri=self._raw_fs.root_uri,
-                )
-                is None
-            ):
+            if not self.is_valid_op_uri(uri):
                 raise ValueError(
-                    f"OPA URI must be a {self.store.root_uri}/ or {raw_prefix} URI, got {uri!r}.",
+                    f"OPA URI must be a provider resource URI or local wiki/raw URI, got {uri!r}.",
                 )
 
     @staticmethod
@@ -436,8 +450,7 @@ class OPAMixin(WikiBuildDeps):
         # the checkpoint build_id match is sufficient scoping.
         checkpoint = self.store.read_json("index/build_checkpoint.json")
         return (
-            isinstance(checkpoint, dict)
-            and str(checkpoint.get("build_id", "")).strip() == build_id
+            isinstance(checkpoint, dict) and str(checkpoint.get("build_id", "")).strip() == build_id
         )
 
     def _opa_category_from_key(self, key: str) -> str:
@@ -659,7 +672,7 @@ class OPAMixin(WikiBuildDeps):
         closure_reason: str = "",
         skip_dedupe_lookup: bool = False,
     ) -> dict:
-        """结构化落盘一条 OPA 冲突/问题记录，替代手写 md。
+        """结构化落盘一条 OPA 冲突/问题记录，替代手写 md。.
 
         存入 ``OP/OpA/<opa_id>.md``（YAML frontmatter + 证据 + 可解析 URI），
         不注册 natural key，因此不会进入 finalize/audit 的实体索引。
@@ -869,6 +882,7 @@ class OPAMixin(WikiBuildDeps):
             uri
             for uri in dict.fromkeys([*evidence_uris, *related_uris])
             if uri
+            and not uri.startswith("viking://resources/")
             and self.read_resource(uri) is None
             and classify_raw_source_uri(uri, raw_root_uri=self._raw_fs.root_uri) is None
         ]
@@ -887,9 +901,10 @@ class OPAMixin(WikiBuildDeps):
         target = target_uri.strip()
         evidence = [str(uri).strip() for uri in evidence_uris if str(uri).strip()]
         related = [str(uri).strip() for uri in related_uris if str(uri).strip()]
-        canonical = lambda uri: (
-            self.store.resolve_redirect(uri) if self.store.is_wiki_uri(uri) else uri
-        )
+
+        def canonical(uri):
+            return self.store.resolve_redirect(uri) if self.store.is_wiki_uri(uri) else uri
+
         evidence_keys = [canonical(uri) for uri in evidence]
         related_keys = [canonical(uri) for uri in related]
         target_key = canonical(target) if target else ""
@@ -1077,7 +1092,9 @@ class OPAMixin(WikiBuildDeps):
                         # merges into a prior suggestion.
                         uuid4().hex[:8]
                         if external_submission
-                        else sha256(f"{opa_uri}\x1f{effective_target}\x1f{title}".encode()).hexdigest()[:8]
+                        else sha256(
+                            f"{opa_uri}\x1f{effective_target}\x1f{title}".encode()
+                        ).hexdigest()[:8]
                     ),
                 ),
                 80,
@@ -2449,7 +2466,7 @@ class OPAMixin(WikiBuildDeps):
             self.store.write_json("index/op_flow_report.json", report)
         return report
 
-    def discover_opa(  # noqa: PLR0915 - audit→OPA pipeline with pagination loop
+    def discover_opa(
         self,
         *,
         profile: BuildProfile = "manual",
@@ -2826,7 +2843,7 @@ class OPAMixin(WikiBuildDeps):
         include_superseded: bool = False,
         build_id: str = "",
     ) -> list[dict]:
-        """读取 ``OP/OpA/`` 下匹配条件的 OPA 记录。
+        """读取 ``OP/OpA/`` 下匹配条件的 OPA 记录。.
 
         可按 ``target_uri`` / ``status`` / ``category`` / ``reason_code`` / ``scope`` 过滤，
         返回结构化 frontmatter（含 ``uri`` 键，供证据链提取）。

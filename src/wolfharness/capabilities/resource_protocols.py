@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 import warnings
 
+from wolfharness.common_types import JsonObject, JsonValue  # noqa: TC001
+
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Sequence
@@ -27,6 +29,41 @@ if TYPE_CHECKING:
     from upath import UPath
 
     from wolfharness.capabilities.change_event import ChangeEvent
+
+
+def resource_catalog_key(server: str, uri: str) -> str:
+    """Build the OpenCode-compatible escaped ``server:uri`` catalog key."""
+    escaped_server = server.replace("%", "%25").replace(":", "%3A")
+    return f"{escaped_server}:{uri}"
+
+
+def normalize_mcp_json_object(value: object) -> JsonObject | None:
+    """Convert MCP metadata models into the repository JSON value types."""
+    if value is None:
+        return None
+    if hasattr(value, "model_dump"):
+        value = value.model_dump(mode="json", by_alias=True, exclude_none=True)
+    if not isinstance(value, dict):
+        return None
+    return {
+        key: _normalize_mcp_json_value(item) for key, item in value.items() if isinstance(key, str)
+    }
+
+
+def _normalize_mcp_json_value(value: object) -> JsonValue:
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if hasattr(value, "model_dump"):
+        value = value.model_dump(mode="json", by_alias=True, exclude_none=True)
+    if isinstance(value, dict):
+        return {
+            key: _normalize_mcp_json_value(item)
+            for key, item in value.items()
+            if isinstance(key, str)
+        }
+    if isinstance(value, list):
+        return [_normalize_mcp_json_value(item) for item in value]
+    return str(value)
 
 
 # ---- Dataclasses ----
@@ -87,14 +124,24 @@ class ResourceEntry:
     Attributes:
         uri: Resource URI (e.g., ``"file:///path/to/resource"``).
         name: Human-readable resource name.
+        title: Optional display title.
         description: Optional description.
         mime_type: MIME type of the resource content.
+        size: Optional byte size reported by the provider.
+        annotations: Optional MCP annotations.
+        meta: Optional provider metadata.
+        server: Configured MCP server/client name.
     """
 
     uri: str
     name: str = ""
     description: str = ""
     mime_type: str = ""
+    title: str = ""
+    size: int | None = None
+    annotations: JsonObject | None = None
+    meta: JsonObject | None = None
+    server: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,7 +178,7 @@ class ResourceContent:
 
     uri: str
     mime_type: str | None = None
-    meta: dict[str, Any] | None = None
+    meta: JsonObject | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -177,6 +224,8 @@ class ResourceTemplateEntry:
         description: Optional description.
         mime_type: MIME type of expanded resources.
         annotations: Optional MCP annotations dict.
+        meta: Optional provider metadata.
+        server: Configured MCP server/client name.
     """
 
     uri_template: str
@@ -184,7 +233,67 @@ class ResourceTemplateEntry:
     title: str = ""
     description: str = ""
     mime_type: str = ""
-    annotations: dict[str, Any] | None = None
+    annotations: JsonObject | None = None
+    meta: JsonObject | None = None
+    server: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class ResourceError:
+    """Structured error returned by a resource provider."""
+
+    code: str
+    message: str
+    retryable: bool = False
+    suggestion: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class McpResourceListResult:
+    """One host-aggregated page of MCP resources."""
+
+    summary: str
+    resources: list[ResourceEntry] = field(default_factory=list)
+    next_cursor: str | None = None
+    errors: list[ResourceError] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
+class McpResourceTemplateListResult:
+    """One host-aggregated page of MCP resource templates."""
+
+    summary: str
+    templates: list[ResourceTemplateEntry] = field(default_factory=list)
+    next_cursor: str | None = None
+    errors: list[ResourceError] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
+class McpResourceReadResult:
+    """Structured result for a single MCP resource read."""
+
+    summary: str
+    uri: str
+    contents: list[JsonObject] = field(default_factory=list)
+    truncated: bool = False
+    original_char_count: int | None = None
+    errors: list[ResourceError] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
+class McpResourceListPage:
+    """Single upstream MCP resources/list page."""
+
+    entries: list[ResourceEntry] = field(default_factory=list)
+    next_cursor: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class McpResourceTemplateListPage:
+    """Single upstream MCP resources/templates/list page."""
+
+    entries: list[ResourceTemplateEntry] = field(default_factory=list)
+    next_cursor: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -286,6 +395,43 @@ class ToolAccess(Protocol):
         ...
 
 
+class UriSchemeMismatchError(ValueError):
+    """Raised when a provider receives a URI whose scheme it does not own.
+
+    Attributes:
+        scheme: The URI scheme that was not recognized.
+        provider_name: The name of the provider that rejected the URI.
+        uri: The full URI that was rejected.
+    """
+
+    def __init__(self, scheme: str, provider_name: str, uri: str) -> None:
+        self.scheme = scheme
+        self.provider_name = provider_name
+        self.uri = uri
+        super().__init__(
+            f"Provider '{provider_name}' does not own URI scheme '{scheme}' for URI: {uri}"
+        )
+
+
+class UriSchemeConflictError(ValueError):
+    """Raised when two providers claim the same URI scheme.
+
+    Attributes:
+        scheme: The URI scheme with conflicting claims.
+        existing_provider: The provider already registered for this scheme.
+        conflicting_provider: The provider attempting to register.
+    """
+
+    def __init__(self, scheme: str, existing_provider: str, conflicting_provider: str) -> None:
+        self.scheme = scheme
+        self.existing_provider = existing_provider
+        self.conflicting_provider = conflicting_provider
+        super().__init__(
+            f"URI scheme '{scheme}' is already claimed by "
+            f"'{existing_provider}'; cannot register '{conflicting_provider}'"
+        )
+
+
 @runtime_checkable
 class ResourceAccess(Protocol):
     """Protocol for accessing MCP resources.
@@ -294,6 +440,17 @@ class ResourceAccess(Protocol):
     Capabilities implementing this protocol provide resource listing, reading,
     and existence checking.
     """
+
+    @property
+    def owned_schemes(self) -> frozenset[str]:
+        """URI schemes this provider authoritatively handles.
+
+        Returns:
+            ``frozenset`` of URI scheme strings (e.g., ``{"viking"}``).
+            An empty set (default) means the provider handles opaque
+            URIs and is consulted for unregistered schemes.
+        """
+        return frozenset()
 
     async def list_resources(self) -> Sequence[ResourceEntry]:
         """List available MCP resources.
@@ -352,19 +509,41 @@ class ResourceTemplateAccess(Protocol):
         argument: CompletionArgument,
         context: dict[str, str] | None = None,
     ) -> CompletionResult:
-        """Complete a resource template parameter.
+        """Complete a resource template parameter."""
+        ...
 
-        Args:
-            uri_template: The URI template to complete.
-            argument: The argument being completed.
-            context: Optional context arguments.
 
-        Returns:
-            ``CompletionResult`` with suggestion values.
+@runtime_checkable
+class McpResourceProvider(Protocol):
+    """Protocol for host-side MCP Resource catalog and reads."""
 
-        Raises:
-            NotImplementedError: If completion is not supported.
-        """
+    @property
+    def server_name(self) -> str:
+        """Return the stable configured MCP server identifier."""
+        ...
+
+    async def supports_resources(self) -> bool:
+        """Return whether the upstream server declared Resource capability."""
+        ...
+
+    async def list_resources(self) -> Sequence[ResourceEntry]:
+        """Read all resources for compatibility Host catalog consumers."""
+        ...
+
+    async def list_resources_page(self, cursor: str | None = None) -> McpResourceListPage:
+        """Read one upstream resources/list page."""
+        ...
+
+    async def list_resource_templates_page(
+        self, cursor: str | None = None
+    ) -> McpResourceTemplateListPage:
+        """Read one upstream resources/templates/list page."""
+        ...
+
+    async def read_mcp_resource(
+        self, uri: str
+    ) -> list[TextResourceContent | BlobResourceContent] | None:
+        """Read an MCP resource by opaque URI."""
         ...
 
 

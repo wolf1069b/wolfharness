@@ -8,6 +8,7 @@ from wolfharness.capabilities.wiki.section_constants import SECTION_CONTROLLER_I
 
 from .base import BaseHook, HookResult
 
+
 _PLACEHOLDER_RE = re.compile(
     r"待\s*(?:URI|Fault|Procedure|Component|Symptom|DTC)?\s*(?:关联)?补充|待后续补充",
     re.IGNORECASE,
@@ -80,7 +81,11 @@ class RelationshipCompletenessHook(BaseHook):
             if not _field_value(frontmatter, "symptom_refs"):
                 missing.append("symptom_refs")
         elif concept == "DTC":
-            controller_section = content.split(f"## {SECTION_CONTROLLER_IDENTITY}", 1)[-1] if f"## {SECTION_CONTROLLER_IDENTITY}" in content else ""
+            controller_section = (
+                content.split(f"## {SECTION_CONTROLLER_IDENTITY}", 1)[-1]
+                if f"## {SECTION_CONTROLLER_IDENTITY}" in content
+                else ""
+            )
             if not _field_value(frontmatter, "controller_role"):
                 missing.append("controller_role")
             if not _field_value(frontmatter, "controller_component") and not re.search(
@@ -113,8 +118,7 @@ class RelationshipCompletenessHook(BaseHook):
                 hook_name=self.name,
                 passed=False,
                 message=(
-                    f"Entity cannot become confirmed; missing or unresolved: "
-                    f"{', '.join(missing)}."
+                    f"Entity cannot become confirmed; missing or unresolved: {', '.join(missing)}."
                 ),
                 severity="error",
             )

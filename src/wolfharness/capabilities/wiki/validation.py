@@ -2,17 +2,25 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
-from wolfharness.capabilities.wiki.hooks.base import BaseHook, HookResult
 from wolfharness.capabilities.wiki.hooks.body_sections import BodySectionsHook
 from wolfharness.capabilities.wiki.hooks.component_taxonomy import ComponentTaxonomyHook
 from wolfharness.capabilities.wiki.hooks.diagnostic_closure import DiagnosticClosureHook
 from wolfharness.capabilities.wiki.hooks.directory_structure import DirectoryStructureHook
 from wolfharness.capabilities.wiki.hooks.frontmatter_schema import FrontmatterSchemaHook
 from wolfharness.capabilities.wiki.hooks.reference_integrity import ReferenceIntegrityHook
-from wolfharness.capabilities.wiki.hooks.relationship_completeness import RelationshipCompletenessHook
+from wolfharness.capabilities.wiki.hooks.relationship_completeness import (
+    RelationshipCompletenessHook,
+)
 from wolfharness.capabilities.wiki.hooks.uri_integrity import URIIntegrityHook
+
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from wolfharness.capabilities.wiki.hooks.base import BaseHook, HookResult
+
 
 ENTITY_VALIDATION_HOOKS: tuple[BaseHook, ...] = (
     DirectoryStructureHook(),
@@ -64,10 +72,14 @@ def validation_feedback(results: Sequence[HookResult]) -> tuple[str, bool]:
     lines: list[str] = []
     if errors:
         lines.append(f"❌ {len(errors)} error(s) (write blocked):")
-        lines.extend(f"  [{result.severity}] {result.hook_name}: {result.message}" for result in errors)
+        lines.extend(
+            f"  [{result.severity}] {result.hook_name}: {result.message}" for result in errors
+        )
     if warnings:
         lines.append(f"⚠ {len(warnings)} warning(s):")
-        lines.extend(f"  [{result.severity}] {result.hook_name}: {result.message}" for result in warnings)
+        lines.extend(
+            f"  [{result.severity}] {result.hook_name}: {result.message}" for result in warnings
+        )
     return "\n".join(lines), bool(errors)
 
 

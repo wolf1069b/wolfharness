@@ -11,18 +11,18 @@ import re
 from wolfharness.capabilities.wiki.io.text_parsers import (
     _dir_to_clean_title,
 )
-from wolfharness.capabilities.wiki.storage import (
-    viking_read,
-)
 from wolfharness.capabilities.wiki.quality import (
     RawSourceKind,
     classify_raw_source_uri,
+)
+from wolfharness.capabilities.wiki.storage import (
+    viking_read,
 )
 
 
 logger = logging.getLogger(__name__)
 
-from .._helpers import _CHAPTER_COMPONENT_RE
+from wolfharness.capabilities.wiki._helpers import _CHAPTER_COMPONENT_RE
 
 
 class MigrationMixin:
@@ -250,9 +250,8 @@ class MigrationMixin:
         if current is None:
             # ponytail: fuzzy fallback — BOM may register Device under a different object_name
             for _concept, _cls, obj_name, _uri in self.store.list_entities("Device"):
-                if (
-                    obj_name.startswith(normalized_device_id)
-                    or normalized_device_id.startswith(obj_name)
+                if obj_name.startswith(normalized_device_id) or normalized_device_id.startswith(
+                    obj_name
                 ):
                     current = self.store.read_entity("Device", None, obj_name)
                     if current is not None:

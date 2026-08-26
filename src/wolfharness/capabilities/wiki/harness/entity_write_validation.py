@@ -9,16 +9,16 @@ are found.
 
 from __future__ import annotations
 
-import tempfile
 from datetime import UTC, datetime
+import tempfile
 from typing import TYPE_CHECKING, Any
 
 from pydantic_ai.capabilities import AbstractCapability
 from pydantic_ai.exceptions import ModelRetry
 from pydantic_ai.tools import AgentDepsT
+
 from wolfharness.capabilities.agent_context import AgentContextDeps, resolve_agent_context_from_deps
 from wolfharness.capabilities.file_team_state import FileTeamState
-
 from wolfharness.capabilities.wiki.auto_repair import clean_open_gap
 from wolfharness.capabilities.wiki.quality import parse_frontmatter
 from wolfharness.capabilities.wiki.validation import (
@@ -27,6 +27,7 @@ from wolfharness.capabilities.wiki.validation import (
     run_entity_validation,
     validation_feedback,
 )
+
 
 if TYPE_CHECKING:
     from pydantic_ai.capabilities.abstract import WrapToolExecuteHandler
@@ -74,7 +75,6 @@ _TASK_SCOPED_MUTATION_TOOLS: frozenset[str] = frozenset(
         "apply_ops",
         "ingest_external_ops",
         "create_opl",
-
         "apply_opl",
         "resolve_opa",
         "refine_opa_reason_code",
@@ -102,7 +102,11 @@ class EntityWriteValidationCapability(AbstractCapability[AgentDepsT]):
     def _wiki_tool_name(tool_name: str) -> str | None:
         if tool_name in _TOOLS_THAT_TRIGGER_HOOKS:
             return tool_name
-        matches = [candidate for candidate in _TOOLS_THAT_TRIGGER_HOOKS if tool_name.endswith(f"_{candidate}")]
+        matches = [
+            candidate
+            for candidate in _TOOLS_THAT_TRIGGER_HOOKS
+            if tool_name.endswith(f"_{candidate}")
+        ]
         return max(matches, key=len) if matches else None
 
     async def wrap_tool_execute(
@@ -180,7 +184,11 @@ class EntityWriteValidationCapability(AbstractCapability[AgentDepsT]):
     def validate_task_scope(tool_name: str, agent_ctx: AgentContextDeps) -> str:
         """Require team members to own active work before mutating the Wiki."""
         canonical = next(
-            (candidate for candidate in _TASK_SCOPED_MUTATION_TOOLS if tool_name == candidate or tool_name.endswith(f"_{candidate}")),
+            (
+                candidate
+                for candidate in _TASK_SCOPED_MUTATION_TOOLS
+                if tool_name == candidate or tool_name.endswith(f"_{candidate}")
+            ),
             None,
         )
         metadata = agent_ctx.session.metadata
@@ -199,7 +207,11 @@ class EntityWriteValidationCapability(AbstractCapability[AgentDepsT]):
         if not team_id or not member_name:
             return "Wiki mutation REJECTED: member task identity is incomplete."
         tasks = FileTeamState(base_dir).list_tasks(team_id)
-        active = [task for task in tasks if task.get("owner") == member_name and task.get("status") == "in_progress"]
+        active = [
+            task
+            for task in tasks
+            if task.get("owner") == member_name and task.get("status") == "in_progress"
+        ]
         if active:
             lease_tokens: dict[str, str] = metadata.setdefault("_task_lease_tokens", {})
             lease_seconds = int(getattr(agent_ctx.team_mode_config, "lease_ttl_seconds", 300))
@@ -293,9 +305,15 @@ class EntityWriteValidationCapability(AbstractCapability[AgentDepsT]):
             status = str(fm.get("status", "")).strip()
             pub_state = str(fm.get("publication_state", "")).strip()
             val_state = str(fm.get("validation_state", "")).strip()
-            is_formal = status in {"confirmed", "deprecated"} or pub_state == "published" or val_state == "machine_validated"
+            is_formal = (
+                status in {"confirmed", "deprecated"}
+                or pub_state == "published"
+                or val_state == "machine_validated"
+            )
             if is_formal:
-                formal_hooks = tuple(h for h in ENTITY_VALIDATION_HOOKS if h.name not in FORMAL_WRITE_EXCLUDED_HOOKS)
+                formal_hooks = tuple(
+                    h for h in ENTITY_VALIDATION_HOOKS if h.name not in FORMAL_WRITE_EXCLUDED_HOOKS
+                )
                 results = run_entity_validation(
                     content=content,
                     concept=concept,
@@ -309,6 +327,8 @@ class EntityWriteValidationCapability(AbstractCapability[AgentDepsT]):
                 is_downgraded = True
 
         if is_downgraded and "❌" in feedback:
-            feedback = feedback.replace("❌", "⚠️").replace("(write blocked)", "(draft — non-blocking)")
+            feedback = feedback.replace("❌", "⚠️").replace(
+                "(write blocked)", "(draft — non-blocking)"
+            )
 
         return feedback, has_errors

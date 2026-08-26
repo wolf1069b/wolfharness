@@ -19,12 +19,13 @@ if TYPE_CHECKING:
 
 
 def format_allowed_prefixes_block(prefixes: Sequence[str]) -> str:
-    """Build the allowed-prefix instruction block.
+    """Build the read allowed-prefix instruction block.
 
     Appended to the base instructions when ``allowed_uri_prefixes`` is
     configured. Rendered dynamically at ``get_instructions()`` time so the
-    model sees the exact prefixes this session may access — it can then pass
-    the most specific prefix as ``target_uri`` and skip discovery probing.
+    model sees the exact prefixes this session may read/search — it can then
+    pass the most specific prefix as ``target_uri`` and skip discovery
+    probing.
 
     Args:
         prefixes: The configured allowed URI prefixes.
@@ -34,14 +35,16 @@ def format_allowed_prefixes_block(prefixes: Sequence[str]) -> str:
     """
     allowed = "\n".join(f"  - `{p}`" for p in prefixes)
     return (
-        "\n### Allowed URI Prefixes (this session)\n"
-        "Your Viking access is restricted to these prefixes:\n"
+        "\n### Read URI Prefixes (this session)\n"
+        "Your Viking read/search access is restricted to these prefixes:\n"
         f"{allowed}\n"
         "When calling `viking_search` / `viking_find`, ALWAYS pass the most "
         "specific matching prefix as `target_uri` — it scopes the search and "
         "is faster. Omitting it searches all allowed prefixes, which is slower. "
         "Use `viking_ls` on these prefixes to see what is in scope. Do not "
-        "probe outside them — you will get access errors."
+        "probe outside them for reads — you will get read_scope_denied errors. "
+        "These prefixes are not write destinations and must not be compared "
+        "with provider-owned ticket submission scopes."
     )
 
 
@@ -125,15 +128,15 @@ Viking enforces path restrictions on write operations:
 Always use **full** `viking://` URIs. Never use relative paths.
 Use `viking_ls` to discover available URIs when unsure.
 
-### Access Restrictions (URI Prefixes)
+### Read Access Restrictions (URI Prefixes)
 
-This agent's Viking access may be restricted to a configured set of URI
-prefixes. URIs outside those prefixes are rejected by the tools with an
-error. When an access error appears, do not retry with modified URIs —
-use `viking_ls` on the allowed prefixes to see what is in scope, or use
-`viking_search`/`viking_find` without a `target_uri` (the search is
-scoped automatically). Never attempt to bypass the restriction by
-guessing paths.
+This agent's Viking read/search access may be restricted to a configured set of
+URI prefixes. These prefixes scope retrieval and evidence discovery only; they
+are not write destinations and must not be treated as provider-owned submission
+scopes. When a read access error appears, do not retry with modified URIs — use
+`viking_ls` on the read prefixes to see what is in scope, or use
+`viking_search`/`viking_find` without a `target_uri` (the search is scoped
+automatically). Never infer write paths from citation or read prefixes.
 
 ### Memory Tools
 

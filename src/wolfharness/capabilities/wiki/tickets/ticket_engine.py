@@ -364,6 +364,22 @@ class TicketEngine:
             return f"{self.store.root_uri}/{key}"
         return f"{self.store.root_uri}/{self.store.CONCEPT_DIRS[concept]}/{record_id}.md"
 
+    def is_valid_op_uri(self, uri: str) -> bool:
+        """Return whether *uri* is an acceptable OPA/OPS reference URI.
+
+        Mirrors the format rules enforced by ``_validate_opa_uris``: a
+        ``viking://resources/...`` provider reference (any namespace), a URI
+        inside the active wiki store's namespace, or a raw-source library
+        URI all pass.  Existence is not checked -- the record may be filed
+        before the entity is merged, and reference scopes may live outside
+        the write store's namespace.
+        """
+        return (
+            uri.startswith("viking://resources/")
+            or self.store.is_wiki_uri(uri)
+            or classify_raw_source_uri(uri, raw_root_uri=self._raw_fs.root_uri) is not None
+        )
+
     def _validate_opa_uris(self, target_uri: str, evidence_uris: list[str]) -> None:
         """Require and validate the URI association of an OPA.
 
@@ -372,9 +388,10 @@ class TicketEngine:
         are checked; existence is not (the record may be filed before the
         entity is merged).
 
-        Accepts any ``viking://resources/`` URI regardless of namespace,
-        because OPA/OPS records may target entities from multiple
-        namespaces (e.g. wiki build namespace vs. raw source namespace).
+        Accepts provider resource references outside the active write store.
+        OPA/OPS records are written to the provider-owned ticket scope, while
+        ``target_uri`` and ``evidence_uris`` are read/citation references and
+        may point at a different provider-owned resource scope.
         """
         uris = [uri for uri in (target_uri, *evidence_uris) if uri]
         if not uris:
@@ -384,9 +401,9 @@ class TicketEngine:
                 f"(viking://resources/... source chapters).",
             )
         for uri in uris:
-            if not uri.startswith("viking://resources/"):
+            if not self.is_valid_op_uri(uri):
                 raise ValueError(
-                    f"OPA URI must be a viking://resources/ URI, got {uri!r}.",
+                    f"OPA URI must be a provider resource URI or local wiki/raw URI, got {uri!r}.",
                 )
 
     @staticmethod
@@ -535,8 +552,7 @@ class TicketEngine:
         # the checkpoint build_id match is sufficient scoping.
         checkpoint = self.store.read_json("index/build_checkpoint.json")
         return (
-            isinstance(checkpoint, dict)
-            and str(checkpoint.get("build_id", "")).strip() == build_id
+            isinstance(checkpoint, dict) and str(checkpoint.get("build_id", "")).strip() == build_id
         )
 
     def _opa_category_from_key(self, key: str) -> str:
@@ -729,7 +745,7 @@ class TicketEngine:
             record.get("category", "")
         ).strip().lower() == "gap" and self._is_explicit_tracked_record(record)
 
-    def create_opa(  # noqa: PLR0915 - CRUD entry point with sequential validation phases
+    def create_opa(
         self,
         *,
         title: str,
@@ -954,6 +970,7 @@ class TicketEngine:
             uri
             for uri in dict.fromkeys([*evidence_uris, *related_uris])
             if uri
+            and not uri.startswith("viking://resources/")
             and self.read_resource(uri) is None
             and classify_raw_source_uri(uri, raw_root_uri=self._raw_fs.root_uri) is None
         ]
@@ -1590,9 +1607,7 @@ class TicketEngine:
         result["updated"] = True
         return result
 
-    def apply_ops(  # noqa: PLR0911 - state-machine dispatch with early-exit guards
-        self, ops_id: str
-    ) -> dict[str, object]:
+    def apply_ops(self, ops_id: str) -> dict[str, object]:
         """Apply a confirmed OPS candidate with optimistic locking.
 
         This is deliberately separate from OPS creation and review.  No
@@ -1925,7 +1940,7 @@ class TicketEngine:
             100,
         ).rstrip("-._")
 
-    def ingest_external_opl(  # noqa: PLR0915 - sequential CRUD entry point
+    def ingest_external_opl(
         self,
         *,
         title: str,
@@ -2150,9 +2165,7 @@ class TicketEngine:
             resolved += 1
         return resolved
 
-    def apply_opl(  # noqa: PLR0911 - apply-state machine with early-exit guards
-        self, opl_id: str
-    ) -> dict[str, object]:
+    def apply_opl(self, opl_id: str) -> dict[str, object]:
         """Apply a stored external OPL exactly once when it is machine-ready."""
         key = self._find_op_key("OPL", opl_id)
         if not key:
@@ -2532,7 +2545,7 @@ class TicketEngine:
             "remaining_count": remaining_count,  # NEW
         }
 
-    def op_flow_report(  # noqa: PLR0915
+    def op_flow_report(
         self,
         *,
         persist: bool = True,
@@ -2684,7 +2697,7 @@ class TicketEngine:
             self.store.write_json("index/op_flow_report.json", report)
         return report
 
-    def discover_opa(  # noqa: PLR0915 - audit→OPA pipeline with pagination loop
+    def discover_opa(
         self,
         *,
         profile: BuildProfile = "manual",

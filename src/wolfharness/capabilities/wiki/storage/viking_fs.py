@@ -13,15 +13,15 @@ a local index.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack
+from datetime import datetime
 import hashlib
 import logging
 import os
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
-from contextlib import ExitStack
-from datetime import datetime
-from typing import ClassVar, Protocol
+from typing import Protocol
 
 from httpx import HTTPError
 from openviking_sdk.errors import (  # type: ignore[import-untyped]
@@ -32,8 +32,8 @@ from openviking_sdk.errors import (  # type: ignore[import-untyped]
 
 from .backend import FSBackend, _strip_control_chars
 
-logger = logging.getLogger(__name__)
 
+logger = logging.getLogger(__name__)
 
 
 class VikingClient(Protocol):
@@ -301,7 +301,10 @@ class VikingFS(FSBackend):
         """Return whether a server response is safe to retry as a read."""
         code = str(getattr(exc, "code", "")).upper()
         text = str(exc).lower()
-        return code in {"408", "429", "500", "502", "503", "504"} or any(marker in text for marker in ("http 408", "http 429", "http 5", "temporarily unavailable", "timeout"))
+        return code in {"408", "429", "500", "502", "503", "504"} or any(
+            marker in text
+            for marker in ("http 408", "http 429", "http 5", "temporarily unavailable", "timeout")
+        )
 
     @staticmethod
     def _read_retry_limit() -> int:
@@ -320,15 +323,22 @@ class VikingFS(FSBackend):
 
     @staticmethod
     def _is_not_found(exc: OpenVikingError) -> bool:
-        return str(getattr(exc, "code", "")).upper() == "NOT_FOUND" or isinstance(exc, NotFoundError)
+        return str(getattr(exc, "code", "")).upper() == "NOT_FOUND" or isinstance(
+            exc, NotFoundError
+        )
 
     @staticmethod
     def _is_busy(exc: OpenVikingError) -> bool:
         code = str(getattr(exc, "code", "")).upper()
         details = getattr(exc, "details", {})
-        detail_text = " ".join(str(value) for value in details.values()) if isinstance(details, dict) else ""
+        detail_text = (
+            " ".join(str(value) for value in details.values()) if isinstance(details, dict) else ""
+        )
         text = f"{type(exc).__name__} {exc} {detail_text}".lower()
-        return code in {"CONFLICT", "ABORTED"} and any(marker in text for marker in ("resourcebusy", "resource busy", "lock", "busy", "acquisition"))
+        return code in {"CONFLICT", "ABORTED"} and any(
+            marker in text
+            for marker in ("resourcebusy", "resource busy", "lock", "busy", "acquisition")
+        )
 
     @staticmethod
     def _write_retry_limit() -> int:
@@ -495,7 +505,12 @@ class VikingFS(FSBackend):
             return None
         # Prefer an explicit timestamp; fall back to a version counter so the
         # cache-fingerprint comparison still invalidates on write.
-        updated = info.get("modTime") or info.get("updated_at") or info.get("version") or info.get("mtime")
+        updated = (
+            info.get("modTime")
+            or info.get("updated_at")
+            or info.get("version")
+            or info.get("mtime")
+        )
         return self._timestamp_to_ns(updated)
 
     def size(self, key: str) -> int | None:
@@ -520,10 +535,17 @@ class VikingFS(FSBackend):
             raise
         if not info or info.get("isDir"):
             return None, None
-        updated = info.get("modTime") or info.get("updated_at") or info.get("version") or info.get("mtime")
+        updated = (
+            info.get("modTime")
+            or info.get("updated_at")
+            or info.get("version")
+            or info.get("mtime")
+        )
         mtime_ns = self._timestamp_to_ns(updated)
         size = info.get("size") or info.get("byte_size") or info.get("content_length")
-        size_value = int(size) if isinstance(size, (int, float, str)) and str(size).isdigit() else None
+        size_value = (
+            int(size) if isinstance(size, (int, float, str)) and str(size).isdigit() else None
+        )
         return mtime_ns, size_value
 
     def mkdir_p(self, key: str) -> None:

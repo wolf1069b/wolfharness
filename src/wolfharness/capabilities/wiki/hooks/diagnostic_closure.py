@@ -32,7 +32,11 @@ class DiagnosticClosureHook(BaseHook):
                 message="Diagnostic closure is enforced when status is confirmed.",
             )
 
-        missing = [check.code for check in confirmation_requirements(content, concept, class_name) if not check.complete]
+        missing = [
+            check.code
+            for check in confirmation_requirements(content, concept, class_name)
+            if not check.complete
+        ]
         if has_unresolved_placeholder(content):
             missing.append("content.unresolved_placeholder")
         if missing:

@@ -17,10 +17,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from pydantic_ai import RunContext
 from pydantic_ai.capabilities import AbstractCapability
-from pydantic_ai.models import ModelRequestContext
-from wolfharness.agents.context import AgentContext
+
 from wolfharness.messaging.compaction import (
     CompactionPipeline,
     FilterToolCalls,
@@ -29,8 +27,13 @@ from wolfharness.messaging.compaction import (
     compact_conversation,
 )
 
+
 if TYPE_CHECKING:
-    pass
+    from pydantic_ai import RunContext
+    from pydantic_ai.models import ModelRequestContext
+
+    from wolfharness.agents.context import AgentContext
+
 
 logger = logging.getLogger(__name__)
 
@@ -107,9 +110,7 @@ class MessageCountCompactionCapability(AbstractCapability[Any]):
             return request_context
 
         chat_messages = conversation.get_history()
-        total_model_msgs = sum(
-            len(cm.messages) if cm.messages else 0 for cm in chat_messages
-        )
+        total_model_msgs = sum(len(cm.messages) if cm.messages else 0 for cm in chat_messages)
         if total_model_msgs <= self._max_messages:
             return request_context
 

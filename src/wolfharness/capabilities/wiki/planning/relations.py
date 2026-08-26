@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -32,7 +31,17 @@ from wolfharness.capabilities.wiki.section_constants import (
 
 logger = logging.getLogger(__name__)
 
-from .._helpers import _RELATION_CLOSURE_READY_STAGES, _entity_batch_limit, _io_worker_limit
+from typing import TYPE_CHECKING
+
+from wolfharness.capabilities.wiki._helpers import (
+    _RELATION_CLOSURE_READY_STAGES,
+    _entity_batch_limit,
+    _io_worker_limit,
+)
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class RelationMixin:
@@ -355,7 +364,12 @@ class RelationMixin:
                         fname = str(ff.get("title", fault_uris[0].rsplit("/", 1)[-1]))
                         fault_display = f"[{fname.replace('|', '／')}]({fault_uris[0]})"
                 model_prefix = dtc_class.split("_", 1)[0] if "_" in dtc_class else dtc_class
-                dtc_by_model.setdefault(model_prefix, []).append((role, code, dtc_uri, fault_display))
+                dtc_by_model.setdefault(model_prefix, []).append((
+                    role,
+                    code,
+                    dtc_uri,
+                    fault_display,
+                ))
             for _concept, class_name, object_name, device_uri in self.store.list_entities("Device"):
                 content = self.store.read_entity_by_uri(device_uri)
                 if content is None:
@@ -473,9 +487,7 @@ class RelationMixin:
                             "| --- |",
                         ]
                         for sname, suri in sorted(symptom_links):
-                            table_lines.append(
-                                f"| [{sname.replace('|', '／')}]({suri}) |"
-                            )
+                            table_lines.append(f"| [{sname.replace('|', '／')}]({suri}) |")
                         updated = self._replace_h2_section(
                             updated, "常见故障及故障机理", "\n".join(table_lines)
                         )
@@ -622,7 +634,7 @@ class RelationMixin:
             for field in relation_fields:
                 value = frontmatter.get(field)
                 values = relation_values(value)
-                if value is None or value == "" or value == []:
+                if value is None or value in ("", []):
                     # Body fallback: check if the body section has URIs before
                     # flagging this field missing (body-first authoring).
                     if all_relation_uris(content, str(concept), field, root_uri):
@@ -1281,7 +1293,9 @@ class RelationMixin:
                 },
             )
 
-        preloaded = {uri: content for uri, _fields, content in update_records if content is not None}
+        preloaded = {
+            uri: content for uri, _fields, content in update_records if content is not None
+        }
         patched: list[str] = []
         batch_limit = _entity_batch_limit()
         for start in range(0, len(patches), batch_limit):

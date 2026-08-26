@@ -228,6 +228,17 @@ class SkillManagerCap(
         _inject_mode: Instruction injection mode (description/matcher/all).
     """
 
+    @property
+    def owned_schemes(self) -> frozenset[str]:
+        """URI schemes this provider authoritatively handles.
+
+        SkillManagerCap owns the ``skill`` URI scheme exclusively.
+
+        Returns:
+            ``frozenset({"skill"})``.
+        """
+        return frozenset({"skill"})
+
     def __init__(
         self,
         local_skills: dict[str, Skill] | None = None,

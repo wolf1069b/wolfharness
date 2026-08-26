@@ -24,6 +24,7 @@ from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 import warnings
 
+from wolfharness.capabilities.uri_scheme_registry import UriSchemeRegistry
 from wolfharness.log import get_logger
 
 
@@ -36,6 +37,7 @@ if TYPE_CHECKING:
     from wolfharness.capabilities.resource_protocols import (
         ChangeObservable,
         CommandResource,
+        McpResourceProvider,
         ResourceAccess,
         ResourceTemplateAccess,
         SkillResource,
@@ -126,6 +128,7 @@ class ExtensionRegistry:
     def __init__(
         self,
         max_composition_depth: int = DEFAULT_MAX_COMPOSITION_DEPTH,
+        scheme_registry: UriSchemeRegistry | None = None,
     ) -> None:
         """Initialize the registry with empty scope storage.
 
@@ -133,8 +136,12 @@ class ExtensionRegistry:
             max_composition_depth: Maximum composition depth (root-inclusive).
                 When depth exceeds this limit, a warning is logged but
                 registration is NOT blocked. Default: 3.
+            scheme_registry: Optional ``UriSchemeRegistry`` for scheme-based
+                resource routing. When ``None``, routing falls back to the
+                legacy iteration over all providers.
         """
         self._max_composition_depth = max_composition_depth
+        self._scheme_registry = scheme_registry or UriSchemeRegistry()
 
         # 4-level scope storage: POOL > AGENT > SESSION > TURN
         self._pool: list[AbstractCapability[Any]] = []
@@ -316,6 +323,20 @@ class ExtensionRegistry:
         self._turn.pop(session_id, None)
 
     # ------------------------------------------------------------------
+    # Properties
+    # ------------------------------------------------------------------
+
+    @property
+    def scheme_registry(self) -> UriSchemeRegistry:
+        """Return the URI scheme registry for resource routing.
+
+        Returns:
+            The ``UriSchemeRegistry`` instance, which is created
+            automatically during ``__init__`` if one was not provided.
+        """
+        return self._scheme_registry
+
+    # ------------------------------------------------------------------
     # Query
     # ------------------------------------------------------------------
 
@@ -387,7 +408,24 @@ class ExtensionRegistry:
         from wolfharness.capabilities.resource_protocols import ResourceAccess
 
         return [
-            cap for cap in self.get_visible_capabilities(scope) if isinstance(cap, ResourceAccess)
+            cap
+            for cap in self.get_visible_capabilities(scope)
+            if isinstance(cap, ResourceAccess)
+            and getattr(cap, "resources_supported", None) is not False
+        ]
+
+    def get_mcp_resource_providers(
+        self,
+        scope: Scope,
+    ) -> list[McpResourceProvider]:
+        """Get visible providers implementing the paged MCP Resource contract."""
+        from wolfharness.capabilities.resource_protocols import McpResourceProvider
+
+        return [
+            cap
+            for cap in self.get_visible_capabilities(scope)
+            if isinstance(cap, McpResourceProvider)
+            and getattr(cap, "resources_supported", None) is not False
         ]
 
     def get_tool_access(

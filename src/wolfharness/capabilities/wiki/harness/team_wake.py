@@ -32,18 +32,20 @@ re-raises the original error so the run's failure semantics are unchanged.
 from __future__ import annotations
 
 import asyncio
-import re
 from dataclasses import dataclass
+import re
 from typing import TYPE_CHECKING, Any
 
 from pydantic_ai.capabilities import AbstractCapability
 from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
+
 from wolfharness.capabilities.agent_context import (
     AgentContextDeps,
     resolve_agent_context_from_deps,
 )
 from wolfharness.capabilities.file_team_state import FileTeamState
 from wolfharness.lifecycle.types import DeliveryMode
+
 
 if TYPE_CHECKING:
     from pydantic_ai._run_context import RunContext
@@ -173,7 +175,9 @@ class TeamWakeCapability(AbstractCapability[Any]):
     @staticmethod
     def _unfinished_team_tasks(tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Return tasks that still require execution or reassignment."""
-        return [task for task in tasks if task.get("status") in {"pending", "in_progress", "blocked"}]
+        return [
+            task for task in tasks if task.get("status") in {"pending", "in_progress", "blocked"}
+        ]
 
     @staticmethod
     def _patrol_attention_fingerprint(
@@ -187,8 +191,14 @@ class TeamWakeCapability(AbstractCapability[Any]):
         Pending/blocked work, a released lease, or an empty task board before
         terminal ``build_state`` all require conductor action.
         """
-        released_ids = sorted(f"{lease.task_id}:{'blocked' if lease.blocked else 'pending'}" for lease in released)
-        attention_tasks = sorted(f"{task.get('task_id', '')}:{task.get('status', '')}:{task.get('owner', '')}" for task in tasks if task.get("status") in {"pending", "blocked"})
+        released_ids = sorted(
+            f"{lease.task_id}:{'blocked' if lease.blocked else 'pending'}" for lease in released
+        )
+        attention_tasks = sorted(
+            f"{task.get('task_id', '')}:{task.get('status', '')}:{task.get('owner', '')}"
+            for task in tasks
+            if task.get("status") in {"pending", "blocked"}
+        )
         if released_ids:
             return "released=" + "|".join(released_ids)
         if attention_tasks:
@@ -286,11 +296,18 @@ class TeamWakeCapability(AbstractCapability[Any]):
         for task in tasks:
             task_id = str(task.get("task_id", ""))
             owner = str(task.get("owner", ""))
-            if not task_id or not owner or owner == self._conductor_name or task.get("status") != "in_progress":
+            if (
+                not task_id
+                or not owner
+                or owner == self._conductor_name
+                or task.get("status") != "in_progress"
+            ):
                 continue
             active_ids.add(task_id)
             fingerprint = self._task_progress_fingerprint(task)
-            counts[task_id] = counts.get(task_id, 0) + 1 if previous.get(task_id) == fingerprint else 1
+            counts[task_id] = (
+                counts.get(task_id, 0) + 1 if previous.get(task_id) == fingerprint else 1
+            )
             previous[task_id] = fingerprint
             if counts[task_id] < self._stall_patrol_limit:
                 continue
@@ -305,7 +322,9 @@ class TeamWakeCapability(AbstractCapability[Any]):
                     "owner": "",
                     "takeover_count": takeover_count,
                     "last_note": (
-                        "automatic takeover limit exceeded; conductor must diagnose and replan" if blocked else "lease released after patrols observed no external progress"
+                        "automatic takeover limit exceeded; conductor must diagnose and replan"
+                        if blocked
+                        else "lease released after patrols observed no external progress"
                     ),
                 },
             )
@@ -430,7 +449,11 @@ class TeamWakeCapability(AbstractCapability[Any]):
         last_fingerprint: str | None = agent_ctx.session.metadata.get(
             "_task_reminder_fingerprint",
         )
-        stall_turns: int = agent_ctx.session.metadata.get("_task_stall_turn_count", 0) + 1 if last_fingerprint == fingerprint else 1
+        stall_turns: int = (
+            agent_ctx.session.metadata.get("_task_stall_turn_count", 0) + 1
+            if last_fingerprint == fingerprint
+            else 1
+        )
         agent_ctx.session.metadata["_task_reminder_fingerprint"] = fingerprint
         agent_ctx.session.metadata["_task_stall_turn_count"] = stall_turns
 
@@ -555,9 +578,16 @@ class TeamWakeCapability(AbstractCapability[Any]):
         if session_pool is None:
             return
 
-        actionable = [t for t in sorted(tasks, key=lambda t: t.get("task_id", "")) if t.get("status") in {"pending", "blocked"}]
+        actionable = [
+            t
+            for t in sorted(tasks, key=lambda t: t.get("task_id", ""))
+            if t.get("status") in {"pending", "blocked"}
+        ]
         summary = (
-            "\n".join(f"- {t.get('task_id', '')}: {t.get('status', '')} owner={t.get('owner', '')} {t.get('subject', '')}" for t in actionable)
+            "\n".join(
+                f"- {t.get('task_id', '')}: {t.get('status', '')} owner={t.get('owner', '')} {t.get('subject', '')}"
+                for t in actionable
+            )
             or "- 任务板已清空；继续 audit、修复、backlinks、finalize。"
         )
         body = (
@@ -624,7 +654,9 @@ class TeamWakeCapability(AbstractCapability[Any]):
                         )
                         state_block = ""
                         if build_state_text:
-                            state_block = f"\n== build_state (from blackboard) ==\n{build_state_text}\n\n"
+                            state_block = (
+                                f"\n== build_state (from blackboard) ==\n{build_state_text}\n\n"
+                            )
                         await session_pool.send_message(
                             own_sid,
                             (
@@ -684,20 +716,37 @@ class TeamWakeCapability(AbstractCapability[Any]):
                             None,
                         )
                         continue
-                    if agent_ctx.session.metadata.get("_last_patrol_attention_fp") == attention_fingerprint:
+                    if (
+                        agent_ctx.session.metadata.get("_last_patrol_attention_fp")
+                        == attention_fingerprint
+                    ):
                         continue
                     agent_ctx.session.metadata["_last_patrol_attention_fp"] = attention_fingerprint
                     state_block = ""
                     if build_state_text:
-                        state_block = f"\n== build_state (from blackboard) ==\n{build_state_text}\n\n"
+                        state_block = (
+                            f"\n== build_state (from blackboard) ==\n{build_state_text}\n\n"
+                        )
                     release_block = ""
                     if released:
                         retry_ids = [lease.task_id for lease in released if not lease.blocked]
                         blocked_ids = [lease.task_id for lease in released if lease.blocked]
                         release_block = (
                             "\n连续无进展 worker 会话已终止。"
-                            + ("任务已释放为 pending：" + ", ".join(retry_ids) + "。请立即重新分配。" if retry_ids else "")
-                            + (" 超过自动接管上限、已转 blocked，conductor 必须诊断并拆小/换策略：" + ", ".join(blocked_ids) + "。" if blocked_ids else "")
+                            + (
+                                "任务已释放为 pending："
+                                + ", ".join(retry_ids)
+                                + "。请立即重新分配。"
+                                if retry_ids
+                                else ""
+                            )
+                            + (
+                                " 超过自动接管上限、已转 blocked，conductor 必须诊断并拆小/换策略："
+                                + ", ".join(blocked_ids)
+                                + "。"
+                                if blocked_ids
+                                else ""
+                            )
                             + "\n"
                         )
                     await session_pool.send_message(
@@ -765,7 +814,11 @@ class TeamWakeCapability(AbstractCapability[Any]):
         )
         if not member_name:
             return []
-        return [task for task in team_state.list_tasks(team_id) if task.get("owner") == member_name and task.get("status") in {"pending", "in_progress"}]
+        return [
+            task
+            for task in team_state.list_tasks(team_id)
+            if task.get("owner") == member_name and task.get("status") in {"pending", "in_progress"}
+        ]
 
     @staticmethod
     def _worker_progress_fingerprint(tasks: list[dict[str, Any]]) -> str:

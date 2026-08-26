@@ -199,17 +199,34 @@ def _title_from_text(text: str, fallback: str) -> str:
     return (first_line[:60] or fallback) if first_line else fallback
 
 
-def _ticket_evidence(revision: EvalRevision | None) -> list[str]:
+def _ticket_evidence(
+    revision: EvalRevision | None,
+    *,
+    is_uri_valid: Callable[[str], bool] | None = None,
+) -> list[str]:
     """Collect tractable evidence URIs from an eval revision.
 
     Combines ``cited_references[].uri`` (引用的证据) and ``evidence``
     (修改关联的uri) — both are user contracts that must flow into the
     OPA/OPS/OPL ``evidence_uris``.
+
+    ``cited_references[].uri`` entries are trusted references and are always
+    kept.  ``evidence`` entries are free-form user expressions: they may
+    carry provider URIs or plain audit text (for example ``QuotedText: ...``
+    or ``Matched knowledge snippet: ...``).  When *is_uri_valid* is supplied
+    (the engine's ``is_valid_op_uri`` predicate), only entries that pass are
+    treated as URIs; plain-text entries are dropped instead of being
+    submitted as invalid evidence URIs.
     """
     if revision is None:
         return []
     cited = [ref.uri.strip() for ref in revision.cited_references if ref.uri.strip()]
-    linked = [uri.strip() for uri in revision.evidence if uri.strip()]
+    if is_uri_valid is None:
+        linked = [uri.strip() for uri in revision.evidence if uri.strip()]
+    else:
+        linked = [
+            uri.strip() for uri in revision.evidence if uri.strip() and is_uri_valid(uri.strip())
+        ]
     return list(dict.fromkeys([*cited, *linked]))
 
 
@@ -287,6 +304,13 @@ def _sync_entity_to_remote(tools: Any, target_uri: str, opl_uri: str) -> dict[st
 
 def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Callable[..., Any]]:
     """Build the six ticket tool closures capturing the tools instance."""
+    # OPA/OPS ticket closures re-derive evidence URIs from the eval revision
+    # dict, bypassing the provider-side adapter filter.  Capture the engine's
+    # URI-validity predicate so plain-text ``evidence`` entries are not
+    # blindly submitted as evidence URIs.  Falls back to the historical
+    # blind merge when the engine does not expose ``is_valid_op_uri``.
+    raw_predicate = getattr(tools, "is_valid_op_uri", None)
+    is_uri_valid: Callable[[str], bool] | None = raw_predicate if callable(raw_predicate) else None
 
     async def create_opa_ticket(
         ctx: RunContext[Any],
@@ -351,7 +375,7 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
         """
         revision = EvalRevision.model_validate(ticket) if ticket is not None else None
         target = revision.target if revision is not None else None
-        derived_evidence = _ticket_evidence(revision)
+        derived_evidence = _ticket_evidence(revision, is_uri_valid=is_uri_valid)
         description = description or (
             (target.content_snippet if target is not None and target.content_snippet else "")
             or (revision.suggested_resolution if revision is not None else "")
@@ -451,7 +475,7 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
             or (revision.suggested_resolution if revision is not None else "")
             or ""
         )
-        derived_evidence = _ticket_evidence(revision)
+        derived_evidence = _ticket_evidence(revision, is_uri_valid=is_uri_valid)
         effective_related = list(
             dict.fromkeys(uri.strip() for uri in (related_uris or []) if uri.strip()),
         )
@@ -638,7 +662,7 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
                 for piece in (revision.expert_opinion, target.content_snippet if target else "")
                 if piece
             )
-        effective_derived_evidence = _ticket_evidence(revision)
+        effective_derived_evidence = _ticket_evidence(revision, is_uri_valid=is_uri_valid)
         effective_evidence = list(
             dict.fromkeys(
                 [
@@ -768,8 +792,12 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
             ``op_flow`` state.
         """
         opas = await asyncio.to_thread(tools.get_opas, target_uri=target_uri, limit=limit)
-        ops = await asyncio.to_thread(tools.get_ops, parent_opa=parent_opa, target_uri=target_uri, limit=limit)
-        opls = await asyncio.to_thread(tools.get_opls, parent_opa=parent_opa, target_uri=target_uri, limit=limit)
+        ops = await asyncio.to_thread(
+            tools.get_ops, parent_opa=parent_opa, target_uri=target_uri, limit=limit
+        )
+        opls = await asyncio.to_thread(
+            tools.get_opls, parent_opa=parent_opa, target_uri=target_uri, limit=limit
+        )
         # op_flow_status is a global scan (get_opas 500 + get_ops 10000) — skip
         # it when a single target_uri is queried; it's irrelevant to per-target
         # ticket lookup and dominates latency on remote backends.
@@ -841,7 +869,7 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
         for revision in payload_obj.revisions:
             target = revision.target
             target_uri = (target.entity_uri if target is not None else "") or payload_obj.entity_uri
-            evidence_uris = _ticket_evidence(revision)
+            evidence_uris = _ticket_evidence(revision, is_uri_valid=is_uri_valid)
             description = (
                 (target.content_snippet if target is not None else "")
                 or revision.suggested_resolution

@@ -30,9 +30,14 @@ from __future__ import annotations
 
 import re
 
-from wolfharness.capabilities.wiki.quality import extract_malformed_wiki_uris, is_wiki_uri, parse_frontmatter
+from wolfharness.capabilities.wiki.quality import (
+    extract_malformed_wiki_uris,
+    is_wiki_uri,
+    parse_frontmatter,
+)
 
 from .base import BaseHook, HookResult
+
 
 # Body placeholder patterns indicating incomplete URI references
 _PLACEHOLDER_PATTERNS: list[re.Pattern[str]] = [
@@ -192,7 +197,9 @@ class ReferenceIntegrityHook(BaseHook):
                 invalid_relations.append(f"{field}={value}")
         if invalid_relations:
             issues.append(
-                "Relation field(s) contain non-resolvable wiki identifiers: " + ", ".join(invalid_relations[:5]) + ". Use a real wiki URI or leave an explicit open_gap.",
+                "Relation field(s) contain non-resolvable wiki identifiers: "
+                + ", ".join(invalid_relations[:5])
+                + ". Use a real wiki URI or leave an explicit open_gap.",
             )
 
         if issues:

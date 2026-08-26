@@ -22,14 +22,18 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Protocol
 
+
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from wolfharness.capabilities.wiki.quality import BuildProfile, SourceReadResult, WikiAuditReport
-
-    from ..build.build_logger import WikiBuildLogger
-    from ..storage.backend import FSBackend
-    from ..storage.storage import WikiStore
+    from wolfharness.capabilities.build.build_logger import WikiBuildLogger
+    from wolfharness.capabilities.storage.backend import FSBackend
+    from wolfharness.capabilities.storage.storage import WikiStore
+    from wolfharness.capabilities.wiki.quality import (
+        BuildProfile,
+        SourceReadResult,
+        WikiAuditReport,
+    )
 
 
 class WikiBuildDeps(Protocol):

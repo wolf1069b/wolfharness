@@ -14,9 +14,8 @@ because nothing triggers the next turn.
 
 from __future__ import annotations
 
-import re
 from collections import Counter
-from collections.abc import Iterable
+import re
 from typing import TYPE_CHECKING
 
 from pydantic_ai.capabilities import AbstractCapability
@@ -24,7 +23,10 @@ from pydantic_ai.exceptions import ModelRetry
 from pydantic_ai.messages import ModelResponse, TextPart, ThinkingPart, ToolCallPart
 from pydantic_ai.tools import AgentDepsT
 
+
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from pydantic_ai.models import ModelRequestContext
     from pydantic_ai.tools import RunContext
 
@@ -60,8 +62,7 @@ _REPETITION_RETRY_MESSAGE = (
 )
 
 _EMPTY_RESPONSE_MESSAGE = (
-    "你上一轮没有产出任何内容（无文本输出、无工具调用）。"
-    "请产出有效内容或调用工具，不能返回空响应。"
+    "你上一轮没有产出任何内容（无文本输出、无工具调用）。请产出有效内容或调用工具，不能返回空响应。"
 )
 
 _INSTRUCTIONS = """\

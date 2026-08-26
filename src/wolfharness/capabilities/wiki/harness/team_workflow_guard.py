@@ -10,16 +10,19 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 from pydantic_ai.capabilities import AbstractCapability
 from pydantic_ai.exceptions import ModelRetry
 from pydantic_ai.tools import AgentDepsT
+
 from wolfharness.capabilities.agent_context import AgentContextDeps, resolve_agent_context_from_deps
 from wolfharness.capabilities.file_team_state import FileTeamState
 
+
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from pydantic_ai.capabilities.abstract import WrapToolExecuteHandler
     from pydantic_ai.messages import ToolCallPart
     from pydantic_ai.tools import RunContext, ToolDefinition
@@ -60,7 +63,9 @@ _PACKET_DECL_RE = re.compile(
 )
 _PROFILE_DECL_RE = re.compile(r"\baudit_profile\s*[:=]\s*['\"]?(manual|case)\b", re.IGNORECASE)
 _EXPECTED_ARTIFACTS_RE = re.compile(r"\bexpected_artifacts?\s*[:=]", re.IGNORECASE)
-_PHASE_1A_RE = re.compile(r"(?:\b1a\b|phase\s*1a|source[- ]analysis|source\s+packet)", re.IGNORECASE)
+_PHASE_1A_RE = re.compile(
+    r"(?:\b1a\b|phase\s*1a|source[- ]analysis|source\s+packet)", re.IGNORECASE
+)
 _PHASE_0_RE = re.compile(r"(?:\bphase\s*[:=]?\s*(?:phase)?0\b|\bphase0\b)", re.IGNORECASE)
 _PHASE_0_OPERATION_RE = re.compile(
     r"\bphase0_operation\s*[:=]\s*['\"]?"
@@ -183,7 +188,10 @@ class TeamWorkflowGuardCapability(AbstractCapability[AgentDepsT]):
 
         result = await handler(args)
         if call.tool_name.endswith("finalize_wiki") and isinstance(result, dict):
-            if result.get("status") in ("finalized", "finalized_local") and result.get("op_flow_passed") is True:
+            if (
+                result.get("status") in ("finalized", "finalized_local")
+                and result.get("op_flow_passed") is True
+            ):
                 agent_ctx.session.metadata["_wiki_finalize_receipt"] = {
                     "audit_profile": str(result.get("audit_profile", "")),
                     "source_snapshot_id": str(result.get("source_snapshot_id", "")),
@@ -231,7 +239,12 @@ class TeamWorkflowGuardCapability(AbstractCapability[AgentDepsT]):
                     and str(existing.get("subject", "")).strip() == subject.strip()
                     and existing.get("status") not in {"completed", "cancelled", "deleted"}
                 ]
-                duplicate = [existing for existing in same_subject if not new_chunk_id or _chunk_id_of(str(existing.get("description", ""))) == new_chunk_id]
+                duplicate = [
+                    existing
+                    for existing in same_subject
+                    if not new_chunk_id
+                    or _chunk_id_of(str(existing.get("description", ""))) == new_chunk_id
+                ]
                 if duplicate:
                     sample_id = str(duplicate[0].get("task_id", "?"))
                     sample_status = str(duplicate[0].get("status", "?"))
@@ -247,7 +260,11 @@ class TeamWorkflowGuardCapability(AbstractCapability[AgentDepsT]):
                     errors.append(f"Task {index}: OP tasks must declare `worker_role`. ")
                 elif _EXTRACTION_TASK_RE.search(text):
                     owner = str(task.get("owner", task.get("assigned_to", ""))).strip()
-                    owner_agent = team_state.get_member_agent(team_id, owner) if team_state and owner else None
+                    owner_agent = (
+                        team_state.get_member_agent(team_id, owner)
+                        if team_state and owner
+                        else None
+                    )
                     if owner_agent != "wiki_extraction_worker":
                         errors.append(
                             f"Task {index}: extraction task owner {owner!r} runs {owner_agent or 'unknown'!r}, expected 'wiki_extraction_worker'.",
@@ -255,7 +272,9 @@ class TeamWorkflowGuardCapability(AbstractCapability[AgentDepsT]):
                 continue
             role = role_match.group(1).lower()
             owner = str(task.get("owner", task.get("assigned_to", ""))).strip()
-            owner_agent = team_state.get_member_agent(team_id, owner) if team_state and owner else None
+            owner_agent = (
+                team_state.get_member_agent(team_id, owner) if team_state and owner else None
+            )
             if not owner:
                 errors.append(f"Task {index}: {role} task must have an explicit owner.")
             elif owner_agent != role:
@@ -267,7 +286,9 @@ class TeamWorkflowGuardCapability(AbstractCapability[AgentDepsT]):
                 if missing:
                     errors.append(f"Task {index}: {role} task is missing {', '.join(missing)}.")
                 if role in {"wiki_ops_worker", "wiki_opl_worker"} and not task.get("blocked_by"):
-                    errors.append(f"Task {index}: {role} task must declare `blocked_by` for the OP DAG.")
+                    errors.append(
+                        f"Task {index}: {role} task must declare `blocked_by` for the OP DAG."
+                    )
         return "\n".join(errors)
 
     def _validate_op_assignment(self, args: Any, agent_ctx: AgentContextDeps) -> str:
@@ -321,7 +342,10 @@ class TeamWorkflowGuardCapability(AbstractCapability[AgentDepsT]):
         source_snapshot_id = str(receipt.get("source_snapshot_id", ""))
         if not audit_profile or not source_snapshot_id:
             return "Finalize receipt is incomplete; audit profile and source snapshot are required."
-        if build_state.get("audit_profile") != audit_profile or build_state.get("source_snapshot_id") != source_snapshot_id:
+        if (
+            build_state.get("audit_profile") != audit_profile
+            or build_state.get("source_snapshot_id") != source_snapshot_id
+        ):
             return "The done build_state must persist the finalize audit profile and source snapshot id."
         return ""
 
@@ -366,18 +390,29 @@ class TeamWorkflowGuardCapability(AbstractCapability[AgentDepsT]):
             packet_match = _PACKET_DECL_RE.search(text)
             packet_id = packet_match.group(1) if packet_match is not None else ""
         if not packet_id:
-            errors.append("Extraction tasks must declare the stable source `packet_id` they consume or produce.")
+            errors.append(
+                "Extraction tasks must declare the stable source `packet_id` they consume or produce."
+            )
         elif is_phase_1a and not _PACKET_ID_RE.fullmatch(packet_id):
             errors.append(
                 "Phase 1A `packet_id` must use only ASCII letters, digits, and `_`; use a stable source-domain slug or content-derived identifier.",
             )
         if _PROFILE_DECL_RE.search(text) is None:
-            errors.append("Extraction tasks must declare the immutable `audit_profile` (`manual` or `case`).")
+            errors.append(
+                "Extraction tasks must declare the immutable `audit_profile` (`manual` or `case`)."
+            )
         if _EXPECTED_ARTIFACTS_RE.search(text) is None:
-            errors.append("Extraction tasks must declare `expected_artifacts` for completion checks.")
+            errors.append(
+                "Extraction tasks must declare `expected_artifacts` for completion checks."
+            )
         chapter_refs = set(_CHAPTER_REF_RE.findall(text))
         if is_phase_1a:
-            declared_counts = {int(value) for match in _CHAPTER_COUNT_RE.finditer(text) for value in match.groups() if value is not None}
+            declared_counts = {
+                int(value)
+                for match in _CHAPTER_COUNT_RE.finditer(text)
+                for value in match.groups()
+                if value is not None
+            }
             if not declared_counts:
                 errors.append(
                     "Phase 1A source-analysis tasks must declare `chapter_count` for bounded dispatch.",
@@ -416,7 +451,9 @@ class TeamWorkflowGuardCapability(AbstractCapability[AgentDepsT]):
                 class_text = match.group(1).lower()
                 for raw_token in re.split(r"[^a-z_]+", class_text):
                     token = raw_token.strip("_")
-                    if token in _COMMON_INVALID_PROCEDURE_CLASS_NAMES or (token and token.endswith("ing") and token not in _PROCEDURE_ONLY_CLASS_NAMES):
+                    if token in _COMMON_INVALID_PROCEDURE_CLASS_NAMES or (
+                        token and token.endswith("ing") and token not in _PROCEDURE_ONLY_CLASS_NAMES
+                    ):
                         invalid_classes.add(token)
             if invalid_classes:
                 errors.append(
@@ -508,7 +545,9 @@ class TeamWorkflowGuardCapability(AbstractCapability[AgentDepsT]):
                     "`component_write` requires `resolved_components` from the persisted BOM identity packet.",
                 )
             if "source_packet_uri" not in text:
-                errors.append("`component_write` requires a real `source_packet_uri` for resumable input.")
+                errors.append(
+                    "`component_write` requires a real `source_packet_uri` for resumable input."
+                )
             count_match = _RESOLVED_COMPONENT_COUNT_RE.search(text)
             if count_match is None:
                 errors.append("`component_write` must declare `resolved_component_count`.")

@@ -1,1 +1,1 @@
-"""wiki capability subpackage: entities"""
+"""wiki capability subpackage: entities."""

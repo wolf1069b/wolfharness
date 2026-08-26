@@ -6,7 +6,6 @@ from collections import Counter
 from hashlib import sha256
 from typing import TypedDict
 
-from wolfharness.capabilities.wiki.wiki_build_deps import WikiBuildDeps
 from wolfharness.capabilities.wiki.quality import (
     BUILD_PROFILES,
     BuildProfile,
@@ -29,9 +28,9 @@ from wolfharness.capabilities.wiki.quality import (
     wiki_uri_prefix,
 )
 from wolfharness.capabilities.wiki.section_constants import SECTION_COMMON_FAULTS
+from wolfharness.capabilities.wiki.tickets.opa import opa_section_names
 from wolfharness.capabilities.wiki.validation import ENTITY_VALIDATION_HOOKS, run_entity_validation
-
-from ..tickets.opa import opa_section_names
+from wolfharness.capabilities.wiki.wiki_build_deps import WikiBuildDeps
 
 
 _CASE_SOFT_REQUIREMENT_CODES = {

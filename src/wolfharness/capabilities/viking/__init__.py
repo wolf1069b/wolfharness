@@ -101,6 +101,17 @@ class VikingCapability(AbstractCapability[Any]):
         public_download_base_url: Base URL for public download links.
     """
 
+    @property
+    def owned_schemes(self) -> frozenset[str]:
+        """URI schemes this provider authoritatively handles.
+
+        VikingCapability owns the ``viking`` URI scheme exclusively.
+
+        Returns:
+            ``frozenset({"viking"})``.
+        """
+        return frozenset({"viking"})
+
     mode: Literal["retrieve", "write", "graph", "all"] = "all"
     url: str | None = None
     api_key: str | None = None
@@ -205,17 +216,20 @@ class VikingCapability(AbstractCapability[Any]):
     """Tool names protected by the URI guard. When ``uri_guard_enabled`` is
     ``True``, these tools are blocked from accessing ``viking://`` URIs."""
     allowed_uri_prefixes: list[str] = field(default_factory=list)
-    """URI prefix allowlist for the ``viking://resources/`` namespace only.
+    """Read/search URI prefix allowlist for ``viking://resources/`` only.
 
-    When non-empty, knowledge-base access (all ``viking_*`` tools + the
-    @-mention flow) rejects ``viking://resources/...`` URIs outside the
-    listed prefixes. All other namespaces — ``viking://user/...``
-    (the agent's own memories, sessions, skills, and other users'
-    namespaces), ``viking://skills/``, etc. — are always allowed and
-    governed by their own feature flags. Skills discovery
-    (``list_skills``/``read_skill``/``skill_exists``) only lists the
-    skills URI, so it is unaffected by this allowlist.
-    Empty list (default) means unrestricted — backward compatible."""
+    When non-empty, read-side knowledge access rejects
+    ``viking://resources/...`` URIs outside the listed prefixes. This scopes
+    retrieval, citation lookup, listing, and @-mention discovery. It does not
+    constrain write tools; configure ``write_allowed_uri_prefixes`` when a
+    deployment needs an explicit write allowlist.
+    Empty list (default) means unrestricted."""
+    write_allowed_uri_prefixes: list[str] = field(default_factory=list)
+    """Optional write URI prefix allowlist for ``viking://resources/``.
+
+    Empty list (default) means writes are not constrained by URI prefix.
+    This is intentionally separate from ``allowed_uri_prefixes`` so read
+    scopes cannot be mistaken for provider-owned submission scopes."""
     profile_enabled: bool = False
     """Enable first-turn profile injection from Viking memories. When True,
     the capability queries Viking for memory search results on the first
@@ -470,8 +484,30 @@ class VikingCapability(AbstractCapability[Any]):
         user_id = self._identity.user_id if self._identity is not None else (self.user or "default")
         return f"viking://user/{user_id}/skills/"
 
+    def _check_uri_scheme(self, uri: str) -> None:
+        """Raise ``UriSchemeMismatchError`` if ``uri`` is not a ``viking://`` URI.
+
+        This is defense-in-depth: even if a caller bypasses the
+        ``UriSchemeRegistry``, this provider rejects URIs it does not own.
+
+        Args:
+            uri: The URI to validate.
+
+        Raises:
+            UriSchemeMismatchError: If the URI scheme is not ``viking``.
+        """
+        from wolfharness.capabilities.resource_protocols import UriSchemeMismatchError
+
+        if not uri.startswith("viking://"):
+            scheme = uri.split(":", maxsplit=1)[0] if ":" in uri else ""
+            raise UriSchemeMismatchError(
+                scheme=scheme,
+                provider_name="VikingCapability",
+                uri=uri,
+            )
+
     def _check_uri_allowed(self, uri: str, *, tool_name: str = "") -> str | None:
-        """Return an error message if ``uri`` is outside the allowed prefixes.
+        """Return an error message if ``uri`` is outside read prefixes.
 
         When ``allowed_uri_prefixes`` is empty (unrestricted), always returns
         ``None``. The allowlist applies **only** to the
@@ -495,7 +531,30 @@ class VikingCapability(AbstractCapability[Any]):
         if any(uri.startswith(prefix) for prefix in self.allowed_uri_prefixes):
             return None
         name = tool_name or "viking"
-        return f"{name}: URI {uri!r} is outside the allowed prefixes ({self.allowed_uri_prefixes})."
+        return (
+            f"{name}: read_scope_denied: URI {uri!r} is outside the read allowed "
+            f"prefixes ({self.allowed_uri_prefixes})."
+        )
+
+    def _check_write_uri_allowed(self, uri: str, *, tool_name: str = "") -> str | None:
+        """Return an error message if ``uri`` is outside write prefixes.
+
+        Write prefixes are opt-in and independent from
+        ``allowed_uri_prefixes``. When no ``write_allowed_uri_prefixes`` are
+        configured, writes are not constrained by URI prefix here; backend
+        path rules and provider-specific submission scopes still apply.
+        """
+        if not self.write_allowed_uri_prefixes:
+            return None
+        if not uri or not uri.startswith("viking://resources/"):
+            return None
+        if any(uri.startswith(prefix) for prefix in self.write_allowed_uri_prefixes):
+            return None
+        name = tool_name or "viking"
+        return (
+            f"{name}: write_scope_denied: URI {uri!r} is outside the write allowed "
+            f"prefixes ({self.write_allowed_uri_prefixes})."
+        )
 
     def _allowed_prefix_for(self, uri: str) -> str | None:
         """Return the allowed prefix matched by ``uri``, or ``None``.
@@ -595,7 +654,7 @@ class VikingCapability(AbstractCapability[Any]):
         """Return the Viking workflow instructions.
 
         When ``allowed_uri_prefixes`` is configured, appends a dynamic
-        block listing the allowed prefixes so the model can pass a
+        block listing the read prefixes so the model can pass a
         ``target_uri`` and skip discovery probing.
 
         Returns:
@@ -1046,16 +1105,24 @@ class VikingCapability(AbstractCapability[Any]):
     ) -> list[TextResourceContent | BlobResourceContent] | None:
         """Read a Viking resource by URI.
 
-        Uses the configured ``resource_read_level`` to determine content
-        depth (L0 abstract, L1 overview, or L2 full content). Falls back
-        to L2 (``client.read``) if the requested level is unavailable.
+        For image resources (png/jpg/jpeg/gif/webp/bmp), returns
+        ``BlobResourceContent`` with the raw image bytes — regardless of
+        ``support_vision``.  ``support_vision`` only gates the
+        ``viking_read`` LLM tool (which returns content to the model
+        conversation); ``read_resource`` is a programmatic API that always
+        returns the actual content.
+
+        For text resources, uses the configured ``resource_read_level`` to
+        determine content depth (L0 abstract, L1 overview, or L2 full
+        content). Falls back to L2 (``client.read``) if the requested level
+        is unavailable.
 
         Args:
             uri: The Viking URI of the resource to read.
 
         Returns:
-            A list containing a ``TextResourceContent`` with the resource
-            content, or ``None`` if not found or on error.
+            A list containing ``TextResourceContent`` or
+            ``BlobResourceContent``, or ``None`` if not found or on error.
         """
         if self._check_uri_allowed(uri, tool_name="read_resource") is not None:
             return None
@@ -1063,9 +1130,11 @@ class VikingCapability(AbstractCapability[Any]):
             client = await self._ensure_client()
 
             # Image resources are served as decoded blob bytes (with their
-            # MIME type) so vision-capable models can consume them directly —
-            # mirrors ``viking_read``. SVG stays on the text path: most vision
-            # APIs reject the vector format.
+            # MIME type) regardless of ``support_vision`` — ``read_resource``
+            # is a programmatic API, not an LLM-facing tool. ``support_vision``
+            # only gates ``viking_read`` (which returns content to the model
+            # conversation). SVG stays on the text path: most vision APIs
+            # reject the vector format.
             from pathlib import PurePosixPath
 
             from wolfharness.capabilities.viking.constants import (
@@ -1078,12 +1147,7 @@ class VikingCapability(AbstractCapability[Any]):
             )
 
             suffix = PurePosixPath(uri).suffix.lower()
-            if (
-                suffix in IMAGE_EXTENSIONS
-                and suffix != ".svg"
-                and uri.startswith("viking://")
-                and self._should_return_image_bytes()
-            ):
+            if suffix in IMAGE_EXTENSIONS and suffix != ".svg" and uri.startswith("viking://"):
                 data = await client.download_bytes(uri)
                 if len(data) > IMAGE_BLOB_MAX_BYTES:
                     from wolfharness.capabilities.viking.tools import _image_uri_hint

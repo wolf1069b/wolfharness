@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from datetime import UTC, datetime
 from hashlib import sha256
 import json
 import logging
-from pathlib import Path
 
 from wolfharness.capabilities.wiki.io.template_materializer import (
     assemble_template_entity,
@@ -23,7 +21,17 @@ from wolfharness.capabilities.wiki.storage import (
 
 logger = logging.getLogger(__name__)
 
-from .._helpers import _entity_batch_limit, _materialization_task_byte_limit
+from typing import TYPE_CHECKING
+
+from wolfharness.capabilities.wiki._helpers import (
+    _entity_batch_limit,
+    _materialization_task_byte_limit,
+)
+
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+    from pathlib import Path
 
 
 def _core_section_filled(content: str, section_heading: str) -> bool:
@@ -31,7 +39,7 @@ def _core_section_filled(content: str, section_heading: str) -> bool:
     idx = content.find(section_heading)
     if idx < 0:
         return False
-    after = content[idx + len(section_heading):]
+    after = content[idx + len(section_heading) :]
     # Stop at the next section heading
     next_section = after.find("\n## ")
     if next_section >= 0:
@@ -40,9 +48,7 @@ def _core_section_filled(content: str, section_heading: str) -> bool:
     if not after:
         return False
     # Treat placeholder text as empty
-    if "待补充" in after:
-        return False
-    return True
+    return "待补充" not in after
 
 
 class MaterializationMixin:
@@ -72,7 +78,7 @@ class MaterializationMixin:
             # conductor loses the original build_id.  In that case, do NOT
             # filter by build_id — scan all packets so materialization can
             # recover candidates from the original build's source packets.
-            if build_id and build_id != "legacy" and packet_build_id != build_id:
+            if build_id and build_id not in ("legacy", packet_build_id):
                 continue
             if doc_id and not (
                 self._doc_id_variants(packet_doc_id) & self._doc_id_variants(doc_id)
@@ -118,9 +124,7 @@ class MaterializationMixin:
                     # Keep the packet available for audit, but only schedule
                     # concepts the store can materialize deterministically.
                     continue
-                uri = self.store.entity_uri(
-                    normalized_concept, cls_value, object_name.strip()
-                )
+                uri = self.store.entity_uri(normalized_concept, cls_value, object_name.strip())
                 raw_source_uris = packet.get("source_uris", [])
                 source_uris = raw_source_uris if isinstance(raw_source_uris, list) else []
                 candidates.append(
@@ -793,8 +797,10 @@ class MaterializationMixin:
                         continue
                     # Check if the core section already has real content
                     core_section = (
-                        "## 工作机理" if concept == "Component"
-                        else "## 失效机理" if concept == "Fault"
+                        "## 工作机理"
+                        if concept == "Component"
+                        else "## 失效机理"
+                        if concept == "Fault"
                         else None
                     )
                     if core_section and _core_section_filled(existing, core_section):
@@ -838,9 +844,7 @@ class MaterializationMixin:
                             raise ValueError(f"packet not readable: {packet_id}")
                         raw_sources = packet.get("source_uris", [])
                         source_uris = [
-                            str(uri)
-                            for uri in raw_sources
-                            if isinstance(uri, str) and uri.strip()
+                            str(uri) for uri in raw_sources if isinstance(uri, str) and uri.strip()
                         ]
                         component = next(
                             (
@@ -996,8 +1000,7 @@ class MaterializationMixin:
             "> 待 LLM 补充：从源章节提取推荐诊断流程。\n"
             "\n"
             "## 来源\n"
-            "\n"
-            + "".join(f"[{uri}]({uri})\n" for uri in source_uris)
+            "\n" + "".join(f"[{uri}]({uri})\n" for uri in source_uris)
         )
 
     def _source_belongs_to_doc(self, uri: str, doc_id: str) -> bool:

@@ -8,8 +8,12 @@ case aliases readable during rolling migration.
 from __future__ import annotations
 
 import json
+from typing import TYPE_CHECKING
 
-from .backend import FSBackend
+
+if TYPE_CHECKING:
+    from .backend import FSBackend
+
 
 WikiIdentity = tuple[str, str | None, str]
 
@@ -27,8 +31,7 @@ class LegacyWikiIndex:
             return {}
         data = json.loads(raw)
         if not isinstance(data, dict) or not all(
-            isinstance(key, str) and isinstance(value, str)
-            for key, value in data.items()
+            isinstance(key, str) and isinstance(value, str) for key, value in data.items()
         ):
             raise ValueError(f"Invalid legacy wiki mapping: {key}")
         return data
