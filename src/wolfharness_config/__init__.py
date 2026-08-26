@@ -14,7 +14,12 @@ from wolfharness_config.attachment import AttachmentImageConfig
 from wolfharness_config.capabilities import CapabilityConfig
 from wolfharness_config.forward_targets import ForwardingTarget
 from wolfharness_config.session import SessionQuery
-from wolfharness_config.session_pool import ACPConfig, OpenCodeConfig, SessionPoolConfig
+from wolfharness_config.session_pool import (
+    ACPConfig,
+    ACPVikingArchiveConfig,
+    OpenCodeConfig,
+    SessionPoolConfig,
+)
 from wolfharness_config.teams import TeamConfig, TeamMemberConfig
 from wolfharness_config.durable import CheckpointConfig, DeferredToolConfig
 from wolfharness_config.mcp_server import (
@@ -85,6 +90,7 @@ AnyToolConfig = Annotated[
 __all__ = [
     "DEFAULT_SKILLS_PATHS",
     "ACPConfig",
+    "ACPVikingArchiveConfig",
     "AnyToolConfig",
     "AttachmentImageConfig",
     "BaseEventHandlerConfig",

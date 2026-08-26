@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 
 from wolfharness.models.model_configs import (
@@ -35,6 +37,7 @@ def test_all_fields_default_to_none() -> None:
     assert caps.video_input is None
     assert caps.document_input is None
     assert caps.image_output is None
+    assert caps.image_output is None
 
 
 def test_image_input_false_round_trips() -> None:
@@ -60,7 +63,85 @@ def test_partial_specification() -> None:
     assert caps.audio_input is None
     assert caps.video_input is None
     assert caps.document_input is None
-    assert caps.image_output is None
+
+
+def test_fallback_model_parses_nested_string_config_dicts() -> None:
+    """YAML fallback chains preserve custom endpoint settings per model."""
+    config = FallbackModelConfig.model_validate(
+        {
+            "type": "fallback",
+            "models": [
+                {
+                    "type": "string",
+                    "identifier": "openai:svc/primary",
+                    "base_url": "https://primary.example/v1",
+                    "api_key": "primary-key",
+                },
+                {
+                    "type": "string",
+                    "identifier": "openai:svc/fallback",
+                    "base_url": "https://fallback.example/v1",
+                    "api_key": "fallback-key",
+                },
+            ],
+        },
+    )
+
+    assert isinstance(config.models[0], StringModelConfig)
+    assert config.models[0].base_url == "https://primary.example/v1"
+    assert isinstance(config.models[1], StringModelConfig)
+    assert config.models[1].base_url == "https://fallback.example/v1"
+
+
+def test_string_model_reads_credential_from_named_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Custom endpoints can select a credential without manifest secrets."""
+    monkeypatch.setenv("PRIVATE_MODEL_KEY", "runtime-secret")
+    config = StringModelConfig(
+        identifier="openai:svc/private",
+        base_url="https://private.example/v1",
+        api_key_env="PRIVATE_MODEL_KEY",
+    )
+
+    with patch(
+        "wolfharness.utils.model_helpers._get_openai_based_model",
+        return_value=object(),
+    ) as build_model:
+        config.get_model()
+
+    build_model.assert_called_once_with(
+        "openai:svc/private",
+        base_url="https://private.example/v1",
+        api_key="runtime-secret",
+    )
+
+
+def test_string_model_forwards_reasoning_effort_to_openai_settings() -> None:
+    """OpenAI-compatible string models preserve the configured effort level."""
+    config = StringModelConfig(
+        identifier="openai:svc/deepseek-v4-flash",
+        reasoning_effort="low",
+    )
+
+    settings = config.get_model_settings()
+
+    assert settings["openai_reasoning_effort"] == "low"
+
+
+def test_string_model_rejects_missing_named_credential(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing named credential fails before the first provider request."""
+    monkeypatch.delenv("PRIVATE_MODEL_KEY", raising=False)
+    config = StringModelConfig(
+        identifier="openai:svc/private",
+        base_url="https://private.example/v1",
+        api_key_env="PRIVATE_MODEL_KEY",
+    )
+
+    with pytest.raises(ValueError, match="PRIVATE_MODEL_KEY"):
+        config.get_model()
 
 
 def test_all_fields_set() -> None:

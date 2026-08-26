@@ -33,8 +33,20 @@ Generate metadata for this conversation request. Provide:
 
 
 def get_database_path() -> str:
-    """Get the database file path, creating directories if needed."""
-    db_path = DATA_DIR / DEFAULT_DB_NAME
+    """Get the configured database URL, creating local directories if needed.
+
+    ``WOLFHARNESS_DATABASE_URL`` is intended for deployments that already
+    provide a database URL.  ``WOLFHARNESS_DATA_DIR`` provides a portable
+    writable location for the default SQLite history database, which is
+    useful for isolated runners and restricted desktop environments.
+    """
+    configured_url = os.environ.get("WOLFHARNESS_DATABASE_URL", "").strip()
+    if configured_url:
+        return configured_url
+
+    configured_dir = os.environ.get("WOLFHARNESS_DATA_DIR", "").strip()
+    data_dir = Path(configured_dir).expanduser() if configured_dir else DATA_DIR
+    db_path = data_dir / DEFAULT_DB_NAME
     db_path.parent.mkdir(parents=True, exist_ok=True)
     return f"sqlite:///{db_path}"
 

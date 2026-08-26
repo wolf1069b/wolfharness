@@ -470,23 +470,25 @@ class TestMessageIdTimestampConsistency:
 
 
 # =============================================================================
-# C4: CustomEvent bypasses assistant registration
+# Loopback elimination: no bridge CustomEvents reach the consumer
 # =============================================================================
 
 
-class TestCustomEventBypassesRegistration:
-    """Tests that CustomEvent does not trigger assistant message registration (C4).
+class TestLoopbackEliminated:
+    """Tests reflecting post-loopback semantics (issue #380).
 
-    Issue C4: CustomEvent wraps SSE broadcast events (e.g.
-    SessionCreatedEvent) republished from the OpenCodeEventBridge. These
-    are not real agent events and must NOT trigger assistant message
-    registration. If they do, the assistant message is broadcast before
-    the agent runs, causing notification ID > assistant ID → QUEUED.
+    The OpenCodeEventBridge republish was removed: projections no longer
+    flow back into the EventBus, so no ``source="opencode_event_bridge"``
+    CustomEvents reach the session consumer. Subscription-level isolation
+    (``exclude_source``) is covered in ``tests/servers/test_subagent_event_mixin.py``.
+    Tool-emitted CustomEvents (``source=None`` or tool name) fall through to
+    normal event processing and trigger assistant registration (C3) like any
+    other real agent event.
     """
 
     @pytest.mark.asyncio
-    async def test_custom_event_does_not_register_assistant(self):
-        """CustomEvent should NOT trigger assistant message registration."""
+    async def test_tool_custom_event_registers_assistant(self):
+        """A tool-emitted CustomEvent triggers assistant registration (C3)."""
         from wolfharness.agents.events.events import CustomEvent
         from wolfharness.orchestrator.event_bus import EventEnvelope
         from wolfharness_server.opencode_server.models import (
@@ -528,36 +530,36 @@ class TestCustomEventBypassesRegistration:
         integration._contexts["test-session"] = ctx
         integration._message_registered["test-session"] = False
 
-        # Send a CustomEvent (e.g., wrapping a SessionCreatedEvent)
+        # A tool-emitted CustomEvent (source=tool name) is a real agent event.
         custom_event = CustomEvent(
-            event_data={"type": "session.created"},
-            event_type="opencode:session.created",
+            event_data={"type": "tool.visibility"},
+            event_type="tool:visibility",
+            source="my_tool",
         )
         envelope = EventEnvelope(
             event=custom_event,
             source_session_id="test-session",
         )
 
-        await integration._handle_event("test-session", envelope)
+        import unittest.mock as _mock
 
-        # Assistant message should NOT have been registered
-        assert not integration._message_registered.get("test-session", False), (
-            "CustomEvent should NOT trigger assistant message registration (C4)"
+        with _mock.patch(
+            "wolfharness_server.opencode_server.opencode_event_bridge.append_message_to_session",
+            new_callable=_mock.AsyncMock,
+        ):
+            await integration._handle_event("test-session", envelope)
+
+        # Assistant message IS registered (the agent is producing events)
+        assert integration._message_registered.get("test-session", False), (
+            "Tool-emitted CustomEvent should trigger assistant registration (C3)"
         )
-        # broadcast_event should NOT have been called for MessageUpdatedEvent
-        broadcast_calls = server_state.broadcast_event.call_args_list
-        for call in broadcast_calls:
-            event_arg = call.args[0] if call.args else call.kwargs.get("event")
-            if hasattr(event_arg, "type") and event_arg.type == "message.updated":
-                pytest.fail("CustomEvent should NOT trigger MessageUpdatedEvent broadcast (C4)")
 
     @pytest.mark.asyncio
     async def test_real_agent_event_does_register_assistant(self):
         """RunStartedEvent (a real agent event) SHOULD trigger registration.
 
-        This is the positive control for C4: after skipping CustomEvent,
-        the next real agent event (RunStartedEvent) must trigger assistant
-        registration.
+        This is the positive control: a real agent event must trigger
+        assistant registration regardless of loopback state.
         """
         from wolfharness.agents.events import RunStartedEvent
         from wolfharness.orchestrator.event_bus import EventEnvelope
@@ -649,13 +651,7 @@ class TestCustomEventBypassesRegistration:
 
     @pytest.mark.asyncio
     async def test_custom_event_then_runstarted_registers_on_runstarted(self):
-        """CustomEvent followed by RunStartedEvent: registration on RunStarted only.
-
-        This simulates the real timeline:
-        1. SessionCreatedEvent → CustomEvent → skip (C4)
-        2. System notifications
-        3. RunStartedEvent → register assistant message
-        """
+        """CustomEvent followed by RunStartedEvent: assistant stays registered."""
         from wolfharness.agents.events import RunStartedEvent
         from wolfharness.agents.events.events import CustomEvent
         from wolfharness.orchestrator.event_bus import EventEnvelope
@@ -708,23 +704,32 @@ class TestCustomEventBypassesRegistration:
         mock_adapter.convert_event = _empty_convert
         integration._adapters["test-session"] = mock_adapter
 
-        # Step 1: Send CustomEvent (SessionCreatedEvent)
+        # Step 1: Send a tool CustomEvent — registers the assistant (C3)
         custom_event = CustomEvent(
-            event_data={"type": "session.created"},
-            event_type="opencode:session.created",
+            event_data={"type": "tool.visibility"},
+            event_type="tool:visibility",
+            source="my_tool",
         )
         envelope1 = EventEnvelope(
             event=custom_event,
             source_session_id="test-session",
         )
-        await integration._handle_event("test-session", envelope1)
 
-        # After CustomEvent: NOT registered
-        assert not integration._message_registered.get("test-session", False), (
-            "CustomEvent should NOT trigger registration (C4)"
+        import unittest.mock as _mock
+
+        with _mock.patch(
+            "wolfharness_server.opencode_server.opencode_event_bridge.append_message_to_session",
+            new_callable=_mock.AsyncMock,
+        ):
+            await integration._handle_event("test-session", envelope1)
+
+        # After CustomEvent: registered (the agent is producing events)
+        assert integration._message_registered.get("test-session", False), (
+            "Tool CustomEvent should trigger registration (C3)"
         )
 
-        # Step 2: Send RunStartedEvent
+        # Step 2: Send RunStartedEvent for a new turn — D1 reset fires,
+        # creating a fresh assistant message (still registered after).
         run_event = RunStartedEvent(
             session_id="test-session",
             run_id="run_001",
@@ -735,17 +740,15 @@ class TestCustomEventBypassesRegistration:
             source_session_id="test-session",
         )
 
-        import unittest.mock as _mock
-
         with _mock.patch(
             "wolfharness_server.opencode_server.opencode_event_bridge.append_message_to_session",
             new_callable=_mock.AsyncMock,
         ):
             await integration._handle_event("test-session", envelope2)
 
-        # After RunStartedEvent: registered
-        assert integration._message_registered.get("test-session", False), (
-            "RunStartedEvent after CustomEvent should trigger registration"
+        # After RunStartedEvent: fresh turn started (D1 reset → new message)
+        assert integration._contexts["test-session"].assistant_msg_id != "msg_timeline", (
+            "RunStartedEvent after registration should start a fresh turn (D1)"
         )
 
 

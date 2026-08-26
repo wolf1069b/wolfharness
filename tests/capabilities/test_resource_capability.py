@@ -1,4 +1,4 @@
-"""Tests for ResourceCapability — unified resource access via 5 agent-facing tools."""
+"""Tests for ResourceCapability — unified MCP Resource access."""
 
 from __future__ import annotations
 
@@ -18,6 +18,8 @@ from wolfharness.capabilities.resource_protocols import (
     BlobResourceContent,
     CompletionArgument,
     CompletionResult,
+    McpResourceListPage,
+    McpResourceTemplateListPage,
     ResourceEntry,
     ResourceTemplateEntry,
     SkillEntry,
@@ -40,6 +42,10 @@ pytestmark = pytest.mark.unit
 
 class FakeResourceAccess:
     """Minimal ResourceAccess implementation for testing."""
+
+    @property
+    def owned_schemes(self) -> frozenset[str]:
+        return frozenset()
 
     def __init__(
         self,
@@ -126,6 +132,76 @@ class FakeResourceTemplateAccess:
         return CompletionResult(values=[])
 
 
+class FakeMcpResourceProvider:
+    """Paged MCP Resource provider used by the formal three-tool tests."""
+
+    def __init__(
+        self,
+        server_name: str,
+        *,
+        supported: bool = True,
+        read_contents: list[TextResourceContent | BlobResourceContent] | None = None,
+    ) -> None:
+        self._server_name = server_name
+        self.supported = supported
+        self.read_contents = read_contents
+        self.resource_pages: dict[str | None, McpResourceListPage] = {
+            None: McpResourceListPage(
+                entries=[
+                    ResourceEntry(
+                        uri="kb:///resources/catalog",
+                        server=server_name,
+                        name="catalog",
+                        title="Catalog",
+                        size=12,
+                        meta={"source": server_name},
+                    )
+                ],
+                next_cursor=None,
+            )
+        }
+
+    @property
+    def server_name(self) -> str:
+        return self._server_name
+
+    @property
+    def resources_supported(self) -> bool:
+        return self.supported
+
+    async def supports_resources(self) -> bool:
+        return self.supported
+
+    async def list_resources_page(self, cursor: str | None = None) -> McpResourceListPage:
+        return self.resource_pages.get(cursor, McpResourceListPage())
+
+    async def list_resources(self) -> list[ResourceEntry]:
+        return self.resource_pages[None].entries
+
+    async def list_resource_templates_page(
+        self, cursor: str | None = None
+    ) -> McpResourceTemplateListPage:
+        return McpResourceTemplateListPage(
+            entries=[
+                ResourceTemplateEntry(uri_template="kb:///resources/{id}", server=self.server_name)
+            ]
+        )
+
+    async def read_mcp_resource(
+        self, uri: str
+    ) -> list[TextResourceContent | BlobResourceContent] | None:
+        if self.read_contents is not None:
+            return list(self.read_contents)
+        return [
+            TextResourceContent(
+                uri=uri,
+                mime_type="text/plain",
+                meta={"source": self._server_name},
+                text="catalog content",
+            )
+        ]
+
+
 # =============================================================================
 # Helpers
 # =============================================================================
@@ -180,16 +256,16 @@ def test_is_abstract_capability() -> None:
 
 
 def test_get_toolset_returns_function_toolset() -> None:
-    """get_toolset() returns a FunctionToolset with 5 tools."""
+    """get_toolset() returns exactly the three formal MCP Resource tools."""
     cap = ResourceCapability()
     toolset = cap.get_toolset()
     assert toolset is not None
     assert isinstance(toolset, FunctionToolset)
-    assert "list_resources" in toolset.tools
-    assert "read_resource" in toolset.tools
-    assert "resource_exists" in toolset.tools
-    assert "list_resource_templates" in toolset.tools
-    assert "complete_resource_template" in toolset.tools
+    assert set(toolset.tools) == {
+        "list_mcp_resources",
+        "list_mcp_resource_templates",
+        "read_mcp_resource",
+    }
 
 
 def test_name_property() -> None:
@@ -199,18 +275,147 @@ def test_name_property() -> None:
 
 
 def test_get_instructions_returns_description() -> None:
-    """get_instructions() returns a non-None description mentioning all tools."""
+    """get_instructions() describes progressive MCP Resource reads."""
     cap = ResourceCapability()
     instructions = cap.get_instructions()
     assert instructions is not None
-    assert "list_resources" in instructions
-    assert "read_resource" in instructions
-    assert "resource_exists" in instructions
-    assert "list_resource_templates" in instructions
-    assert "complete_resource_template" in instructions
+    assert "list_mcp_resources" in instructions
+    assert "list_mcp_resource_templates" in instructions
+    assert "read_mcp_resource" in instructions
     # skill:// is NOT advertised (D2 — unadvertised fallback)
     assert "skill://" not in instructions
-    assert "mcp://" in instructions
+    assert "opaque URI" in instructions
+
+
+async def test_formal_mcp_resource_tools_list_and_read_exact_server() -> None:
+    """Formal tools preserve server identity and return typed results."""
+    provider = FakeMcpResourceProvider("unikb")
+    registry = _make_registry_with_caps(provider)
+    cap = ResourceCapability()
+    ctx = _make_ctx(_make_agent_context(registry))
+
+    listed = await cap.list_mcp_resources(ctx, limit=1)
+    assert listed.resources[0].server == "unikb"
+    assert listed.resources[0].meta == {"source": "unikb"}
+    templates = await cap.list_mcp_resource_templates(ctx)
+    assert templates.templates[0].server == "unikb"
+    read = await cap.read_mcp_resource(ctx, server="unikb", uri="kb:///resources/catalog")
+    assert read.return_value.uri == "kb:///resources/catalog"
+    assert read.return_value.contents[0]["text"] == "catalog content"
+    assert read.return_value.contents[0]["meta"] == {"source": "unikb"}
+
+
+async def test_formal_mcp_resource_tools_reject_unknown_server() -> None:
+    provider = FakeMcpResourceProvider("unikb")
+    registry = _make_registry_with_caps(provider)
+    cap = ResourceCapability()
+    ctx = _make_ctx(_make_agent_context(registry))
+
+    result = await cap.read_mcp_resource(ctx, server="other", uri="kb:///resources/catalog")
+    assert result.return_value.errors[0].code == "unknown_server"
+
+
+def test_registry_excludes_provider_after_capability_negotiation() -> None:
+    provider = FakeMcpResourceProvider("tools-only", supported=False)
+    registry = _make_registry_with_caps(provider)
+
+    assert registry.get_mcp_resource_providers(Scope(level=ScopeLevel.POOL)) == []
+
+
+async def test_formal_tools_report_resources_not_supported_for_known_server() -> None:
+    provider = FakeMcpResourceProvider("tools-only", supported=False)
+    cap = ResourceCapability()
+    ctx = _make_ctx(_make_agent_context(_make_registry_with_caps(provider)))
+
+    listed = await cap.list_mcp_resources(ctx, server="tools-only")
+    assert listed.errors[0].code == "resources_not_supported"
+    read = await cap.read_mcp_resource(ctx, server="tools-only", uri="kb:///same")
+    assert read.return_value.errors[0].code == "resources_not_supported"
+
+
+async def test_formal_resource_cursor_tracks_current_server_across_pages() -> None:
+    alpha = FakeMcpResourceProvider("alpha")
+    alpha.resource_pages[None] = McpResourceListPage(
+        entries=[
+            ResourceEntry(uri="docs://alpha/1", server="alpha", name="a1"),
+            ResourceEntry(uri="docs://alpha/2", server="alpha", name="a2"),
+        ]
+    )
+    beta = FakeMcpResourceProvider("beta")
+    beta.resource_pages[None] = McpResourceListPage(
+        entries=[ResourceEntry(uri="docs://beta/1", server="beta", name="b1")]
+    )
+    registry = _make_registry_with_caps(beta, alpha)
+    cap = ResourceCapability()
+    ctx = _make_ctx(_make_agent_context(registry))
+
+    first = await cap.list_mcp_resources(ctx, limit=1)
+    assert [entry.name for entry in first.resources] == ["a1"]
+    assert first.next_cursor is not None
+    decoded = cap._decode_cursor(first.next_cursor)
+    assert decoded["version"] == 2
+    assert decoded["current_server"] == "alpha"
+
+    second = await cap.list_mcp_resources(ctx, cursor=first.next_cursor, limit=1)
+    assert [entry.name for entry in second.resources] == ["a2"]
+    assert second.next_cursor is not None
+    third = await cap.list_mcp_resources(ctx, cursor=second.next_cursor, limit=1)
+    assert [entry.name for entry in third.resources] == ["b1"]
+
+    conflict = await cap.list_mcp_resources(
+        ctx,
+        server="beta",
+        cursor=first.next_cursor,
+        limit=1,
+    )
+    assert conflict.errors[0].code == "invalid_cursor"
+
+
+async def test_formal_resource_list_keeps_results_when_provider_fails() -> None:
+    class FailingProvider(FakeMcpResourceProvider):
+        async def list_resources_page(self, cursor: str | None = None) -> McpResourceListPage:
+            raise RuntimeError("temporary provider outage")
+
+    failing = FailingProvider("alpha")
+    healthy = FakeMcpResourceProvider("beta")
+    healthy.resource_pages[None] = McpResourceListPage(
+        entries=[ResourceEntry(uri="docs://beta/1", server="beta", name="healthy")]
+    )
+    registry = _make_registry_with_caps(failing, healthy)
+    cap = ResourceCapability()
+    result = await cap.list_mcp_resources(_make_ctx(_make_agent_context(registry)), limit=10)
+
+    assert [entry.name for entry in result.resources] == ["healthy"]
+    assert result.errors[0].code == "provider_unavailable"
+    assert result.errors[0].retryable is True
+
+
+async def test_formal_read_truncates_text_and_omits_unsupported_or_large_blobs() -> None:
+    provider = FakeMcpResourceProvider(
+        "server",
+        read_contents=[
+            TextResourceContent(uri="kb:///long", text="x" * 10_001),
+            BlobResourceContent(
+                uri="kb:///gif", mime_type="image/bmp", blob=base64.b64encode(b"bmp").decode()
+            ),
+        ],
+    )
+    registry = _make_registry_with_caps(provider)
+    cap = ResourceCapability()
+    result = await cap.read_mcp_resource(
+        _make_ctx(_make_agent_context(registry)), server="server", uri="kb:///long"
+    )
+
+    assert result.return_value.truncated is True
+    assert result.return_value.original_char_count == 10_001
+    assert len(result.return_value.contents[0]["text"]) == 10_000
+    assert result.return_value.errors[0].code == "unsupported_mime_type"
+
+    blob_result = await cap.read_mcp_resource(
+        _make_ctx(_make_agent_context(registry)), server="server", uri="kb:///gif"
+    )
+    assert blob_result.return_value.contents[-1]["attached"] is False
+    assert blob_result.return_value.errors[0].code == "unsupported_mime_type"
 
 
 async def test_stateless_lifecycle() -> None:

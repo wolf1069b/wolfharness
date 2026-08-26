@@ -18,7 +18,9 @@ from pydantic_ai.messages import (
     ModelResponse,
     SystemPromptPart,
     TextPart,
+    ToolCallPart,
     ToolReturn,
+    ToolReturnPart,
     UserPromptPart,
 )
 from pydantic_ai.models import ModelRequestContext, ModelRequestParameters
@@ -28,6 +30,7 @@ import yamling
 
 from wolfharness.capabilities.viking import VikingCapability
 from wolfharness.capabilities.viking.identity import VikingIdentity
+from wolfharness.capabilities.viking.ingest import _extract_full_trace
 from wolfharness.capabilities.viking.tools import build_tools
 from wolfharness_config.capabilities import VikingCapabilityConfig, build_capability
 
@@ -324,7 +327,8 @@ async def test_mode_tool_exposure_write() -> None:
     assert toolset is not None
     tool_names = list(toolset.tools.keys())  # type: ignore[attr-defined]
     # 4 write tools (remember gated by enable_memory, forget by enable_forget)
-    assert len(tool_names) == 4
+    # + viking_upload_tree (tree upload from capability)
+    assert len(tool_names) == 5
 
 
 @pytest.mark.asyncio
@@ -356,7 +360,7 @@ async def test_mode_tool_exposure_all() -> None:
     toolset = cap.get_toolset()
     assert toolset is not None
     tool_names = list(toolset.tools.keys())  # type: ignore[attr-defined]
-    assert len(tool_names) == 12  # 7 retrieve + 4 write + 1 graph (expand included in retrieve)
+    assert len(tool_names) == 13  # 7 retrieve + 5 write + 1 graph (expand included in retrieve)
 
 
 @pytest.mark.asyncio
@@ -380,7 +384,7 @@ async def test_mode_tool_exposure_with_config_fields() -> None:
     toolset = cap.get_toolset()
     assert toolset is not None
     tool_names = list(toolset.tools.keys())  # type: ignore[attr-defined]
-    assert len(tool_names) == 12  # default flags: enable_link=False, enable_memory=False
+    assert len(tool_names) == 13  # default flags: enable_link=False, enable_memory=False
 
 
 # ---------------------------------------------------------------------------
@@ -667,7 +671,7 @@ async def test_l2_auto_recall_before_model_request_fires() -> None:
     sys_msg = result.messages[0]
     assert isinstance(sys_msg, ModelRequest)
     sys_part = sys_msg.parts[0]
-    assert isinstance(sys_part, SystemPromptPart)
+    assert isinstance(sys_part, UserPromptPart)
     assert "<openviking-recall>" in sys_part.content
     assert "viking://user/alice/memories/doc.md" in sys_part.content
 
@@ -717,6 +721,102 @@ async def test_l2_auto_ingest_second_turn_triggers_ingestion() -> None:
 
     # Cursor should be advanced to the current message count
     assert cap._last_ingested_idx == 3
+
+
+@pytest.mark.asyncio
+async def test_l2_auto_ingest_rolls_back_cursor_when_commit_fails() -> None:
+    """L2: failed auto-ingest leaves the message range retryable."""
+    client = _make_mock_client()
+    client.commit_session = AsyncMock(side_effect=RuntimeError("viking unavailable"))
+    identity = VikingIdentity(account_id="acct", user_id="alice", role="user")
+
+    cfg = VikingCapabilityConfig(
+        mode="all",
+        auto_ingest_enabled=True,
+        auto_ingest_mode="sync",
+    )
+    cap = _build_cap_from_config(cfg, client, identity)
+
+    messages = [
+        ModelRequest(parts=[UserPromptPart(content="What is X?")]),
+        ModelResponse(parts=[TextPart(content="X is a thing.")]),
+    ]
+    rc = _make_request_context(messages)
+
+    await cap.before_model_request(_make_run_context(), rc)
+
+    assert cap._last_ingested_idx == 0
+    assert len(cap._failed_ingest_batches) == 1
+
+
+@pytest.mark.asyncio
+async def test_l2_auto_ingest_retries_captured_batch_after_context_is_gone() -> None:
+    """L2: failed captured batches retry without relying on source messages."""
+    client = _make_mock_client()
+    client.commit_session = AsyncMock(
+        side_effect=[RuntimeError("viking unavailable"), {"ok": True}]
+    )
+    identity = VikingIdentity(account_id="acct", user_id="alice", role="user")
+
+    cfg = VikingCapabilityConfig(
+        mode="all",
+        auto_ingest_enabled=True,
+        auto_ingest_mode="sync",
+    )
+    cap = _build_cap_from_config(cfg, client, identity)
+
+    messages = [
+        ModelRequest(parts=[UserPromptPart(content="What is X?")]),
+        ModelResponse(parts=[TextPart(content="X is a thing.")]),
+    ]
+    await cap.before_model_request(_make_run_context(), _make_request_context(messages))
+
+    ctx = _make_run_context()
+    ctx.messages = []
+    await cap._flush_tail(ctx)
+
+    assert cap._failed_ingest_batches == []
+    assert client.commit_session.await_count == 2
+
+
+def test_extract_full_trace_skips_system_prompt_and_preserves_tool_payloads() -> None:
+    """Full trace capture avoids injected system text and keeps tool output complete."""
+    long_output = "result-" * 500
+    messages = [
+        ModelRequest(
+            parts=[
+                SystemPromptPart(content="<openviking-recall>injected</openviking-recall>"),
+                UserPromptPart(content=["SY215C 发动机无法启动", {"text": "冷车更明显"}]),
+            ],
+        ),
+        ModelResponse(
+            parts=[
+                TextPart(content="先查蓄电池。"),
+                ToolCallPart(
+                    tool_name="viking_search",
+                    args={"query": "SY215C 发动机无法启动"},
+                    tool_call_id="call-search",
+                ),
+            ],
+        ),
+        ModelRequest(
+            parts=[
+                ToolReturnPart(
+                    tool_name="viking_search",
+                    content=long_output,
+                    tool_call_id="call-search",
+                ),
+            ],
+        ),
+    ]
+
+    trace = _extract_full_trace(messages, 0)
+
+    assert trace[0]["role"] == "user"
+    assert trace[0]["parts"] == [{"type": "text", "text": "SY215C 发动机无法启动\n冷车更明显"}]
+    assert "injected" not in str(trace)
+    assert trace[-1]["role"] == "assistant"
+    assert trace[-1]["parts"][0]["tool_output"] == long_output
 
 
 # ---------------------------------------------------------------------------
@@ -785,7 +885,7 @@ async def test_l2_allowed_uri_prefixes_block_read_outside_scope() -> None:
     ctx = _make_run_context()
     result = await read_tool(ctx, uris="viking://resources/raw/engine.md")
 
-    assert "outside the allowed prefixes" in result.return_value
+    assert "read_scope_denied" in result.return_value
     client.read.assert_not_called()
 
 
@@ -917,6 +1017,58 @@ agents:
         "viking://resources/wiki/",
         "viking://resources/raw/",
     ]
+    assert cfg.write_allowed_uri_prefixes == []
+
+
+@pytest.mark.asyncio
+async def test_l2_write_allowed_uri_prefixes_config_roundtrip() -> None:
+    """L2: write_allowed_uri_prefixes propagates independently from read prefixes."""
+    from wolfharness import AgentsManifest
+
+    yaml_str = """
+agents:
+  test_agent:
+    type: native
+    model: test
+    capabilities:
+      - type: viking
+        mode: all
+        allowed_uri_prefixes:
+          - viking://resources/wiki/
+        write_allowed_uri_prefixes:
+          - viking://resources/tickets/
+"""
+    d = yamling.load_yaml(yaml_str, verify_type=dict)
+    manifest = AgentsManifest.model_validate(d)
+    cap_configs = manifest.agents["test_agent"].capabilities
+    assert len(cap_configs) == 1
+    cfg = cap_configs[0]
+    assert isinstance(cfg, VikingCapabilityConfig)
+    assert cfg.allowed_uri_prefixes == ["viking://resources/wiki/"]
+    assert cfg.write_allowed_uri_prefixes == ["viking://resources/tickets/"]
+
+
+@pytest.mark.asyncio
+async def test_l2_allowed_uri_prefixes_do_not_block_write_by_default() -> None:
+    """L2: read prefixes do not constrain viking_write without an explicit write guard."""
+    client = _make_mock_client()
+    cfg = VikingCapabilityConfig(
+        mode="all",
+        allowed_uri_prefixes=["viking://resources/wiki/"],
+    )
+    cap = _build_cap_from_config(cfg, client)
+    tools = build_tools(cap)
+    write_tool = next(t for t in tools if t.__name__ == "viking_write")
+
+    ctx = _make_run_context()
+    result = await write_tool(
+        ctx,
+        uri="viking://resources/810test/Procedure/tickets/OPA-001.md",
+        content="ticket",
+    )
+
+    assert "Wrote" in result.return_value
+    client.write.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -967,7 +1119,7 @@ async def test_l2_memory_features_implicitly_allowed_outside_prefixes() -> None:
         for msg_ in result.messages
         if isinstance(msg_, ModelRequest)
         for part in msg_.parts
-        if isinstance(part, SystemPromptPart)
+        if isinstance(part, UserPromptPart)
     )
 
 
@@ -1137,11 +1289,11 @@ async def test_l2_profile_injection_first_turn_fires_second_skips() -> None:
     sys_msgs = [
         m
         for m in result1.messages
-        if isinstance(m, ModelRequest) and any(isinstance(p, SystemPromptPart) for p in m.parts)
+        if isinstance(m, ModelRequest) and any(isinstance(p, UserPromptPart) for p in m.parts)
     ]
     assert len(sys_msgs) >= 1
     profile_content = next(
-        p.content for m in sys_msgs for p in m.parts if isinstance(p, SystemPromptPart)
+        p.content for m in sys_msgs for p in m.parts if isinstance(p, UserPromptPart)
     )
     assert "<openviking-profile>" in profile_content
 

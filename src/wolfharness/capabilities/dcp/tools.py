@@ -40,6 +40,9 @@ if TYPE_CHECKING:
     from wolfharness.agents.context import AgentContext
 
 
+_DISTILLATION_MAX_CHARS = 4000
+
+
 class DistillTargetInput(TypedDict):
     """Input schema for a single distill target.
 
@@ -52,7 +55,13 @@ class DistillTargetInput(TypedDict):
     """
 
     id: Annotated[str, "Numeric ID (as string) from the <prunable-tools> list"]
-    distillation: Annotated[str, "Complete technical distillation for this tool output"]
+    distillation: Annotated[
+        str,
+        "Complete technical distillation for this tool output. "
+        "Keep it under 3000 characters. Use Chinese full-width quotes "
+        '「」/“” or escape ASCII double-quotes as \\" — the arguments '
+        "field must stay valid JSON. Do not truncate mid-output.",
+    ]
 
 
 logger = logging.getLogger(__name__)
@@ -430,6 +439,12 @@ def distill_tool(
 
         if not distillation:
             raise ModelRetry("distillation cannot be empty")
+        if len(distillation) > _DISTILLATION_MAX_CHARS:
+            raise ModelRetry(
+                f"distillation for id {id_val!r} is {len(distillation)} chars, "
+                f"exceeds the {_DISTILLATION_MAX_CHARS}-char safe length. Split the target into a "
+                "shorter summary or drop low-value detail.",
+            )
 
         if not isinstance(id_val, str):
             raise ModelRetry(

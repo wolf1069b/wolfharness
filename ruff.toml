@@ -151,6 +151,9 @@ max-complexity = 15
   "TRY300",
   "PLR0915"
 ]
+# Viking ticket tools: ctx is pydantic-ai internal, reward-complex closures,
+# BLE001 is intentional for best-effort remote sync
+"src/wolfharness/capabilities/viking/ticket.py" = ["D417", "BLE001", "PLR0915"]
 # Viking capability: BLE001 for safe SkillResource defaults, TRY300 for early-return pattern
 "src/wolfharness/capabilities/viking/__init__.py" = ["BLE001", "TRY300"]
 # Viking instructions: E501 for markdown table lines
@@ -185,6 +188,36 @@ max-complexity = 15
   "TC002",
   "TC003",
   "TRY301",
+]
+
+# Wiki capability (copied from xeno-adp-agentic): CJK docstrings (RUF001/002/003),
+# long lines (E501), magic values (PLR2004), complex methods (PLR0915/PLR0911),
+# import ordering (E402), blind except for best-effort ops (BLE001),
+# raise-in-try (TRY301), docstring style (D205/D417),
+# mutable defaults (RUF012), manual list comprehension (PERF401),
+# collapsible if (SIM102)
+"src/wolfharness/capabilities/wiki/**" = [
+  "RUF001",
+  "RUF002",
+  "RUF003",
+  "E501",
+  "PLR2004",
+  "PLR0915",
+  "PLR0911",
+  "E402",
+  "BLE001",
+  "TRY301",
+  "D205",
+  "D417",
+  "RUF012",
+  "PERF401",
+  "SIM102",
+  "EXE002",
+  "PLW0127",
+  "PTH123",
+  "PLR1704",
+  "PLW2901",
+  "TRY004",
 ]
 
 [format]

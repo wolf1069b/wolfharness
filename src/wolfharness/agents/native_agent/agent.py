@@ -1158,7 +1158,7 @@ class Agent[TDeps = None, OutputDataT = str](BaseAgent[TDeps, OutputDataT]):
             #    Per-agent opt-out via ``resources.enabled: false`` in YAML.
             if self.config is not None and self.config.resources.enabled:
                 resource_cap = pool.resource_capability
-                if resource_cap is not None:
+                if resource_cap is not None and resource_cap not in self._external_capabilities:
                     tool_capabilities.append(resource_cap)
 
         # Register per-session capabilities (MCP, SkillManagerCap)
@@ -1178,9 +1178,20 @@ class Agent[TDeps = None, OutputDataT = str](BaseAgent[TDeps, OutputDataT]):
                         ScopeLevel,
                     )
 
-                    session_scope = Scope(level=ScopeLevel.SESSION, session_id=session_id)
+                    session_scope = Scope(
+                        level=ScopeLevel.SESSION,
+                        agent_name=self.name,
+                        session_id=session_id,
+                    )
                     for cap in mcp_capabilities:
                         registry.register(cap, session_scope)
+                    # Agent/session MCP managers may own additional resource
+                    # providers. Pool-shared providers are already registered
+                    # at POOL scope by AgentFactory and must not be duplicated.
+                    if self.host_context is None or self.mcp is not self.host_context.mcp:
+                        for provider in self.mcp.get_mcp_providers():
+                            if provider.resources_supported is not False:
+                                registry.register(provider, session_scope)
                     if pool is not None:
                         pool_caps = pool.skill_capabilities
                         if pool_caps:

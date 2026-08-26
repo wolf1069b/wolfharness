@@ -161,6 +161,9 @@ class DCPState:
     # assistant messages before the last user message on every pipeline run.
     # Toggled by the model via prune(clear_thinking=True/False).
     clear_thinking_active: bool = False
+    # When True, the manifest compaction pipeline already ran for the current
+    # CRITICAL episode, so compaction fires at most once per episode.
+    critical_compacted: bool = False
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> DCPState:

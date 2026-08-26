@@ -171,6 +171,29 @@ Last audited against OpenCode source: **2026-02-24**
 | [x] | GET | `/experimental/resource` | List MCP resources from connected servers |
 | [x] | GET | `/experimental/session` | List sessions globally (cross-project, paginated) |
 
+### MCP Resource compatibility
+
+`GET /experimental/resource` returns a record of resources only. Each key is
+the escaped `{client_name}:{uri}` pair (`%` is escaped before `:`), and each
+value keeps the upstream `name`, `uri`, `description`, `mimeType`, and
+`client`. Providers are selected by the current `agent_name` + `session_id`
+scope; a provider failure does not discard resources returned by other
+servers.
+
+There is intentionally no HTTP resource-template endpoint. Resource templates
+are enumerated through the model-facing
+`list_mcp_resource_templates(server, cursor, limit)` tool. The model-facing
+resource surface contains exactly three tools:
+
+- `list_mcp_resources(server=None, cursor=None, limit=50)`
+- `list_mcp_resource_templates(server=None, cursor=None, limit=50)`
+- `read_mcp_resource(server, uri)`
+
+The legacy Python resource helpers remain available to Host internals but are
+not registered in the model toolset. `resources.enabled=false` hides only the
+three model tools; Host catalog lookup and `ResourceSource` injection continue
+to use the provider registry.
+
 ---
 
 ## Worktrees (Experimental)

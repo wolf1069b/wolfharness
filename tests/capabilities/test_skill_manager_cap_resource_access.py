@@ -23,6 +23,10 @@ pytestmark = pytest.mark.unit
 class FakeResourceChild:
     """Stand-in for a per-skill ``McpServerCap`` implementing ``ResourceAccess``."""
 
+    @property
+    def owned_schemes(self) -> frozenset[str]:
+        return frozenset()
+
     def __init__(
         self,
         name: str,

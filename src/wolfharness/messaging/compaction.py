@@ -384,6 +384,68 @@ class TruncateTextParts(CompactionStep):
         return result
 
 
+@dataclass
+class TruncateToolCallInputs(CompactionStep):
+    """Truncate large tool-call input arguments in responses.
+
+    Tool calls carry the request arguments the model sent (``ToolCallPart.args``).
+    Over a long build these inputs accumulate and can dwarf the pruned output
+    placeholders, so the context still grows unboundedly even when DCP turns
+    tool *outputs* into ``[pruned]``.  This step shortens tool-input args while
+    preserving the tool name and call id.  String args are truncated in place;
+    dict args have their large string values truncated (recursively) and None
+    args are left untouched.
+    """
+
+    max_length: int = 1500
+    """Maximum length for a tool-call input string value."""
+
+    suffix: str = "\n... [input truncated]"
+    """Suffix appended to a truncated string value."""
+
+    async def apply(self, messages: MessageSequence) -> list[ModelMessage]:
+        result: list[ModelMessage] = []
+        for msg in messages:
+            match msg:
+                case ModelResponse(parts=parts):
+                    new_parts: list[ModelRequestPart | ModelResponsePart] = []
+                    for part in parts:
+                        if isinstance(part, ToolCallPart):
+                            new_parts.append(self._truncate_call(part))
+                        else:
+                            new_parts.append(part)
+                    result.append(replace(msg, parts=cast(Sequence[Any], new_parts)))
+                case _:
+                    result.append(msg)
+        return result
+
+    def _truncate_call(self, part: ToolCallPart) -> ToolCallPart:
+        args = part.args
+        if isinstance(args, str):
+            if len(args) > self.max_length:
+                truncated = args[: self.max_length - len(self.suffix)]
+                return replace(part, args=truncated + self.suffix)
+            return part
+        if isinstance(args, dict):
+            new_args = self._truncate_dict(args)
+            return replace(part, args=new_args)
+        return part
+
+    def _truncate_value(self, value: Any) -> Any:
+        if isinstance(value, str):
+            if len(value) > self.max_length:
+                return value[: self.max_length - len(self.suffix)] + self.suffix
+            return value
+        if isinstance(value, dict):
+            return self._truncate_dict(value)
+        if isinstance(value, list):
+            return [self._truncate_value(v) for v in value]
+        return value
+
+    def _truncate_dict(self, data: dict[str, Any]) -> dict[str, Any]:
+        return {k: self._truncate_value(v) for k, v in data.items()}
+
+
 # =============================================================================
 # Selection Steps - Keep subsets of messages
 # =============================================================================

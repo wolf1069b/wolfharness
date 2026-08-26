@@ -24,6 +24,9 @@ if TYPE_CHECKING:
 # ``re.DOTALL`` ensures the pattern matches across newlines.
 _RECALL_RE = re.compile(r"<openviking-recall>.*?</openviking-recall>", re.DOTALL)
 _PROFILE_RE = re.compile(r"<openviking-profile>.*?</openviking-profile>", re.DOTALL)
+_CONTEXT_RE = re.compile(r"<openviking-context\b[^>]*>.*?</openviking-context>", re.DOTALL)
+_SESSION_ARCHIVE_RE = re.compile(r"<session-archive\b[^>]*>.*?</session-archive>", re.DOTALL)
+_USER_PROFILE_RE = re.compile(r"<user-profile\b[^>]*>.*?</user-profile>", re.DOTALL)
 
 _REPLACEMENT = "[recalled context omitted]"
 
@@ -39,8 +42,11 @@ _MEMORY_INTENT_TEMPLATE = "<memory-intent>{reason}</memory-intent>"
 def _sanitize_message(content: str, enabled: bool = True) -> str:
     """Strip injected Viking XML blocks from message content.
 
-    Replaces ``<openviking-recall>...</openviking-recall>`` and
-    ``<openviking-profile>...</openviking-profile>`` blocks with
+    Replaces ``<openviking-recall>...</openviking-recall>``,
+    ``<openviking-profile>...</openviking-profile>``,
+    ``<openviking-context>...</openviking-context>``,
+    ``<session-archive>...</session-archive>``, and
+    ``<user-profile>...</user-profile>`` blocks with
     ``[recalled context omitted]`` to prevent feedback loops where
     recalled context is re-ingested as original conversation.
 
@@ -54,7 +60,10 @@ def _sanitize_message(content: str, enabled: bool = True) -> str:
     if not enabled:
         return content
     sanitized = _RECALL_RE.sub(_REPLACEMENT, content)
-    return _PROFILE_RE.sub(_REPLACEMENT, sanitized)
+    sanitized = _PROFILE_RE.sub(_REPLACEMENT, sanitized)
+    sanitized = _CONTEXT_RE.sub(_REPLACEMENT, sanitized)
+    sanitized = _SESSION_ARCHIVE_RE.sub(_REPLACEMENT, sanitized)
+    return _USER_PROFILE_RE.sub(_REPLACEMENT, sanitized)
 
 
 def _extract_conversation_pairs(
@@ -83,8 +92,8 @@ def _extract_conversation_pairs(
         if isinstance(msg, ModelRequest):
             for part in msg.parts:
                 if isinstance(part, UserPromptPart):
-                    content = part.content
-                    if isinstance(content, str):
+                    content = _extract_text_content(part.content)
+                    if content:
                         pairs.append({"role": "user", "content": content})
         elif isinstance(msg, ModelResponse):
             text_parts = [p for p in msg.parts if isinstance(p, TextPart)]
@@ -92,6 +101,179 @@ def _extract_conversation_pairs(
                 combined = "\n".join(p.content for p in text_parts)
                 pairs.append({"role": "assistant", "content": combined})
     return pairs
+
+
+def _extract_full_trace(
+    messages: Sequence[Any],
+    start_idx: int,
+) -> list[dict[str, Any]]:
+    """Extract full conversation trace including tool calls and results.
+
+    Unlike ``_extract_conversation_pairs`` which only captures user/assistant
+    text, this function extracts **all** part types from pydantic-ai messages
+    and produces Viking-compatible ``{role, parts}`` dicts:
+
+    - ``UserPromptPart`` → ``{"type": "text", "text": "..."}``
+    - ``TextPart`` / ``ThinkingPart`` → ``{"type": "text", "text": "..."}``
+    - ``ToolCallPart`` → ``{"type": "tool", "tool_name": ..., "tool_status": "running", ...}``
+    - ``ToolReturnPart`` → ``{"type": "tool", "tool_status": "completed"/"error"}``
+
+    Args:
+        messages: Sequence of ``ModelRequest`` / ``ModelResponse`` objects.
+        start_idx: Index to start scanning from (inclusive).
+
+    Returns:
+        A list of ``{"role": "user"|"assistant", "parts": [...]}`` dicts
+        in Viking-compatible format.
+    """
+    from pydantic_ai.messages import (
+        ModelRequest,
+        TextPart,
+        ThinkingPart,
+        ToolCallPart,
+        ToolReturnPart,
+        UserPromptPart,
+    )
+
+    result: list[dict[str, Any]] = []
+    for msg in messages[start_idx:]:
+        parts: list[dict[str, Any]] = []
+        role = "user" if isinstance(msg, ModelRequest) else "assistant"
+
+        for part in msg.parts:
+            part_role = _trace_part_role(part, default=role)
+            if part_role != role:
+                if parts:
+                    result.append({"role": role, "parts": parts})
+                    parts = []
+                role = part_role
+
+            if isinstance(part, UserPromptPart):
+                content = _extract_text_content(part.content)
+                if content:
+                    _append_text_part(parts, _sanitize_message(content))
+
+            elif isinstance(part, TextPart):
+                if part.content.strip():
+                    _append_text_part(parts, _sanitize_message(part.content))
+
+            elif isinstance(part, ThinkingPart):
+                if part.content.strip():
+                    _append_text_part(parts, _sanitize_message(part.content), subtype="thinking")
+
+            elif isinstance(part, ToolCallPart):
+                tool_part: dict[str, Any] = {
+                    "type": "tool",
+                    "tool_name": part.tool_name or "",
+                    "tool_status": "running",
+                }
+                if part.tool_call_id:
+                    tool_part["tool_id"] = part.tool_call_id
+                if part.args is not None:
+                    tool_part["tool_input"] = _serialize_tool_args(part.args)
+                parts.append(tool_part)
+
+            elif isinstance(part, ToolReturnPart):
+                outcome = getattr(part, "outcome", None)
+                tool_part = {
+                    "type": "tool",
+                    "tool_name": part.tool_name or "",
+                    "tool_status": "error" if outcome == "failed" else "completed",
+                }
+                if part.tool_call_id:
+                    tool_part["tool_id"] = part.tool_call_id
+                if part.content is not None:
+                    tool_part["tool_output"] = _serialize_tool_output(part.content)
+                parts.append(tool_part)
+
+        if parts:
+            result.append({"role": role, "parts": parts})
+
+    return result
+
+
+def _trace_part_role(part: Any, *, default: str) -> str:
+    from pydantic_ai.messages import ToolCallPart, ToolReturnPart, UserPromptPart
+
+    if isinstance(part, (ToolCallPart, ToolReturnPart)):
+        return "assistant"
+    if isinstance(part, UserPromptPart):
+        return "user"
+    return default
+
+
+def _extract_text_content(content: Any) -> str:
+    """Extract human-readable text from pydantic-ai prompt content."""
+    if isinstance(content, str):
+        return content.strip()
+    if not isinstance(content, list):
+        return ""
+    chunks: list[str] = []
+    for item in content:
+        if isinstance(item, str):
+            text = item
+        elif isinstance(item, dict):
+            value = item.get("text") or item.get("content")
+            text = value if isinstance(value, str) else ""
+        else:
+            value = getattr(item, "text", None)
+            if not isinstance(value, str):
+                value = getattr(item, "content", None)
+            text = value if isinstance(value, str) else ""
+        if text.strip():
+            chunks.append(text.strip())
+    return "\n".join(chunks)
+
+
+def _append_text_part(
+    parts: list[dict[str, Any]],
+    text: str,
+    *,
+    subtype: str | None = None,
+) -> None:
+    """Append text while coalescing adjacent text chunks with matching subtype."""
+    stripped = text.strip()
+    if not stripped:
+        return
+    if parts and parts[-1].get("type") == "text" and parts[-1].get("subtype") == subtype:
+        parts[-1]["text"] = f"{parts[-1].get('text', '')}\n{stripped}"
+        return
+    part: dict[str, Any] = {"type": "text", "text": stripped}
+    if subtype is not None:
+        part["subtype"] = subtype
+    parts.append(part)
+
+
+def _serialize_tool_args(args: Any) -> Any:
+    """Serialize tool call arguments to a JSON-safe dict.
+
+    Handles string-encoded JSON (parsed), native dicts (passed through),
+    and other types (wrapped in ``{"value": ...}``).
+    """
+    if isinstance(args, str):
+        try:
+            return json.loads(args)
+        except (json.JSONDecodeError, TypeError):
+            return {"value": args}
+    if isinstance(args, dict):
+        return args
+    if isinstance(args, list):
+        return {"items": args}
+    return {"value": str(args)} if args is not None else {}
+
+
+def _serialize_tool_output(content: Any) -> str:
+    """Serialize tool return content to a string.
+
+    Preserves the complete textual payload so Viking has the auditable
+    tool trace. Display-layer truncation should happen outside ingestion.
+    """
+    if isinstance(content, str):
+        return content
+    try:
+        return json.dumps(content, ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        return str(content)
 
 
 async def _ingest_conversation(

@@ -173,6 +173,57 @@ def test_compile_registers_config_capabilities_at_agent_scope(
     assert isinstance(test_ra_caps[0], TestResourceAccessCap)
 
 
+def test_register_config_capabilities_allows_same_owned_scheme_across_agent_scopes(
+    minimal_pool: AgentPool,
+) -> None:
+    """Per-agent resource providers may own the same URI scheme."""
+    from tests.fixtures.test_resource_cap import TestResourceAccessCap
+    from wolfharness.capabilities.extension_registry import Scope, ScopeLevel
+
+    class VikingLikeResourceCap(TestResourceAccessCap):
+        @property
+        def owned_schemes(self) -> frozenset[str]:
+            return frozenset({"viking"})
+
+    cap_a = VikingLikeResourceCap(read_text="a", read_uri="viking://doc.md")
+    cap_b = VikingLikeResourceCap(read_text="b", read_uri="viking://doc.md")
+
+    class NativeCfgA:
+        def __init__(self) -> None:
+            self.capabilities = [cap_a]
+
+    class NativeCfgB:
+        def __init__(self) -> None:
+            self.capabilities = [cap_b]
+
+    cfg_a = NativeCfgA()
+    cfg_b = NativeCfgB()
+
+    manifest = MagicMock()
+    manifest.agents = {"agent_a": cfg_a, "agent_b": cfg_b}
+    mcp = MagicMock()
+    mcp.get_mcp_providers.return_value = []
+
+    factory = AgentFactory(pool=minimal_pool)
+
+    with patch("wolfharness.models.agents.NativeAgentConfig", (NativeCfgA, NativeCfgB)):
+        factory.register_config_capabilities(
+            manifest=manifest,
+            host_context=_make_host_context(mcp=mcp),
+        )
+
+    visible_a = minimal_pool.extension_registry.get_visible_capabilities(
+        Scope(level=ScopeLevel.AGENT, agent_name="agent_a")
+    )
+    visible_b = minimal_pool.extension_registry.get_visible_capabilities(
+        Scope(level=ScopeLevel.AGENT, agent_name="agent_b")
+    )
+    assert cap_a in visible_a
+    assert cap_a not in visible_b
+    assert cap_b in visible_b
+    assert cap_b not in visible_a
+
+
 def test_get_visible_capabilities_no_duplicates_across_scopes(
     minimal_pool: AgentPool,
 ) -> None:

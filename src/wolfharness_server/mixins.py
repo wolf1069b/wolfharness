@@ -83,6 +83,42 @@ class ProtocolEventConsumerMixin(ABC):
         """
         return "descendants"
 
+    def _get_subscription_replay(self) -> bool:
+        """Return whether the session consumer replays buffered events on subscribe.
+
+        Defaults to ``True`` (historical behavior). Protocol servers whose
+        client reloads full state via an explicit sync (e.g. OpenCode) may
+        override to ``False`` so the consumer aligns with the SSE endpoint's
+        first-connect policy — replaying buffered events would re-convert
+        native events into duplicate projections for messages the client has
+        already loaded. Crash-recovery paths that genuinely need historical
+        events must override this back to ``True``.
+
+        Returns:
+            Whether the consumer should replay the EventBus replay buffer.
+        """
+        return True
+
+    def _get_subscription_exclude_source(self) -> frozenset[str] | None:
+        """Return sources whose published events this consumer must not receive.
+
+        Defaults to ``None``. Protocol servers that republish their own
+        projections into the EventBus (loopback) should override to exclude
+        that source so a producer can never re-consume its own output.
+
+        !!! note
+            Currently inert in production: the OpenCode server delivers
+            projections direct-wire to SSE queues and no producer calls
+            ``publish(..., source_hint=...)`` anymore (the loopback bridge
+            that did was removed). The hook is kept as defense-in-depth for
+            any future producer that re-enters the EventBus; unit tests
+            exercise both the hook and the ``exclude_source`` filter.
+
+        Returns:
+            A frozenset of ``source_hint`` values to exclude, or ``None``.
+        """
+        return None
+
     async def _before_consumer_loop(self, session_id: str) -> None:  # noqa: B027
         """Hook called before the consumer loop starts reading from the stream.
 
@@ -158,7 +194,10 @@ class ProtocolEventConsumerMixin(ABC):
                 return
 
             receive_stream = await self.event_bus.subscribe(
-                session_id, scope=self._get_subscription_scope()
+                session_id,
+                scope=self._get_subscription_scope(),
+                replay=self._get_subscription_replay(),
+                exclude_source=self._get_subscription_exclude_source(),
             )
             self._consumer_streams[session_id] = receive_stream
 

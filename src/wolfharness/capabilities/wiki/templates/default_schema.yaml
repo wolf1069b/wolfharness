@@ -1,0 +1,904 @@
+# 工程机械维修 Wiki — 实体 Schema (v9)
+#
+# 售后故障诊断场景：从故障现象出发，经 Symptom → Profile → Fault → Component → 工作机理，
+# 到 Device 参数和 raw 原文，形成完整诊断闭环。
+#
+# 7 种 Concept + Symptom Profile 子资源 + OP（OPA/OPS/OPL）
+# URI 格式：viking://resources/<namespace>/Concept/Class/Object（由 OpenViking 直接读取）
+# 存储路径：Concept/Class/Object.md；natural key/index 只承担构建期去重与审计，不替代 URI
+# 状态：candidate → published → deprecated；status 仅保留兼容，不表示人工审核
+#
+# 此文件是实体结构的权威定义，供：
+# - extraction_worker 作为 few-shot 模板参考
+# - hooks 作为校验依据（运行时直接读取本文件，禁止双份硬编码）
+# - 开发者理解实体结构
+
+version: 9
+
+# All formal pages share these orthogonal build/review fields.  ``status`` is
+# retained below for backward compatibility, but it must not be interpreted
+# as human approval: automated builds publish with review_state=unreviewed.
+shared_frontmatter:
+  - name: publication_state
+    type: string
+    enum: [candidate, published, deprecated]
+    description: "是否进入正式 Wiki 发布面"
+  - name: validation_state
+    type: string
+    enum: [pending, machine_validated, failed]
+    description: "harness/audit 的机器校验状态"
+  - name: review_state
+    type: string
+    enum: [unreviewed, human_reviewed]
+    description: "人工复核状态；自动构建默认为 unreviewed"
+
+concepts:
+  # ── Component — 物理组件（可替换/可维修的总成）──
+  Component:
+    description: "物理组件 = 可导航的关键总成（assembly）。通用 Wiki 保存身份、工作机理、诊断关系和 raw 入口，不复制机型参数表、判定阈值、线号、线色或针脚图。文件夹即其逻辑装配路径（class_name），按实际 BOM 数据动态创建/合并/重命名。"
+    class_name: "逻辑装配路径（总成分解树），允许子类路径：发动机/电控发动机/EGR、主泵/变量柱塞泵/双联泵、履带总成/前后导轮。文件夹据此动态生成。"
+    object_name: "品牌+型号（如 川崎K3V112）或 机械类型+规格。禁止机型代号开头"
+    frontmatter:
+      - name: id
+        type: string
+        required: true
+      - name: title
+        type: string
+        required: true
+      - name: description
+        type: string
+        required: true
+      - name: class_name
+        type: string
+        required: true
+      - name: object_name
+        type: string
+        required: true
+      - name: bom_path
+        type: string
+        description: "BOM-derived logical assembly path; optional until a BOM baseline is available"
+      - name: bom_parent_uri
+        type: ref
+        ref_type: Component
+        description: "Optional immediate BOM parent Component"
+      - name: bom_evidence
+        type: list
+        description: "Raw BOM/assembly evidence for bom_path; not a specification field"
+      - name: status
+        type: string
+        required: true
+        enum: [draft, confirmed, deprecated]
+      - name: sources
+        type: list
+        required: true
+        description: "raw 章节 URI 列表（{raw_root}/<doc_id>/chapters/<subdir>/chapter.md）"
+      - name: applicable_models
+        type: list
+      - name: aliases
+        type: list
+    body_sections:
+      - "总成概览"
+      - "工作机理"
+    optional_body_sections:
+      - "组成零件"
+    example: |
+      ---
+      id: COMPONENT-K3V112
+      title: 川崎K3V112主泵
+      description: SY215C 主液压泵。
+      class_name: 主泵/变量柱塞泵/双联泵
+      object_name: 川崎K3V112
+      status: draft
+      applicable_models:
+        - SY215C
+      sources:
+        - viking://resources/<raw_namespace>/manual-sy215/chapters/05_液压系统/05_2 主泵/chapter.md
+      ---
+      ## 总成概览
+      川崎K3V112 是 SY215C 的主液压泵，变量柱塞式双联泵。
+      ## 工作机理
+      柱塞往复运动完成吸油和压油，斜盘角度调节排量。
+      > 具体流量、压力、转速和调节值不在通用 Wiki 复制；按适用机型读取下列原始章节。
+      ## 组成零件
+      - 回油滤芯 P-7534：见原始章节 `05_液压系统/05_2 主泵`。
+
+  # ── Fault — 故障机理 ──
+  Fault:
+    description: "回答'哪个部件以什么方式失效，怎样传播并造成什么后果'。与 Symptom 分别物化但共享同一 causal packet。"
+    class_name_enum: [HydraulicFailure, MechanicalFailure, ElectricalFailure, ControlFailure, FluidFailure, ThermalFailure, StructuralFailure]
+    frontmatter:
+      - name: id
+        type: string
+        required: true
+      - name: title
+        type: string
+        required: true
+      - name: description
+        type: string
+        required: true
+      - name: class_name
+        type: string
+        required: true
+        enum: [HydraulicFailure, MechanicalFailure, ElectricalFailure, ControlFailure, FluidFailure, ThermalFailure, StructuralFailure]
+      - name: object_name
+        type: string
+        required: true
+      - name: status
+        type: string
+        required: true
+      - name: affected_components
+        type: ref_list
+        ref_type: Component
+        required: true
+      - name: verification_procedures
+        type: ref_list
+        ref_type: Procedure
+        required: true
+      - name: repair_procedures
+        type: ref_list
+        ref_type: Procedure
+        required: true
+      - name: applicable_models
+        type: list
+      - name: sources
+        type: list
+        required: true
+    body_sections:
+      - "失效描述"
+      - "失效机理"
+      - "常见原因"
+      - "影响范围"
+      - "关联故障现象"
+      - "验证方法"
+      - "修复方式"
+    example: |
+      ---
+      id: FAULT-PUMP-WEAR-LEAK
+      title: 主泵磨损导致内泄增大
+      description: 主泵磨损后内泄增大并使供油能力下降。
+      class_name: HydraulicFailure
+      object_name: 主泵磨损导致内泄增大
+      status: draft
+      affected_components:
+        - viking://resources/<namespace>/Component/abc123def456789012345678
+      verification_procedures:
+        - viking://resources/<namespace>/Procedure/def456abc789012345678901
+      repair_procedures:
+        - viking://resources/<namespace>/Procedure/ghi789abc012345678901234
+      applicable_models:
+        - SY215C
+      sources:
+        - viking://resources/<raw_namespace>/manual-sy215/chapters/05_液压系统/05_2 主泵/chapter.md
+      ---
+      ## 失效描述
+      主泵磨损后内泄增大，导致液压系统供油不足。
+      ## 失效机理
+      ### 正常工作状态
+      柱塞往复运动完成吸油和压油，输出压力稳定。
+      ### 失效演变过程
+      1. 柱塞和缸体磨损间隙增大
+      2. 高压油从间隙泄漏回低压侧
+      3. 容积效率下降，输出流量减少
+      ### 失效后的系统表现
+      - 主泵供油能力下降
+      - 整机动作变慢
+      ## 常见原因
+      - 液压油污染导致柱塞磨损
+      - 长期高负荷运转
+      ## 影响范围
+      影响 [川崎K3V112主泵](viking://resources/<namespace>/Component/abc123def456789012345678) 的供油能力。
+      ## 关联故障现象
+      - [整机动作慢](viking://resources/<namespace>/Symptom/jkl012mno345678901234567)
+      ## 验证方法
+      - [检查主泵内泄](viking://resources/<namespace>/Procedure/def456abc789012345678901)
+      ## 修复方式
+      - [修复主泵内泄](viking://resources/<namespace>/Procedure/ghi789abc012345678901234)
+
+  # ── Symptom — 故障现象 ──
+  Symptom:
+    description: "回答'观察到什么'，不解释为什么。含 Profile 子资源。"
+    frontmatter:
+      - name: id
+        type: string
+        required: true
+      - name: title
+        type: string
+        required: true
+      - name: description
+        type: string
+        required: true
+      - name: class_name
+        type: string
+        required: false
+        description: "功能域，不是机型（如 液压系统、动力与发动机）"
+      - name: object_name
+        type: string
+        required: true
+      - name: status
+        type: string
+        required: true
+      - name: profile_resource
+        type: string
+        description: "固定值 profile/"
+      - name: sources
+        type: list
+        required: true
+    body_sections:
+      - "现象定义"
+      - "典型观察特征"
+      - "相似现象区分"
+      - "产品配置差异"
+      - "Profile 索引"
+    sub_resources:
+      profiles:
+        description: "配置特化的诊断上下文"
+        frontmatter:
+          - name: profile_id
+            type: string
+            required: true
+            description: "由设备(机型+配置版本) × 直接关联 Component(总成,含具体型号)归一化生成，如 sy215c柴油_主泵川崎K3V112；只含与该故障现象直接关联的组件"
+          - name: parent_symptom
+            type: ref
+            ref_type: Symptom
+            required: true
+          - name: status
+            type: string
+            required: true
+          - name: applicable_models
+            type: list
+            required: true
+          - name: direct_component
+            type: string
+            description: "兼容旧库的显示名称；新页面必须同时提供 direct_component_uri"
+          - name: direct_component_uri
+            type: ref
+            ref_type: Component
+            description: "该 Profile 直接关联的具体 Component URI；用于确定性下探"
+          - name: device_refs
+            type: ref_list
+            ref_type: Device
+            description: "该 Profile 适用的 Device URI；applicable_models 仅作为显示文本"
+          - name: possible_faults
+            type: ref_list
+            ref_type: Fault
+            required: true
+          - name: sources
+            type: list
+            required: true
+          - name: engine
+            type: string
+          - name: controller
+            type: string
+          - name: emission
+            type: string
+          - name: fuel_system
+            type: string
+        body_sections:
+          - "适用配置"
+          - "本配置下的表现特征"
+          - "与其他配置的差异"
+          - "可能失效机理"
+          - "推荐诊断流程"
+        example: |
+          ---
+          profile_id: sy215c柴油_主泵川崎K3V112
+          parent_symptom: viking://resources/<namespace>/Symptom/jkl012mno345678901234567
+          status: draft
+          applicable_models:
+            - SY215C (柴油)
+          direct_component: 主泵 川崎K3V112
+          possible_faults:
+            - viking://resources/<namespace>/Fault/ghi789def012345678901234
+          sources:
+            - viking://resources/<raw_namespace>/manual-sy215/chapters/05_液压系统/05_2 主泵/chapter.md
+          ---
+          ## 适用配置
+          SY215C 柴油版 + 主泵川崎K3V112 组合下的诊断上下文。
+          ## 本配置下的表现特征
+          多个液压动作均变慢，且表现集中在主液压回路。
+          ## 与其他配置的差异
+          来源未给出其他配置差异。
+          ## 可能失效机理
+          - [主泵磨损导致内泄增大](viking://resources/<namespace>/Fault/ghi789def012345678901234)
+          ## 推荐诊断流程
+          1. [检查主泵内泄](viking://resources/<namespace>/Procedure/def456abc789012345678901)
+    example: |
+      ---
+      id: SYMPTOM-MACHINE-SLOW
+      title: 整机动作慢
+      description: 整机液压动作速度下降。
+      class_name: 液压系统
+      object_name: 整机动作慢
+      status: draft
+      profile_resource: profile/
+      sources:
+        - viking://resources/<raw_namespace>/manual-sy215/chapters/05_液压系统/05_2 主泵/chapter.md
+      ---
+      ## 现象定义
+      整机液压动作速度下降，多个动作同时变慢。
+      ## 典型观察特征
+      - 多个液压动作均变慢
+      - 多个动作同时受到影响
+      ## 相似现象区分
+      | 相似现象 | 区分要点 |
+      |---------|---------|
+      | [单动作慢](viking://resources/<namespace>/Symptom/0123456789abcdef01234567) | 仅单个动作受影响，整机不掉速 |
+      > open_gap: 若相似现象实体尚未创建，先写现象名称并在行首标注 `open_gap:`，待 Phase 2 关联或 Phase 4 修复循环补链 URI。
+      ## 产品配置差异
+      | 配置 | 差异要点 | 对应 Profile |
+      |------|---------|-------------|
+      | SY215C 柴油 + 川崎泵 | 诊断路径按该配置 Profile 区分；具体阈值读取原始章节 | [sy215c柴油_主泵川崎K3V112](viking://resources/<namespace>/Symptom/0123456789abcdef01234567/profile/sy215c柴油_主泵川崎K3V112) |
+      > 此节必须列出源章节中提到的不同设备配置及其在该现象下的具体差异（排放标准/液压配置/控制策略等），禁止仅写"见 Profile"。
+      ## Profile 索引
+      - [sy215c柴油_主泵川崎K3V112](viking://resources/<namespace>/Symptom/0123456789abcdef01234567/profile/sy215c柴油_主泵川崎K3V112) — SY215C 柴油版 + 主泵川崎K3V112
+      > 此节必须列出每个已创建 Profile 的 URI + 一句话描述，禁止仅写"详见 profile/"。
+
+  # ── DTC — 故障码 ──
+  DTC:
+    description: "由系列代号+控制器功能角色+原始故障码共同决定身份。"
+    class_name_format: "<系列代号>_<控制器功能角色>（如 SY215_主控制器）"
+    frontmatter:
+      - name: id
+        type: string
+        required: true
+      - name: title
+        type: string
+        required: true
+      - name: description
+        type: string
+        required: true
+      - name: class_name
+        type: string
+        required: true
+      - name: object_name
+        type: string
+        required: true
+      - name: status
+        type: string
+        required: true
+      - name: code
+        type: string
+        required: true
+      - name: controller_component
+        type: ref
+        ref_type: Component
+        description: "可选。仅当来源能确认具体控制器总成/型号时填写；否则在控制器身份 section 保留 source-honest open_gap。"
+      - name: controller_role
+        type: string
+        required: true
+        description: "来源确认的控制器功能角色，不等同于硬件型号。"
+      - name: software_effectivity
+        type: string
+      - name: related_faults
+        type: ref_list
+        ref_type: Fault
+        required: true
+      - name: sources
+        type: list
+        required: true
+    body_sections:
+      - "故障码定义"
+      - "控制器身份"
+      - "触发条件"
+      - "控制器反应"
+      - "设备表现"
+      - "可能失效机理"
+      - "诊断流程"
+    example: |
+      ---
+      id: DTC-SY215-168-02
+      title: 168-02 主控制器电源异常
+      description: 主控制器电源电压异常。
+      class_name: SY215_主控制器
+      object_name: 168-02_主控制器电源异常
+      status: draft
+      code: "168-02"
+      controller_role: 主控制器
+      controller_component: viking://resources/<namespace>/Component/mno456pqr789012345678901
+      related_faults:
+        - viking://resources/<namespace>/Fault/pqr901stu234567890123456
+      sources:
+        - viking://resources/<raw_namespace>/manual-sy215/chapters/09_故障诊断/09_4 排故流程/chapter.md
+      ---
+      ## 故障码定义
+      168-02：主控制器电源电压异常。
+      ## 触发条件
+      控制器判定电源输入异常；机型相关阈值和持续时间读取引用的原始章节。
+      ## 控制器反应
+      控制器进入保护模式，限制输出。
+      ## 设备表现
+      整机动作受限或停机。
+      ## 可能失效机理
+      - [电源电路故障](viking://resources/<namespace>/Fault/pqr901stu234567890123456)
+      ## 诊断流程
+      1. [检查电源电压](viking://resources/<namespace>/Procedure/stu345vwx678901234567890)
+
+  # ── Procedure — 操作规程 ──
+  Procedure:
+    description: "一项与真实 Component 关联、可独立复用的通用操作。保存动作顺序、分支和定性结果；诊断判定基准值（压力标准/间隙/扭矩/磨损极限等阈值）写入 ## 判定标准 附 raw 引用；裸工况测量值、线号、线色和针脚映射只保留 raw 引用，不复制进通用 Wiki。"
+    class_name_enum: [diagnosis, inspection, measurement, maintenance, removal, installation, replacement, adjustment, repair, test]
+    frontmatter:
+      - name: id
+        type: string
+        required: true
+      - name: title
+        type: string
+        required: true
+      - name: description
+        type: string
+        required: true
+      - name: class_name
+        type: string
+        required: true
+        enum: [diagnosis, inspection, measurement, maintenance, removal, installation, replacement, adjustment, repair, test]
+      - name: object_name
+        type: string
+        required: true
+      - name: status
+        type: string
+        required: true
+      - name: target_components
+        type: ref_list
+        ref_type: Component
+        required: true
+      - name: procedure_scope
+        type: string
+        enum: [atomic, composite]
+        description: "复合诊断流程必须声明 composite；可复用单项操作声明 atomic"
+      - name: specification_refs
+        type: list
+        description: "Component#spec_id 格式的 URI"
+      - name: applicable_models
+        type: list
+      - name: sources
+        type: list
+        required: true
+    body_sections:
+      - "操作目的"
+      - "操作步骤"
+      - "判定标准"
+      - "后续处理"
+    example: |
+      ---
+      id: PROCEDURE-DIAGNOSE-PUMP-LEAK
+      title: 检查主泵内泄
+      description: 检查主泵是否存在内泄。
+      class_name: diagnosis
+      object_name: 检查主泵内泄
+      status: draft
+      target_components:
+        - viking://resources/<namespace>/Component/abc123def456789012345678
+      specification_refs: []
+      sources:
+        - viking://resources/<raw_namespace>/manual-sy215/chapters/05_液压系统/05_2 主泵/chapter.md
+      ---
+      ## 操作目的
+      判断主泵磨损后是否发生内泄增大。
+      ## 操作步骤
+      1. 按原始章节确认适用机型、测点和安全前提。viking://resources/<raw_namespace>/manual-sy215/chapters/05_液压系统/05_2 主泵/chapter.md
+      2. 在主泵测试口连接适用的测量工具。viking://resources/<raw_namespace>/manual-sy215/chapters/05_液压系统/05_2 主泵/chapter.md
+      3. 建立章节规定的测试工况并记录结果。viking://resources/<raw_namespace>/manual-sy215/chapters/05_液压系统/05_2 主泵/chapter.md
+      4. 按引用章节中的本机型标准判断结果，不在通用 Wiki 复制阈值。viking://resources/<raw_namespace>/manual-sy215/chapters/05_液压系统/05_2 主泵/chapter.md
+      ## 判定标准
+      测量结果不满足适用机型原始章节规定时，进入关联 Fault；通用 Wiki 只保存分支语义。
+       ## 后续处理
+       结果异常时沿关联 Fault/修复 Procedure 继续；结果正常时返回上一级诊断流程。
+
+  # ── Device — 机型 ──
+  Device:
+    description: "在 Phase 0 从 BOM 创建。Phase 1 增量补充。"
+    frontmatter:
+      - name: id
+        type: string
+        required: true
+      - name: title
+        type: string
+        required: true
+      - name: description
+        type: string
+        required: true
+      - name: series
+        type: string
+      - name: status
+        type: string
+        required: true
+      - name: critical_components
+        type: ref_list
+        ref_type: Component
+        required: true
+        description: "Device 的关键总成 Component URI 列表（该设备包含/故障相关的总成）"
+      - name: symptom_refs
+        type: ref_list
+        ref_type: Symptom
+        description: "该 Device 已物化且适用的 Symptom URI 索引；用于从机型页确定性进入排故"
+      - name: aliases
+        type: list
+      - name: sources
+        type: list
+        required: true
+      - name: system_chapters
+        type: list
+        description: "该机型整机/各系统的 raw 章节引用（{raw_root}/<doc_id>/chapters/<subdir>/chapter.md）。audit 校验 Device.system_chapters.raw_link 覆盖"
+      - name: applicable_models
+        type: list
+    body_sections:
+      - "基础信息"
+      - "包含系统"
+    optional_body_sections:
+      - "本型号特点"
+      - "常见故障及故障机理"
+      - "控制器与故障码"
+    example: |
+      ---
+      id: DEVICE-SY215C
+      title: SY215C 挖掘机
+      description: 三一重工 SY215C 液压挖掘机。
+      series: SY215
+      status: draft
+      critical_components:
+        - viking://resources/<namespace>/Component/abc123def456789012345678
+      sources:
+        - viking://resources/<raw_namespace>/manual-sy215/chapters/01_前言/01_1 阅读维修手册的方法/chapter.md
+      ---
+      ## 基础信息
+      SY215C 挖掘机。通用页面保留机型身份和导航关系；重量、压力、容量等参数读取原始章节。
+      ## 包含系统
+      - 液压系统
+      - 电气系统
+      ## 本型号特点
+      电控发动机，带 EGR 排放系统。
+      ## 常见故障及故障机理
+      | Symptom URI | Fault URI | Component URI |
+      |-------------|-----------|--------------|
+      | viking://resources/<namespace>/Symptom/jkl012mno345678901234567 | viking://resources/<namespace>/Fault/ghi789def012345678901234 | viking://resources/<namespace>/Component/abc123def456789012345678 |
+      ## 控制器与故障码
+      | DTC URI | 描述 |
+      |---------|------|
+      | viking://resources/<namespace>/DTC/vwx234yza567890123456789 | 168-02 主控制器电源异常 |
+
+# ── 关系定义（严格单向写入）──
+#
+# 每条关系只在一个实体的 frontmatter 中维护。
+# 反方向通过 get_backlinks(uri) 查询。
+#
+# 诊断链路：
+#   Device → symptom_refs → Symptom → Profile.device_refs
+#   Symptom Profile → direct_component_uri → Component
+#   Symptom → Profile.possible_faults → Fault
+#   Fault → affected_components → Component
+#   Fault → verification_procedures → Procedure
+#   Fault → repair_procedures → Procedure
+#   Device → critical_components → Component
+#   DTC → related_faults → Fault
+#   DTC → controller_component → Component
+#   Procedure → target_components → Component
+#
+# 反查链路：
+#   Component → get_backlinks → Fault (谁引用了我)
+#   Component → get_backlinks → Device (哪个设备包含我)
+#   Fault → get_backlinks → Profile (哪些现象指向我)
+#   Fault → get_backlinks → DTC (哪些故障码关联我)
+
+  # ── OP — 构建反馈与专家提案（不进入正式实体索引）──
+  # OP 写入走 create_opa / create_ops / create_opl 工具（wiki/serve/opa.py），
+  # 存储路径 OP/OpA|OpS|OpL/。以下 frontmatter 与 models.py 的
+  # OPAModel/OPSModel/OPLModel.to_markdown 输出一一对应。
+  OPA:
+    description: "单点冲突、缺失、引用问题或分类歧义；必须绑定目标或证据 URI。由 wiki_opa_worker 沉淀。"
+    frontmatter:
+      - name: id
+        type: string
+        required: true
+        description: "可读稳定标识，格式 opa-<category>-<reason>-<target>-<section>-<title>，禁止哈希/UUID"
+      - name: human_key
+        type: string
+        description: "人工可读去重键（标题+类别+section 归一化）；自动生成，用于检查是否已有同问题记录"
+      - name: title
+        type: string
+        required: true
+        description: "短标题，如 'Procedure.target_components 源缺口：诊断预热功能异常'"
+      - name: description
+        type: string
+        required: true
+        description: "详细描述冲突双方/缺失内容/引用问题及适用条件"
+      - name: status
+        type: string
+        required: true
+        enum: [pending, resolved, rejected, superseded]
+      - name: category
+        type: string
+        required: true
+        enum: [conflict, gap]
+        description: "conflict=不同来源对同一事实/归因/关系给出矛盾结论；gap=来源缺失、引用无法解析、控制器身份不能判别等"
+      - name: reason_code
+        type: string
+        enum: [content_missing, fact_conflict]
+        required: true
+        description: "稳定的机器可读原因码；create_opa 自动由 category 推导，可显式覆盖"
+      - name: scope
+        type: string
+        enum: [entity, source_honest]
+        description: "entity=实体之间/内部的冲突；source_honest=属源数据缺口，不是漏抽"
+      - name: subtype
+        type: string
+        enum: [wiki_error, category_error, case_feedback, user_feedback]
+        description: "问题来源类型；wiki_error=构建期 wiki 问题"
+      - name: target_uri
+        type: ref
+        description: "受影响的正式实体 URI（viking://）；缺失类 OPA 必须引用观察到问题的页面"
+      - name: target_path
+        type: string
+        description: "文件路径（实体不存在时作为回退定位）"
+      - name: target_section
+        type: string
+        description: "目标实体的具体 section 或 frontmatter 字段名，如 target_components"
+      - name: source_chapter
+        type: string
+        description: "触发问题的 raw 章节定位（可选）"
+      - name: evidence_uris
+        type: list
+        required: true
+        description: "支持证据 URI 列表；冲突必须引用双方，缺失必须引用实体页与相关 raw 章节"
+      - name: related_uris
+        type: list
+        description: "关联 URI（相邻实体/章节），用于后续检索下探"
+      - name: solution
+        type: string
+        description: "已应用的处置描述；status=resolved 时填写，否则留空字符串"
+      - name: finding
+        type: string
+        required: true
+        description: "详细写冲突双方、字段、取值和适用条件；缺失类写观察到什么"
+      - name: missing
+        type: string
+        required: true
+        description: "详细写缺什么、缺在哪个 section、为什么阻断后续处理"
+      - name: recommendation
+        type: string
+        required: true
+        description: "可执行的下一步（对谁、做什么、怎么验证）"
+      - name: report_count
+        type: int
+        description: "同一问题被重复报告的累计次数；重复报告递增而非新建"
+    example: |
+      ---
+      id: "opa-gap-content_missing-wiki_Procedure_诊断预热功能异常-target_components-源缺口"
+      human_key: "Procedure 诊断预热功能异常 target_components 源缺口"
+      title: "Procedure.target_components 源缺口：诊断预热功能异常"
+      description: "Procedure 诊断预热功能异常 的 target_components 为空：目标部件（预热回路/预热塞）在来源手册中无 BOM 型号，按 Component 物化门槛（品牌+型号唯一可识别）不建实体。属源数据缺口，非漏抽。"
+      status: "pending"
+      category: "gap"
+      reason_code: "content_missing"
+      scope: "source_honest"
+      subtype: "wiki_error"
+      target_uri: "viking://resources/<wiki_namespace>/Procedure/diagnosis/诊断预热功能异常"
+      target_path: ""
+      target_section: "target_components"
+      source_chapter: ""
+      evidence_uris: ["viking://resources/<raw_namespace>/manual-sy215/chapters/14_暖风空调/14_1 预热塞检修/chapter.md"]
+      related_uris: []
+      solution: ""
+      finding: "目标部件在来源手册中无 BOM 型号，未达 Component 物化门槛，故 target_components 为空。"
+      missing: "缺预热回路/预热塞的 Component 实体及其 URI，导致 Procedure 悬空无 target。"
+      recommendation: "保留 open_gap 标记；待 BOM 基线提供预热塞型号后再物化 Component 并回填 target_components。"
+      report_count: 1
+      ---
+      ## 问题描述
+      Procedure 诊断预热功能异常 的 target_components 为空：目标部件（预热回路/预热塞）在来源手册中无 BOM 型号，按 Component 物化门槛（品牌+型号唯一可识别）不建实体。属源数据缺口，非漏抽。
+      ## 冲突点
+      未发现来源矛盾；属源数据缺失。
+      ## 缺失点
+      target_components 缺少可解析 Component URI；预热回路/预热塞未物化。
+      ## 建议
+      保留 open_gap，待 BOM 基线提供预热塞型号后再物化 Component 并回填 target_components。
+      ## 证据
+      - [原手册章节](viking://resources/<raw_namespace>/manual-sy215/chapters/14_暖风空调/14_1 预热塞检修/chapter.md)
+      ## 关联解决方案
+      - [对应 OPS](viking://resources/<namespace>/OP/OpS/ops-gap-content_missing-wiki_Procedure_诊断预热功能异常-bom补充建议)
+
+  OPS:
+    description: "针对一个 OPA 的专家修改建议；由 wiki_ops_worker 基于 OpenViking 检索形成，状态默认 unconfirmed。"
+    frontmatter:
+      - name: id
+        type: string
+        required: true
+        description: "可读稳定标识，格式 ops-<opa可读名>-<建议短标题>，禁止哈希"
+      - name: parent_opa
+        type: ref
+        required: true
+        description: "父 OPA 的完整 URI"
+      - name: title
+        type: string
+        required: true
+      - name: status
+        type: string
+        required: true
+        enum: [unconfirmed, confirmed, rejected]
+        description: "新建必须 unconfirmed；不得直接写成 confirmed"
+      - name: target_uri
+        type: ref
+        description: "同 OPA 的 target；缺省继承 OPA"
+      - name: solution
+        type: string
+        required: true
+        description: "建议修改的具体字段/section 与改动内容；原数据确实缺失时明确保持 open_gap，不补写猜测"
+      - name: analysis
+        type: string
+        required: true
+        description: "问题分析：为什么该建议能解决 OPA 中的冲突或缺失；冲突必须并列双方及需裁决条件"
+      - name: evidence_uris
+        type: list
+        required: true
+        description: "至少一个真实检索返回的 URI（viking://），禁止拼接"
+      - name: related_uris
+        type: list
+        description: "关联 URI"
+    example: |
+      ---
+      id: "ops-gap-content_missing-wiki_Procedure_诊断预热功能异常-bom补充建议"
+      parent_opa: "viking://resources/<namespace>/OP/OpA/opa-gap-content_missing-wiki_Procedure_诊断预热功能异常-target_components-源缺口"
+      title: "BOM 到位后补建预热 Component 并回填 target_components"
+      status: "unconfirmed"
+      target_uri: "viking://resources/<wiki_namespace>/Procedure/diagnosis/诊断预热功能异常"
+      solution: "保留 open_gap；待 BOM 基线提供预热塞型号后，物化 Component 预热回路/预热塞，并 patch_entity 回填 target_components。"
+      analysis: "OPA 显示 target_components 为空源于来源无 BOM 型号（源数据缺口），fork 到 Component 物化门槛（品牌+型号唯一可识别）。已检索 raw 章节确认预热回路归属暖风空调系统，与 OPA 定位一致。冲突无；建议在 BOM 数据可用后闭环。"
+      evidence_uris: ["viking://resources/<raw_namespace>/manual-sy215/chapters/14_暖风空调/14_1 预热塞检修/chapter.md"]
+      related_uris: ["viking://resources/<namespace>/Procedure/diagnosis/诊断预热功能异常"]
+      ---
+      ## 关联问题
+      - [OPA](viking://resources/<namespace>/OP/OpA/opa-gap-content_missing-wiki_Procedure_诊断预热功能异常-target_components-源缺口)
+      ## 专家分析
+      OPA 显示 target_components 为空源于来源无 BOM 型号（源数据缺口），fork 到 Component 物化门槛（品牌+型号唯一可识别）。已检索 raw 章节确认预热回路归属暖风空调系统，与 OPA 定位一致。冲突无；建议在 BOM 数据可用后闭环。
+      ## 解决方案描述
+      保留 open_gap；待 BOM 基线提供预热塞型号后，物化 Component 预热回路/预热塞，并 patch_entity 回填 target_components。
+      ## 证据引用
+      - [原手册章节](viking://resources/<raw_namespace>/manual-sy215/chapters/14_暖风空调/14_1 预热塞检修/chapter.md)
+      ## 关联资源
+      - viking://resources/<namespace>/Procedure/diagnosis/诊断预热功能异常
+
+  OPL:
+    description: "OPA+OPS 形成的初版知识提案；由 wiki_opl_worker 组合，状态强制 unconfirmed，不直接发布为正式实体。"
+    frontmatter:
+      - name: id
+        type: string
+        required: true
+        description: "可读稳定标识，格式 opl-<opa可读名>-<提案短标题>，禁止哈希"
+      - name: title
+        type: string
+        required: true
+      - name: parent_opa
+        type: ref
+        required: true
+        description: "父 OPA 的完整 URI"
+      - name: ops_uris
+        type: list
+        required: true
+        description: "选用的 OPS URI 列表，至少一条；必须真实存在且 attach 到该 OPA 下"
+      - name: target_uri
+        type: ref
+        description: "拟修改的正式实体 URI；缺省继承 OPA"
+      - name: status
+        type: string
+        required: true
+        enum: [unconfirmed]
+        description: "新建强制 unconfirmed；确认后才由正式写入 worker 按 diff/merge/patch 落地"
+      - name: proposal
+        type: string
+        required: true
+        description: "详细描述拟加入/修改哪个实体的哪个 section、关系方向、来源依据和不确定部分"
+      - name: rationale
+        type: string
+        required: true
+        description: "解释证据如何支持该提案，以及哪些地方仍需确认"
+      - name: evidence_uris
+        type: list
+        required: true
+        description: "合并自 OPA 与所选 OPS 的证据 URI"
+      - name: related_uris
+        type: list
+        description: "关联 URI"
+    example: |
+      ---
+      id: "opl-gap-content_missing-wiki_Procedure_诊断预热功能异常-bom补充提案"
+      title: "BOM 到位后补建预热 Component 并回填 target_components"
+      parent_opa: "viking://resources/<namespace>/OP/OpA/opa-gap-content_missing-wiki_Procedure_诊断预热功能异常-target_components-源缺口"
+      ops_uris: ["viking://resources/<namespace>/OP/OpS/ops-gap-content_missing-wiki_Procedure_诊断预热功能异常-bom补充建议"]
+      target_uri: "viking://resources/<wiki_namespace>/Procedure/diagnosis/诊断预热功能异常"
+      status: "unconfirmed"
+      proposal: "待 BOM 基线提供预热塞型号后：1) 物化 Component 预热回路/预热塞（品牌+型号唯一可识别）；2) patch_entity 为 Procedure 诊断预热功能异常 回填 target_components；3) 将 OPA 标记 resolved。"
+      rationale: "OPS 确认此缺口源于源数据无 BOM 型号，非漏抽；raw 章节 14_1 定位预热回路归属暖风空调系统，支持该提案。BOM 可用性仍是前置风险，需人工确认后再落地。"
+      evidence_uris: ["viking://resources/<raw_namespace>/manual-sy215/chapters/14_暖风空调/14_1 预热塞检修/chapter.md"]
+      related_uris: ["viking://resources/<namespace>/Procedure/diagnosis/诊断预热功能异常"]
+      ---
+      ## 关联 OPA
+      - [OPA](viking://resources/<namespace>/OP/OpA/opa-gap-content_missing-wiki_Procedure_诊断预热功能异常-target_components-源缺口)
+      ## 关联 OPS
+      - [OPS](viking://resources/<namespace>/OP/OpS/ops-gap-content_missing-wiki_Procedure_诊断预热功能异常-bom补充建议)
+      ## 初版知识提案
+      待 BOM 基线提供预热塞型号后：1) 物化 Component 预热回路/预热塞（品牌+型号唯一可识别）；2) patch_entity 为 Procedure 诊断预热功能异常 回填 target_components；3) 将 OPA 标记 resolved。
+      ## 形成依据
+      OPS 确认此缺口源于源数据无 BOM 型号，非漏抽；raw 章节 14_1 定位预热回路归属暖风空调系统，支持该提案。BOM 可用性仍是前置风险，需人工确认后再落地。
+      ## 证据引用
+      - [原手册章节](viking://resources/<raw_namespace>/manual-sy215/chapters/14_暖风空调/14_1 预热塞检修/chapter.md)
+      ## 关联资源
+      - viking://resources/<namespace>/Procedure/diagnosis/诊断预热功能异常
+      > status: unconfirmed。OPL 仅供后续人工/专家确认，不能直接作为正式实体内容发布。
+
+relations:
+  - name: possible_faults
+    description: "Symptom Profile 指向可能的 Fault"
+    domain: [SymptomProfile]
+    range: [Fault]
+    cardinality: many
+
+  - name: symptom_refs
+    description: "Device 索引适用的 Symptom"
+    domain: [Device]
+    range: [Symptom]
+    cardinality: many
+
+  - name: device_refs
+    description: "Symptom Profile 适用的 Device"
+    domain: [SymptomProfile]
+    range: [Device]
+    cardinality: many
+
+  - name: direct_component_uri
+    description: "Symptom Profile 直接关联的 Component"
+    domain: [SymptomProfile]
+    range: [Component]
+    cardinality: one
+
+  - name: affected_components
+    description: "Fault 影响的 Component"
+    domain: [Fault]
+    range: [Component]
+    cardinality: many
+
+  - name: verification_procedures
+    description: "Fault 的验证 Procedure"
+    domain: [Fault]
+    range: [Procedure]
+    cardinality: many
+
+  - name: repair_procedures
+    description: "Fault 的修复 Procedure"
+    domain: [Fault]
+    range: [Procedure]
+    cardinality: many
+
+  - name: target_components
+    description: "Procedure 操作的 Component"
+    domain: [Procedure]
+    range: [Component]
+    cardinality: many
+
+  - name: specification_refs
+    description: "Procedure 引用的 Component 规格（Component#spec_id）"
+    domain: [Procedure]
+    range: [Component]
+    cardinality: many
+
+  - name: critical_components
+    description: "Device 的关键总成 Component"
+    domain: [Device]
+    range: [Component]
+    cardinality: many
+
+  - name: controller_component
+    description: "DTC 的定义控制器 Component"
+    domain: [DTC]
+    range: [Component]
+    cardinality: one
+
+  - name: related_faults
+    description: "DTC 可能关联的 Fault"
+    domain: [DTC]
+    range: [Fault]
+    cardinality: many
+
+  - name: parent_symptom
+    description: "Profile 的父 Symptom"
+    domain: [SymptomProfile]
+    range: [Symptom]
+    cardinality: one

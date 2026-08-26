@@ -434,6 +434,9 @@ class TestTopLevelMcpPoolRegistration:
             async def __aexit__(self, *args: object) -> None:
                 return None
 
+            async def supports_resources(self) -> bool:
+                return False
+
         monkeypatch.setattr(
             "wolfharness.mcp_server.client.MCPClient",
             _FakeClient,
@@ -457,3 +460,47 @@ class TestTopLevelMcpPoolRegistration:
             assert len(prefixes) == 2
             assert prefixes[0] == "kb"
             assert prefixes[1] == "kb_2"
+
+    async def test_mcp_server_explicit_tool_prefix_preferred(
+        self,
+        manifest_with_mcp: AgentsManifest,
+        monkeypatch: Any,
+    ) -> None:
+        """Configured tool_prefix takes precedence over display_name-derived prefixes."""
+        from wolfharness.mcp_server.manager import MCPManager
+        from wolfharness_config.mcp_server import StreamableHTTPMCPServerConfig
+
+        class _FakeClient:
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                pass
+
+            @property
+            def connected(self) -> bool:
+                return True
+
+            async def __aenter__(self) -> Self:
+                return self
+
+            async def __aexit__(self, *args: object) -> None:
+                return None
+
+            async def supports_resources(self) -> bool:
+                return False
+
+        monkeypatch.setattr(
+            "wolfharness.mcp_server.client.MCPClient",
+            _FakeClient,
+        )
+
+        manager = MCPManager(
+            name="pool_mcp",
+            servers=[
+                StreamableHTTPMCPServerConfig(
+                    url="http://127.0.0.1:1/mcp",
+                    name="Knowledge Base",
+                    tool_prefix="fault_kb",
+                ),
+            ],
+        )
+        async with manager:
+            assert [p.tool_prefix for p in manager.providers] == ["fault_kb"]

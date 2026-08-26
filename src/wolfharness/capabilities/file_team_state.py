@@ -43,6 +43,15 @@ __all__ = [
 _KEY_PATTERN = re.compile(r"^[a-zA-Z0-9_/]+$")
 
 _MAX_TASKS = 100
+_TERMINAL_TASK_STATUSES = frozenset({"completed", "failed", "cancelled", "deleted", "dead_letter"})
+_DEFAULT_LEASE_SECONDS = 300
+_CONTROL_PLANE_COUNTERS = (
+    "task_retry_count",
+    "task_reassign_count",
+    "empty_wakeup_count",
+    "owner_mismatch_count",
+    "duplicate_intent_count",
+)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -65,6 +74,11 @@ class TaskRecord:
     last_note: str = ""
     progress_current: int | None = None
     progress_total: int | None = None
+    intent_key: str = ""
+    build_id: str = ""
+    attempt: int = 0
+    lease_token: str = ""
+    lease_expires_at: str = ""
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> TaskRecord:
@@ -82,6 +96,11 @@ class TaskRecord:
             last_note=data.get("last_note", ""),
             progress_current=data.get("progress_current"),
             progress_total=data.get("progress_total"),
+            intent_key=data.get("intent_key", ""),
+            build_id=data.get("build_id", ""),
+            attempt=data.get("attempt", 0),
+            lease_token=data.get("lease_token", ""),
+            lease_expires_at=data.get("lease_expires_at", ""),
         )
 
 
@@ -201,6 +220,46 @@ class FileTeamState:
         tmp.write_text(json.dumps(data, default=str, indent=2), encoding="utf-8")
         tmp.replace(path)
 
+    def _control_plane_path(self, team_id: str) -> Path:
+        """Return the durable control-plane counter file for one team."""
+        return self._team_dir(team_id) / "control_plane.json"
+
+    @staticmethod
+    def _active_task_count(tasks_dir: Path) -> int:
+        """Count only task records that still consume dispatch capacity.
+
+        Completed task files remain as an audit trail and must not make later
+        batches impossible to create.  Capacity is therefore a concurrency
+        guard over non-terminal work, not a retention limit over history.
+        """
+        if not tasks_dir.exists():
+            return 0
+        return sum(
+            1
+            for path in tasks_dir.glob("*.json")
+            if str(FileTeamState._read_json(path).get("status", "pending"))
+            not in _TERMINAL_TASK_STATUSES
+        )
+
+    def record_control_plane_event(self, team_id: str, event: str) -> None:
+        """Increment one runtime control-plane counter atomically."""
+        if event not in _CONTROL_PLANE_COUNTERS:
+            raise ValueError(f"Unknown control-plane event: {event}")
+        path = self._control_plane_path(team_id)
+        lock = FileLock(str(path) + ".lock")
+        with lock:
+            metrics = self._read_json(path) if path.exists() else {}
+            metrics[event] = int(metrics.get(event, 0)) + 1
+            self._atomic_write(path, metrics)
+
+    def control_plane_metrics(self, team_id: str) -> dict[str, int]:
+        """Return measured task-board and control-plane counters."""
+        path = self._control_plane_path(team_id)
+        metrics = self._read_json(path) if path.exists() else {}
+        result = {name: int(metrics.get(name, 0)) for name in _CONTROL_PLANE_COUNTERS}
+        result["task_count"] = len(self.list_tasks(team_id))
+        return result
+
     @staticmethod
     def _read_json(path: Path) -> dict[str, Any]:
         """Read and parse a JSON file."""
@@ -294,6 +353,21 @@ class FileTeamState:
         sid: str = member.get("session_id", "")
         return sid if sid else None
 
+    def list_member_names(self, team_id: str) -> set[str]:
+        """Return the set of registered member names for a team."""
+        state = self._read_json(self._state_path(team_id))
+        return set(state.get("members", {}).keys())
+
+    def get_member_agent(self, team_id: str, member_name: str) -> str | None:
+        """Return the registered agent role behind one team member name."""
+        state = self._read_json(self._state_path(team_id))
+        members: dict[str, dict[str, str]] = state["members"]
+        member = members.get(member_name)
+        if member is None:
+            return None
+        agent = member.get("agent", "")
+        return agent if agent else None
+
     # ------------------------------------------------------------------
     # Messaging
     # ------------------------------------------------------------------
@@ -352,20 +426,34 @@ class FileTeamState:
         """
         tasks_dir = self._tasks_dir(team_id)
         tasks_dir.mkdir(parents=True, exist_ok=True)
-        parent_id: str | None = task.get("parent_id")
-        if parent_id is not None:
-            parent_path = tasks_dir / f"{parent_id}.json"
-            if not parent_path.exists():
-                msg = f"Parent task not found: {parent_id}"
-                raise ValueError(msg)
-        task_id = f"task_{uuid.uuid4().hex[:8]}"
-        task_data = {**task, "task_id": task_id}
-        if "status" not in task_data:
-            task_data["status"] = "pending"
-        if "blocked_by" not in task_data:
-            task_data["blocked_by"] = []
-        self._atomic_write(tasks_dir / f"{task_id}.json", task_data)
-        return task_id
+        lock = FileLock(str(tasks_dir / ".create.lock"))
+        with lock:
+            parent_id: str | None = task.get("parent_id")
+            if parent_id is not None:
+                parent_path = tasks_dir / f"{parent_id}.json"
+                if not parent_path.exists():
+                    msg = f"Parent task not found: {parent_id}"
+                    raise ValueError(msg)
+            intent_key = str(task.get("intent_key", "")).strip()
+            if intent_key:
+                for existing_path in tasks_dir.glob("*.json"):
+                    existing = self._read_json(existing_path)
+                    if str(existing.get("intent_key", "")).strip() == intent_key:
+                        self.record_control_plane_event(team_id, "duplicate_intent_count")
+                        return str(existing.get("task_id", existing_path.stem))
+            if self._active_task_count(tasks_dir) >= _MAX_TASKS:
+                raise ValueError(
+                    f"Task board active capacity reached: {_MAX_TASKS} non-terminal tasks; "
+                    "complete, release, or repartition active work before dispatching more"
+                )
+            task_id = f"task_{uuid.uuid4().hex[:8]}"
+            task_data = {**task, "task_id": task_id}
+            if "status" not in task_data:
+                task_data["status"] = "pending"
+            if "blocked_by" not in task_data:
+                task_data["blocked_by"] = []
+            self._atomic_write(tasks_dir / f"{task_id}.json", task_data)
+            return task_id
 
     def create_tasks_batch(  # noqa: PLR0915
         self,
@@ -426,11 +514,11 @@ class FileTeamState:
                 else:
                     symbolic_ids[sym_id] = i
 
-        existing_count = len(list(tasks_dir.glob("*.json")))
+        existing_count = self._active_task_count(tasks_dir)
         if existing_count + len(tasks) > _MAX_TASKS:
             errors.append(
                 f"Batch would exceed max tasks limit: "
-                f"{existing_count} existing + {len(tasks)} new > {_MAX_TASKS}"
+                f"{existing_count} active + {len(tasks)} new > {_MAX_TASKS}"
             )
 
         # Validate #N and symbolic references in blocked_by and parent_id.
@@ -477,9 +565,34 @@ class FileTeamState:
         # ------------------------------------------------------------------
         # Creation pass: write all task files within a FileLock
         # ------------------------------------------------------------------
-        lock_path = tasks_dir / ".batch.lock"
+        # Single and batch creation must share one lock.  Separate locks allow
+        # concurrent callers to both pass the capacity check and oversubscribe
+        # the board.
+        lock_path = tasks_dir / ".create.lock"
         lock = FileLock(str(lock_path))
         with lock:
+            existing_count = self._active_task_count(tasks_dir)
+            if existing_count + len(tasks) > _MAX_TASKS:
+                raise ValueError(
+                    f"Batch would exceed max tasks limit (active capacity): "
+                    f"{existing_count} non-terminal + {len(tasks)} new > {_MAX_TASKS}"
+                )
+            existing_intents = {
+                str(self._read_json(path).get("intent_key", "")).strip()
+                for path in tasks_dir.glob("*.json")
+            }
+            batch_intents = [
+                str(task.get("intent_key", "")).strip()
+                for task in tasks
+                if str(task.get("intent_key", "")).strip()
+            ]
+            duplicate_batch_intent = len(batch_intents) != len(set(batch_intents))
+            if (
+                any(intent in existing_intents for intent in batch_intents)
+                or duplicate_batch_intent
+            ):
+                self.record_control_plane_event(team_id, "duplicate_intent_count")
+                raise ValueError("TASK_INTENT_CONFLICT")
             for i, (task, tid) in enumerate(zip(tasks, task_ids, strict=True)):
                 resolved_blocked_by = [resolve_ref(ref) for ref in task.get("blocked_by", [])]
                 resolved_parent = resolve_ref(task["parent_id"]) if task.get("parent_id") else None
@@ -506,6 +619,13 @@ class FileTeamState:
                     task_data["owner"] = task["owner"]
                 if task.get("progress_total") is not None:
                     task_data["progress_total"] = task["progress_total"]
+                for field in ("intent_key", "build_id", "write_scope"):
+                    value = str(task.get(field, "")).strip()
+                    if value:
+                        task_data[field] = value
+                write_set = task.get("write_set")
+                if isinstance(write_set, list) and write_set:
+                    task_data["write_set"] = list(write_set)
                 self._atomic_write(tasks_dir / f"{tid}.json", task_data)
 
         return task_ids
@@ -608,7 +728,7 @@ class FileTeamState:
         tasks = self.list_tasks(team_id)
         return [t for t in tasks if t.get("parent_id") == parent_id]
 
-    def update_task(
+    def update_task(  # noqa: PLR0915
         self,
         team_id: str,
         task_id: str,
@@ -616,6 +736,11 @@ class FileTeamState:
         *,
         progress_current: int | None = None,
         progress_total: int | None = None,
+        expected_lease_token: str | None = None,
+        lease_owner: str | None = None,
+        claim: bool = False,
+        release_lease: bool = False,
+        lease_seconds: int = _DEFAULT_LEASE_SECONDS,
     ) -> dict[str, Any]:
         """Merge *updates* into an existing task and return the result.
 
@@ -625,16 +750,133 @@ class FileTeamState:
             updates: Fields to merge into the task.
             progress_current: Optional current progress value to persist.
             progress_total: Optional total progress value to persist.
+            expected_lease_token: Token held by the current task owner.
+            lease_owner: Member performing a lease-protected update.
+            claim: Whether to claim or renew the task lease.
+            release_lease: Whether to revoke the current lease atomically.
+            lease_seconds: Duration for a newly issued or renewed lease.
         """
+        if lease_seconds < 1:
+            raise ValueError("lease_seconds must be positive")
         path = self._tasks_dir(team_id) / f"{task_id}.json"
-        task = self._read_json(path)
-        task.update(updates)
-        if progress_current is not None:
-            task["progress_current"] = progress_current
-        if progress_total is not None:
-            task["progress_total"] = progress_total
-        self._atomic_write(path, task)
-        return task
+        lock = FileLock(str(path) + ".lock")
+        with lock:
+            task = self._read_json(path)
+            now = datetime.datetime.now(datetime.UTC)
+            original_owner = str(task.get("owner", ""))
+            expires_at = self._parse_timestamp(task.get("lease_expires_at", ""))
+            lease_active = (
+                bool(task.get("lease_token")) and expires_at is not None and expires_at > now
+            )
+
+            if release_lease:
+                task["owner"] = ""
+                task["lease_token"] = ""
+                task["lease_expires_at"] = ""
+                if task.get("status") == "in_progress":
+                    task["status"] = "pending"
+                task["updated_at"] = now.isoformat()
+                self._atomic_write(path, task)
+                return task
+
+            if claim:
+                owner = str(lease_owner or "")
+                if not owner:
+                    raise ValueError("TASK_OWNER_REQUIRED")
+                if task.get("status") in {"completed", "failed", "cancelled", "dead_letter"}:
+                    raise ValueError("TASK_ALREADY_TERMINAL")
+                if lease_active and task.get("owner") != owner:
+                    self.record_control_plane_event(team_id, "owner_mismatch_count")
+                    raise ValueError("TASK_LEASE_INVALID")
+                if (
+                    lease_active
+                    and expected_lease_token
+                    and expected_lease_token != task.get("lease_token")
+                ):
+                    self.record_control_plane_event(team_id, "owner_mismatch_count")
+                    raise ValueError("TASK_LEASE_INVALID")
+                if not lease_active:
+                    if int(task.get("attempt", 0)) > 0:
+                        self.record_control_plane_event(team_id, "task_retry_count")
+                    if task.get("owner") and task.get("owner") != lease_owner:
+                        self.record_control_plane_event(team_id, "task_reassign_count")
+                    task["lease_token"] = uuid.uuid4().hex
+                    task["attempt"] = int(task.get("attempt", 0)) + 1
+                task["owner"] = owner
+                task["status"] = "in_progress"
+                task["lease_expires_at"] = (
+                    now + datetime.timedelta(seconds=lease_seconds)
+                ).isoformat()
+            elif lease_owner is not None:
+                if (
+                    task.get("status") != "in_progress"
+                    or task.get("owner") != lease_owner
+                    or not expected_lease_token
+                    or expected_lease_token != task.get("lease_token")
+                    or not lease_active
+                ):
+                    self.record_control_plane_event(team_id, "owner_mismatch_count")
+                    raise ValueError("TASK_LEASE_INVALID")
+                task["lease_expires_at"] = (
+                    now + datetime.timedelta(seconds=lease_seconds)
+                ).isoformat()
+
+            # A lead-side owner change is a lease handoff, not a metadata
+            # update.  Keeping the previous token makes the new worker fail
+            # every claim with TASK_LEASE_INVALID, while the old worker can
+            # still appear to own the task until the stale token expires.
+            # Revoke the old lease atomically and leave the task claimable by
+            # the new owner.  The new worker will receive its own token on
+            # task_update(status="in_progress").
+            requested_owner = str(updates.get("owner", original_owner))
+            if not claim and requested_owner != original_owner:
+                task["lease_token"] = ""
+                task["lease_expires_at"] = ""
+                if task.get("status") == "in_progress" or updates.get("status") == "in_progress":
+                    updates = dict(updates)
+                    updates["status"] = "pending"
+
+            task.update(updates)
+            if progress_current is not None:
+                task["progress_current"] = progress_current
+            if progress_total is not None:
+                task["progress_total"] = progress_total
+            if task.get("status") in {"completed", "failed", "cancelled", "dead_letter"}:
+                task["lease_token"] = ""
+                task["lease_expires_at"] = ""
+            task["updated_at"] = now.isoformat()
+            self._atomic_write(path, task)
+            return task
+
+    @staticmethod
+    def _parse_timestamp(value: object) -> datetime.datetime | None:
+        """Parse an ISO timestamp, returning ``None`` for missing/invalid values."""
+        if not isinstance(value, str) or not value:
+            return None
+        try:
+            parsed = datetime.datetime.fromisoformat(value)
+        except ValueError:
+            return None
+        return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=datetime.UTC)
+
+    def release_task_lease(
+        self,
+        team_id: str,
+        task_id: str,
+        *,
+        status: str = "pending",
+        note: str = "",
+    ) -> dict[str, Any]:
+        """Revoke a task lease atomically so stale workers cannot write afterward."""
+        if status not in {"pending", "blocked"}:
+            raise ValueError("lease release status must be pending or blocked")
+        self.record_control_plane_event(team_id, "task_reassign_count")
+        return self.update_task(
+            team_id,
+            task_id,
+            {"status": status, "last_note": note},
+            release_lease=True,
+        )
 
     # ------------------------------------------------------------------
     # Blackboard
