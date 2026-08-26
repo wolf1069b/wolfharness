@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 import contextlib
 import json
 from pathlib import Path
@@ -270,15 +271,13 @@ class _MockState:
 
     def __init__(self, working_dir: str = "/tmp/test_wd") -> None:
         self.working_dir = working_dir
-        self.event_subscribers: list[asyncio.Queue[Event]] = []
+        self.event_subscribers: list[asyncio.Queue[tuple[int, Event]]] = []
+        self._projection_buffers: dict[str, deque[tuple[int, Event]]] = {}
+        self._projection_counter = 0
         self._event_factory: GlobalEventFactory | None = None
         self._first_subscriber_triggered = False
         self.on_first_subscriber: Any = None
-        # Provide EventBus-based infrastructure so _event_generator uses
-        # the EventBus path instead of the heartbeat-only fallback.
-        self._mock_event_bus = _MockEventBus()
         self.session_controller = _MockSessionController()
-        self.pool = _MockPool(_MockSessionPool(self._mock_event_bus))
 
     def get_event_factory(self) -> GlobalEventFactory:
         if self._event_factory is None:
@@ -297,6 +296,55 @@ class _MockState:
         """No-op mock for SSE disconnect handler."""
         return []
 
+    @staticmethod
+    def extract_session_id(event: Event) -> str | None:
+        """Mirror ServerState.extract_session_id for mock-state tests."""
+        from wolfharness_server.opencode_server.routes.global_routes import (
+            _extract_session_id,
+        )
+
+        return _extract_session_id(event)
+
+    async def broadcast_event(self, event: Event) -> None:
+        """Direct-wire fanout to subscriber queues (mirrors ServerState).
+
+        Overflow uses the same drop-oldest policy as production so the mock
+        does not hide queue-full behavior from the suite.
+        """
+        self._projection_counter += 1
+        event_id = self._projection_counter
+        session_id = self.extract_session_id(event)
+        if session_id is not None:
+            self._projection_buffers.setdefault(session_id, deque(maxlen=100)).append((
+                event_id,
+                event,
+            ))
+        for queue in self.event_subscribers:
+            try:
+                queue.put_nowait((event_id, event))
+            except asyncio.QueueShutDown:
+                continue
+            except asyncio.QueueFull:
+                with contextlib.suppress(asyncio.QueueEmpty):
+                    queue.get_nowait()
+                try:
+                    queue.put_nowait((event_id, event))
+                except asyncio.QueueFull:
+                    continue
+
+    def replay_projections(self, queue: asyncio.Queue[Any], last_event_id: int) -> None:
+        """Enqueue buffered projections with event_id > last_event_id."""
+        buffered: list[tuple[int, Event]] = []
+        for session_buf in self._projection_buffers.values():
+            buffered.extend(session_buf)
+        for event_id, event in sorted(buffered, key=lambda item: item[0]):
+            if event_id <= last_event_id:
+                continue
+            try:
+                queue.put_nowait((event_id, event))
+            except (asyncio.QueueShutDown, asyncio.QueueFull):
+                return
+
     # get_next_event_id() removed — event_id now comes from EventBus
     # (EventEnvelope.event_id assigned at publish time, not ServerState).
 
@@ -312,9 +360,9 @@ async def _collect_events(
     # Get the initial connected event
     item = await gen.__anext__()
     results.append(json.loads(item["data"]))
-    # Send additional events through the mock EventBus
+    # Send additional events through the direct-wire broadcast system
     for event in events_to_send:
-        await state._mock_event_bus.publish("__global_sse__", event)
+        await state.broadcast_event(event)
         item = await gen.__anext__()
         results.append(json.loads(item["data"]))
     return results
@@ -474,8 +522,8 @@ async def test_event_endpoint_unicode_preserved() -> None:
     gen = _event_generator(state, wrap_payload=False)
     # Consume connected event
     await gen.__anext__()
-    # Send unicode session event via mock EventBus
-    await state._mock_event_bus.publish("__global_sse__", session_evt)
+    # Send unicode session event via direct-wire broadcast
+    await state.broadcast_event(session_evt)
     item = await gen.__anext__()
     raw_data = item["data"]
     assert "会话测试" in raw_data
@@ -724,7 +772,7 @@ async def test_disconnect_events_not_delivered() -> None:
 
     # Put an event via mock EventBus — only gen2 should receive it
     event = SessionStatusEvent.create(session_id="disc1", status_type="busy")
-    await state._mock_event_bus.publish("__global_sse__", event)
+    await state.broadcast_event(event)
     item = await gen2.__anext__()
     data = json.loads(item["data"])
     assert data["type"] == "session.status"
@@ -1166,7 +1214,7 @@ async def test_concurrent_two_subscribers_both_receive_events() -> None:
 
     # Broadcast event to both subscribers via mock EventBus
     event = SessionStatusEvent.create(session_id="s_concurrent", status_type="busy")
-    await state._mock_event_bus.publish("__global_sse__", event)
+    await state.broadcast_event(event)
 
     item1 = await gen1.__anext__()
     item2 = await gen2.__anext__()
@@ -1192,7 +1240,7 @@ async def test_concurrent_subscribers_receive_same_content() -> None:
     await gen2.__anext__()
 
     event = SessionStatusEvent.create(session_id="s_same", status_type="idle")
-    await state._mock_event_bus.publish("__global_sse__", event)
+    await state.broadcast_event(event)
 
     item1 = await gen1.__anext__()
     item2 = await gen2.__anext__()
@@ -1224,7 +1272,7 @@ async def test_concurrent_event_ordering_preserved() -> None:
     ]
 
     for ev in events:
-        await state._mock_event_bus.publish("__global_sse__", ev)
+        await state.broadcast_event(ev)
 
     # Collect all 3 events from each subscriber
     received1 = [json.loads((await gen1.__anext__())["data"]) for _ in range(3)]
@@ -1257,7 +1305,7 @@ async def test_concurrent_subscriber_receives_after_another_disconnects() -> Non
 
     # Send event via mock EventBus — remaining subscriber B should receive it
     event = SessionStatusEvent.create(session_id="s_survive", status_type="busy")
-    await state._mock_event_bus.publish("__global_sse__", event)
+    await state.broadcast_event(event)
 
     item_b = await gen_b.__anext__()
     data_b = json.loads(item_b["data"])
@@ -1294,56 +1342,51 @@ async def test_concurrent_all_get_server_connected() -> None:
 
 def _make_broadcast_state() -> ServerState:
     """Create a ServerState with a minimal mock agent for broadcast_event tests."""
-    from unittest.mock import AsyncMock, Mock
-
-    mock_env = Mock()
-    mock_env.get_fs = Mock(return_value=Mock())
-    mock_agent = Mock()
-    mock_agent.env = mock_env
-    state = ServerState(working_dir="/test", agent=mock_agent)
-    # Set up event_bridge mock so broadcast_event has a destination
-    state.event_bridge = Mock()
-    state.event_bridge.publish = AsyncMock()
-    return state
-
-
-@pytest.mark.anyio
-async def test_broadcast_event_delegates_to_bridge() -> None:
-    """Broadcast delegates event to event_bridge.publish."""
-    state = _make_broadcast_state()
-
-    event = SessionStatusEvent.create(session_id="abc", status_type="busy")
-    await state.broadcast_event(event)
-
-    state.event_bridge.publish.assert_called_once_with(event)
-
-
-@pytest.mark.anyio
-async def test_broadcast_event_no_bridge_no_error() -> None:
-    """Broadcast with no event_bridge does not raise."""
     from unittest.mock import Mock
 
     mock_env = Mock()
     mock_env.get_fs = Mock(return_value=Mock())
     mock_agent = Mock()
     mock_agent.env = mock_env
-    state = ServerState(working_dir="/test", agent=mock_agent)
-    assert state.event_bridge is None
+    return ServerState(working_dir="/test", agent=mock_agent)
+
+
+@pytest.mark.anyio
+async def test_broadcast_event_fans_out_to_subscribers() -> None:
+    """Broadcast delivers projections to every registered subscriber queue."""
+    state = _make_broadcast_state()
+    queue: asyncio.Queue[Any] = asyncio.Queue()
+    state.event_subscribers.append(queue)
+
+    event = SessionStatusEvent.create(session_id="abc", status_type="busy")
+    await state.broadcast_event(event)
+
+    event_id, received = queue.get_nowait()
+    assert received is event
+    assert event_id > 0
+
+
+@pytest.mark.anyio
+async def test_broadcast_event_no_subscribers_no_error() -> None:
+    """Broadcast with no subscribers does not raise."""
+    state = _make_broadcast_state()
 
     event = SessionStatusEvent.create(session_id="abc", status_type="busy")
     await state.broadcast_event(event)  # Should not raise
 
 
 @pytest.mark.anyio
-async def test_broadcast_event_bridge_error_propagates() -> None:
-    """If event_bridge.publish raises, broadcast_event propagates the error."""
+async def test_broadcast_event_ignores_dead_subscriber_queue() -> None:
+    """A shut-down subscriber queue is dropped, not raised on."""
     state = _make_broadcast_state()
-    state.event_bridge.publish.side_effect = RuntimeError("bridge broken")
+    queue: asyncio.Queue[Any] = asyncio.Queue()
+    queue.shutdown()
+    state.event_subscribers.append(queue)
 
     event = SessionStatusEvent.create(session_id="abc", status_type="busy")
-    # The error propagates since broadcast_event does not catch it
-    with pytest.raises(RuntimeError, match="bridge broken"):
-        await state.broadcast_event(event)
+    await state.broadcast_event(event)  # Should not raise
+
+    assert queue not in state.event_subscribers
 
 
 # =============================================================================

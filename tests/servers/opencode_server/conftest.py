@@ -67,6 +67,7 @@ def _make_functional_event_bus() -> Mock:
         *,
         replay: bool = True,
         last_event_id: int | None = None,
+        exclude_source: frozenset[str] | None = None,
     ) -> asyncio.Queue[Any]:
         queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=_stream_buffer_size)
         _subscribers.setdefault(session_id, []).append((queue, scope))
@@ -82,7 +83,7 @@ def _make_functional_event_bus() -> Mock:
         with contextlib.suppress(asyncio.QueueShutDown):
             queue.shutdown()
 
-    async def _publish(session_id: str, event: Any) -> None:
+    async def _publish(session_id: str, event: Any, *, source_hint: str | None = None) -> None:
         for subscriber_sid, subscribers in _subscribers.items():
             for queue, scope in subscribers:
                 if scope == "all" or subscriber_sid == session_id:
@@ -587,10 +588,10 @@ def mock_agent(mock_env: Mock, mock_pool: Mock, storage_manager: StorageManager)
 
 
 @pytest.fixture
-def server_state(tmp_project_dir: Path, mock_agent: Mock) -> ServerState:  # noqa: PLR0915
+def server_state(tmp_project_dir: Path, mock_agent: Mock) -> ServerState:
     """Create a server state for testing."""
     # Extract session_controller from mock pool so _event_generator can
-    # subscribe to the EventBus and receive events broadcast via event_bridge.
+    # reach state fields (event_subscribers) and broadcast via broadcast_event.
     session_controller = None
     session_pool = getattr(mock_agent.host_context, "session_pool", None)
     if session_pool is not None:
@@ -719,17 +720,8 @@ def server_state(tmp_project_dir: Path, mock_agent: Mock) -> ServerState:  # noq
         return result
 
     state.session_pool_integration.route_message = AsyncMock(side_effect=_mock_route_message)
-    # event_bridge is automatically set up by __post_init__ when
-    # session_controller is present, but ensure it's initialized for cases
-    # where the mock pool's event_bus isn't available at construction time.
-    if state.event_bridge is None and state._pool is not None:
-        from wolfharness_server.opencode_server.event_bridge import OpenCodeEventBridge
-
-        session_pool = getattr(state._pool, "session_pool", None)
-        if session_pool is not None:
-            event_bus = getattr(session_pool, "event_bus", None)
-            if event_bus is not None:
-                state.event_bridge = OpenCodeEventBridge(state, event_bus)
+    # Projection delivery is direct: broadcast_event fans out to
+    # state.event_subscribers queues. No EventBus bridge is wired.
     return state
 
 

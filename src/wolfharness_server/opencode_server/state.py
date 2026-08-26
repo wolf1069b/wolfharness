@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 from collections.abc import Callable, Coroutine
+import contextlib
 from dataclasses import dataclass, field
 from pathlib import Path
 import time
@@ -79,7 +81,11 @@ class ServerState:
     agent_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     reverted_messages: dict[str, list[MessageWithParts]] = field(default_factory=dict)
     messages: dict[str, list[MessageWithParts]] = field(default_factory=dict)
-    event_subscribers: list[asyncio.Queue[Event]] = field(default_factory=list)
+    event_subscribers: list[asyncio.Queue[tuple[int, Event]]] = field(default_factory=list)
+    _projection_buffers: dict[str, deque[tuple[int, Event]]] = field(
+        default_factory=dict, repr=False
+    )
+    _projection_counter: int = field(default=0, repr=False)
     _event_factory: GlobalEventFactory | None = field(default=None, repr=False)
     on_first_subscriber: OnFirstSubscriberCallback | None = None
     _first_subscriber_triggered: bool = field(default=False, repr=False)
@@ -93,7 +99,6 @@ class ServerState:
     _mcp_tool_change_task: Any = field(default=None, repr=False)
     session_pool_integration: Any = field(default=None)
     session_controller: SessionController | None = field(default=None)
-    event_bridge: Any = field(default=None, repr=False)
     _shell_env: Any = field(default=None, repr=False)
 
     @staticmethod
@@ -180,22 +185,33 @@ class ServerState:
                 # Fallback: reference the same env (preserves remote env support)
                 self._shell_env = agent_env
 
-        # Instantiate the OpenCodeEventBridge when a SessionController is
-        # available.  The bridge dual-publishes events to SSE subscribers
-        # (backward compat) and the SessionPool EventBus.
-        if self.session_controller is not None:
-            event_bus = None
-            if self._pool is not None:
-                session_pool = getattr(self._pool, "session_pool", None)
-                if session_pool is not None:
-                    event_bus = getattr(session_pool, "event_bus", None)
+    @staticmethod
+    def extract_session_id(event: Event) -> str | None:
+        """Extract the session ID from an OpenCode event's properties.
 
-            if event_bus is not None:
-                from wolfharness_server.opencode_server.event_bridge import (
-                    OpenCodeEventBridge,
-                )
+        Most session-scoped events inherit from ``SessionIdProperties`` and
+        expose ``properties.session_id`` directly. However, some event types
+        nest session_id deeper:
 
-                self.event_bridge = OpenCodeEventBridge(self, event_bus)
+        - ``PartUpdatedEvent`` → ``properties.part.session_id``
+        - ``SessionCreatedEvent`` / ``SessionUpdatedEvent`` → ``properties.info.id``
+        - ``MessageUpdatedEvent`` → ``properties.info.session_id``
+
+        The typed ``match`` implementation in ``global_routes._extract_session_id``
+        is the single source of truth; it is imported lazily to avoid a circular
+        import (same pattern as :meth:`get_event_factory`).
+
+        Args:
+            event: The OpenCode event to inspect.
+
+        Returns:
+            The session ID string, or ``None`` if the event is global.
+        """
+        from wolfharness_server.opencode_server.routes.global_routes import (
+            _extract_session_id,
+        )
+
+        return _extract_session_id(event)
 
     def get_event_factory(self) -> GlobalEventFactory:
         """Get or lazily create the GlobalEventFactory for event wrapping.
@@ -370,19 +386,105 @@ class ServerState:
         self.background_tasks.clear()
 
     async def broadcast_event(self, event: Event) -> None:
-        """Broadcast an event via the EventBus bridge.
+        """Broadcast an OpenCode protocol event directly to SSE subscribers.
 
-        When :attr:`event_bridge` is present, delegates to the bridge which
-        publishes the event to the SessionPool EventBus. Otherwise, the
-        event is silently dropped (no event delivery path available).
+        Projections are delivered straight to the connected global SSE
+        subscriber queues (the client routes per-session, matching the
+        previous ``scope="all"`` bus stream semantics). Each event is
+        assigned a monotonic id and appended to a per-session projection
+        buffer so a reconnecting client can replay via ``Last-Event-ID``.
+
+        Events are deliberately NOT republished into the SessionPool
+        EventBus: the bus carries only native agent events, and republishing
+        derived projections into the source bus creates the feedback loop
+        that caused duplicate user-message rendering (issue #380).
+
+        Args:
+            event: The OpenCode protocol event to broadcast.
         """
-        if self.event_bridge is not None:
-            await self.event_bridge.publish(event)
-        else:
-            logger.debug(
-                "broadcast_event: no event_bridge, skipping event",
-                event_type=getattr(event, "type", "unknown"),
-            )
+        self._projection_counter += 1
+        event_id = self._projection_counter
+        session_id = self.extract_session_id(event)
+        if session_id is not None:
+            self._projection_buffers.setdefault(session_id, deque(maxlen=100)).append((
+                event_id,
+                event,
+            ))
+
+        # Fanout is atomic on the event loop (no await in the loop). A
+        # stalled/slow SSE client must not abort delivery to the other
+        # subscribers, so overflow is handled per-queue with a drop-oldest
+        # policy (mirrors EventBus._enqueue). Dead queues are collected and
+        # pruned after the loop.
+        dead_queues: list[asyncio.Queue[tuple[int, Event]]] = []
+        overflow_count = 0
+        for queue in self.event_subscribers:
+            try:
+                queue.put_nowait((event_id, event))
+            except asyncio.QueueShutDown:
+                dead_queues.append(queue)
+            except asyncio.QueueFull:
+                # Evict the oldest buffered item and retry once; if still
+                # full the client is irrecoverably stalled, so drop the
+                # event for it and keep fanning out to everyone else.
+                with contextlib.suppress(asyncio.QueueEmpty):
+                    queue.get_nowait()
+                try:
+                    queue.put_nowait((event_id, event))
+                except asyncio.QueueFull:
+                    overflow_count += 1
+                    logger.warning(
+                        "SSE subscriber queue overflow — dropping event for stalled client",
+                        event_type=getattr(event, "type", "unknown"),
+                        queue_size=queue.qsize(),
+                    )
+        for queue in dead_queues:
+            with contextlib.suppress(ValueError):
+                self.event_subscribers.remove(queue)
+        logger.debug(
+            "SSE: Broadcast event to subscribers",
+            event_type=getattr(event, "type", "unknown"),
+            event_id=event_id,
+            session_id=session_id or "-",
+            subscriber_count=len(self.event_subscribers),
+            dropped=overflow_count,
+        )
+
+    def replay_projections(
+        self,
+        queue: asyncio.Queue[tuple[int, Event]],
+        last_event_id: int,
+    ) -> None:
+        """Enqueue buffered projections with ``event_id > last_event_id``.
+
+        The per-session buffers are merged and sorted by the single global
+        projection counter so a reconnecting client receives a monotonic
+        ``id:`` sequence.
+
+        Args:
+            queue: The subscriber queue to enqueue replayed events into.
+            last_event_id: The client's last seen projection id.
+        """
+        # Merge all session buffers and replay in global event_id order.
+        buffered: list[tuple[int, Event]] = []
+        for session_buf in self._projection_buffers.values():
+            buffered.extend(session_buf)
+        for event_id, event in sorted(buffered, key=lambda item: item[0]):
+            if event_id <= last_event_id:
+                continue
+            try:
+                queue.put_nowait((event_id, event))
+            except asyncio.QueueShutDown:
+                return
+            except asyncio.QueueFull:
+                # Reconnecting client stalled mid-replay — stop instead of
+                # silently dropping a suffix of the sequence.
+                logger.warning(
+                    "SSE replay queue full — aborting replay for stalled client",
+                    last_event_id=last_event_id,
+                    event_id=event_id,
+                )
+                return
 
     async def mark_session_idle(self, session_id: str) -> None:
         """Mark a session idle and broadcast the matching status events."""
