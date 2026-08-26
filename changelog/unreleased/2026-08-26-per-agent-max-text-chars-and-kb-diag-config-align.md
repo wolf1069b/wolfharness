@@ -4,9 +4,10 @@
 
 `ResourceConfig` now accepts a `max_text_chars` field (default 10 000,
 minimum 100) controlling the maximum text length per `read_resource` call
-before truncation. Previously this was only configurable programmatically
-on `ResourceCapability.__init__`; now it is wired through the agent YAML
-config so each agent can set its own limit:
+before truncation. Previously the limit was a hardcoded constant
+(``_DEFAULT_READ_TEXT_LIMIT = 10_000``); now it is configurable per agent
+via the YAML config, with a programmatic override on
+``ResourceCapability.__init__``:
 
 ```yaml
 agents:
