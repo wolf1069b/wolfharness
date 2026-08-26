@@ -27,6 +27,10 @@ if TYPE_CHECKING:
     from wolfharness.capabilities.uri_scheme_registry import UriSchemeRegistry
 
 
+# Default maximum text characters per resource read before truncation.
+_DEFAULT_MAX_TEXT_CHARS = 10_000
+
+
 def _truncate_text(text: str, max_chars: int) -> str:
     """Truncate text to ``max_chars`` if needed, appending a truncation suffix.
 
@@ -39,7 +43,11 @@ def _truncate_text(text: str, max_chars: int) -> str:
     """
     if len(text) <= max_chars:
         return text
-    suffix = f"\n\n... [truncated: {len(text)} chars total, showing first {max_chars}]"
+    suffix = (
+        f"\n\n... [truncated: {len(text)} chars total, showing first {max_chars}. "
+        f"Use a narrower resource URI (e.g. a chapter or chunk URI) to read "
+        f"a specific section, or a paginated read tool for full content.]"
+    )
     return text[:max_chars] + suffix
 
 
@@ -215,7 +223,7 @@ async def resolve_resource_content(
     resource_caps: list[ResourceAccess],
     skill_caps: list[SkillResource],
     *,
-    max_text_chars: int = 10_000,
+    max_text_chars: int = _DEFAULT_MAX_TEXT_CHARS,
     client_name: str | None = None,
     scheme_registry: UriSchemeRegistry | None = None,
 ) -> list[UserContent] | None:
