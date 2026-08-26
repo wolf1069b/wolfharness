@@ -77,6 +77,13 @@ class EventEnvelope:
     """The original event payload (unmodified)."""
     event_id: int = 0
     """Monotonic event ID assigned at publish time (0 for legacy/test envelopes)."""
+    source_hint: str | None = None
+    """Provenance tag set at publish time (e.g. ``"opencode_event_bridge"``).
+
+    Lets subscribers exclude events published by a specific source via
+    ``subscribe(exclude_source=...)``, preventing a producer from
+    re-consuming its own output (loopback isolation).
+    """
 
     def __getattr__(self, name: str) -> Any:
         """Forward attribute access to the wrapped event."""
@@ -216,7 +223,10 @@ def _merge_progress_events(events: list[ToolCallProgressEvent]) -> ToolCallProgr
 def _rebind(template: EventEnvelope, new_event: Any) -> EventEnvelope:
     """Create new EventEnvelope with merged event, preserving source_session_id and event_id."""
     return EventEnvelope(
-        source_session_id=template.source_session_id, event=new_event, event_id=template.event_id
+        source_session_id=template.source_session_id,
+        event=new_event,
+        event_id=template.event_id,
+        source_hint=template.source_hint,
     )
 
 
@@ -312,6 +322,9 @@ async def drain_and_merge(
             yield env
 
 
+_SubscriberEntry = tuple[asyncio.Queue[EventEnvelope], str, frozenset[str]]
+
+
 class EventBus:
     """PubSub event bus for cross-turn event streaming.
 
@@ -362,7 +375,7 @@ class EventBus:
                 f"Must be one of: {sorted(_VALID_OVERFLOW_POLICIES)}"
             )
 
-        self._subscribers: dict[str, list[tuple[asyncio.Queue[EventEnvelope], str]]] = {}
+        self._subscribers: dict[str, list[_SubscriberEntry]] = {}
         self._session_tree: dict[str, list[str]] = {}
         self._lock = asyncio.Lock()
         self._max_queue_size = max_queue_size
@@ -379,6 +392,7 @@ class EventBus:
         *,
         replay: bool = True,
         last_event_id: int | None = None,
+        exclude_source: frozenset[str] | None = None,
     ) -> asyncio.Queue[EventEnvelope]:
         """Subscribe to events for a session.
 
@@ -402,6 +416,11 @@ class EventBus:
         For ``scope="all"``, the filtering applies per-buffer after collecting
         from all buffers.
 
+        ``exclude_source`` filters at publish fanout time: events published
+        with a matching ``source_hint`` are never queued to this subscriber
+        (live or replayed). This lets a producer subscribe to a bus without
+        re-consuming its own output (loopback isolation).
+
         Args:
             session_id: The session to subscribe to.
             scope: Subscription scope - "session" (exact match),
@@ -419,6 +438,8 @@ class EventBus:
                 events with ``event_id > last_event_id``. Gap detection
                 falls back to full replay when the buffer is missing
                 contiguous events.
+            exclude_source: Provenance tags whose published events this
+                subscriber must not receive.
 
         Returns:
             An ``asyncio.Queue`` to consume events from.
@@ -426,7 +447,11 @@ class EventBus:
         queue: asyncio.Queue[EventEnvelope] = asyncio.Queue(maxsize=self._max_queue_size)
 
         async with self._lock:
-            self._subscribers.setdefault(session_id, []).append((queue, scope))
+            self._subscribers.setdefault(session_id, []).append((
+                queue,
+                scope,
+                exclude_source or frozenset(),
+            ))
             if scope == "all":
                 historical_events: list[EventEnvelope] = []
                 for buffer in self._replay_buffers.values():
@@ -451,6 +476,16 @@ class EventBus:
                 historical_events = [
                     env for env in historical_events if env.event_id > last_event_id
                 ]
+
+        # Apply source exclusion to replayed events too (same rule as live
+        # fanout in _send), so a subscriber never sees its own output even
+        # through the replay buffer.
+        if exclude_source and historical_events:
+            historical_events = [
+                env
+                for env in historical_events
+                if env.source_hint is None or env.source_hint not in exclude_source
+            ]
 
         for envelope in historical_events:
             try:
@@ -492,7 +527,7 @@ class EventBus:
         async with self._lock:
             if session_id in self._subscribers:
                 self._subscribers[session_id] = [
-                    (q, sc) for q, sc in self._subscribers[session_id] if q is not queue
+                    (q, sc, ex) for q, sc, ex in self._subscribers[session_id] if q is not queue
                 ]
                 if not self._subscribers[session_id]:
                     del self._subscribers[session_id]
@@ -590,7 +625,9 @@ class EventBus:
 
             targets: list[tuple[asyncio.Queue[EventEnvelope], str]] = []
             for subscriber_sid, subscribers in self._subscribers.items():
-                for queue, scope in subscribers:
+                for queue, scope, excluded in subscribers:
+                    if envelope.source_hint is not None and envelope.source_hint in excluded:
+                        continue
                     if self._should_receive(session_id, subscriber_sid, scope):
                         targets.append((queue, scope))
 
@@ -615,7 +652,13 @@ class EventBus:
             with contextlib.suppress(Exception):
                 queue.shutdown()
 
-    async def publish(self, session_id: str, event: Any) -> None:
+    async def publish(
+        self,
+        session_id: str,
+        event: Any,
+        *,
+        source_hint: str | None = None,
+    ) -> None:
         """Publish an event to all subscribers for a session.
 
         Wraps the event in an EventEnvelope and sends it directly via _send().
@@ -628,12 +671,17 @@ class EventBus:
         Args:
             session_id: The session that produced the event.
             event: The event to broadcast.
+            source_hint: Optional provenance tag so subscribers can exclude
+                this publisher's events (see ``subscribe(exclude_source=...)``).
         """
         if isinstance(event, PartDeltaEvent) and event.delta is None:
             return
         self._event_counter += 1
         envelope = EventEnvelope(
-            source_session_id=session_id, event=event, event_id=self._event_counter
+            source_session_id=session_id,
+            event=event,
+            event_id=self._event_counter,
+            source_hint=source_hint,
         )
         await self._send(session_id, envelope)
 
@@ -650,7 +698,7 @@ class EventBus:
 
         async with self._lock:
             subscribers = self._subscribers.pop(session_id, [])
-            queues = [queue for queue, _scope in subscribers]
+            queues = [queue for queue, _scope, _ex in subscribers]
 
         for queue in queues:
             with contextlib.suppress(Exception):

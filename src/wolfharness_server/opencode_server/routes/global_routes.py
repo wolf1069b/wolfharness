@@ -5,14 +5,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import anyio
 from fastapi import APIRouter, Query
 from sse_starlette.sse import EventSourceResponse
 
 from wolfharness import log
-from wolfharness.agents.events.events import CustomEvent
 from wolfharness_server.opencode_server.dependencies import StateDep
 from wolfharness_server.opencode_server.models import Event, GlobalEvent, HealthResponse
 from wolfharness_server.opencode_server.models.app import (
@@ -210,20 +209,21 @@ async def _event_generator(  # noqa: PLR0915
 ) -> AsyncGenerator[dict[str, Any]]:
     """Generate SSE events for connected clients.
 
-    Events are received from the SessionPool EventBus via a global
-    subscription (``"__global_sse__"``) and streamed to SSE clients.
+    Events are OpenCode protocol projections delivered directly from
+    ``ServerState``: ``broadcast_event`` fans projections out to each
+    connection's subscriber queue (no EventBus round-trip). Reconnecting
+    clients replay missed projections via ``Last-Event-ID``.
 
     Args:
-        state: The server state holding subscribers and event factory
+        state: The server state holding subscriber queues and projection buffers
         wrap_payload: Whether to wrap events in GlobalEvent envelopes
         last_event_id: The last event ID received by the client, for replay
     """
     factory = state.get_event_factory() if wrap_payload else None
-    # Track connection for diagnostic subscriber counting.
-    # The queue is maintained only for the event_subscribers counter;
-    # actual event delivery now flows exclusively through the EventBus.
-    _sentinel_queue: asyncio.Queue[Event] = asyncio.Queue()
-    state.event_subscribers.append(_sentinel_queue)
+    # Each SSE connection owns a queue registered with ServerState. Live
+    # projections are delivered here by broadcast_event.
+    queue: asyncio.Queue[tuple[int, Event]] = asyncio.Queue(maxsize=1000)
+    state.event_subscribers.append(queue)
     subscriber_count = len(state.event_subscribers)
     logger.info("SSE: New client connected (total subscribers: %s)", subscriber_count)
 
@@ -236,23 +236,13 @@ async def _event_generator(  # noqa: PLR0915
         state._first_subscriber_triggered = True
         state.create_background_task(state.on_first_subscriber(), name="on_first_subscriber")
 
-    # Subscribe to EventBus for global SSE events.
-    # When the client provides a Last-Event-ID, use conditional replay: only
-    # events with event_id > last_event_id are replayed. When no Last-Event-ID
-    # is provided, replay all buffered events (default behavior).
+    # Reconnect replay: when the client provides a Last-Event-ID, replay the
+    # buffered projections with event_id > last_event_id before live events.
+    # First connections (no Last-Event-ID) get live events only — the client
+    # loads full state via sync() (matches the pre-loopback SSE policy).
     parsed_last_event_id: int | None = int(last_event_id) if last_event_id is not None else None
-    event_bus_stream: asyncio.Queue[Any] | None = None
-    session_controller = getattr(state, "session_controller", None)
-    if session_controller is not None:
-        session_pool = getattr(state.pool, "session_pool", None)
-        if session_pool is not None:
-            event_bus = session_pool.event_bus
-            event_bus_stream = await event_bus.subscribe(
-                "__global_sse__",
-                scope="all",
-                replay=parsed_last_event_id is not None,
-                last_event_id=parsed_last_event_id,
-            )
+    if parsed_last_event_id is not None:
+        state.replay_projections(queue, parsed_last_event_id)
 
     try:
         # Send initial connected event
@@ -261,64 +251,40 @@ async def _event_generator(  # noqa: PLR0915
         logger.info("SSE: Sending connected event", data=data)
         yield {"data": data, "id": "0"}
 
-        if event_bus_stream is None:
-            while True:
-                await asyncio.sleep(10.0)
+        while True:
+            try:
+                with anyio.fail_after(10.0):
+                    event_id, event = await queue.get()
+            except TimeoutError:
                 heartbeat = ServerHeartbeatEvent()
                 data = _serialize_event(heartbeat, wrap_payload=wrap_payload)
                 yield {"data": data}
-        else:
-            while True:
-                try:
-                    with anyio.fail_after(10.0):
-                        raw_event = await event_bus_stream.get()
-                except TimeoutError:
-                    heartbeat = ServerHeartbeatEvent()
-                    data = _serialize_event(heartbeat, wrap_payload=wrap_payload)
-                    yield {"data": data}
-                    continue
-                except asyncio.QueueShutDown:
-                    break
+                continue
+            except asyncio.QueueShutDown:
+                break
 
-                from wolfharness.orchestrator.core import EventEnvelope
-
-                inner_event: Any
-                inner_event = raw_event.event if isinstance(raw_event, EventEnvelope) else raw_event
-
-                if isinstance(inner_event, CustomEvent):
-                    if inner_event.event_data is None:
-                        continue
-                    event = cast(Event, inner_event.event_data)
-                else:
-                    event = inner_event
-
-                if not hasattr(event, "type"):
-                    continue
-                if factory is not None and not isinstance(
-                    event, ServerHeartbeatEvent | ServerConnectedEvent
-                ):
-                    data = factory.wrap(event)
-                elif wrap_payload:
-                    data = _serialize_event(event, wrap_payload=True)
-                else:
-                    data = _serialize_event(event)
-                logger.debug(
-                    "SSE: Sending event",
-                    event_type=getattr(event, "type", "unknown"),
-                    session_id=_extract_session_id(event) or "-",
-                )
-                event_id = raw_event.event_id if isinstance(raw_event, EventEnvelope) else 0
-                yield {"data": data, "id": str(event_id)}
+            if not hasattr(event, "type"):
+                continue
+            if factory is not None and not isinstance(
+                event, ServerHeartbeatEvent | ServerConnectedEvent
+            ):
+                data = factory.wrap(event)
+            elif wrap_payload:
+                data = _serialize_event(event, wrap_payload=True)
+            else:
+                data = _serialize_event(event)
+            logger.debug(
+                "SSE: Sending event",
+                event_type=getattr(event, "type", "unknown"),
+                session_id=_extract_session_id(event) or "-",
+            )
+            yield {"data": data, "id": str(event_id)}
     finally:
-        if event_bus_stream is not None:
-            session_pool = getattr(state.pool, "session_pool", None)
-            if session_pool is not None:
-                with contextlib.suppress(Exception):
-                    await session_pool.event_bus.unsubscribe("__global_sse__", event_bus_stream)
-        # Remove from subscriber count
         with contextlib.suppress(ValueError):
-            state.event_subscribers.remove(_sentinel_queue)
+            state.event_subscribers.remove(queue)
+        queue.shutdown()
         # Cancel any pending questions when the SSE client disconnects
+        session_controller = getattr(state, "session_controller", None)
         if session_controller is not None:
             cancelled = session_controller.cancel_all_pending_questions()
         else:

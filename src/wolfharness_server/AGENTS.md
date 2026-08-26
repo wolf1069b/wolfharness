@@ -20,7 +20,7 @@
 | ACP: syntax detection | `acp_server/syntax_detection.py` — maps file extensions/dotfiles to language identifiers |
 | ACP: slash commands | `acp_server/commands/skill_commands.py` (`ACPSkillBridge`) + `debug_commands.py` + `docs_commands/` |
 | ACP: session lifecycle | `acp_server/session.py` (`ACPSession`) + `session_manager.py` (`ACPSessionManager`) |
-| OpenCode: event processing pipeline | `opencode_server/event_processor.py` → `stream_adapter.py` → `event_adapter.py` → `event_bridge.py` |
+| OpenCode: event processing pipeline | `opencode_server/event_processor.py` → `stream_adapter.py` → `event_adapter.py` → `state.broadcast_event()` (direct-wire to SSE queues; no EventBus republish) |
 | OpenCode: session integration | `opencode_server/session_pool_integration.py` — `OpenCodeSessionPoolIntegration`, main bridge to SessionPool |
 | OpenCode: models (20 files) | `opencode_server/models/` — Pydantic models matching OpenCode API types (`parts.py`, `session.py`, `message.py`, `events.py`, etc.) |
 | OpenCode: route handlers (14 files) | `opencode_server/routes/` — `session_routes.py`, `message_routes.py`, `file_routes.py`, `config_routes.py`, `agent_routes.py`, etc. |

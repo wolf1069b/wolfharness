@@ -96,7 +96,9 @@ async def test_start_consumer_subscribes_and_runs_loop(
     assert "sess-1" in consumer._session_groups
     assert "sess-1" in consumer._consumer_streams
 
-    mock_event_bus.subscribe.assert_awaited_once_with("sess-1", scope="descendants")
+    mock_event_bus.subscribe.assert_awaited_once_with(
+        "sess-1", scope="descendants", replay=True, exclude_source=None
+    )
 
     await consumer.stop_event_consumer("sess-1")
 
@@ -174,11 +176,59 @@ async def test_handle_event_dispatches_to_subclass(mock_event_bus: AsyncMock) ->
     await consumer.start_event_consumer("sess-1")
 
     for _ in range(100):
-        if mock_handle.await_count > 0:
+        if mock_handle.called:
             break
         await asyncio.sleep(0.01)
 
     mock_handle.assert_awaited_once_with("sess-1", envelope)
+
+    await consumer.stop_event_consumer("sess-1")
+
+
+class _NoReplayConsumer(_TestConsumer):
+    """Consumer that opts out of EventBus replay (OpenCode-style policy)."""
+
+    def _get_subscription_replay(self) -> bool:
+        return False
+
+    def _get_subscription_exclude_source(self) -> frozenset[str] | None:
+        return frozenset({"opencode_event_bridge"})
+
+
+@pytest.mark.anyio
+async def test_session_consumer_subscribes_replay_false(mock_event_bus: AsyncMock) -> None:
+    """OpenCode-style consumer subscribes with replay=False + exclude_source."""
+    _make_queue_and_mock_subscribe(mock_event_bus)
+    consumer = _NoReplayConsumer(mock_event_bus)
+    await consumer.start_event_consumer("sess-1")
+
+    mock_event_bus.subscribe.assert_awaited_once_with(
+        "sess-1",
+        scope="descendants",
+        replay=False,
+        exclude_source=frozenset({"opencode_event_bridge"}),
+    )
+
+    await consumer.stop_event_consumer("sess-1")
+
+
+class _RecoveryReplayConsumer(_TestConsumer):
+    """Consumer that needs historical events (crash-recovery opt-in)."""
+
+    def _get_subscription_replay(self) -> bool:
+        return True
+
+
+@pytest.mark.anyio
+async def test_recovery_path_opt_in_replay_true(mock_event_bus: AsyncMock) -> None:
+    """Recovery consumers explicitly opt back in to replay=True."""
+    _make_queue_and_mock_subscribe(mock_event_bus)
+    consumer = _RecoveryReplayConsumer(mock_event_bus)
+    await consumer.start_event_consumer("sess-1")
+
+    mock_event_bus.subscribe.assert_awaited_once_with(
+        "sess-1", scope="descendants", replay=True, exclude_source=None
+    )
 
     await consumer.stop_event_consumer("sess-1")
 
