@@ -743,9 +743,11 @@ class OPAMixin(WikiBuildDeps):
                 dedupe_key=dedupe_key,
             )
             if is_feedback:
-                # 保证每次提交都生成唯一文件名,避免相同 target/章节/标题
+                # 时间戳保证每次提交生成唯一文件名,避免相同 target/章节/标题
                 # 的反馈撞到同一文件被追加合并。
-                opa_id = self._clip_utf8(f"{opa_id}-{uuid4().hex[:8]}", 80).rstrip("-._")
+                opa_id = self._clip_utf8(
+                    f"{opa_id}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}", 80
+                ).rstrip("-._")
         previous: dict[str, object] = {}
         existing_key = self._find_opa_key(opa_id)
         if existing_key and build_id:
@@ -1103,7 +1105,7 @@ class OPAMixin(WikiBuildDeps):
                     (
                         # external_expert: one submission = one record, never
                         # merges into a prior suggestion.
-                        uuid4().hex[:8]
+                        datetime.now(UTC).strftime("%Y%m%d%H%M%S")
                         if external_submission
                         else sha256(
                             f"{opa_uri}\x1f{effective_target}\x1f{title}".encode()
@@ -1340,7 +1342,7 @@ class OPAMixin(WikiBuildDeps):
                 + "-"
                 + sha256(payload.encode("utf-8")).hexdigest()[:10]
                 + "-"
-                + uuid4().hex[:6],
+                + datetime.now(UTC).strftime("%Y%m%d%H%M%S"),
                 100,
             ).rstrip("-._")
         key = self._find_op_key("OPS", ops_id)
@@ -1803,7 +1805,7 @@ class OPAMixin(WikiBuildDeps):
                     (
                         # external_expert: one snapshot = one record, never
                         # merges into a prior proposal.
-                        uuid4().hex[:8]
+                        datetime.now(UTC).strftime("%Y%m%d%H%M%S")
                         if external_snapshot
                         else sha256(
                             f"{opa_uri}\x1f{effective_target}\x1f{title}".encode()

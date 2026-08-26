@@ -144,6 +144,14 @@ class RelationMixin:
         if not started_at:
             started_at = datetime.now(UTC).isoformat()
         updated_at = datetime.now(UTC).isoformat()
+        # Code-level source identity: combines library_root + source_doc_allowlist
+        # + wiki_root into a deterministic fingerprint.  inspect_build_checkpoint
+        # validates this to detect source changes (e.g. fixmaster → local
+        # OpenViking, or different namespace) without relying on LLM-passed
+        # doc_id/build_id.
+        _source_fp = sha256(
+            f"{self._raw_fs.root_uri}\x1f{','.join(getattr(self, '_source_doc_allowlist', ()))}\x1f{self.store.root_uri}".encode(),
+        ).hexdigest()[:16]
         return {
             "build_id": build_id,
             "doc_id": doc_id,
@@ -160,6 +168,8 @@ class RelationMixin:
             "input_docs": list(input_docs) if input_docs else [doc_id],
             "schema_version": schema_version,
             "audit_profile": audit_profile,
+            "source_fingerprint": _source_fp,
+            "library_root": self._raw_fs.root_uri,
             "last_error_code": last_error_code,
             "last_error": last_error,
             "started_at": started_at,

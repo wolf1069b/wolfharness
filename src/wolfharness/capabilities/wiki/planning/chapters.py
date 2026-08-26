@@ -602,6 +602,22 @@ class ChapterMixin:
         checkpoint = self.store.read_json("index/build_checkpoint.json")
         if checkpoint is None:
             return {"exists": False, "stage": ""}
+        # Code-level source validation: detect source changes without relying
+        # on LLM-passed doc_id/build_id.  The source_fingerprint combines
+        # library_root + source_doc_allowlist + wiki_root — any of these
+        # changing means the checkpoint belongs to a different build origin.
+        stored_fp = str(checkpoint.get("source_fingerprint", ""))
+        if stored_fp:
+            current_fp = sha256(
+                f"{self._raw_fs.root_uri}\x1f{','.join(getattr(self, '_source_doc_allowlist', ()))}\x1f{self.store.root_uri}".encode(),
+            ).hexdigest()[:16]
+            if stored_fp != current_fp:
+                return {
+                    "exists": False,
+                    "stage": "",
+                    "source_changed": True,
+                    "stored_source_fingerprint": stored_fp,
+                }
         if doc_id and str(checkpoint.get("doc_id", "")) != doc_id:
             return {
                 "exists": False,
