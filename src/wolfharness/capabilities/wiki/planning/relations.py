@@ -110,11 +110,25 @@ class RelationMixin:
             raise ValueError("checkpoint stage must not be empty")
         audit_profile = self._validate_audit_profile(audit_profile)
         schema_version = schema_version or get_schema_version()
-        if not build_id:
-            build_id = sha256(
-                f"{doc_id}\x1f{device_id}\x1f{series_id}\x1f{input_hash}\x1f{config_hash}\x1f{','.join(input_docs)}\x1f{schema_version}\x1f{audit_profile}".encode(),
-            ).hexdigest()[:16]
         existing = self.store.read_json("index/build_checkpoint.json")
+        if not build_id:
+            existing_build_id = (
+                str(existing.get("build_id", "")) if isinstance(existing, dict) else ""
+            )
+            existing_doc_id = str(existing.get("doc_id", "")) if isinstance(existing, dict) else ""
+            if existing_doc_id == doc_id and existing_build_id:
+                # Preserve the existing build identity.  A checkpoint_build
+                # call without an explicit build_id (recovery paths, stage
+                # transitions) must not mint a fresh auto-generated id over an
+                # in-progress build — that silently detaches every plan and
+                # source packet owner, leaving materialized chapters pending
+                # forever.  Only brand-new builds (no matching checkpoint)
+                # auto-generate an id.
+                build_id = existing_build_id
+            else:
+                build_id = sha256(
+                    f"{doc_id}\x1f{device_id}\x1f{series_id}\x1f{input_hash}\x1f{config_hash}\x1f{','.join(input_docs)}\x1f{schema_version}\x1f{audit_profile}".encode(),
+                ).hexdigest()[:16]
         existing_build_id = str(existing.get("build_id", "")) if isinstance(existing, dict) else ""
         if existing is not None:
             existing_profile = str(existing.get("audit_profile", "manual"))
@@ -130,6 +144,14 @@ class RelationMixin:
         if not started_at:
             started_at = datetime.now(UTC).isoformat()
         updated_at = datetime.now(UTC).isoformat()
+        # Code-level source identity: combines library_root + source_doc_allowlist
+        # + wiki_root into a deterministic fingerprint.  inspect_build_checkpoint
+        # validates this to detect source changes (e.g. fixmaster → local
+        # OpenViking, or different namespace) without relying on LLM-passed
+        # doc_id/build_id.
+        _source_fp = sha256(
+            f"{self._raw_fs.root_uri}\x1f{','.join(getattr(self, '_source_doc_allowlist', ()))}\x1f{self.store.root_uri}".encode(),
+        ).hexdigest()[:16]
         return {
             "build_id": build_id,
             "doc_id": doc_id,
@@ -140,9 +162,14 @@ class RelationMixin:
             "config_hash": config_hash,
             "source_snapshot_id": source_snapshot_id,
             "snapshot_id": snapshot_id,
-            "input_docs": list(input_docs),
+            # ponytail: conductor prompt omits input_docs → default to doc_id
+            # so packets.py has_input_identity check passes.  Matches fallback
+            # already present in chapters.py:904 and materialization.py:235.
+            "input_docs": list(input_docs) if input_docs else [doc_id],
             "schema_version": schema_version,
             "audit_profile": audit_profile,
+            "source_fingerprint": _source_fp,
+            "library_root": self._raw_fs.root_uri,
             "last_error_code": last_error_code,
             "last_error": last_error,
             "started_at": started_at,
@@ -179,15 +206,16 @@ class RelationMixin:
         fault_links: list[tuple[str, str]] | None = None,
         procedure_links: list[tuple[str, str]] | None = None,
         force: bool = False,
-    ) -> None:
+    ) -> bool:
         """Materialize reverse Fault/Procedure edges in a Component body.
 
         Structured edges remain authoritative in Fault/Procedure frontmatter;
         this helper only mirrors those already-resolved edges into the two
         human-readable Component sections required by the graph contract.
+        Returns True when the Component body was rewritten.
         """
         with self._relation_sync_lock:
-            self._sync_component_narrative_links_locked(
+            return self._sync_component_narrative_links_locked(
                 component_uri,
                 fault_links=fault_links,
                 procedure_links=procedure_links,
@@ -201,18 +229,21 @@ class RelationMixin:
         fault_links: list[tuple[str, str]] | None = None,
         procedure_links: list[tuple[str, str]] | None = None,
         force: bool = False,
-    ) -> None:
-        """Run Component reverse-link synchronization under its shared lock."""
+    ) -> bool:
+        """Run Component reverse-link synchronization under its shared lock.
+
+        Returns True when the Component body was rewritten.
+        """
         relation_mode = os.environ.get("WIKI_RELATION_SYNC_MODE", "immediate").strip().lower()
         if not force and relation_mode == "deferred":
-            return
+            return False
         info = self.store.lookup_by_uri(component_uri)
         if info is None or info[0] != "Component":
-            return
+            return False
         concept, class_name, object_name = info
         content = self.store.read_entity_by_uri(component_uri)
         if content is None:
-            return
+            return False
         resolved_fault_links = (
             fault_links
             if fault_links is not None
@@ -231,9 +262,16 @@ class RelationMixin:
         )
         updated = self._dedupe_h2_sections(updated)
         if updated == content:
-            return
+            return False
         updated = self.store.resolve_body_refs(updated, None)
         updated = self.store.dedup_citations(updated)
+        updated = self._preserve_expert_sections(
+            target_uri=component_uri,
+            current=content,
+            candidate=updated,
+        )
+        if updated == content:
+            return False
         self.store.write_entity(concept, class_name, object_name, updated)
         self.store.register_natural_key(concept, class_name, object_name, component_uri)
         logger.info(
@@ -242,6 +280,59 @@ class RelationMixin:
             len(resolved_fault_links),
             len(resolved_procedure_links),
         )
+        return True
+
+    def _sync_all_component_narrative_links(self, *, force: bool = False) -> int:
+        """Mirror reverse Fault/Procedure links into every Component body.
+
+        The join step after relation shards finish.  Builds a reverse index in
+        one pass over Fault/Procedure pages instead of re-scanning all entities
+        once per component (O(C*N) reads -> O(N) reads), then syncs only the
+        Components that actually have reverse links.  Returns how many
+        Component bodies changed.
+        """
+        fault_index: dict[str, list[tuple[str, str]]] = {}
+        for _concept, _class_name, object_name, uri in self.store.list_entities("Fault"):
+            page = self.store.read_entity_by_uri(uri)
+            if page is None:
+                continue
+            component_uris = all_relation_uris(
+                page, "Fault", "affected_components", self.store.root_uri
+            )
+            if not component_uris:
+                continue
+            frontmatter = parse_frontmatter(page)
+            title = frontmatter.get("title")
+            label = title.strip() if isinstance(title, str) and title.strip() else object_name
+            for component_uri in component_uris:
+                fault_index.setdefault(component_uri, []).append((label, uri))
+        procedure_index: dict[str, list[tuple[str, str]]] = {}
+        for _concept, _class_name, object_name, uri in self.store.list_entities("Procedure"):
+            page = self.store.read_entity_by_uri(uri)
+            if page is None:
+                continue
+            component_uris = all_relation_uris(
+                page, "Procedure", "target_components", self.store.root_uri
+            )
+            if not component_uris:
+                continue
+            frontmatter = parse_frontmatter(page)
+            title = frontmatter.get("title")
+            label = title.strip() if isinstance(title, str) and title.strip() else object_name
+            for component_uri in component_uris:
+                procedure_index.setdefault(component_uri, []).append((label, uri))
+        synced = 0
+        for component_uri in sorted(set(fault_index) | set(procedure_index)):
+            # Join is the deferred-mode executor: always mirror, regardless of
+            # WIKI_RELATION_SYNC_MODE (workers may have skipped immediate sync).
+            if self._sync_component_narrative_links(
+                component_uri,
+                fault_links=fault_index.get(component_uri),
+                procedure_links=procedure_index.get(component_uri),
+                force=True,
+            ):
+                synced += 1
+        return synced
 
     def _sync_symptom_profile_index(self, symptom_uri: str, *, force: bool = False) -> None:
         """Backfill ## Profile 索引 in a Symptom index.md from its profile files."""
@@ -293,6 +384,13 @@ class RelationMixin:
             return
         updated = self.store.resolve_body_refs(updated, None)
         updated = self.store.dedup_citations(updated)
+        updated = self._preserve_expert_sections(
+            target_uri=symptom_uri,
+            current=content,
+            candidate=updated,
+        )
+        if updated == content:
+            return
         self.store.write_entity(concept, class_name, object_name, updated)
         self.store.register_natural_key(concept, class_name, object_name, symptom_uri)
         logger.info("Synced Symptom profile index: %s (%d profiles)", symptom_uri, len(rows))
@@ -495,6 +593,12 @@ class RelationMixin:
                         )
                         updated = self._dedupe_h2_sections(updated)
                     if updated != content:
+                        updated = self._preserve_expert_sections(
+                            target_uri=device_uri,
+                            current=content,
+                            candidate=updated,
+                        )
+                    if updated != content:
                         self.store.write_entity("Device", class_name, object_name, updated)
                         synced += 1
                     continue
@@ -534,6 +638,12 @@ class RelationMixin:
                     )
                     updated = self._dedupe_h2_sections(updated)
                 if updated != content:
+                    updated = self._preserve_expert_sections(
+                        target_uri=device_uri,
+                        current=content,
+                        candidate=updated,
+                    )
+                if updated != content:
                     self.store.write_entity("Device", class_name, object_name, updated)
                     synced += 1
         return synced
@@ -566,7 +676,11 @@ class RelationMixin:
         ]
         return tuple(names)
 
-    def _entity_relation_work_items(self) -> list[dict[str, object]]:
+    def _entity_relation_work_items(
+        self,
+        *,
+        scope_entity_uris: list[str] | None = None,
+    ) -> list[dict[str, object]]:
         """Discover relation work from committed entities, not extraction state.
 
         Source packets are evidence for extraction and checkpoints are restart
@@ -574,9 +688,18 @@ class RelationMixin:
         page still needs a relation. This scan looks only at the current
         entity library, schema relation fields and unresolved placeholders;
         OPA/OPS review state is deliberately not a relation-work trigger.
+
+        When ``scope_entity_uris`` is provided, the scan is limited to those
+        entities only — used in incremental mode to avoid re-planning relation
+        work for old entities untouched by the current build.
         """
-        entity_records = self.store.list_entities()
-        known_uris = {str(record[3]) for record in entity_records}
+        all_entity_records = self.store.list_entities()
+        known_uris = {str(record[3]) for record in all_entity_records}
+        if scope_entity_uris is not None:
+            scope_set = {uri.strip() for uri in scope_entity_uris if uri.strip()}
+            entity_records = [r for r in all_entity_records if str(r[3]) in scope_set]
+        else:
+            entity_records = all_entity_records
         root_uri = self.store.root_uri.rstrip("/") + "/"
 
         def relation_values(value: object) -> list[str]:
@@ -658,6 +781,7 @@ class RelationMixin:
         *,
         active_entity_uris: list[str] | None = None,
         max_parallel_shards: int | None = None,
+        scope_entity_uris: list[str] | None = None,
     ) -> dict[str, object]:
         """Plan retrieval-and-patch work from the current committed Wiki.
 
@@ -666,11 +790,36 @@ class RelationMixin:
         entity write set; the worker must retrieve real neighbouring pages,
         verify identity/evidence, then use guarded ``patch_entity``. Empty
         fields are review work, never permission to invent a URI.
+
+        When ``scope_entity_uris`` is ``None`` and the wiki is in incremental
+        mode, the planner auto-scopes to entities touched in the current build
+        via ``build_change_report``. Pass an explicit list to override; pass
+        ``None`` in a non-incremental wiki for the traditional full-library scan.
         """
         if max_parallel_shards is not None and max_parallel_shards < 1:
             raise ValueError("max_parallel_shards must be positive when provided")
         active_uris = {uri.strip() for uri in active_entity_uris or [] if uri.strip()}
-        relation_items = self._entity_relation_work_items()
+
+        # Auto-scope in incremental mode: limit to build-touched entities
+        auto_scoped = False
+        if scope_entity_uris is None:
+            wiki_state = self.inspect_wiki_state()
+            if wiki_state.get("mode") == "incremental":
+                try:
+                    change_report = self.build_change_report(persist=False, include_op_flow=False)
+                    changed = change_report.get("changed_entities", [])
+                    if isinstance(changed, list):
+                        scope_entity_uris = [
+                            str(e.get("uri", "")).strip()
+                            for e in changed
+                            if isinstance(e, dict) and e.get("uri")
+                        ]
+                        auto_scoped = True
+                except Exception:
+                    # If build_change_report fails, fall back to full library scan
+                    pass
+
+        relation_items = self._entity_relation_work_items(scope_entity_uris=scope_entity_uris)
         grouped: dict[str, list[dict[str, object]]] = {}
         for item in relation_items:
             grouped.setdefault(str(item["concept"]), []).append(item)
@@ -717,18 +866,26 @@ class RelationMixin:
         current_uris = sorted(
             known_uri for known_uri in {str(record[3]) for record in self.store.list_entities()}
         )
+        if scope_entity_uris is not None:
+            scope_uris_for_id = sorted(set(scope_entity_uris))
+        else:
+            scope_uris_for_id = current_uris
         scope_id = (
-            "entity-relation-" + sha256("\n".join(current_uris).encode("utf-8")).hexdigest()[:16]
+            "entity-relation-"
+            + sha256("\n".join(scope_uris_for_id).encode("utf-8")).hexdigest()[:16]
+        )
+        effective_scope_source = (
+            "build_touched_entities" if scope_entity_uris is not None else "entity_library"
         )
         ledger_uri = self._write_relation_work_ledger(
             scope_id,
-            scope_source="entity_library",
+            scope_source=effective_scope_source,
             scope_trusted=True,
             packet_ids=set(),
             items=relation_items,
         )
         return {
-            "scope_source": "entity_library",
+            "scope_source": effective_scope_source,
             "scope_id": scope_id,
             "work_ledger_uri": ledger_uri,
             "shards": shards,
@@ -737,6 +894,8 @@ class RelationMixin:
             "pending_count": len(relation_items),
             "active_excluded_count": active_excluded_count,
             "remaining_count": dispatchable_candidate_count - returned_candidate_count,
+            "scope_entity_count": len(scope_entity_uris) if scope_entity_uris is not None else None,
+            "auto_scoped": auto_scoped,
             "join": {
                 "required": False,
                 "service_action": "rebuild_all_backlinks",

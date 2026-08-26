@@ -410,6 +410,62 @@ class BomMixin:
             else:
                 written += int(result.get("written_count", 0))
 
+        # Pull chapter references from the raw backend at Device creation
+        # time so the Device page immediately carries its source chapter
+        # inventory.  When the remote source (e.g. MCP) does not expose
+        # chapter URIs, ``system_chapters`` is left empty and the status is
+        # documented in the ``包含系统`` body section.
+        try:
+            device_chapter_sync = self.sync_device_system_chapters(doc_id, device_name)
+        except (OSError, HTTPError, OpenVikingError) as exc:
+            logger.warning("sync_device_system_chapters failed at BOM time: %s", exc)
+            device_chapter_sync = {"status": "skipped", "reason": "sync_error", "chapter_count": 0}
+
+        sync_status = str(device_chapter_sync.get("status", ""))
+        sync_reason = str(device_chapter_sync.get("reason", ""))
+        chapter_count = int(device_chapter_sync.get("chapter_count", 0))
+
+        if sync_status == "skipped" and sync_reason == "no_local_chapters":
+            current_device = self.store.read_entity("Device", None, device_name)
+            if current_device is not None and "BOM 组件树已登记" in current_device:
+                current_hash = sha256(current_device.encode("utf-8")).hexdigest()
+                self.patch_entity(
+                    "Device",
+                    "",
+                    device_name,
+                    [
+                        {
+                            "op": "section_replace",
+                            "heading": "包含系统",
+                            "content": (
+                                "BOM 组件树已登记。\n\n"
+                                "远端源未提供章节 URI，`system_chapters` 字段留空。"
+                            ),
+                        }
+                    ],
+                    expected_sha256=current_hash,
+                )
+        elif sync_status == "updated" and chapter_count > 0:
+            current_device = self.store.read_entity("Device", None, device_name)
+            if current_device is not None and "BOM 组件树已登记" in current_device:
+                current_hash = sha256(current_device.encode("utf-8")).hexdigest()
+                self.patch_entity(
+                    "Device",
+                    "",
+                    device_name,
+                    [
+                        {
+                            "op": "section_replace",
+                            "heading": "包含系统",
+                            "content": (
+                                f"BOM 组件树已登记。已从远端源同步 {chapter_count} 个"
+                                "系统章节引用（见 frontmatter `system_chapters`）。"
+                            ),
+                        }
+                    ],
+                    expected_sha256=current_hash,
+                )
+
         for item in validated_components:
             component_uri = str(item["component_uri"])
             registry[component_uri] = {

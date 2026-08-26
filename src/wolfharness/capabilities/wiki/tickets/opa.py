@@ -7,6 +7,7 @@ never enter the finalize/audit entity index).
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from hashlib import sha256
 import json
@@ -208,20 +209,20 @@ class OPAMixin(WikiBuildDeps):
             if records:
                 return sorted(records)
         records: list[tuple[str, str]] = []
-        for key in self.store.list_dir(self._op_dir_key(concept), recursive=True):
-            if not key.endswith(".md"):
-                continue
-            content = self.store.read_text(key)
+        keys = [
+            key
+            for key in self.store.list_dir(self._op_dir_key(concept), recursive=True)
+            if key.endswith(".md")
+        ]
+        for key, content in self._read_md_files_parallel(keys):
             if content is not None:
                 records.append((key, content))
         return sorted(records)
 
     def _read_md_dir(self, dir_key: str) -> list[tuple[str, str]]:
         records: list[tuple[str, str]] = []
-        for key in self.store.list_dir(dir_key, recursive=False):
-            if not key.endswith(".md"):
-                continue
-            content = self.store.read_text(key)
+        keys = [key for key in self.store.list_dir(dir_key, recursive=False) if key.endswith(".md")]
+        for key, content in self._read_md_files_parallel(keys):
             if content is not None:
                 records.append((key, content))
         return records
@@ -241,13 +242,25 @@ class OPAMixin(WikiBuildDeps):
                 records.extend(self._read_md_dir(f"{base}/{subdir}/{th}"))
             return sorted(records)
         records: list[tuple[str, str]] = []
-        for key in self.store.list_dir(base, recursive=True):
-            if not key.endswith(".md"):
-                continue
-            content = self.store.read_text(key)
+        keys = [key for key in self.store.list_dir(base, recursive=True) if key.endswith(".md")]
+        for key, content in self._read_md_files_parallel(keys):
             if content is not None:
                 records.append((key, content))
         return sorted(records)
+
+    def _read_md_files_parallel(
+        self, keys: list[str], max_workers: int = 16
+    ) -> list[tuple[str, str | None]]:
+        """Batch-read Markdown files concurrently.
+
+        Remote backends (e.g. VikingFS) round-trip per file over HTTP;
+        a serial read of 100+ files stalls the ticket service.
+        """
+        if not keys:
+            return []
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            contents = pool.map(self.store.read_text, keys)
+            return list(zip(keys, contents, strict=True))
 
     def _opa_uri(self, opa_id: str, category: str = "") -> str:
         """Return a URI that can actually be read from the active backend."""
@@ -730,9 +743,11 @@ class OPAMixin(WikiBuildDeps):
                 dedupe_key=dedupe_key,
             )
             if is_feedback:
-                # 保证每次提交都生成唯一文件名,避免相同 target/章节/标题
+                # 时间戳保证每次提交生成唯一文件名,避免相同 target/章节/标题
                 # 的反馈撞到同一文件被追加合并。
-                opa_id = self._clip_utf8(f"{opa_id}-{uuid4().hex[:8]}", 80).rstrip("-._")
+                opa_id = self._clip_utf8(
+                    f"{opa_id}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}", 80
+                ).rstrip("-._")
         previous: dict[str, object] = {}
         existing_key = self._find_opa_key(opa_id)
         if existing_key and build_id:
@@ -1090,7 +1105,7 @@ class OPAMixin(WikiBuildDeps):
                     (
                         # external_expert: one submission = one record, never
                         # merges into a prior suggestion.
-                        uuid4().hex[:8]
+                        datetime.now(UTC).strftime("%Y%m%d%H%M%S")
                         if external_submission
                         else sha256(
                             f"{opa_uri}\x1f{effective_target}\x1f{title}".encode()
@@ -1187,7 +1202,7 @@ class OPAMixin(WikiBuildDeps):
             out.append(
                 {
                     "ops_id": ops_id,
-                    "uri": self._op_uri("OPS", ops_id),
+                    "uri": f"{self.store.root_uri}/{path}",
                     "path": path,
                     "parent_opa": record_parent,
                     "title": str(fm.get("title", ops_id)),
@@ -1327,7 +1342,7 @@ class OPAMixin(WikiBuildDeps):
                 + "-"
                 + sha256(payload.encode("utf-8")).hexdigest()[:10]
                 + "-"
-                + uuid4().hex[:6],
+                + datetime.now(UTC).strftime("%Y%m%d%H%M%S"),
                 100,
             ).rstrip("-._")
         key = self._find_op_key("OPS", ops_id)
@@ -1610,7 +1625,10 @@ class OPAMixin(WikiBuildDeps):
                 object_name,
                 candidate,
                 expected_sha256=expected_sha256,
-                conflict_policy="detect",
+                # This IS the expert apply path: the record itself is already
+                # confirmed, so its own authority claim must not revert its
+                # candidate (mirrors apply_opl).
+                conflict_policy="external_authority",
             )
         except (FileNotFoundError, OSError, ValueError) as error:
             return self._update_ops_apply_status(current_id, "failed", str(error))
@@ -1787,7 +1805,7 @@ class OPAMixin(WikiBuildDeps):
                     (
                         # external_expert: one snapshot = one record, never
                         # merges into a prior proposal.
-                        uuid4().hex[:8]
+                        datetime.now(UTC).strftime("%Y%m%d%H%M%S")
                         if external_snapshot
                         else sha256(
                             f"{opa_uri}\x1f{effective_target}\x1f{title}".encode()
@@ -2067,7 +2085,7 @@ class OPAMixin(WikiBuildDeps):
             out.append(
                 {
                     "opl_id": opl_id,
-                    "uri": self._op_uri("OPL", opl_id),
+                    "uri": f"{self.store.root_uri}/{path}",
                     "path": path,
                     "title": str(fm.get("title", opl_id)),
                     "parent_opa": str(fm.get("parent_opa", "")),
@@ -2256,6 +2274,7 @@ class OPAMixin(WikiBuildDeps):
                     "target_section": section,
                     "reason_code": reason,
                     "suggested_retrieval_query": f"{opa.get('title', '')!s} {section}".strip(),
+                    "evidence_uris": [str(u) for u in (opa.get("evidence_uris") or [])],
                     "repair_cost": repair_cost.get(reason, 9),
                 },
             )
@@ -2275,6 +2294,15 @@ class OPAMixin(WikiBuildDeps):
                 chunk = class_items[start : start + _entity_batch_limit()]
                 opa_ids = [str(row["opa_id"]) for row in chunk]
                 shard_id = f"ops_{target_class.casefold()}_{shard_index}"
+                per_opa_lines: list[str] = []
+                for row in chunk:
+                    per_opa_lines.extend(
+                        [
+                            f"parent_opa: {row['opa_uri']}",
+                            f"retrieval_query: {row['suggested_retrieval_query']}",
+                            f"evidence_uris: {json.dumps(row['evidence_uris'], ensure_ascii=False)}",
+                        ],
+                    )
                 task_description = "\n".join(
                     [
                         "worker_role: wiki_ops_worker",
@@ -2283,6 +2311,7 @@ class OPAMixin(WikiBuildDeps):
                         f"ops_shard_id: {shard_id}",
                         f"write_scope: ops_draft:{shard_id}",
                         f"opa_ids: {json.dumps(opa_ids, ensure_ascii=False)}",
+                        *per_opa_lines,
                         (
                             "worker_task: read each OPA and its evidence, then create an "
                             "unconfirmed OPS draft proposing the repair for that OPA"
@@ -2903,7 +2932,7 @@ class OPAMixin(WikiBuildDeps):
                     },
                     "evidence_uris": self._list_value(fm.get("evidence_uris")),
                     "related_uris": self._list_value(fm.get("related_uris")),
-                    "uri": self._opa_uri(opa_id, self._opa_category_from_key(path)),
+                    "uri": f"{self.store.root_uri}/{path}",
                 },
             )
             if len(out) >= max(limit, 1):

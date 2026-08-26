@@ -99,7 +99,7 @@ class FinalizeMixin:
         global join worker.
         """
         device_diagnostic_page_count = self._sync_device_diagnostic_links()
-        component_narrative_page_count = self._sync_component_narrative_links()
+        component_narrative_page_count = self._sync_all_component_narrative_links()
         pairs: list[tuple[str, list[str]]] = []
         for concept, _class_name, _object_name, uri in self.store.list_entities():
             content = self.store.read_entity_by_uri(uri)
@@ -123,6 +123,34 @@ class FinalizeMixin:
             "native_relation_sync": self.store.native_relation_sync_result
             or {"status": "not_attempted"},
         }
+
+    def _purge_build_intermediates(self) -> dict[str, object]:
+        """Delete build-only intermediate state after a successful finalize.
+
+        ``chapter_plans``, ``source_packets``, ``relation_work``, and
+        ``relation_manifests`` are consumed during the pipeline and no longer
+        needed once the wiki is finalized.  ``materialization_receipts``
+        (audit trail) and ``build_checkpoint.json`` (completion record) are
+        preserved.
+        """
+        purged: dict[str, int] = {}
+        for dir_key in (
+            "source_packets",
+            "index/chapter_plans",
+            "index/relation_work",
+            "index/relation_manifests",
+        ):
+            files = self.store.list_dir(dir_key, recursive=True)
+            count = 0
+            for file_key in files:
+                if file_key.endswith(".json"):
+                    self.store.delete(file_key)
+                    count += 1
+            self.store.remove_empty_dir(dir_key)
+            purged[dir_key] = count
+        self._invalidate_audit_cache()
+        logger.info("Purged build intermediates after finalize: %s", purged)
+        return {"purged_intermediates": purged}
 
     def get_backlinks(self, uri: str) -> list[str]:
         """Return URIs that link to *uri* (empty if none / no index)."""
@@ -592,7 +620,13 @@ class FinalizeMixin:
                     ckpt_snapshot,
                 )
                 return self._retry_remote_sync(current_checkpoint, audit_profile)
-        device_chapter_sync = self.sync_device_system_chapters(doc_id, device_id)
+        # Chapter sync now runs at Device creation time
+        # (register_bom_identity_batch) rather than in finalize.  Kept as a
+        # no-op marker for the return dict.
+        device_chapter_sync: dict[str, object] = {
+            "status": "not_run",
+            "reason": "moved_to_bom_stage",
+        }
         self._invalidate_audit_cache()
         audit_started = time.perf_counter()
         audit = self._audit_all_pages(profile=audit_profile, limit=500)
@@ -898,6 +932,12 @@ class FinalizeMixin:
                 },
             )
         self._invalidate_audit_cache()
+        # ponytail: purge build-only intermediates after successful finalize so
+        # the next ingestion starts clean.  Only purge when remote sync
+        # succeeded — on finalized_local (upload failed) keep them for retry.
+        purge_result: dict[str, object] = {}
+        if not remote_sync_failed:
+            purge_result = self._purge_build_intermediates()
         return {
             "resource_count": len(manifest.get("resources", [])),
             "concept_count": len(concepts),
@@ -922,6 +962,7 @@ class FinalizeMixin:
             "config_hash": config_hash,
             "metrics_path": "index/build_metrics.json",
             "spec_version": get_schema_version(),
+            **purge_result,
         }
 
     def _retry_remote_sync(

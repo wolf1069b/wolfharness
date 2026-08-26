@@ -13,6 +13,7 @@ full entity-write path (``merge_entity``, ``_apply_operations``, etc.).
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from hashlib import sha256
 import json
@@ -307,24 +308,38 @@ class TicketEngine:
             th_records = self._read_md_dir(subdir)
             if th_records:
                 return sorted(th_records)
+        keys = [
+            key
+            for key in self.store.list_dir(self._op_dir_key(concept), recursive=True)
+            if key.endswith(".md")
+        ]
         records: list[tuple[str, str]] = []
-        for key in self.store.list_dir(self._op_dir_key(concept), recursive=True):
-            if not key.endswith(".md"):
-                continue
-            content = self.store.read_text(key)
+        for key, content in self._read_md_files_parallel(keys):
             if content is not None:
                 records.append((key, content))
         return sorted(records)
 
     def _read_md_dir(self, dir_key: str) -> list[tuple[str, str]]:
+        keys = [key for key in self.store.list_dir(dir_key, recursive=False) if key.endswith(".md")]
         records: list[tuple[str, str]] = []
-        for key in self.store.list_dir(dir_key, recursive=False):
-            if not key.endswith(".md"):
-                continue
-            content = self.store.read_text(key)
+        for key, content in self._read_md_files_parallel(keys):
             if content is not None:
                 records.append((key, content))
         return records
+
+    def _read_md_files_parallel(
+        self, keys: list[str], max_workers: int = 16
+    ) -> list[tuple[str, str | None]]:
+        """Batch-read Markdown files concurrently.
+
+        Remote backends (e.g. VikingFS) round-trip per file over HTTP;
+        a serial read of 100+ files stalls the ticket service.
+        """
+        if not keys:
+            return []
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            contents = pool.map(self.store.read_text, keys)
+            return list(zip(keys, contents, strict=True))
 
     def _opa_files(self, *, target_uri: str = "") -> list[tuple[str, str]]:
         """Read OPA Markdown files through local or Viking storage.
@@ -340,11 +355,9 @@ class TicketEngine:
             for subdir in _OPA_CATEGORY_DIRS.values():
                 records.extend(self._read_md_dir(f"{base}/{subdir}/{th}"))
             return sorted(records)
+        keys = [key for key in self.store.list_dir(base, recursive=True) if key.endswith(".md")]
         records: list[tuple[str, str]] = []
-        for key in self.store.list_dir(base, recursive=True):
-            if not key.endswith(".md"):
-                continue
-            content = self.store.read_text(key)
+        for key, content in self._read_md_files_parallel(keys):
             if content is not None:
                 records.append((key, content))
         return sorted(records)
@@ -1264,7 +1277,7 @@ class TicketEngine:
             out.append(
                 {
                     "ops_id": ops_id,
-                    "uri": self._op_uri("OPS", ops_id),
+                    "uri": f"{self.store.root_uri}/{path}",
                     "path": path,
                     "parent_opa": record_parent,
                     "title": str(fm.get("title", ops_id)),
@@ -1678,7 +1691,9 @@ class TicketEngine:
                 object_name,
                 candidate,
                 expected_sha256=expected_sha256,
-                conflict_policy="detect",
+                # Expert apply path: the confirmed record's own authority must
+                # not revert its candidate (mirrors apply_opl).
+                conflict_policy="external_authority",
             )
         except (FileNotFoundError, OSError, ValueError) as error:
             return self._update_ops_apply_status(current_id, "failed", str(error))
@@ -2296,7 +2311,7 @@ class TicketEngine:
             out.append(
                 {
                     "opl_id": opl_id,
-                    "uri": self._op_uri("OPL", opl_id),
+                    "uri": f"{self.store.root_uri}/{path}",
                     "path": path,
                     "title": str(fm.get("title", opl_id)),
                     "parent_opa": str(fm.get("parent_opa", "")),
@@ -2478,6 +2493,10 @@ class TicketEngine:
             target_class = target_uri.removeprefix(root_prefix).split("/")[0] if target_uri else ""
             reason = str(opa.get("reason_code", "content_missing"))
             section = str(opa.get("target_section", ""))
+            evidence_value = opa.get("evidence_uris")
+            evidence_uris = (
+                [str(u) for u in evidence_value] if isinstance(evidence_value, list) else []
+            )
             items.append(
                 {
                     "opa_id": opa_id,
@@ -2487,6 +2506,7 @@ class TicketEngine:
                     "target_section": section,
                     "reason_code": reason,
                     "suggested_retrieval_query": f"{opa.get('title', '')!s} {section}".strip(),
+                    "evidence_uris": evidence_uris,
                     "repair_cost": repair_cost.get(reason, 9),
                 },
             )
@@ -2506,6 +2526,15 @@ class TicketEngine:
                 chunk = class_items[start : start + _entity_batch_limit()]
                 opa_ids = [str(row["opa_id"]) for row in chunk]
                 shard_id = f"ops_{target_class.casefold()}_{shard_index}"
+                per_opa_lines: list[str] = []
+                for row in chunk:
+                    per_opa_lines.extend(
+                        [
+                            f"parent_opa: {row['opa_uri']}",
+                            f"retrieval_query: {row['suggested_retrieval_query']}",
+                            f"evidence_uris: {json.dumps(row['evidence_uris'], ensure_ascii=False)}",
+                        ],
+                    )
                 task_description = "\n".join(
                     [
                         "worker_role: wiki_ops_worker",
@@ -2514,6 +2543,7 @@ class TicketEngine:
                         f"ops_shard_id: {shard_id}",
                         f"write_scope: ops_draft:{shard_id}",
                         f"opa_ids: {json.dumps(opa_ids, ensure_ascii=False)}",
+                        *per_opa_lines,
                         (
                             "worker_task: read each OPA and its evidence, then create an "
                             "unconfirmed OPS draft proposing the repair for that OPA"
@@ -3141,7 +3171,7 @@ class TicketEngine:
                     },
                     "evidence_uris": self._list_value(fm.get("evidence_uris")),
                     "related_uris": self._list_value(fm.get("related_uris")),
-                    "uri": self._opa_uri(opa_id, self._opa_category_from_key(path)),
+                    "uri": f"{self.store.root_uri}/{path}",
                 },
             )
             if len(out) >= max(limit, 1):

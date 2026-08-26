@@ -16,7 +16,6 @@ from wolfharness.capabilities.wiki.io.text_parsers import (
 from wolfharness.capabilities.wiki.quality import (
     entity_status,
     extract_sections,
-    extract_source_uris,
     parse_frontmatter,
 )
 from wolfharness.capabilities.wiki.validation import (
@@ -26,12 +25,26 @@ from wolfharness.capabilities.wiki.validation import (
 
 logger = logging.getLogger(__name__)
 
-from wolfharness.capabilities.wiki._helpers import (
-    _FORMAL_WRITE_HOOKS,
-    _conflicting_facts,
-    _entity_batch_limit,
-    _internal_conflicting_facts,
-)
+from wolfharness.capabilities.wiki._helpers import _FORMAL_WRITE_HOOKS, _entity_batch_limit
+
+
+def _empty_fm_value(value: object) -> bool:
+    """Return whether a parsed frontmatter value is absent or empty.
+
+    Falsy scalars like ``False``/``0`` are real values and must not be
+    treated as empty (avoids the ``0 == False`` membership trap).
+    """
+    return value is None or value in ("", [], {})
+
+
+def _render_fm_value(value: object) -> str:
+    """Render a parsed frontmatter value back into valid YAML.
+
+    JSON is a strict YAML subset, so ``json.dumps`` round-trips every value
+    shape ``parse_frontmatter`` can emit (scalars, lists, maps, booleans)
+    with correct quoting.
+    """
+    return json.dumps(value, ensure_ascii=False)
 
 
 class EntityWriteMixin:
@@ -83,59 +96,6 @@ class EntityWriteMixin:
             )
         return content
 
-    def _mark_merge_conflict(
-        self,
-        concept: str,
-        uri: str,
-        current: str,
-        candidate: str,
-    ) -> str:
-        """Record a fact-changing merge and keep the candidate unpublished."""
-        if concept not in {"Fault", "Symptom", "Component"}:
-            return candidate
-        changed_facts = sorted(
-            _conflicting_facts(current, candidate) | _internal_conflicting_facts(candidate)
-        )
-        if not changed_facts:
-            return candidate
-        evidence = list(
-            dict.fromkeys(
-                [
-                    *extract_source_uris(current),
-                    *extract_source_uris(candidate),
-                    uri,
-                ],
-            ),
-        )
-        entity_name = uri.rstrip("/").rsplit("/", 1)[-1].removesuffix(".md") or concept
-        slug = re.sub(r"[^A-Za-z0-9_-]+", "-", entity_name).strip("-") or "entity"
-        conflict_key = uri + chr(31).join(changed_facts)
-        conflict_digest = sha256(conflict_key.encode()).hexdigest()[:12]
-        opa_id = f"opa-merge-{slug}-{conflict_digest}"
-        record = self.create_opa(
-            opa_id=opa_id,
-            title=f"{entity_name} — {concept} 增量合并事实冲突",
-            description=f"同一实体的重复构建输入产生了不同事实：{uri}",
-            category="conflict",
-            reason_code="fact_conflict",
-            target_uri=uri,
-            target_section="增量合并事实",
-            evidence_uris=evidence,
-            finding="以下内容在重复构建中出现了不一致：\n" + "\n".join(changed_facts[:20]),
-            missing="在人工裁决前，无法确认哪一组事实适用于当前机型或配置。",
-            recommendation="保留双方证据，按机型和来源裁决；不得静默覆盖旧事实。",
-        )
-        marked = self._set_frontmatter_value(
-            self._set_frontmatter_value(candidate, "conflict_pending", "true"),
-            "conflict_refs",
-            json.dumps([record["uri"]], ensure_ascii=False),
-        )
-        marker = f"- 待裁决冲突详情：{record['uri']}"
-        if marker not in marked:
-            suffix = "\n" if marked.endswith("\n") else "\n\n"
-            marked = f"{marked}{suffix}## 冲突说明\n\n{marker}\n"
-        return marked
-
     @staticmethod
     def _set_frontmatter_value(content: str, key: str, value: str) -> str:
         """Set one scalar/list-compatible frontmatter field deterministically."""
@@ -155,30 +115,64 @@ class EntityWriteMixin:
         lines.insert(end, rendered)
         return "".join(lines)
 
-    def _assert_expert_authority_preserved(
+    def _preserve_expert_sections(
         self,
         *,
         target_uri: str,
         current: str,
         candidate: str,
-        reference_replacements: list[tuple[str, str]] | None = None,
-    ) -> None:
-        """Verify that expert-confirmed sections are not removed by a candidate write."""
+    ) -> str:
+        """Preserve expert-confirmed content across pipeline writes.
+
+        Expert authority is section ownership: any section claimed by an
+        applied OPL (or confirmed OPS) keeps its current content verbatim
+        whenever a pipeline write would change it.  An empty or phantom
+        ``target_section`` claims the whole entity: every existing section
+        is frozen, the candidate may only add new sections, and frontmatter
+        keys the candidate would drop or empty are re-inserted so expert
+        corrections survive regenerated relation fields.
+        """
         try:
             authorities = self.get_expert_authority(target_uri=target_uri)
-        except (OSError, ValueError, KeyError):
-            return
+        except (OSError, ValueError, KeyError) as error:
+            logger.warning("Expert authority lookup failed for %s: %s", target_uri, error)
+            return candidate
         if not authorities:
-            return
-        current_sections = {name for name, _ in extract_sections(current)}
+            return candidate
+        current_sections = extract_sections(current)
+        candidate_sections = extract_sections(candidate)
+        restored: list[str] = []
+        full_entity = False
         for authority in authorities:
             section = authority.get("target_section", "")
-            if section and section in current_sections:
-                candidate_sections = {name for name, _ in extract_sections(candidate)}
-                if section not in candidate_sections:
-                    raise ValueError(
-                        f"Expert-confirmed section '{section}' would be removed from {target_uri}",
-                    )
+            if section in ("", "external_opl"):
+                full_entity = True
+                owned = list(current_sections)
+            elif section in current_sections:
+                owned = [section]
+            else:
+                continue
+            for name in owned:
+                current_body = current_sections[name]
+                if candidate_sections.get(name) != current_body:
+                    candidate = self._replace_h2_section(candidate, name, current_body)
+                    candidate_sections = extract_sections(candidate)
+                    restored.append(name)
+        if full_entity:
+            current_fm = parse_frontmatter(current)
+            candidate_fm = parse_frontmatter(candidate)
+            for key, value in current_fm.items():
+                # conflict_pending/conflict_refs are stale bookkeeping from the
+                # removed rule conflict gate; never gap-fill them back.
+                if key in ("conflict_pending", "conflict_refs"):
+                    continue
+                if _empty_fm_value(value) or not _empty_fm_value(candidate_fm.get(key)):
+                    continue
+                candidate = self._set_frontmatter_value(candidate, key, _render_fm_value(value))
+                restored.append(f"frontmatter:{key}")
+        if restored:
+            logger.info("Restored expert-owned content on %s: %s", target_uri, ", ".join(restored))
+        return candidate
 
     def write_entity(
         self,
@@ -245,11 +239,10 @@ class EntityWriteMixin:
         content = self.store.dedup_citations(content)
         content = self._dedupe_h2_sections(content)
         if current is not None and conflict_policy == "detect":
-            self._assert_expert_authority_preserved(
+            content = self._preserve_expert_sections(
                 target_uri=uri,
                 current=current,
                 candidate=content,
-                reference_replacements=reference_replacements,
             )
         self._validate_formal_write(
             content=content,
@@ -260,9 +253,7 @@ class EntityWriteMixin:
         )
         self._record_phase_timing("materialization", materialization_started)
         existing_content = self.store.read_entity(concept, clz, object_name)
-        if existing_content is not None and conflict_policy == "detect":
-            content = self._mark_merge_conflict(concept, uri, existing_content, content)
-        elif existing_content is not None and conflict_policy == "external_authority":
+        if existing_content is not None and conflict_policy == "external_authority":
             content = self._set_frontmatter_value(content, "conflict_pending", "false")
             content = self._set_frontmatter_value(content, "conflict_refs", "[]")
         is_new = existing_content is None
@@ -288,11 +279,10 @@ class EntityWriteMixin:
                         f"Entity changed before commit; rerun diff_entity before merge (expected={expected_sha256}, actual={latest_sha256}).",
                     )
                 if conflict_policy == "detect":
-                    self._assert_expert_authority_preserved(
+                    content = self._preserve_expert_sections(
                         target_uri=uri,
                         current=latest or "",
                         candidate=content,
-                        reference_replacements=reference_replacements,
                     )
             self.store.write_entity(concept, clz, object_name, content)
         if self._log:
@@ -403,20 +393,18 @@ class EntityWriteMixin:
             self._reject_malformed_wiki_refs(normalized)
             normalized = self.store.dedup_citations(normalized)
             normalized = self._dedupe_h2_sections(normalized)
+            if current is not None:
+                normalized = self._preserve_expert_sections(
+                    target_uri=self.store.entity_uri(concept, class_name or None, object_name),
+                    current=current,
+                    candidate=normalized,
+                )
             self._validate_formal_write(
                 content=normalized,
                 concept=concept,
                 class_name=class_name,
                 object_name=object_name,
             )
-            current_content = self.store.read_entity(concept, class_name or None, object_name)
-            if current_content is not None:
-                normalized = self._mark_merge_conflict(
-                    concept,
-                    self.store.entity_uri(concept, class_name or None, object_name),
-                    current_content,
-                    normalized,
-                )
             prepared.append(
                 (
                     concept,
@@ -424,7 +412,7 @@ class EntityWriteMixin:
                     object_name,
                     normalized,
                     expected_sha256,
-                    len(current_content) if current_content is not None else None,
+                    len(current) if current is not None else None,
                 ),
             )
 
@@ -446,6 +434,23 @@ class EntityWriteMixin:
             )
             for concept, class_name, object_name, content, expected_sha256, char_before in prepared
         ]
+        # Materialization may append links inside expert-owned sections; restore
+        # expert content once more before publication (mirrors write_entity's
+        # locked double-check).
+        protected: list[tuple[str, str, str, str, str, int | None]] = []
+        for concept, class_name, object_name, content, expected_sha256, char_before in prepared:
+            current = self.store.read_entity(concept, class_name or None, object_name)
+            merged = content
+            if current is not None:
+                merged = self._preserve_expert_sections(
+                    target_uri=self.store.entity_uri(concept, class_name or None, object_name),
+                    current=current,
+                    candidate=content,
+                )
+            protected.append(
+                (concept, class_name, object_name, merged, expected_sha256, char_before),
+            )
+        prepared = protected
 
         uris: list[str] = []
         sync_targets: set[str] = set()
@@ -549,6 +554,12 @@ class EntityWriteMixin:
         self._reject_malformed_wiki_refs(content)
         content = self.store.dedup_citations(content)
         content = self._dedupe_h2_sections(content)
+        if current is not None:
+            content = self._preserve_expert_sections(
+                target_uri=profile_uri,
+                current=current,
+                candidate=content,
+            )
         parent_info = self.store.lookup_by_uri(symptom_uri)
         if parent_info is None or parent_info[0] != "Symptom":
             raise ValueError(f"Unknown canonical Symptom URI: {symptom_uri}")

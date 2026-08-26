@@ -200,6 +200,29 @@ class TeamWorkflowGuardCapability(AbstractCapability[AgentDepsT]):
             agent_ctx.session.metadata.pop("_wiki_finalize_receipt", None)
         return result
 
+    def _validate_checkpoint_build(self, args: Any) -> str:
+        """Require an explicit build_id on every conductor checkpoint write.
+
+        A checkpoint_build call that omits build_id lets the server mint a
+        fresh auto-generated id over an in-progress build, silently detaching
+        every plan and source-packet owner (all chapters stay pending).
+        The conductor must always pass the canonical build identity; recovery
+        paths that legitimately omit it are server-internal and never flow
+        through the conductor tool.  Rejecting here turns the root-cause bug
+        into a prompt-time error instead of silent data corruption.
+        """
+        if not isinstance(args, dict):
+            return "checkpoint_build requires an argument object."
+        build_id = str(args.get("build_id", "")).strip()
+        if not build_id:
+            return (
+                "checkpoint_build must declare an explicit `build_id` matching this build. "
+                "Omitting it auto-generates a new id that detaches every plan and source "
+                "packet (all chapters stay pending forever). Pass the build_id used at "
+                "attach time (see inspect_build_checkpoint / build_state)."
+            )
+        return ""
+
     def _validate_runtime_assignment(self, args: Any, agent_ctx: AgentContextDeps) -> str:
         """Bind specialized task contracts to the owner's registered agent."""
         if not isinstance(args, dict):
@@ -285,7 +308,9 @@ class TeamWorkflowGuardCapability(AbstractCapability[AgentDepsT]):
                 missing = [field for field in _OP_REQUIRED_FIELDS[role] if field not in text]
                 if missing:
                     errors.append(f"Task {index}: {role} task is missing {', '.join(missing)}.")
-                if role in {"wiki_ops_worker", "wiki_opl_worker"} and not task.get("blocked_by"):
+                if role in {"wiki_ops_worker", "wiki_opl_worker"} and "blocked_by" not in task:
+                    # OP DAG roots legitimately declare blocked_by: [] (no
+                    # predecessor); only a missing field is a contract breach.
                     errors.append(
                         f"Task {index}: {role} task must declare `blocked_by` for the OP DAG."
                     )
@@ -353,6 +378,8 @@ class TeamWorkflowGuardCapability(AbstractCapability[AgentDepsT]):
         """Return rejection feedback for an invalid team-tool call, else ``""``."""
         if self._role != "wiki_conductor":
             return ""
+        if tool_name.endswith("checkpoint_build"):
+            return self._validate_checkpoint_build(args)
         is_batch = tool_name.endswith("task_create_batch")
         if not is_batch and not tool_name.endswith("task_create"):
             return ""

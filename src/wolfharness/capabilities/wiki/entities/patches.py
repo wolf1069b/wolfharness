@@ -113,11 +113,10 @@ class PatchMixin:
         self._reject_malformed_wiki_refs(content)
         content = self.store.dedup_citations(content)
         content = self._dedupe_h2_sections(content)
-        self._assert_expert_authority_preserved(
+        content = self._preserve_expert_sections(
             target_uri=uri,
             current=self.store.read_entity(concept, clz, object_name) or "",
             candidate=content,
-            reference_replacements=reference_replacements,
         )
         if entity_status(content) == "confirmed":
             if concept == "Symptom" and not self.list_symptom_profiles(uri):
@@ -265,7 +264,7 @@ class PatchMixin:
             self._reject_malformed_wiki_refs(content)
             content = self.store.dedup_citations(content)
             content = self._dedupe_h2_sections(content)
-            self._assert_expert_authority_preserved(
+            content = self._preserve_expert_sections(
                 target_uri=uri,
                 current=current,
                 candidate=content,
@@ -300,8 +299,6 @@ class PatchMixin:
                         f"changed {original_prefix!r} → {new_prefix!r}. "
                         f"Use write_entity to create a separate DTC for {new_prefix}.",
                     )
-            if content != current:
-                content = self._mark_merge_conflict(concept, uri, current, content)
             frontmatter = parse_frontmatter(content)
             if concept == "Component":
                 sync_targets.add(uri)
@@ -334,6 +331,7 @@ class PatchMixin:
                     "patch_entities_batch",
                 )
         with self._relation_sync_lock:
+            committed: list[tuple[str, str | None, str, str]] = []
             for concept, class_name, object_name, content, expected, _before in prepared:
                 latest = self.store.read_entity(concept, class_name or None, object_name)
                 latest_sha256 = sha256((latest or "").encode("utf-8")).hexdigest()
@@ -341,17 +339,15 @@ class PatchMixin:
                     raise ValueError(
                         f"Batch entity changed before commit; rerun diff_entity before patch ({concept}/{class_name}/{object_name}).",
                     )
-                self._assert_expert_authority_preserved(
+                # Re-merge expert-owned sections against the fresh commit-time
+                # read; the merged content must actually reach the write.
+                merged = self._preserve_expert_sections(
                     target_uri=self.store.entity_uri(concept, class_name or None, object_name),
                     current=latest,
                     candidate=content,
                 )
-            self.store.write_entities(
-                [
-                    (concept, class_name or None, object_name, content)
-                    for concept, class_name, object_name, content, _expected, _before in prepared
-                ],
-            )
+                committed.append((concept, class_name or None, object_name, merged))
+            self.store.write_entities(committed)
         uris: list[str] = []
         for concept, class_name, object_name, content, _expected, char_before in prepared:
             uri = self.store.entity_uri(concept, class_name or None, object_name)

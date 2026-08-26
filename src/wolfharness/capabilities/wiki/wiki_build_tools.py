@@ -423,19 +423,13 @@ class WikiBuildTools(
                 result = self.read_raw_source(uri)
                 if result.status is SourceReadStatus.OK and result.content_hash is not None:
                     source_hashes[uri] = result.content_hash
-                elif kind is RawSourceKind.EXTERNAL:
-                    recorded = self._lookup_recorded_source_hash(uri, coverage=ledger_coverage)
-                    if recorded is not None:
-                        source_hashes[uri] = recorded
-                    else:
-                        raise ValueError(
-                            f"External source never registered in a source packet: {uri}",
-                        )
-                else:
-                    # ponytail: skip unresolvable sources to match audit's behavior
-                    # (audit drops them from the hash instead of raising).  A
-                    # truncated/stale source URI is a reference-quality issue,
-                    # not a data-integrity blocker.
+                # External (kb:// etc.) and other locally-unreadable
+                # sources are excluded from the source snapshot exactly
+                # like audit does (audit only hashes what it can read).
+                # The server cannot verify external content or its hash;
+                # only the reference itself matters, and unresolved
+                # references surface as audit gaps, not snapshot drift.
+                elif result.status is not SourceReadStatus.OK:
                     logger.warning(
                         "Skipping unresolvable source URI in snapshot: %s (%s)",
                         uri,

@@ -3,8 +3,11 @@
 Exposes the OPA → OPS → OPL knowledge loop as *tickets* so an outside
 system (an evaluator, an external expert) can submit a problem, attach an
 expert recommendation, form an integrated proposal, and apply it to the
-Wiki through six tool closures:
+Wiki through seven tool closures:
 
+- ``read_resource`` — read a wiki entity page and return its content
+  plus SHA-256 hash (for ``candidate_content`` preparation and
+  ``expected_sha256`` optimistic locking).
 - ``create_opa_ticket`` — file or revise a problem/feedback record (OPA).
 - ``create_ops_ticket`` — attach an expert recommendation (OPS) to an OPA.
 - ``create_opl_ticket`` — integrate one OPA + its OPS into a proposal
@@ -32,6 +35,7 @@ from collections.abc import (
 )
 import contextlib
 import os
+from hashlib import sha256
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
@@ -56,6 +60,7 @@ _OP_METADATA_FILENAMES = frozenset({".overview.md", ".abstract.md", "entities.js
 
 TICKET_TOOL_NAMES: frozenset[str] = frozenset(
     {
+        "read_resource",
         "create_opa_ticket",
         "create_ops_ticket",
         "create_opl_ticket",
@@ -981,7 +986,36 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
                 break
         return {"entries": entries}
 
+    async def read_resource(
+        ctx: RunContext[Any],
+        *,
+        uri: str,
+    ) -> dict[str, Any]:
+        """Read a wiki entity page by its ``viking://`` URI.
+
+        Returns the page content and its SHA-256 hash so the caller can
+        prepare ``candidate_content`` for ``create_opl_ticket`` and use
+        the hash as ``expected_sha256`` for optimistic locking at apply
+        time.
+
+        Args:
+            uri: ``viking://`` URI of the wiki entity to read.
+
+        Returns:
+            Dict with ``uri``, ``content`` (page markdown), and
+            ``sha256`` (hex digest of the UTF-8 encoded content).
+        """
+        content = await asyncio.to_thread(tools.read_resource, uri)
+        if not content:
+            return {"uri": uri, "content": "", "sha256": "", "error": "resource not found"}
+        return {
+            "uri": uri,
+            "content": content,
+            "sha256": sha256(content.encode("utf-8")).hexdigest(),
+        }
+
     return [
+        read_resource,
         create_opa_ticket,
         create_ops_ticket,
         update_ops_ticket,
@@ -1026,8 +1060,9 @@ def get_ticket_instructions() -> str:
         "viking:// URI scheme (e.g. viking://resources/814/Component/...).\n"
         "\n"
         "Discovery:\n"
-        "- read_resource(uri) / find_wiki(query) — locate the target entity "
-        "page and cited source chapters.\n"
+        "- read_resource(uri) — read a wiki entity page; returns content "
+        "and sha256. Use the content to prepare candidate_content for "
+        "create_opl_ticket and the sha256 as expected_sha256.\n"
         "- get_ticket_status(target_uri=...) — check existing OPA/OPS/OPL "
         "tickets, expert authority claims, and recent apply events before "
         "submitting new ones.\n"
