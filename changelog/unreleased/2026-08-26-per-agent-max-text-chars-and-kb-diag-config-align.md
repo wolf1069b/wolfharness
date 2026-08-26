@@ -37,3 +37,15 @@ actual tool surface (v3.4.4, 6 tools):
   complementary.
 - **Added `search_kb` rewrite** — full param descriptions including
   `methods` (FULL/FAST/WIKI), `equipment_model` filter, `dataset_id`.
+
+## Resource subscribe-on-read wiring
+
+`McpServerCap` now best-effort subscribes to resource URIs after a
+successful `read_resource()` call, enabling `notifications/resources/updated`
+notifications for resources the agent has read. Tracked subscriptions are
+automatically re-established after reconnect and cleaned up on disconnect.
+
+This is a no-op for servers that declare `subscribe: false` (like the
+current knowledge_diag v3.4.4) — the subscribe call fails silently and
+the read proceeds normally. When the server enables subscription support
+(FR-5), the wiring activates automatically.
