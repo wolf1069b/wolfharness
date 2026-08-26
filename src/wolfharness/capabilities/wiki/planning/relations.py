@@ -676,7 +676,11 @@ class RelationMixin:
         ]
         return tuple(names)
 
-    def _entity_relation_work_items(self) -> list[dict[str, object]]:
+    def _entity_relation_work_items(
+        self,
+        *,
+        scope_entity_uris: list[str] | None = None,
+    ) -> list[dict[str, object]]:
         """Discover relation work from committed entities, not extraction state.
 
         Source packets are evidence for extraction and checkpoints are restart
@@ -684,9 +688,18 @@ class RelationMixin:
         page still needs a relation. This scan looks only at the current
         entity library, schema relation fields and unresolved placeholders;
         OPA/OPS review state is deliberately not a relation-work trigger.
+
+        When ``scope_entity_uris`` is provided, the scan is limited to those
+        entities only — used in incremental mode to avoid re-planning relation
+        work for old entities untouched by the current build.
         """
-        entity_records = self.store.list_entities()
-        known_uris = {str(record[3]) for record in entity_records}
+        all_entity_records = self.store.list_entities()
+        known_uris = {str(record[3]) for record in all_entity_records}
+        if scope_entity_uris is not None:
+            scope_set = {uri.strip() for uri in scope_entity_uris if uri.strip()}
+            entity_records = [r for r in all_entity_records if str(r[3]) in scope_set]
+        else:
+            entity_records = all_entity_records
         root_uri = self.store.root_uri.rstrip("/") + "/"
 
         def relation_values(value: object) -> list[str]:
@@ -768,6 +781,7 @@ class RelationMixin:
         *,
         active_entity_uris: list[str] | None = None,
         max_parallel_shards: int | None = None,
+        scope_entity_uris: list[str] | None = None,
     ) -> dict[str, object]:
         """Plan retrieval-and-patch work from the current committed Wiki.
 
@@ -776,11 +790,36 @@ class RelationMixin:
         entity write set; the worker must retrieve real neighbouring pages,
         verify identity/evidence, then use guarded ``patch_entity``. Empty
         fields are review work, never permission to invent a URI.
+
+        When ``scope_entity_uris`` is ``None`` and the wiki is in incremental
+        mode, the planner auto-scopes to entities touched in the current build
+        via ``build_change_report``. Pass an explicit list to override; pass
+        ``None`` in a non-incremental wiki for the traditional full-library scan.
         """
         if max_parallel_shards is not None and max_parallel_shards < 1:
             raise ValueError("max_parallel_shards must be positive when provided")
         active_uris = {uri.strip() for uri in active_entity_uris or [] if uri.strip()}
-        relation_items = self._entity_relation_work_items()
+
+        # Auto-scope in incremental mode: limit to build-touched entities
+        auto_scoped = False
+        if scope_entity_uris is None:
+            wiki_state = self.inspect_wiki_state()
+            if wiki_state.get("mode") == "incremental":
+                try:
+                    change_report = self.build_change_report(persist=False, include_op_flow=False)
+                    changed = change_report.get("changed_entities", [])
+                    if isinstance(changed, list):
+                        scope_entity_uris = [
+                            str(e.get("uri", "")).strip()
+                            for e in changed
+                            if isinstance(e, dict) and e.get("uri")
+                        ]
+                        auto_scoped = True
+                except Exception:
+                    # If build_change_report fails, fall back to full library scan
+                    pass
+
+        relation_items = self._entity_relation_work_items(scope_entity_uris=scope_entity_uris)
         grouped: dict[str, list[dict[str, object]]] = {}
         for item in relation_items:
             grouped.setdefault(str(item["concept"]), []).append(item)
@@ -827,18 +866,26 @@ class RelationMixin:
         current_uris = sorted(
             known_uri for known_uri in {str(record[3]) for record in self.store.list_entities()}
         )
+        if scope_entity_uris is not None:
+            scope_uris_for_id = sorted(set(scope_entity_uris))
+        else:
+            scope_uris_for_id = current_uris
         scope_id = (
-            "entity-relation-" + sha256("\n".join(current_uris).encode("utf-8")).hexdigest()[:16]
+            "entity-relation-"
+            + sha256("\n".join(scope_uris_for_id).encode("utf-8")).hexdigest()[:16]
+        )
+        effective_scope_source = (
+            "build_touched_entities" if scope_entity_uris is not None else "entity_library"
         )
         ledger_uri = self._write_relation_work_ledger(
             scope_id,
-            scope_source="entity_library",
+            scope_source=effective_scope_source,
             scope_trusted=True,
             packet_ids=set(),
             items=relation_items,
         )
         return {
-            "scope_source": "entity_library",
+            "scope_source": effective_scope_source,
             "scope_id": scope_id,
             "work_ledger_uri": ledger_uri,
             "shards": shards,
@@ -847,6 +894,8 @@ class RelationMixin:
             "pending_count": len(relation_items),
             "active_excluded_count": active_excluded_count,
             "remaining_count": dispatchable_candidate_count - returned_candidate_count,
+            "scope_entity_count": len(scope_entity_uris) if scope_entity_uris is not None else None,
+            "auto_scoped": auto_scoped,
             "join": {
                 "required": False,
                 "service_action": "rebuild_all_backlinks",

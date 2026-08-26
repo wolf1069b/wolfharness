@@ -620,7 +620,13 @@ class FinalizeMixin:
                     ckpt_snapshot,
                 )
                 return self._retry_remote_sync(current_checkpoint, audit_profile)
-        device_chapter_sync = self.sync_device_system_chapters(doc_id, device_id)
+        # Chapter sync now runs at Device creation time
+        # (register_bom_identity_batch) rather than in finalize.  Kept as a
+        # no-op marker for the return dict.
+        device_chapter_sync: dict[str, object] = {
+            "status": "not_run",
+            "reason": "moved_to_bom_stage",
+        }
         self._invalidate_audit_cache()
         audit_started = time.perf_counter()
         audit = self._audit_all_pages(profile=audit_profile, limit=500)

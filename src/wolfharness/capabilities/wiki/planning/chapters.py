@@ -992,6 +992,7 @@ class ChapterMixin:
                 completed_count += 1
             else:
                 pending.append(chapter)
+
         active = {packet_id.strip() for packet_id in (active_packet_ids or []) if packet_id.strip()}
         dispatchable = [
             chapter for chapter in pending if str(chapter.get("packet_id", "")) not in active
