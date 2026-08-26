@@ -27,7 +27,7 @@
 - **DelegationService limits exposure**: `spawn_subagent(name, prompt)` and `get_available_agents()` only. Does not expose full `AgentPool`.
 - **SkillCapability injection order**: In `get_agentlet()`, skill capabilities are injected at position 5 (after MCP, deferred bridge, approval bridge, and hook capabilities).
 - **Entry-point registry**: Custom capabilities discovered via `wolfharness.capabilities` entry-point group.
-- **ExtensionRegistry scope hierarchy**: `POOL → AGENT → SESSION → TURN`. Agents outlive sessions (AGENT scope keyed by `agent_name` only, no `session_id`). `clear_session()` removes SESSION and TURN entries during teardown. Factory registers config-derived caps at AGENT scope; `get_agentlet()` registers session-specific caps (MCP, SkillManagerCap, ResourceCapability) at SESSION scope.
+- **ExtensionRegistry scope hierarchy**: `POOL → AGENT → SESSION → TURN`. Agents outlive sessions (AGENT scope keyed by `agent_name` only, no `session_id`). `clear_session()` removes SESSION and TURN entries during teardown. Factory registers config-derived caps at AGENT scope; `get_agentlet()` registers session-specific caps (MCP, SkillManagerCap) at SESSION scope. `ResourceCapability` is constructed per-agent (not registered in the ExtensionRegistry) with the agent's `max_text_chars` config.
 - **ScopeLevel reorder is breaking**: `Scope` field order changed — `agent_name` is now 2nd (after `level`), `session_id` is 3rd. AGENT scope queries no longer include SESSION caps.
 
 ## Anti-Patterns

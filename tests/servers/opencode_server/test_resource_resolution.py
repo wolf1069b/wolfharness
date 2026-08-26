@@ -476,9 +476,15 @@ async def test_resolve_resource_text_truncation() -> None:
     assert '<resource uri="viking://big">' in wrapped
     assert "</resource>" in wrapped
     # The body is the first 10_000 chars + suffix
-    suffix = f"\n\n... [truncated: {len(long_text)} chars total, showing first 10000]"
+    suffix = (
+        f"\n\n... [truncated: {len(long_text)} chars total, showing first 10000. "
+        f"Use a narrower resource URI (e.g. a chapter or chunk URI) to read "
+        f"a specific section, or a paginated read tool for full content.]"
+    )
     expected_body = long_text[:10_000] + suffix
     assert f'<resource uri="viking://big">\n{expected_body}\n</resource>' == wrapped
+    # The guidance suffix steers the model toward narrower URIs.
+    assert "Use a narrower resource URI" in wrapped
 
 
 # =============================================================================
