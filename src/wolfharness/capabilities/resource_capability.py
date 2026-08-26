@@ -65,13 +65,24 @@ class ResourceCapability(AbstractCapability[AgentDepsT]):
     ``resource_resolver.resolve_resource_content``) for protocol consumers.
     """
 
-    def __init__(self, *, toolset_id: str = "resource_access") -> None:
+    def __init__(
+        self,
+        *,
+        toolset_id: str = "resource_access",
+        max_text_chars: int = _DEFAULT_READ_TEXT_LIMIT,
+    ) -> None:
         """Initialize the resource capability.
 
         Args:
             toolset_id: Identifier for the produced ``FunctionToolset``.
+            max_text_chars: Maximum text characters per resource read before
+                truncation. Content exceeding this limit is truncated with a
+                guidance suffix; the tail is not retrievable via the resource
+                read path. Increase this for knowledge-base sources with long
+                chapters, or keep it small to protect context budget.
         """
         self._toolset_id = toolset_id
+        self._max_text_chars = max_text_chars
 
     @property
     def name(self) -> str:
@@ -301,7 +312,9 @@ class ResourceCapability(AbstractCapability[AgentDepsT]):
         resource_caps = registry.get_resource_access(scope)
         skill_caps = registry.get_skill_resources(scope)
 
-        content = await resolve_resource_content(uri, resource_caps, skill_caps)
+        content = await resolve_resource_content(
+            uri, resource_caps, skill_caps, max_text_chars=self._max_text_chars
+        )
         if content is None:
             return ToolReturn(return_value=f"Resource not found: {uri}")
 

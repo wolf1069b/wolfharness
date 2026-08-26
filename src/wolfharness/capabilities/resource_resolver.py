@@ -37,7 +37,11 @@ def _truncate_text(text: str, max_chars: int) -> str:
     """
     if len(text) <= max_chars:
         return text
-    suffix = f"\n\n... [truncated: {len(text)} chars total, showing first {max_chars}]"
+    suffix = (
+        f"\n\n... [truncated: {len(text)} chars total, showing first {max_chars}. "
+        f"Use a narrower resource URI (e.g. a chapter or chunk URI) to read "
+        f"a specific section, or a paginated read tool for full content.]"
+    )
     return text[:max_chars] + suffix
 
 
