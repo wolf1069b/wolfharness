@@ -1156,9 +1156,16 @@ class Agent[TDeps = None, OutputDataT = str](BaseAgent[TDeps, OutputDataT]):
                 )
             # 6. ResourceCapability — unified resource access tools.
             #    Per-agent opt-out via ``resources.enabled: false`` in YAML.
+            #    Per-agent max_text_chars via ``resources.max_text_chars`` in YAML.
             if self.config is not None and self.config.resources.enabled:
-                resource_cap = pool.resource_capability
-                if resource_cap is not None and resource_cap not in self._external_capabilities:
+                from wolfharness.capabilities.resource_capability import (
+                    ResourceCapability,
+                )
+
+                resource_cap = ResourceCapability(
+                    max_text_chars=self.config.resources.max_text_chars
+                )
+                if resource_cap not in self._external_capabilities:
                     tool_capabilities.append(resource_cap)
 
         # Register per-session capabilities (MCP, SkillManagerCap)
