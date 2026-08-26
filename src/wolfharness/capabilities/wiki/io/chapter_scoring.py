@@ -30,7 +30,10 @@ from collections import Counter
 import math
 import re
 
-from wolfharness.capabilities.wiki.section_constants import ADMIN_SECTION_KEYWORDS
+from wolfharness.capabilities.wiki.section_constants import (
+    ADMIN_SECTION_KEYWORDS,
+    MUST_READ_KEYWORDS,
+)
 
 
 _HTML_STRIP_RE = re.compile(r"<[^>]+>")
@@ -156,8 +159,16 @@ def score_chapter_record(
 
 
 def should_auto_register_no_entity_from_toc(*, rootsection: str, section: str, title: str) -> bool:
-    """True when a chapter is administrative boilerplate by its TOC position."""
+    """True when a chapter is administrative boilerplate by its TOC position.
+
+    Returns ``False`` (must read) when the title/section contains a
+    :data:`MUST_READ_KEYWORDS` term, even if an admin keyword is also present.
+    Technical-spec and connector sections carry entity-defining content
+    (torque values, pinouts, oil specs) that materialization needs.
+    """
     probe = f"{rootsection} {section} {title}".lower()
+    if any(keyword.lower() in probe for keyword in MUST_READ_KEYWORDS):
+        return False
     return any(keyword in probe for keyword in ADMIN_SECTION_KEYWORDS)
 
 

@@ -7,6 +7,7 @@ from hashlib import sha256
 import json
 import logging
 from pathlib import Path
+import re
 import time
 
 from openviking_sdk.errors import OpenVikingError
@@ -45,9 +46,67 @@ from wolfharness.capabilities.wiki._helpers import (
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from wolfharness.capabilities.wiki.storage import (
-        FSBackend,
+    from wolfharness.capabilities.wiki.storage import FSBackend
+
+
+_PAGE_RANGE_RE = re.compile(r"#p(\d+)-(\d+)")
+
+
+def _parse_page_range(uri: str) -> tuple[int, int] | None:
+    """Extract (start, end) page numbers from a kb:// URI fragment."""
+    m = _PAGE_RANGE_RE.search(uri)
+    if m:
+        return (int(m.group(1)), int(m.group(2)))
+    return None
+
+
+def _filter_leaf_manifest_entries(
+    entries: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    """Remove manifest entries that fully contain another entry.
+
+    When the conductor builds a ``chapter_manifest`` from a TOC tree, it may
+    accidentally include both a parent section and its children.  This filters
+    out parent entries so only leaf (most granular) segments remain, preventing
+    duplicate extraction of the same pages.
+
+    Containment is detected via page-range overlap (``#p{start}-{end}``) when
+    both URIs carry it; otherwise URI string prefix containment is used.
+    """
+    if len(entries) <= 1:
+        return entries
+    parsed: list[tuple[int, tuple[int, int] | None, str]] = [
+        (i, _parse_page_range(str(e.get("uri", ""))), str(e.get("uri", "")))
+        for i, e in enumerate(entries)
+    ]
+    to_remove: set[int] = set()
+    for i, (idx_a, range_a, uri_a) in enumerate(parsed):
+        if idx_a in to_remove:
+            continue
+        for j, (idx_b, range_b, uri_b) in enumerate(parsed):
+            if i == j or idx_b in to_remove:
+                continue
+            if range_a is not None and range_b is not None:
+                # Page-range containment: a contains b → remove a
+                if range_a[0] <= range_b[0] and range_a[1] >= range_b[1] and range_a != range_b:
+                    to_remove.add(idx_a)
+                    break
+            elif uri_a and uri_b:
+                # URI prefix containment fallback
+                if uri_b.startswith(uri_a.rstrip("/")) and uri_a.rstrip("/") != uri_b.rstrip("/"):
+                    to_remove.add(idx_a)
+                    break
+    if not to_remove:
+        return entries
+    removed_titles = [
+        entries[idx].get("title", entries[idx].get("uri", "?")) for idx in sorted(to_remove)
+    ]
+    logger.warning(
+        "Filtered %d parent manifest entries (contained children): %s",
+        len(to_remove),
+        removed_titles,
     )
+    return [e for idx, e in enumerate(entries) if idx not in to_remove]
 
 
 class ChapterMixin:
@@ -527,11 +586,34 @@ class ChapterMixin:
             else "",
         }
 
-    def inspect_build_checkpoint(self) -> dict[str, object]:
-        """Read the last durable build checkpoint, if one exists."""
+    def inspect_build_checkpoint(
+        self,
+        *,
+        doc_id: str = "",
+        build_id: str = "",
+    ) -> dict[str, object]:
+        """Read the last durable build checkpoint, if one exists.
+
+        When ``doc_id``/``build_id`` are provided they act as an identity
+        filter: a checkpoint belonging to a *different* build is reported
+        as nonexistent for the current build, so a new build on the same
+        namespace does not falsely resume another build's stage.
+        """
         checkpoint = self.store.read_json("index/build_checkpoint.json")
         if checkpoint is None:
             return {"exists": False, "stage": ""}
+        if doc_id and str(checkpoint.get("doc_id", "")) != doc_id:
+            return {
+                "exists": False,
+                "stage": "",
+                "stored_doc_id": str(checkpoint.get("doc_id", "")),
+            }
+        if build_id and str(checkpoint.get("build_id", "")) != build_id:
+            return {
+                "exists": False,
+                "stage": "",
+                "stored_build_id": str(checkpoint.get("build_id", "")),
+            }
         return {"exists": True, **checkpoint}
 
     def plan_chapter_work(
@@ -546,6 +628,7 @@ class ChapterMixin:
         preview: bool = False,
         preview_offset: int = 0,
         preview_limit: int = 50,
+        chapter_manifest: list[dict[str, str]] | None = None,
     ) -> dict[str, object]:
         """Return the next receipt-missing chapters for dynamic dispatch.
 
@@ -554,6 +637,14 @@ class ChapterMixin:
         the workers currently available and may change that value every call.
         No batch index or cursor participates in progress, so a restart or a
         different worker count cannot skip chapters.
+
+        When ``chapter_manifest`` is provided, the planner skips local
+        filesystem scanning (``list_chapters``) and uses the manifest entries
+        directly.  Each entry must have ``uri`` and ``title``; ``section``
+        and ``rootsection`` are optional.  Scoring is skipped (all chapters
+        get ``score=1.0``, ``score_action="read"``) and the pre-filter gate
+        is auto-satisfied — the conductor already excluded low-value
+        chapters when building the manifest.
         """
         normalized_build_id = build_id.strip()
         if not normalized_build_id:
@@ -578,7 +669,7 @@ class ChapterMixin:
 
         plan_id = sha256(f"{normalized_build_id}\x1f{doc_id}".encode()).hexdigest()[:24]
         plan_key = f"index/chapter_plans/{plan_id}.json"
-        persisted = None if refresh else self.store.read_json(plan_key)
+        persisted = self.store.read_json(plan_key)
         raw_chapters = persisted.get("chapters") if isinstance(persisted, dict) else None
         reusable_plan = (
             isinstance(persisted, dict)
@@ -597,132 +688,215 @@ class ChapterMixin:
             )
         )
         if not reusable_plan:
-            listed = self.list_chapters(doc_id, refresh=True)
-            if not listed:
-                raise ValueError(f"Document has no readable leaf chapters: {doc_id}")
-            paths = [str(chapter["md_path"]) for chapter in listed]
-            with ThreadPoolExecutor(max_workers=min(_io_worker_limit(), len(paths) or 1)) as pool:
-                chapter_contents = list(pool.map(self._raw_fs.read_text, paths))
-            toc_no_entity_decisions = [
-                should_auto_register_no_entity_from_toc(
-                    rootsection=str(chapter["rootsection"]),
-                    section=str(chapter["section"]),
-                    title=str(chapter["title"]),
-                )
-                for chapter in listed
-            ]
-            fingerprint = build_fingerprint(
-                [
-                    content
-                    for content, toc_no_entity in zip(
-                        chapter_contents,
-                        toc_no_entity_decisions,
-                        strict=True,
-                    )
-                    if isinstance(content, str) and not toc_no_entity
-                ],
-            )
-            chapters: list[dict[str, object]] = []
-            for chapter, content, toc_auto_no_entity in zip(
-                listed,
-                chapter_contents,
-                toc_no_entity_decisions,
-                strict=True,
-            ):
-                uri = self.make_source_uri(doc_id, str(chapter["subdir"]))
-                identity = sha256(f"{doc_id}\x1f{uri}".encode()).hexdigest()[:20]
-                packet_id = f"chapter_{identity}"
-                shard_id = f"chapter_{identity}"
-                idempotency_key = _chapter_idempotency_key(normalized_build_id, doc_id, uri)
-                score_record = (
-                    score_chapter_record(content, fingerprint)
-                    if isinstance(content, str)
-                    else {
-                        "score": 0.0,
-                        "action": "read",
-                        "signal_breakdown": {"unreadable": 1},
-                    }
-                )
-                auto_no_entity = isinstance(content, str) and should_auto_register_no_entity(
-                    content,
-                    score_record,
-                    directory_administrative=toc_auto_no_entity,
-                )
-                auto_no_entity_reason = ""
-                if auto_no_entity:
-                    auto_no_entity_reason = (
-                        "deterministic_directory_administrative"
-                        if toc_auto_no_entity
-                        else "deterministic_low_information"
-                    )
-                chapters.append(
-                    {
-                        "uri": uri,
-                        "rootsection": chapter["rootsection"],
-                        "section": chapter["section"],
-                        "subdir": chapter["subdir"],
-                        "title": chapter["title"],
-                        "md_path": chapter["md_path"],
-                        "packet_id": packet_id,
-                        "shard_id": shard_id,
-                        "idempotency_key": idempotency_key,
-                        "score": score_record["score"],
-                        "score_action": score_record["action"],
-                        "auto_no_entity": auto_no_entity,
-                        "auto_no_entity_reason": auto_no_entity_reason,
-                        "task_description": "\n".join(
-                            [
-                                "worker_role: wiki_extraction_worker",
-                                "phase=1A_source_analysis",
-                                "chapter_count=1",
-                                f"build_id={normalized_build_id}",
-                                f"doc_id={doc_id}",
-                                f"audit_profile={audit_profile}",
-                                "depends_on_stage=bom_enriched",
-                                f"shard_id={shard_id}",
-                                f"chunk_id={shard_id}",
-                                "chunk_of=1",
-                                f"packet_id={packet_id}",
-                                f"idempotency_key={idempotency_key}",
-                                f"chapter_uri={uri}",
-                                "analysis_kinds=causal,procedure,assembly,specification,device",
-                                "heartbeat=task_update before first chapter read",
-                                "expected_artifacts=source_packet",
-                                "Read this chapter only and call record_source_packet for the exact source URI.",
-                            ],
-                        ),
-                    },
-                )
-                if auto_no_entity:
-                    assert isinstance(content, str)
-                    self.record_source_packet(
-                        packet_id=packet_id,
-                        doc_id=doc_id,
-                        source_uris=[uri],
-                        status="complete",
-                        evidence_count=0,
-                        packet_body={
-                            "kind": "no_entity",
-                            "reason_code": auto_no_entity_reason,
-                            "score": score_record["score"],
-                            "signal_breakdown": score_record["signal_breakdown"],
+            if chapter_manifest is not None:
+                # Filter out parent entries that contain child entries — only
+                # keep leaf (most granular) segments to prevent duplicate extraction.
+                chapter_manifest = _filter_leaf_manifest_entries(chapter_manifest)
+                # Build chapters from manifest — skip list_chapters, scoring, auto_no_entity
+                chapters: list[dict[str, object]] = []
+                for entry in chapter_manifest:
+                    uri = str(entry["uri"])
+                    title = str(entry["title"])
+                    rootsection = str(entry.get("rootsection", ""))
+                    section = str(entry.get("section", ""))
+                    identity = sha256(f"{doc_id}\x1f{uri}".encode()).hexdigest()[:20]
+                    packet_id = f"chapter_{identity}"
+                    shard_id = f"chapter_{identity}"
+                    idempotency_key = _chapter_idempotency_key(normalized_build_id, doc_id, uri)
+                    chapters.append(
+                        {
+                            "uri": uri,
+                            "rootsection": rootsection,
+                            "section": section,
+                            "subdir": "",
+                            "title": title,
+                            "md_path": "",
+                            "packet_id": packet_id,
+                            "shard_id": shard_id,
+                            "idempotency_key": idempotency_key,
+                            "score": 1.0,
+                            "score_action": "read",
+                            "auto_no_entity": False,
+                            "auto_no_entity_reason": "",
+                            "task_description": "\n".join(
+                                [
+                                    "worker_role: wiki_extraction_worker",
+                                    "phase=1A_source_analysis",
+                                    "chapter_count=1",
+                                    f"build_id={normalized_build_id}",
+                                    f"doc_id={doc_id}",
+                                    f"audit_profile={audit_profile}",
+                                    "depends_on_stage=bom_enriched",
+                                    f"shard_id={shard_id}",
+                                    f"chunk_id={shard_id}",
+                                    "chunk_of=1",
+                                    f"packet_id={packet_id}",
+                                    f"idempotency_key={idempotency_key}",
+                                    f"chapter_uri={uri}",
+                                    "analysis_kinds=causal,procedure,assembly,specification,device",
+                                    "heartbeat=task_update before first chapter read",
+                                    "expected_artifacts=source_packet",
+                                    (
+                                        "Read this chapter only and call record_source_packet "
+                                        "for the exact source URI."
+                                    ),
+                                ],
+                            ),
                         },
-                        source_contents={uri: content},
-                        build_id=normalized_build_id,
                     )
-            self.store.write_json(
-                plan_key,
-                {
-                    "version": 4,
-                    "plan_id": plan_id,
-                    "doc_id": doc_id,
-                    "build_id": normalized_build_id,
-                    "audit_profile": audit_profile,
-                    "chapter_count": len(chapters),
-                    "chapters": chapters,
-                },
-                durable=True,
-            )
+                self.store.write_json(
+                    plan_key,
+                    {
+                        "version": 4,
+                        "plan_id": plan_id,
+                        "doc_id": doc_id,
+                        "build_id": normalized_build_id,
+                        "audit_profile": audit_profile,
+                        "chapter_count": len(chapters),
+                        "chapters": chapters,
+                    },
+                    durable=True,
+                )
+                # Auto-satisfy pre-filter gate — conductor already filtered when building manifest
+                from datetime import UTC, datetime
+
+                self.store.write_json(
+                    f"index/chapter_plans/{plan_id}.prefilter.json",
+                    {
+                        "source": "chapter_manifest",
+                        "timestamp": datetime.now(UTC).isoformat(),
+                    },
+                    durable=True,
+                )
+            else:
+                listed = self.list_chapters(doc_id, refresh=True)
+                if not listed:
+                    raise ValueError(f"Document has no readable leaf chapters: {doc_id}")
+                paths = [str(chapter["md_path"]) for chapter in listed]
+                with ThreadPoolExecutor(
+                    max_workers=min(_io_worker_limit(), len(paths) or 1)
+                ) as pool:
+                    chapter_contents = list(pool.map(self._raw_fs.read_text, paths))
+                toc_no_entity_decisions = [
+                    should_auto_register_no_entity_from_toc(
+                        rootsection=str(chapter["rootsection"]),
+                        section=str(chapter["section"]),
+                        title=str(chapter["title"]),
+                    )
+                    for chapter in listed
+                ]
+                fingerprint = build_fingerprint(
+                    [
+                        content
+                        for content, toc_no_entity in zip(
+                            chapter_contents,
+                            toc_no_entity_decisions,
+                            strict=True,
+                        )
+                        if isinstance(content, str) and not toc_no_entity
+                    ],
+                )
+                chapters: list[dict[str, object]] = []
+                for chapter, content, toc_auto_no_entity in zip(
+                    listed,
+                    chapter_contents,
+                    toc_no_entity_decisions,
+                    strict=True,
+                ):
+                    uri = self.make_source_uri(doc_id, str(chapter["subdir"]))
+                    identity = sha256(f"{doc_id}\x1f{uri}".encode()).hexdigest()[:20]
+                    packet_id = f"chapter_{identity}"
+                    shard_id = f"chapter_{identity}"
+                    idempotency_key = _chapter_idempotency_key(normalized_build_id, doc_id, uri)
+                    score_record = (
+                        score_chapter_record(content, fingerprint)
+                        if isinstance(content, str)
+                        else {
+                            "score": 0.0,
+                            "action": "read",
+                            "signal_breakdown": {"unreadable": 1},
+                        }
+                    )
+                    auto_no_entity = isinstance(content, str) and should_auto_register_no_entity(
+                        content,
+                        score_record,
+                        directory_administrative=toc_auto_no_entity,
+                    )
+                    auto_no_entity_reason = ""
+                    if auto_no_entity:
+                        auto_no_entity_reason = (
+                            "deterministic_directory_administrative"
+                            if toc_auto_no_entity
+                            else "deterministic_low_information"
+                        )
+                    chapters.append(
+                        {
+                            "uri": uri,
+                            "rootsection": chapter["rootsection"],
+                            "section": chapter["section"],
+                            "subdir": chapter["subdir"],
+                            "title": chapter["title"],
+                            "md_path": chapter["md_path"],
+                            "packet_id": packet_id,
+                            "shard_id": shard_id,
+                            "idempotency_key": idempotency_key,
+                            "score": score_record["score"],
+                            "score_action": score_record["action"],
+                            "auto_no_entity": auto_no_entity,
+                            "auto_no_entity_reason": auto_no_entity_reason,
+                            "task_description": "\n".join(
+                                [
+                                    "worker_role: wiki_extraction_worker",
+                                    "phase=1A_source_analysis",
+                                    "chapter_count=1",
+                                    f"build_id={normalized_build_id}",
+                                    f"doc_id={doc_id}",
+                                    f"audit_profile={audit_profile}",
+                                    "depends_on_stage=bom_enriched",
+                                    f"shard_id={shard_id}",
+                                    f"chunk_id={shard_id}",
+                                    "chunk_of=1",
+                                    f"packet_id={packet_id}",
+                                    f"idempotency_key={idempotency_key}",
+                                    f"chapter_uri={uri}",
+                                    "analysis_kinds=causal,procedure,assembly,specification,device",
+                                    "heartbeat=task_update before first chapter read",
+                                    "expected_artifacts=source_packet",
+                                    "Read this chapter only and call record_source_packet for the exact source URI.",
+                                ],
+                            ),
+                        },
+                    )
+                    if auto_no_entity:
+                        assert isinstance(content, str)
+                        self.record_source_packet(
+                            packet_id=packet_id,
+                            doc_id=doc_id,
+                            source_uris=[uri],
+                            status="complete",
+                            evidence_count=0,
+                            packet_body={
+                                "kind": "no_entity",
+                                "reason_code": auto_no_entity_reason,
+                                "score": score_record["score"],
+                                "signal_breakdown": score_record["signal_breakdown"],
+                            },
+                            source_contents={uri: content},
+                            build_id=normalized_build_id,
+                        )
+                self.store.write_json(
+                    plan_key,
+                    {
+                        "version": 4,
+                        "plan_id": plan_id,
+                        "doc_id": doc_id,
+                        "build_id": normalized_build_id,
+                        "audit_profile": audit_profile,
+                        "chapter_count": len(chapters),
+                        "chapters": chapters,
+                    },
+                    durable=True,
+                )
         else:
             assert isinstance(raw_chapters, list)
             chapters = [dict(item) for item in raw_chapters]

@@ -22,6 +22,10 @@ __all__ = [
     "strip_device_prefix",
 ]
 
+# ponytail: threshold for image filtering — above this count, captions are
+# matched against object_name to drop irrelevant chapter-level images.
+_IMAGE_FILTER_THRESHOLD = 10
+
 
 def strip_device_prefix(object_name: str, device_id: str, series_id: str) -> str:
     """Strip a device model prefix from *object_name* if present.
@@ -148,12 +152,29 @@ def _format_sources(evidence_map: Any, source_uris: list[str]) -> list[str]:
     return uris
 
 
-def _format_images(images: Any) -> list[str]:
-    """Render ``images`` list as markdown image references."""
-    lines: list[str] = []
+def _format_images(images: Any, object_name: str = "") -> list[str]:
+    """Render ``images`` list as markdown image references.
+
+    When *object_name* is provided and there are more than 10 images, filter
+    to only include images whose caption shares at least one character with
+    *object_name*.  This is a safety net for single-candidate packets that
+    still carry many chapter-level images — only images whose caption relates
+    to the entity survive.
+    """
     if not isinstance(images, list):
-        return lines
-    for img in images:
+        return []
+
+    filtered = images
+    if object_name and len(images) > _IMAGE_FILTER_THRESHOLD:
+        name_chars = {ch for ch in object_name if not ch.isspace()}
+        filtered = [
+            img
+            for img in images
+            if isinstance(img, dict) and any(ch in str(img.get("caption", "")) for ch in name_chars)
+        ]
+
+    lines: list[str] = []
+    for img in filtered:
         if not isinstance(img, dict):
             continue
         uri = str(img.get("uri", "")).strip()
@@ -327,7 +348,7 @@ def assemble_template_entity(
             body_lines.append("")
 
     # ── Images (shared across all concepts) ──────────────────────────────
-    image_lines = _format_images(images)
+    image_lines = _format_images(images, object_name=object_name)
     if image_lines:
         body_lines.append("## 附图")
         body_lines.append("")

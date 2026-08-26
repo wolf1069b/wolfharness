@@ -88,6 +88,12 @@ logger = get_logger(__name__)
 # while they are awaiting ``RunHandle.complete_event``.
 _cleanup_tasks: set[asyncio.Task[Any]] = set()
 
+# Bounded wait for an ephemeral member's run to complete. ``complete_event``
+# may never fire on protocol-server sessions (see _schedule_member_cleanup),
+# so after this grace window we fall back to the shared task board: no
+# in_progress task owned by the member => safe to clean up the session.
+_EPHEMERAL_COMPLETE_GRACE_SECONDS = 120.0
+
 
 class InitialMemberTask(TypedDict):
     """Task persisted atomically before a newly added member is awakened."""
@@ -1512,7 +1518,9 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             "_task_lease_tokens",
             {},
         )
-        effective_lease_token = lease_token.strip() or session_tokens.get(task_id, "")
+        # Prefer session-stored token (always latest after heartbeat renewal)
+        # over client-provided token (may be stale after intermediate heartbeats).
+        effective_lease_token = session_tokens.get(task_id, "") or lease_token.strip()
 
         # Permission check: lead bypasses, members need ownership or unclaimed.
         if role != "lead":
@@ -3213,7 +3221,39 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                         # Run handle already cleaned up — session should
                         # be idle or starting a new chained run.
                         break
-                    await run_handle.complete_event.wait()
+                    try:
+                        await asyncio.wait_for(
+                            run_handle.complete_event.wait(),
+                            timeout=_EPHEMERAL_COMPLETE_GRACE_SECONDS,
+                        )
+                    except asyncio.TimeoutError:
+                        # complete_event can hang forever on protocol-server
+                        # sessions whose RunLoop stays alive between turns
+                        # (see _schedule_member_cleanup docstring). Fall back
+                        # to the task board: if the member owns no in_progress
+                        # task, the work is done — clean up instead of leaving
+                        # a zombie session that keeps getting re-woken with
+                        # nothing to do (empty responses then burn the model
+                        # output-retry budget).
+                        session = session_pool.sessions.get_session(member_session_id)
+                        if session is None:
+                            return
+                        if session.current_run_id is not None and session.current_run_id != run_id:
+                            continue  # New chained run — wait for it too
+                        team_state = FileTeamState(base_dir)
+                        tasks = (
+                            team_state.list_tasks(team_id)
+                            if team_state._state_path(team_id).exists()
+                            else []
+                        )
+                        owns_in_progress = any(
+                            t.get("owner") == member_name
+                            and t.get("status") == "in_progress"
+                            for t in tasks
+                        )
+                        if not owns_in_progress:
+                            break  # No live work — safe to clean up
+                        continue  # Still working on a task — keep waiting
                     # Check if a new chained run started (prompt_queue).
                     session = session_pool.sessions.get_session(member_session_id)
                     if session is None:

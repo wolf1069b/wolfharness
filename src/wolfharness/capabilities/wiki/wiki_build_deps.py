@@ -26,14 +26,14 @@ from typing import TYPE_CHECKING, Any, Protocol
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from wolfharness.capabilities.build.build_logger import WikiBuildLogger
-    from wolfharness.capabilities.storage.backend import FSBackend
-    from wolfharness.capabilities.storage.storage import WikiStore
+    from wolfharness.capabilities.wiki.build_logger import WikiBuildLogger
     from wolfharness.capabilities.wiki.quality import (
         BuildProfile,
         SourceReadResult,
         WikiAuditReport,
     )
+    from wolfharness.capabilities.wiki.storage.backend import FSBackend
+    from wolfharness.capabilities.wiki.storage.storage import WikiStore
 
 
 class WikiBuildDeps(Protocol):

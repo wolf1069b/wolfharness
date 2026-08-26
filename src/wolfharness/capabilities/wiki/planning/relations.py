@@ -110,11 +110,25 @@ class RelationMixin:
             raise ValueError("checkpoint stage must not be empty")
         audit_profile = self._validate_audit_profile(audit_profile)
         schema_version = schema_version or get_schema_version()
-        if not build_id:
-            build_id = sha256(
-                f"{doc_id}\x1f{device_id}\x1f{series_id}\x1f{input_hash}\x1f{config_hash}\x1f{','.join(input_docs)}\x1f{schema_version}\x1f{audit_profile}".encode(),
-            ).hexdigest()[:16]
         existing = self.store.read_json("index/build_checkpoint.json")
+        if not build_id:
+            existing_build_id = (
+                str(existing.get("build_id", "")) if isinstance(existing, dict) else ""
+            )
+            existing_doc_id = str(existing.get("doc_id", "")) if isinstance(existing, dict) else ""
+            if existing_doc_id == doc_id and existing_build_id:
+                # Preserve the existing build identity.  A checkpoint_build
+                # call without an explicit build_id (recovery paths, stage
+                # transitions) must not mint a fresh auto-generated id over an
+                # in-progress build — that silently detaches every plan and
+                # source packet owner, leaving materialized chapters pending
+                # forever.  Only brand-new builds (no matching checkpoint)
+                # auto-generate an id.
+                build_id = existing_build_id
+            else:
+                build_id = sha256(
+                    f"{doc_id}\x1f{device_id}\x1f{series_id}\x1f{input_hash}\x1f{config_hash}\x1f{','.join(input_docs)}\x1f{schema_version}\x1f{audit_profile}".encode(),
+                ).hexdigest()[:16]
         existing_build_id = str(existing.get("build_id", "")) if isinstance(existing, dict) else ""
         if existing is not None:
             existing_profile = str(existing.get("audit_profile", "manual"))
@@ -140,7 +154,10 @@ class RelationMixin:
             "config_hash": config_hash,
             "source_snapshot_id": source_snapshot_id,
             "snapshot_id": snapshot_id,
-            "input_docs": list(input_docs),
+            # ponytail: conductor prompt omits input_docs → default to doc_id
+            # so packets.py has_input_identity check passes.  Matches fallback
+            # already present in chapters.py:904 and materialization.py:235.
+            "input_docs": list(input_docs) if input_docs else [doc_id],
             "schema_version": schema_version,
             "audit_profile": audit_profile,
             "last_error_code": last_error_code,
@@ -179,15 +196,16 @@ class RelationMixin:
         fault_links: list[tuple[str, str]] | None = None,
         procedure_links: list[tuple[str, str]] | None = None,
         force: bool = False,
-    ) -> None:
+    ) -> bool:
         """Materialize reverse Fault/Procedure edges in a Component body.
 
         Structured edges remain authoritative in Fault/Procedure frontmatter;
         this helper only mirrors those already-resolved edges into the two
         human-readable Component sections required by the graph contract.
+        Returns True when the Component body was rewritten.
         """
         with self._relation_sync_lock:
-            self._sync_component_narrative_links_locked(
+            return self._sync_component_narrative_links_locked(
                 component_uri,
                 fault_links=fault_links,
                 procedure_links=procedure_links,
@@ -201,18 +219,21 @@ class RelationMixin:
         fault_links: list[tuple[str, str]] | None = None,
         procedure_links: list[tuple[str, str]] | None = None,
         force: bool = False,
-    ) -> None:
-        """Run Component reverse-link synchronization under its shared lock."""
+    ) -> bool:
+        """Run Component reverse-link synchronization under its shared lock.
+
+        Returns True when the Component body was rewritten.
+        """
         relation_mode = os.environ.get("WIKI_RELATION_SYNC_MODE", "immediate").strip().lower()
         if not force and relation_mode == "deferred":
-            return
+            return False
         info = self.store.lookup_by_uri(component_uri)
         if info is None or info[0] != "Component":
-            return
+            return False
         concept, class_name, object_name = info
         content = self.store.read_entity_by_uri(component_uri)
         if content is None:
-            return
+            return False
         resolved_fault_links = (
             fault_links
             if fault_links is not None
@@ -231,7 +252,7 @@ class RelationMixin:
         )
         updated = self._dedupe_h2_sections(updated)
         if updated == content:
-            return
+            return False
         updated = self.store.resolve_body_refs(updated, None)
         updated = self.store.dedup_citations(updated)
         updated = self._preserve_expert_sections(
@@ -240,7 +261,7 @@ class RelationMixin:
             candidate=updated,
         )
         if updated == content:
-            return
+            return False
         self.store.write_entity(concept, class_name, object_name, updated)
         self.store.register_natural_key(concept, class_name, object_name, component_uri)
         logger.info(
@@ -249,6 +270,59 @@ class RelationMixin:
             len(resolved_fault_links),
             len(resolved_procedure_links),
         )
+        return True
+
+    def _sync_all_component_narrative_links(self, *, force: bool = False) -> int:
+        """Mirror reverse Fault/Procedure links into every Component body.
+
+        The join step after relation shards finish.  Builds a reverse index in
+        one pass over Fault/Procedure pages instead of re-scanning all entities
+        once per component (O(C*N) reads -> O(N) reads), then syncs only the
+        Components that actually have reverse links.  Returns how many
+        Component bodies changed.
+        """
+        fault_index: dict[str, list[tuple[str, str]]] = {}
+        for _concept, _class_name, object_name, uri in self.store.list_entities("Fault"):
+            page = self.store.read_entity_by_uri(uri)
+            if page is None:
+                continue
+            component_uris = all_relation_uris(
+                page, "Fault", "affected_components", self.store.root_uri
+            )
+            if not component_uris:
+                continue
+            frontmatter = parse_frontmatter(page)
+            title = frontmatter.get("title")
+            label = title.strip() if isinstance(title, str) and title.strip() else object_name
+            for component_uri in component_uris:
+                fault_index.setdefault(component_uri, []).append((label, uri))
+        procedure_index: dict[str, list[tuple[str, str]]] = {}
+        for _concept, _class_name, object_name, uri in self.store.list_entities("Procedure"):
+            page = self.store.read_entity_by_uri(uri)
+            if page is None:
+                continue
+            component_uris = all_relation_uris(
+                page, "Procedure", "target_components", self.store.root_uri
+            )
+            if not component_uris:
+                continue
+            frontmatter = parse_frontmatter(page)
+            title = frontmatter.get("title")
+            label = title.strip() if isinstance(title, str) and title.strip() else object_name
+            for component_uri in component_uris:
+                procedure_index.setdefault(component_uri, []).append((label, uri))
+        synced = 0
+        for component_uri in sorted(set(fault_index) | set(procedure_index)):
+            # Join is the deferred-mode executor: always mirror, regardless of
+            # WIKI_RELATION_SYNC_MODE (workers may have skipped immediate sync).
+            if self._sync_component_narrative_links(
+                component_uri,
+                fault_links=fault_index.get(component_uri),
+                procedure_links=procedure_index.get(component_uri),
+                force=True,
+            ):
+                synced += 1
+        return synced
 
     def _sync_symptom_profile_index(self, symptom_uri: str, *, force: bool = False) -> None:
         """Backfill ## Profile 索引 in a Symptom index.md from its profile files."""

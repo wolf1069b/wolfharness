@@ -35,7 +35,6 @@ from .backend import FSBackend, _strip_control_chars
 
 logger = logging.getLogger(__name__)
 
-
 class VikingClient(Protocol):
     """Structural interface for the OpenViking SDK client duck-type."""
 

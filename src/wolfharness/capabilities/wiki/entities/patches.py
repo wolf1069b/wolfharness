@@ -299,8 +299,6 @@ class PatchMixin:
                         f"changed {original_prefix!r} → {new_prefix!r}. "
                         f"Use write_entity to create a separate DTC for {new_prefix}.",
                     )
-            if content != current:
-                content = self._mark_merge_conflict(concept, uri, current, content)
             frontmatter = parse_frontmatter(content)
             if concept == "Component":
                 sync_targets.add(uri)

@@ -81,6 +81,36 @@ ADMIN_SECTION_KEYWORDS: tuple[str, ...] = (
     "preface",
 )
 
+# Technical sections that must NOT be classified as low-value, even when their
+# chapter score is low or the title resembles admin boilerplate.  These
+# sections carry entity-defining content (specs, torque values, pinouts,
+# connector pin/wire/color mappings) needed by materialization and audit.
+MUST_READ_KEYWORDS: tuple[str, ...] = (
+    "技术规格",
+    "规格",
+    "标准值",
+    "部件标准值",
+    "参数",
+    "技术参数",
+    "连接器",
+    "接线",
+    "插脚",
+    "针脚",
+    "端子",
+    "扭矩",
+    "力矩",
+    "公差",
+    "间隙",
+    "压力",
+    "specification",
+    "torque",
+    "tolerance",
+    "clearance",
+    "connector",
+    "pinout",
+    "terminal",
+)
+
 # Placeholder/gap text patterns (regex-escaped)
 GAP_RE = r"open_gap|来源未说明|待补充|来源缺失|未物化|未提供|未确认|未说明|未知"
 PLACEHOLDER_TEXT_RE = r"见来源|未提供|待补充|暂无|无资料|N/A|TODO|TBD"

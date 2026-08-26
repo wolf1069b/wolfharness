@@ -32,6 +32,13 @@ class _FakeVikingCap(ResourceAccess):
     def __init__(self, entries: list[ResourceEntry]) -> None:
         self._entries = entries
 
+    @property
+    def server_name(self) -> str:
+        return "viking"
+
+    async def supports_resources(self) -> bool:
+        return True
+
     async def list_resources(self) -> list[ResourceEntry]:
         return self._entries
 
@@ -57,7 +64,7 @@ async def _fetch_resources(state: ServerState) -> dict[str, object]:
 def _state_with_cap(server_state: ServerState, cap: ResourceAccess) -> ServerState:
     """Point the mock agent's registry at a registry returning ``cap``."""
     registry = Mock()
-    registry.get_resource_access = Mock(return_value=[cap])
+    registry.get_mcp_resource_providers = Mock(return_value=[cap])
     server_state.agent.host_context.extension_registry = registry
     return server_state
 
@@ -143,8 +150,10 @@ async def test_duplicate_basenames_get_distinct_keys(
 
 async def test_erroring_capability_is_skipped(server_state: ServerState) -> None:
     """A failing list_resources must not break the whole picker."""
-    breaking = Mock(spec=ResourceAccess)
+    breaking = Mock()
     breaking.list_resources = AsyncMock(side_effect=RuntimeError("viking down"))
+    breaking.supports_resources = AsyncMock(return_value=True)
+    breaking.server_name = "breaking"
     good = _FakeVikingCap(
         [
             ResourceEntry(
@@ -156,7 +165,7 @@ async def test_erroring_capability_is_skipped(server_state: ServerState) -> None
         ]
     )
     registry = Mock()
-    registry.get_resource_access = Mock(return_value=[breaking, good])
+    registry.get_mcp_resource_providers = Mock(return_value=[breaking, good])
     server_state.agent.host_context.extension_registry = registry
 
     data = await _fetch_resources(server_state)

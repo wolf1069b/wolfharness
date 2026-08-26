@@ -19,6 +19,7 @@ import os
 from pathlib import Path
 import re
 from typing import TYPE_CHECKING, Any, ClassVar
+import unicodedata
 
 import logfire
 from pydantic import BaseModel
@@ -60,6 +61,40 @@ logger = get_logger(__name__)
 
 def _is_viking_backend() -> bool:
     return os.environ.get("WIKI_STORAGE_BACKEND", "viking") == "viking"
+
+
+def _display_width(text: str) -> int:
+    """Return terminal display width (CJK/wide chars count as 2 columns)."""
+    return sum(2 if unicodedata.east_asian_width(ch) in {"W", "F"} else 1 for ch in text)
+
+
+def _clip_display(text: str, limit: int = 40) -> str:
+    """Clip ``text`` to ``limit`` display columns, keeping head and tail.
+
+    The opencode TUI truncates option names by UTF-16 code-unit count, which
+    under-counts CJK (2 display columns per char), so long Chinese names wrap
+    and break the picker's scroll/highlight tracking.  Clipping server-side by
+    true display width keeps every name on one line.
+    """
+    if _display_width(text) <= limit:
+        return text
+    head_goal = max(10, limit * 3 // 5)
+    tail_goal = max(4, limit - head_goal - 1)
+    head, head_w = [], 0
+    for ch in text:
+        w = _display_width(ch)
+        if head_w + w > head_goal:
+            break
+        head.append(ch)
+        head_w += w
+    tail, tail_w = [], 0
+    for ch in reversed(text):
+        w = _display_width(ch)
+        if tail_w + w > tail_goal:
+            break
+        tail.append(ch)
+        tail_w += w
+    return "".join(head).rstrip(" ·:") + "…" + "".join(reversed(tail)).lstrip(" ·:")
 
 
 class WikiBuildConfig(BaseModel):
@@ -221,15 +256,31 @@ class WikiBuildCapability(
     async def list_resources(self) -> Sequence[ResourceEntry]:
         """List OPA/OPS/OPL wiki tickets as MCP resources.
 
+        Only **actionable** tickets are surfaced — those that still need
+        expert attention.  Resolved/rejected OPAs, confirmed/rejected OPS,
+        and applied OPLs are excluded so they don't clutter ``@``-completion.
+
         Returns:
             Sequence of ``ResourceEntry`` descriptors — at most 50 per
             ticket kind.
         """
         self._ensure_tools()
         assert self._tools is not None
-        opas = await asyncio.to_thread(self._tools.get_opas, limit=self._LIST_RESOURCE_LIMIT)
-        ops = await asyncio.to_thread(self._tools.get_ops, limit=self._LIST_RESOURCE_LIMIT)
-        opls = await asyncio.to_thread(self._tools.get_opls, limit=self._LIST_RESOURCE_LIMIT)
+        opas = await asyncio.to_thread(
+            self._tools.get_opas,
+            limit=self._LIST_RESOURCE_LIMIT,
+            status="pending",
+        )
+        ops = await asyncio.to_thread(
+            self._tools.get_ops,
+            limit=self._LIST_RESOURCE_LIMIT,
+            status="unconfirmed",
+        )
+        opls = await asyncio.to_thread(
+            self._tools.get_opls,
+            limit=self._LIST_RESOURCE_LIMIT,
+            status="unconfirmed",
+        )
         return [
             *[self._ticket_entry("OPA", record) for record in opas],
             *[self._ticket_entry("OPS", record) for record in ops],
@@ -335,10 +386,18 @@ class WikiBuildCapability(
             )
             id_key = "opa_id"
         elif kind == "OPS":
-            rows = await asyncio.to_thread(self._tools.get_ops, limit=self._COMPLETION_LIMIT)
+            rows = await asyncio.to_thread(
+                self._tools.get_ops,
+                limit=self._COMPLETION_LIMIT,
+                status="unconfirmed",
+            )
             id_key = "ops_id"
         else:
-            rows = await asyncio.to_thread(self._tools.get_opls, limit=self._COMPLETION_LIMIT)
+            rows = await asyncio.to_thread(
+                self._tools.get_opls,
+                limit=self._COMPLETION_LIMIT,
+                status="unconfirmed",
+            )
             id_key = "opl_id"
         needle = argument.value.strip().lower()
         values: list[str] = []
@@ -383,8 +442,20 @@ class WikiBuildCapability(
             The corresponding ``ResourceEntry``.
         """
         record_id = str(record.get(f"{kind.lower()}_id", ""))
-        title = str(record.get("title", ""))
-        name = f"{kind} {record_id}: {title}" if title else f"{kind} {record_id}"
+        title = str(record.get("title", "")).strip()
+        target_uri = str(record.get("target_uri", "")).strip()
+        target = target_uri.rstrip("/").rsplit("/", 1)[-1] if target_uri else ""
+        if title and title != record_id:
+            # human summary exists: surface the fault/entity context too
+            label = f"{target}: {title}" if target and target not in title else title
+        elif record_id and len(record_id) <= 24:
+            # short hand-written ids (OPA-001, ops-xxx) stay as-is
+            label = record_id
+        elif target:
+            label = target
+        else:
+            label = record_id
+        name = _clip_display(f"{kind} {label}")
         detail = f"status={record.get('status', '')}"
         category = str(record.get("category", ""))
         if category:

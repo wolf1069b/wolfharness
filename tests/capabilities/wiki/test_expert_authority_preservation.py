@@ -457,3 +457,89 @@ class TestPipelineWiring:
         sections = extract_sections(stored)
         assert sections[AUTHORITY_SECTION] == "专家再次修改"
         assert sections[PIPELINE_SECTION] == "新流程"
+
+
+# ── Relation join: _sync_all_component_narrative_links / rebuild_all_backlinks ──
+
+
+def test_sync_all_component_narrative_links_mirrors_reverse_edges(
+    wiki_tools: WikiBuildTools,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The join pass after relation shards must mirror reverse Fault/Procedure
+    edges into every Component body in one sweep, without raising (the old
+    rebuild_all_backlinks called _sync_component_narrative_links with no
+    component_uri and crashed with a TypeError before touching the first
+    Component; see the join blocker)."""
+    tools = wiki_tools
+    # Deferred mode keeps the write-path from mirroring; the join must do it.
+    monkeypatch.setenv("WIKI_RELATION_SYNC_MODE", "deferred")
+    component_uri = tools.write_entity(
+        "Component",
+        "液压系统",
+        "主泵",
+        make_entity({"概述": "主泵是动力元件。"}, title="主泵"),
+    )
+    fault_uri = tools.write_entity(
+        "Fault",
+        "液压系统",
+        "主泵压力不足",
+        make_entity(
+            {"故障现象": "压力不足。"},
+            title="主泵压力不足",
+            frontmatter={"affected_components": [component_uri]},
+        ),
+    )
+    procedure_uri = tools.write_entity(
+        "Procedure",
+        "液压系统",
+        "主泵拆装",
+        make_entity(
+            {"步骤": "拆下主泵。"},
+            title="主泵拆装",
+            frontmatter={"target_components": [component_uri]},
+        ),
+    )
+
+    synced = tools._sync_all_component_narrative_links()
+    assert synced >= 1
+
+    stored = tools.store.read_entity("Component", "液压系统", "主泵") or ""
+    sections = extract_sections(stored)
+    assert fault_uri in sections.get("常见失效模式", "")
+    assert procedure_uri in sections.get("拆装步骤", "")
+
+
+def test_rebuild_all_backlinks_join_completes(
+    wiki_tools: WikiBuildTools,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The Phase 2.1 join entry point must run to completion and report its
+    counts. Regression for the crash where it called
+    _sync_component_narrative_links() with no component_uri."""
+    tools = wiki_tools
+    monkeypatch.setenv("WIKI_RELATION_SYNC_MODE", "deferred")
+    component_uri = tools.write_entity(
+        "Component",
+        "液压系统",
+        "主泵",
+        make_entity({"概述": "主泵是动力元件。"}, title="主泵"),
+    )
+    tools.write_entity(
+        "Fault",
+        "液压系统",
+        "主泵压力不足",
+        make_entity(
+            {"故障现象": "压力不足。"},
+            title="主泵压力不足",
+            frontmatter={"affected_components": [component_uri]},
+        ),
+    )
+
+    result = tools.rebuild_all_backlinks()
+    assert isinstance(result, dict)
+    narrative_count = result["component_narrative_page_count"]
+    assert isinstance(narrative_count, int)
+    assert narrative_count >= 1
+    assert isinstance(result["device_diagnostic_page_count"], int)
+    assert isinstance(result["backlink_entries"], int)

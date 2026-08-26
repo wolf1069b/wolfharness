@@ -318,8 +318,8 @@ async def test_list_resources_returns_opa_ops_opl_entries(
     assert isinstance(tools, FakeWikiBuildTools)
     tools.write_ticket("OPA", "opa-001", title="压力判据缺失", category="conflict")
     tools.write_ticket("OPA", "opa-002", title="散热器检查", category="gap")
-    tools.write_ticket("OPS", "ops-001", title="补充压力上限说明")
-    tools.write_ticket("OPL", "opl-001", title="提交共轨压力提案")
+    tools.write_ticket("OPS", "ops-001", title="补充压力上限说明", status="unconfirmed")
+    tools.write_ticket("OPL", "opl-001", title="提交共轨压力提案", status="unconfirmed")
 
     entries = await wiki_cap.list_resources()
 
@@ -328,12 +328,13 @@ async def test_list_resources_returns_opa_ops_opl_entries(
     opa_uri = "viking://resources/test_ns/OP/OpA/conflict/opa-001.md"
     assert opa_uri in by_uri
     opa = by_uri[opa_uri]
-    assert opa.name == "OPA opa-001: 压力判据缺失"
+    # name is a short, display-width-safe label (title-first), not raw record id
+    assert opa.name == "OPA 压力判据缺失"
     assert "status=pending" in opa.description
     assert "category=conflict" in opa.description
     assert opa.mime_type == "text/markdown"
-    assert by_uri["viking://resources/test_ns/OP/OpS/ops-001.md"].name.startswith("OPS ops-001")
-    assert by_uri["viking://resources/test_ns/OP/OpL/opl-001.md"].name.startswith("OPL opl-001")
+    assert by_uri["viking://resources/test_ns/OP/OpS/ops-001.md"].name == "OPS 补充压力上限说明"
+    assert by_uri["viking://resources/test_ns/OP/OpL/opl-001.md"].name == "OPL 提交共轨压力提案"
 
 
 @pytest.mark.asyncio

@@ -11,7 +11,7 @@ from wolfharness.capabilities.wiki.io.template_materializer import (
     assemble_template_entity,
     strip_device_prefix,
 )
-from wolfharness.capabilities.wiki.quality import parse_frontmatter
+from wolfharness.capabilities.wiki.quality import extract_sections, parse_frontmatter
 from wolfharness.capabilities.wiki.schema_loader import get_schema_version
 from wolfharness.capabilities.wiki.storage import (
     LocalFS,
@@ -49,6 +49,22 @@ def _core_section_filled(content: str, section_heading: str) -> bool:
         return False
     # Treat placeholder text as empty
     return "待补充" not in after
+
+
+def _has_substantive_content(content: str) -> bool:
+    """Check if entity body has any real (non-placeholder) content beyond frontmatter.
+
+    Returns True if any ``##`` section has text that isn't just a placeholder.
+    This detects whether a previous LLM worker or manual edit has added
+    real content to the entity, which should be preserved on re-ingestion
+    rather than overwritten with a fresh template.
+    """
+    sections = extract_sections(content)
+    for body_text in sections.values():
+        stripped = body_text.strip()
+        if stripped and "待补充" not in stripped:
+            return True
+    return False
 
 
 class MaterializationMixin:
@@ -240,6 +256,27 @@ class MaterializationMixin:
             if isinstance(checkpoint, dict)
             else {"doc_id": doc_id, "input_docs": [doc_id]}
         )
+        # Build a fallback URI→packet map from ALL complete packets, same as
+        # plan_chapter_work's completion scan.  This catches packets whose
+        # packet_id differs from the plan's expected one (e.g. re-registered
+        # with a build_id after initial legacy registration).
+        complete_uri_owners: dict[str, str] = {}
+        for pkt_key in self.store.list_dir("source_packets", recursive=True):
+            if not pkt_key.endswith(".json"):
+                continue
+            owning = self.store.read_json(pkt_key)
+            if not isinstance(owning, dict) or str(owning.get("status", "")) != "complete":
+                continue
+            owning_build_id = str(owning.get("build_id", "")).strip()
+            if owning_build_id and owning_build_id != build_id:
+                continue
+            raw_owning_uris = (
+                owning.get("source_uris", []) if isinstance(owning.get("source_uris"), list) else []
+            )
+            for raw_uri in raw_owning_uris:
+                if isinstance(raw_uri, str) and raw_uri not in complete_uri_owners:
+                    complete_uri_owners[raw_uri] = pkt_key
+
         pending: list[dict[str, str]] = []
         for item in chapters:
             if not isinstance(item, dict):
@@ -249,25 +286,27 @@ class MaterializationMixin:
             uri = str(item.get("uri", ""))
             packet_key = self._source_packet_key(packet_id) if packet_id else ""
             packet = self.store.read_json(packet_key) if packet_key else None
-            if not self._chapter_packet_complete_for_build(
+            completed = self._chapter_packet_complete_for_build(
                 packet_key,
                 packet if isinstance(packet, dict) else None,
                 build_id=build_id,
                 doc_id=doc_id,
                 source_uri=uri,
                 checkpoint=ownership_checkpoint,
+            )
+            if completed or uri in complete_uri_owners:
+                continue
+            if not isinstance(packet, dict):
+                reason = "packet missing"
+            elif str(packet.get("status", "")) != "complete":
+                reason = f"status={packet.get('status', 'missing')}"
+            elif uri not in (
+                packet.get("source_uris") if isinstance(packet.get("source_uris"), list) else []
             ):
-                if not isinstance(packet, dict):
-                    reason = "packet missing"
-                elif str(packet.get("status", "")) != "complete":
-                    reason = f"status={packet.get('status', 'missing')}"
-                elif uri not in (
-                    packet.get("source_uris") if isinstance(packet.get("source_uris"), list) else []
-                ):
-                    reason = "source_uri not in packet"
-                else:
-                    reason = f"build_id mismatch (packet={packet.get('build_id', '')})"
-                pending.append({"uri": uri, "packet_id": packet_id, "reason": reason})
+                reason = "source_uri not in packet"
+            else:
+                reason = f"build_id mismatch (packet={packet.get('build_id', '')})"
+            pending.append({"uri": uri, "packet_id": packet_id, "reason": reason})
         return pending
 
     def plan_materialization_work(
@@ -425,20 +464,32 @@ class MaterializationMixin:
             pids = candidate.get("packet_ids", [candidate["packet_id"]])
             return not (isinstance(pids, list) and len(pids) > 1)
 
+        # ponytail: removed packet_concept_counts guard — template now writes
+        # a draft for ALL single-packet candidates, even when a packet
+        # produces multiple same-concept candidates.  The template body will
+        # be identical across siblings (packet-level fields), but the entity
+        # exists immediately with correct identity/frontmatter.
+        # materialize_template_batch detects shared-packet candidates and
+        # adds them to fallback_to_llm (with written=True) so the conductor
+        # dispatches LLM workers to patch/differentiate the body in parallel.
+        # Net effect: entities exist in seconds instead of 5-10 min/shard,
+        # and LLM workers do lighter patch work instead of full creation.
+
+        def _needs_llm(candidate: dict[str, object]) -> bool:
+            """Whether a candidate must go through the LLM materialization path."""
+            return not _is_single_packet(candidate)
+
         for concept, class_partition in sorted(grouped):
             items = sorted(
                 grouped[(concept, class_partition)], key=lambda item: str(item["entity_uri"])
             )
-            # Split single-packet (template) from multi-packet (llm) BEFORE
-            # chunking.  Previously the whole (concept, class) chunk shared one
-            # strategy via ``all(...)``: a single multi-packet candidate forced
-            # every single-packet sibling through the LLM path.  Partitioning
-            # first lets single-packet entities form their own template shards
-            # (zero LLM, zero embedded payload) while only the genuine
-            # multi-packet minority pays for LLM reconciliation.
+            # Split template-eligible from LLM-requiring BEFORE chunking.
+            # Multi-packet merges need LLM reconciliation; single-packet
+            # candidates that share their packet with other same-concept
+            # candidates also need LLM (template renders them identically).
             for items_subset, subset_strategy in (
-                ([it for it in items if _is_single_packet(it)], "template"),
-                ([it for it in items if not _is_single_packet(it)], "llm"),
+                ([it for it in items if not _needs_llm(it)], "template"),
+                ([it for it in items if _needs_llm(it)], "llm"),
             ):
                 for chunk in materialization_chunks(items_subset):
                     shard_index += 1
@@ -785,14 +836,19 @@ class MaterializationMixin:
                     source_uris=list(candidate.get("source_uris", [])),  # type: ignore[arg-type]
                 )
 
-                # Incremental fill-blanks: skip entities whose core section
-                # is already filled (confirmed/published OR draft with real content).
+                # Incremental fill-blanks: skip or route entities based on
+                # existing library content to avoid blind overwrites on re-ingestion.
                 existing = self.store.read_entity(concept, class_name or None, actual_object_name)
                 expected_sha = ""
                 if existing is not None:
                     existing_fm = parse_frontmatter(existing)
                     existing_status = str(existing_fm.get("status", "")).strip()
                     if existing_status in ("confirmed", "published"):
+                        skipped_existing += 1
+                        continue
+                    # Content equivalence: skip if body sections are identical
+                    # (frontmatter may differ due to timestamps or source hashes).
+                    if extract_sections(content) == extract_sections(existing):
                         skipped_existing += 1
                         continue
                     # Check if the core section already has real content
@@ -805,6 +861,15 @@ class MaterializationMixin:
                     )
                     if core_section and _core_section_filled(existing, core_section):
                         skipped_existing += 1
+                        continue
+                    # Route to LLM merge if existing entity has any substantive
+                    # content that would be lost by a template overwrite.
+                    if _has_substantive_content(existing):
+                        fallback_to_llm.append({
+                            "entity_uri": planned_uri,
+                            "reason": "existing entity has content requiring LLM merge with new packet",
+                            "written": False,
+                        })
                         continue
                     expected_sha = sha256(existing.encode("utf-8")).hexdigest()
 
@@ -931,6 +996,50 @@ class MaterializationMixin:
                 recorded_count = int(str(receipt.get("recorded_count", 0)))
             except (ValueError, KeyError) as exc:
                 errors.append({"receipt_error": str(exc)})
+
+        # Detect shared-packet candidates: multiple same-concept entities from
+        # one packet get identical template bodies.  Flag them for LLM body
+        # differentiation — the entity IS written (draft), so the worker
+        # patches rather than creates from scratch.
+        if written_uris:
+            packet_concept_counts: dict[tuple[str, str], int] = {}
+            for candidate in candidates.values():
+                raw_pids = candidate.get("packet_ids", [candidate.get("packet_id", "")])
+                pid_list = (
+                    raw_pids
+                    if isinstance(raw_pids, list)
+                    else [str(candidate.get("packet_id", ""))]
+                )
+                if len(pid_list) != 1:
+                    continue
+                pid = str(pid_list[0]).strip()
+                if not pid:
+                    continue
+                key = (str(candidate["concept"]), pid)
+                packet_concept_counts[key] = packet_concept_counts.get(key, 0) + 1
+
+            for uri in written_uris:
+                candidate = candidates.get(uri)
+                if candidate is None:
+                    continue
+                raw_pids = candidate.get("packet_ids", [candidate.get("packet_id", "")])
+                pid_list = (
+                    raw_pids
+                    if isinstance(raw_pids, list)
+                    else [str(candidate.get("packet_id", ""))]
+                )
+                if len(pid_list) != 1:
+                    continue
+                pid = str(pid_list[0]).strip()
+                if not pid:
+                    continue
+                key = (str(candidate["concept"]), pid)
+                if packet_concept_counts.get(key, 0) > 1:
+                    fallback_to_llm.append({
+                        "entity_uri": uri,
+                        "reason": "shared-packet candidate needs LLM body differentiation",
+                        "written": True,
+                    })
 
         return {
             "build_id": normalized_build_id,

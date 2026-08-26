@@ -26,6 +26,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _external_identity_hash(uri: str) -> str:
+    """Stable identity fingerprint for external (non-self-readable) URIs.
+
+    Used when a caller omits ``source_contents`` for an external URI: the
+    server cannot re-read kb:// or http(s) sources, so no content hash is
+    possible.  A deterministic fingerprint of the URI itself keeps the
+    packet's ``source_hashes``/``source_hash`` fields populated while
+    avoiding any model round-trip of the chapter text.
+    """
+    return sha256(f"external\x1f{uri}".encode()).hexdigest()
+
+
 class PacketBody(BaseModel):
     """Validated packet body for ``record_source_packet``.
 
@@ -580,7 +592,10 @@ class PacketMixin:
 
         ``source_contents`` maps external MCP source URIs to the text the
         agent fetched via MCP tools. The system hashes this caller-provided
-        text instead of trying to re-read the URI locally.
+        text instead of trying to re-read the URI locally.  When omitted for
+        an external URI, the packet records a stable URI identity fingerprint
+        (``_external_identity_hash``) instead — external content need not be
+        round-tripped through the model.
 
         ``allow_same_snapshot_replace`` is reserved for an explicit
         same-task refinement workflow. It permits a stable packet id to
@@ -623,12 +638,23 @@ class PacketMixin:
             raise ValueError(
                 "source_uris must be raw chapter URIs, the case file for the selected doc_id, or an addressable cross-namespace Markdown raw resource URI",
             )
+        # External URIs (kb://, http://, etc.) cannot be self-read by the
+        # server.  Callers MAY pass their content via source_contents; when
+        # omitted the packet carries a stable URI identity fingerprint
+        # instead of a content hash, so no model round-trip is required.
+        has_external_identity = any(
+            kind is RawSourceKind.EXTERNAL and not normalized_source_contents.get(uri)
+            for uri, kind in zip(sources, kinds, strict=True)
+        )
         missing: list[str] = []
         source_hashes: dict[str, str] = {}
-        for uri in sources:
+        for uri, kind in zip(sources, kinds, strict=True):
             provided_content = normalized_source_contents.get(uri)
             if provided_content:
                 source_hashes[uri] = sha256(provided_content.encode("utf-8")).hexdigest()
+                continue
+            if kind is RawSourceKind.EXTERNAL:
+                source_hashes[uri] = _external_identity_hash(uri)
                 continue
             content_hash = self._source_hash(uri, refresh=True)
             if content_hash is not None:
@@ -699,6 +725,7 @@ class PacketMixin:
             and comparable_existing != comparable_packet
             and str(existing_packet.get("source_hash", "")) == computed_hash
             and str(existing_packet.get("extractor_config_hash", "")) == extractor_config_hash
+            and not has_external_identity
             and not (
                 existing_build_id and requested_build_id and existing_build_id != requested_build_id
             )
@@ -714,6 +741,30 @@ class PacketMixin:
             # incremental manuals can never advance past the first build.
             packet_document["supersedes_build_id"] = existing_build_id
             record["supersedes_build_id"] = existing_build_id
+        elif (
+            existing_packet is not None
+            and not has_external_identity
+            and allow_same_snapshot_replace
+        ):
+            # Explicit caller override of the unchanged-snapshot guard; keep it
+            # auditable even though it is a deliberate replacement.
+            logger.info(
+                "Replacing source packet %s under an unchanged snapshot (allow_same_snapshot_replace)",
+                packet_id,
+            )
+        elif (
+            existing_packet is not None
+            and has_external_identity
+            and comparable_existing != comparable_packet
+        ):
+            # External identity packets carry no content evidence, so the
+            # unchanged-snapshot guard cannot apply; a body change here is
+            # most likely a duplicate dispatch overwriting a previous worker.
+            logger.warning(
+                "Replacing external identity source packet %s with a different body; "
+                "possible duplicate dispatch",
+                packet_id,
+            )
         # A packet id is a stable business identity. Changed raw input
         # replaces the old extraction result instead of creating an
         # ever-growing family of version-suffixed packet ids.

@@ -345,6 +345,14 @@ class MigrationMixin:
         to ``_uri_to_path`` for backward compatibility.
         """
         resource_uri, separator, fragment = uri.partition("#")
+        # Follow persisted redirects (old URI -> moved location) before any
+        # backend read.  Directories reorganized after materialization leave
+        # stale canonical URIs in OPA/OPS evidence and entity bodies; without
+        # this step every read of a redirected URI returns None even though
+        # register_redirect/move_entity correctly persist the mapping.
+        resolved_uri = self.store.resolve_redirect(resource_uri)
+        if resolved_uri != resource_uri:
+            resource_uri = resolved_uri
         content: str | None = None
         if self.store.is_wiki_uri(resource_uri):
             # Wiki namespace: OP records keep their real backend URI; entity
