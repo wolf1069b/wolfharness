@@ -265,3 +265,108 @@ async def test_prompt_async_user_message_renders_once(  # noqa: PLR0915
         f"Found {len(sse_part_updated_events)} part.updated events. "
         f"Text parts from SSE: {sse_user_text_parts}"
     )
+
+
+async def test_attach_existing_session_first_prompt_renders_once(
+    subprocess_server_simple: SubprocessServer,
+) -> None:
+    """L4a: Attach to a pre-existing session, first prompt renders once.
+
+    Reproduces issue #380 exactly: ``serve-opencode`` + ``opencode attach``
+    against a session that already has history. The session consumer is
+    running and the replay buffer is populated; the first prompt on the
+    attached stream must produce exactly ONE ``message.updated`` per
+    ``message_id`` (no EventBus loopback, no replay re-conversion).
+    """
+    base_url = subprocess_server_simple.base_url
+    marker_a = "PRE_EXISTING_TURN"
+    marker_b = "ATTACH_FIRST_PROMPT"
+
+    async with (
+        httpx.AsyncClient(timeout=60.0) as sse_client,
+        httpx.AsyncClient(timeout=60.0) as http_client,
+    ):
+        session_id = await _create_session(base_url, http_client)
+
+        # Turn 1: pre-existing history on the session.
+        resp = await http_client.post(
+            f"{base_url}/session/{session_id}/prompt_async",
+            json={"parts": [{"type": "text", "text": marker_a}]},
+        )
+        assert resp.status_code == 204, f"first prompt_async failed: {resp.status_code}"
+        # Wait for the session to go idle (turn complete).
+        deadline = time.monotonic() + 20.0
+        while time.monotonic() < deadline:
+            resp = await http_client.get(f"{base_url}/session/{session_id}")
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("status") == "idle":
+                    break
+            await asyncio.sleep(0.5)
+
+        # Turn 2: attach a fresh SSE stream (the "attach" connection) and send
+        # the first prompt on it.
+        sse_events: list[dict[str, Any]] = []
+        saw_busy = asyncio.Event()
+
+        async def collect_sse_events() -> None:
+            deadline = time.monotonic() + 30.0
+            async with sse_client.stream("GET", f"{base_url}/event") as sse_response:
+                assert sse_response.status_code == 200
+                async for line in sse_response.aiter_lines():
+                    event = _parse_sse_line(line)
+                    if event is not None:
+                        sse_events.append(event)
+                        if _is_session_busy(event):
+                            saw_busy.set()
+                        if _is_session_idle(event) and saw_busy.is_set():
+                            break
+                    if time.monotonic() > deadline:
+                        break
+
+        async def send_prompt() -> None:
+            await asyncio.sleep(0.5)  # Wait for SSE to connect
+            resp = await http_client.post(
+                f"{base_url}/session/{session_id}/prompt_async",
+                json={"parts": [{"type": "text", "text": marker_b}]},
+            )
+            assert resp.status_code == 204, (
+                f"attach prompt_async failed: {resp.status_code}: {resp.text}"
+            )
+
+        sse_task = asyncio.create_task(collect_sse_events(), name="attach_sse_collector")
+        prompt_task = asyncio.create_task(send_prompt(), name="attach_prompt_sender")
+
+        try:
+            await asyncio.wait_for(asyncio.gather(sse_task, prompt_task), timeout=35.0)
+        except TimeoutError:
+            pytest.fail(
+                f"Timed out waiting for attach SSE collection. "
+                f"Collected {len(sse_events)} events. "
+                f"Event types: {[e.get('type') for e in sse_events]}"
+            )
+
+    # --- Assertion: exactly 1 message.updated per user message_id on attach ---
+    message_updated_infos = [
+        info for event in sse_events if (info := _get_message_updated_info(event)) is not None
+    ]
+    sse_user_msgs = [info for info in message_updated_infos if info.get("role") == "user"]
+
+    from collections import Counter
+
+    user_id_counts = Counter(info["id"] for info in sse_user_msgs)
+    assert user_id_counts, "No user message.updated events collected on attach stream"
+
+    duplicate_ids = {mid for mid, count in user_id_counts.items() if count > 1}
+    assert not duplicate_ids, (
+        f"Duplicate message.updated deliveries on attach for message_ids: {duplicate_ids}. "
+        f"All user message infos: {sse_user_msgs}"
+    )
+
+    # The attach stream connects after turn 1 (replay=False on first connect),
+    # so it should see exactly ONE user message (turn 2's first prompt) and
+    # that message must be delivered exactly once.
+    assert len(user_id_counts) == 1, (
+        f"Attach stream should see exactly 1 user message, got {len(user_id_counts)}. "
+        f"All user message infos: {sse_user_msgs}"
+    )

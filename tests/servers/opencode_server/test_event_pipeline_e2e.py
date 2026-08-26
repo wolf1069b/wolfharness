@@ -1,13 +1,13 @@
 """E2E tests for the OpenCode event pipeline.
 
 Simulates a full agent streaming session from agent event emission through
-EventBus → session-scoped consumer → event_bridge → EventBus → SSE subscriber.
-Verifies every OpenCode event type produced by the pipeline reaches the scope="all"
-subscriber (representing the SSE frontend).
+EventBus → session-scoped consumer → adapter → ``ServerState.broadcast_event``
+→ SSE subscriber queues. Verifies every OpenCode event type produced by the
+pipeline reaches the subscriber queues (representing the SSE frontend).
 
 Covers the regression where PartUpdatedEvent (which has session_id at
 properties.part.session_id, not properties.session_id) was silently dropped
-by event_bridge._extract_session_id().
+by the session-id extractor.
 """
 
 from __future__ import annotations
@@ -69,21 +69,18 @@ def _stream_empty(queue: asyncio.Queue[Any]) -> bool:
 def _extract_opencode_events(sse_queue: Any) -> list[Any]:
     """Extract OpenCode events from the SSE subscriber queue.
 
-    The SSE subscriber receives EventEnvelope objects where the ``.event``
-    field can be a CustomEvent wrapper (from event_bridge) or a raw agent
-    event.  This helper filters for CustomEvent wrappers and extracts the
-    underlying OpenCode event from ``.event_data``.
+    The direct-wire subscriber queue holds ``(event_id, event)`` tuples of
+    raw OpenCode protocol events (no CustomEvent wrapping — projections are
+    no longer republished into the EventBus).
     """
-    from wolfharness.agents.events.events import CustomEvent
-    from wolfharness.orchestrator.core import EventEnvelope
-
     result: list[Any] = []
     while not _stream_empty(sse_queue):
-        envelope = sse_queue.get_nowait()
-        if isinstance(envelope, EventEnvelope):
-            inner = envelope.event
-            if isinstance(inner, CustomEvent) and inner.event_data is not None:
-                result.append(inner.event_data)
+        item = sse_queue.get_nowait()
+        if isinstance(item, tuple):
+            _event_id, event = item
+        else:
+            event = item
+        result.append(event)
     return result
 
 
@@ -140,13 +137,9 @@ async def session_pool(server_state: ServerState):  # type: ignore[no-untyped-de
     )
     await sp.start()
 
-    # Wire the EventBus into server_state so event_bridge can discover it
-    server_state._pool = pool_mock
-    pool_mock.session_pool = sp
-    # Re-initialize event_bridge now that event_bus is available
-    from wolfharness_server.opencode_server.event_bridge import OpenCodeEventBridge
-
-    server_state.event_bridge = OpenCodeEventBridge(server_state, sp.event_bus)
+    # The SessionPool EventBus is wired into server_state at __post_init__;
+    # no projection bridge exists — projections fan out directly to
+    # server_state.event_subscribers queues.
 
     yield sp
     await sp.shutdown()
@@ -158,7 +151,7 @@ async def session_pool(server_state: ServerState):  # type: ignore[no-untyped-de
 
 
 class TestEventPipelineE2E:
-    """Full pipeline: agent event → EventBus → consumer → event_bridge → EventBus → SSE."""
+    """Full pipeline: agent event → EventBus → consumer → broadcast_event → SSE queues."""
 
     @pytest.mark.asyncio
     async def test_text_streaming_full_pipeline(
@@ -184,7 +177,8 @@ class TestEventPipelineE2E:
         await _async_wait(0.1)
 
         # Subscribe a scope="all" subscriber to mimic SSE frontend
-        sse_queue = await session_pool.event_bus.subscribe("__global_sse__", scope="all")
+        sse_queue: asyncio.Queue[tuple[int, Any]] = asyncio.Queue(maxsize=1000)
+        server_state.event_subscribers.append(sse_queue)
 
         # Simulate agent emitting PartStartEvent (text)
         text_start = PartStartEvent(index=0, part=pydantic_text_part("Hello"))
@@ -211,8 +205,8 @@ class TestEventPipelineE2E:
 
         # Assert: Text PartUpdatedEvent reached SSE (regression test for nested session_id)
         assert len(part_updated_events) >= 1, (
-            "PartUpdatedEvent should reach scope='all' subscriber; "
-            "event_bridge._extract_session_id must traverse properties.part.session_id"
+            "PartUpdatedEvent should reach the SSE subscriber; "
+            "ServerState.extract_session_id must traverse properties.part.session_id"
         )
 
         # The first PartUpdatedEvent should contain a TextPart
@@ -257,7 +251,8 @@ class TestEventPipelineE2E:
         await integration.create_session(session_id=session_id, agent_name="test-agent")
         await _async_wait(0.1)
 
-        sse_queue = await session_pool.event_bus.subscribe("__global_sse__", scope="all")
+        sse_queue: asyncio.Queue[tuple[int, Any]] = asyncio.Queue(maxsize=1000)
+        server_state.event_subscribers.append(sse_queue)
 
         # Simulate agent emitting ToolCallStartEvent
         tool_start = ToolCallStartEvent(
@@ -358,7 +353,8 @@ class TestEventPipelineE2E:
         await integration.create_session(session_id=session_id, agent_name="test-agent")
         await _async_wait(0.1)
 
-        sse_queue = await session_pool.event_bus.subscribe("__global_sse__", scope="all")
+        sse_queue: asyncio.Queue[tuple[int, Any]] = asyncio.Queue(maxsize=1000)
+        server_state.event_subscribers.append(sse_queue)
 
         # Step 1: ToolCallStartEvent with EMPTY raw_input (simulates streamed args)
         tool_start = ToolCallStartEvent(
@@ -444,7 +440,8 @@ class TestEventPipelineE2E:
     ) -> None:
         """RunStartedEvent → SessionStatusEvent (busy).
 
-        Verifies lifecycle events pass through event_bridge correctly.
+        Verifies lifecycle events pass through the consumer → adapter →
+        broadcast path correctly.
         """
         integration = OpenCodeSessionPoolIntegration(
             session_pool=session_pool,
@@ -455,7 +452,8 @@ class TestEventPipelineE2E:
         await integration.create_session(session_id=session_id, agent_name="test-agent")
         await _async_wait(0.1)
 
-        sse_queue = await session_pool.event_bus.subscribe("__global_sse__", scope="all")
+        sse_queue: asyncio.Queue[tuple[int, Any]] = asyncio.Queue(maxsize=1000)
+        server_state.event_subscribers.append(sse_queue)
 
         run_started = RunStartedEvent(session_id=session_id, run_id="run-e2e-001")
         await session_pool.event_bus.publish(session_id, run_started)
@@ -478,7 +476,8 @@ class TestEventPipelineE2E:
     ) -> None:
         """RunErrorEvent → SessionErrorEvent.
 
-        Verifies error events pass through event_bridge correctly.
+        Verifies error events pass through the consumer → adapter →
+        broadcast path correctly.
         """
         from wolfharness.agents.events import RunErrorEvent
 
@@ -491,7 +490,8 @@ class TestEventPipelineE2E:
         await integration.create_session(session_id=session_id, agent_name="test-agent")
         await _async_wait(0.1)
 
-        sse_queue = await session_pool.event_bus.subscribe("__global_sse__", scope="all")
+        sse_queue: asyncio.Queue[tuple[int, Any]] = asyncio.Queue(maxsize=1000)
+        server_state.event_subscribers.append(sse_queue)
 
         run_error = RunErrorEvent(
             code="TestError",
@@ -510,18 +510,17 @@ class TestEventPipelineE2E:
         await integration._stop_event_consumer(session_id)
 
     @pytest.mark.asyncio
-    async def test_event_bridge_extracts_nested_session_id(
+    async def test_extract_session_id_nested_part_session(
         self,
         session_pool: SessionPool,
         server_state: ServerState,
     ) -> None:
-        """Regression test: _extract_session_id handles PartUpdatedEvent's nested session_id.
+        """Regression test: extract_session_id handles PartUpdatedEvent's nested session_id.
 
         PartUpdatedEventProperties has session_id at properties.part.session_id,
         not at properties.session_id. The extractor must traverse this nested path.
         """
-        # Verify event_bridge is set up
-        assert server_state.event_bridge is not None
+        from wolfharness_server.opencode_server.state import ServerState
 
         # Create a PartUpdatedEvent with a TextPart (nested session_id)
         text_part = TextPart(
@@ -533,9 +532,9 @@ class TestEventPipelineE2E:
         part_updated = PartUpdatedEvent.create(text_part)
 
         # Extract session_id — must succeed with the fix
-        session_id = server_state.event_bridge._extract_session_id(part_updated)
+        session_id = ServerState.extract_session_id(part_updated)
         assert session_id == "sess-e2e-nested", (
-            f"_extract_session_id should return 'sess-e2e-nested' for PartUpdatedEvent "
+            f"extract_session_id should return 'sess-e2e-nested' for PartUpdatedEvent "
             f"with TextPart, got {session_id!r}"
         )
 
@@ -548,9 +547,10 @@ class TestEventPipelineE2E:
         """Verify the consumer doesn't process the OpenCode events it publishes back.
 
         When _handle_event converts an agent event to an OpenCode event and
-        broadcasts it via event_bridge, the event_bridge publishes back to the
-        SAME EventBus. The consumer should NOT try to convert these OpenCode
-        events again (they're not RichAgentStreamEvent instances).
+        broadcasts it via ``ServerState.broadcast_event``, the projection goes
+        directly to SSE subscriber queues — never back into the EventBus. The
+        consumer should NOT try to convert these OpenCode events again (they're
+        not RichAgentStreamEvent instances).
         """
         integration = OpenCodeSessionPoolIntegration(
             session_pool=session_pool,
@@ -561,7 +561,8 @@ class TestEventPipelineE2E:
         await integration.create_session(session_id=session_id, agent_name="test-agent")
         await _async_wait(0.1)
 
-        sse_queue = await session_pool.event_bus.subscribe("__global_sse__", scope="all")
+        sse_queue: asyncio.Queue[tuple[int, Any]] = asyncio.Queue(maxsize=1000)
+        server_state.event_subscribers.append(sse_queue)
 
         # Publish a sequence of agent events
         text_start = PartStartEvent(index=0, part=pydantic_text_part("Hello"))

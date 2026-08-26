@@ -1,7 +1,15 @@
 # EventBus Replay Buffer Design
 
-> **Status**: Accepted — this design has been implemented in the AgentPool codebase.
-> See `docs/explanation/` for the current architecture documentation.
+> **Status**: **Superseded** — the planned "Migration B" (SSE endpoints migrate
+> from `state.event_subscribers` to EventBus-only subscription, with `ServerState`
+> as a pure EventBus consumer) was **reversed** by PR #391 (issue #380): the
+> OpenCode server now delivers projections **direct-wire** to per-connection SSE
+> subscriber queues via `ServerState.broadcast_event`, and the EventBus replay
+> buffer is no longer the SSE replay path. Reconnect replay is served by
+> `ServerState.replay_projections()` (`Last-Event-ID`). This ADR is retained as
+> historical record of the original replay-buffer design for the EventBus.
+>
+> Kept as historical record; see `docs/explanation/` for current architecture.
 
 ## Overview
 
