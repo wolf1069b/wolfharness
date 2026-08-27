@@ -273,6 +273,7 @@ nav:
           - EventBus & SessionController: reference/api/eventbus.md
       - Architecture:
           - Module Structure: explanation/module-structure.md
+          - AgentPool Runtime Architecture: explanation/agentpool-runtime-architecture.html
           - Graph Architecture: explanation/graph-architecture.md
           - Session Orchestration: explanation/session-orchestration.md
           - Lifecycle Dimensions: explanation/lifecycle-dimensions.md
