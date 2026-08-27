@@ -202,7 +202,7 @@ class EntityWriteMixin:
         clz = class_name or None
         uri = self.store.entity_uri(concept, clz, object_name)
         current = self.store.read_entity(concept, clz, object_name)
-        if current is not None:
+        if current is not None and conflict_policy != "external_authority":
             current_sha256 = sha256(current.encode("utf-8")).hexdigest()
             if not expected_sha256:
                 raise ValueError(
@@ -273,7 +273,7 @@ class EntityWriteMixin:
                 raise ValueError(
                     "Entity was created concurrently; rerun diff_entity before writing"
                 )
-            if current is not None:
+            if current is not None and conflict_policy != "external_authority":
                 latest_sha256 = sha256((latest or "").encode("utf-8")).hexdigest()
                 if latest_sha256 != expected_sha256:
                     raise ValueError(

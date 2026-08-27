@@ -425,15 +425,18 @@ class PatchMixin:
     ) -> str:
         """Materialize an explicit candidate with an optimistic-lock check."""
         current = self.store.read_entity(concept, class_name or None, object_name)
-        current_hash = sha256((current or "").encode("utf-8")).hexdigest()
-        if expected_sha256 and expected_sha256 != current_hash:
-            raise ValueError(
-                f"Entity changed since diff; rerun diff_entity before merge (expected={expected_sha256}, actual={current_hash}).",
-            )
-        if current is not None and not expected_sha256:
-            raise ValueError(
-                "Existing entity merges require expected_sha256 from diff_entity",
-            )
+        # ponytail: lock applies to "detect" (extraction workers); external_authority
+        # OPL apply writes through without a hash compare.
+        if conflict_policy != "external_authority":
+            current_hash = sha256((current or "").encode("utf-8")).hexdigest()
+            if expected_sha256 and expected_sha256 != current_hash:
+                raise ValueError(
+                    f"Entity changed since diff; rerun diff_entity before merge (expected={expected_sha256}, actual={current_hash}).",
+                )
+            if current is not None and not expected_sha256:
+                raise ValueError(
+                    "Existing entity merges require expected_sha256 from diff_entity",
+                )
         return self.write_entity(
             concept,
             class_name,
