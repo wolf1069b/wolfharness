@@ -260,16 +260,18 @@ async def _async_push_to_remote(tools: Any, target_uri: str, opl_uri: str) -> di
     result: dict[str, object] = {"sync_status": "ok"}
     errors: list[str] = []
 
+    # Entity URIs from store.entity_uri() lack .md extension; Viking SDK requires it for create mode
+    push_uri = target_uri if target_uri.endswith(".md") else target_uri + ".md"
     entity_content = await asyncio.to_thread(tools.read_resource, target_uri)
     if entity_content:
         try:
             try:
-                await client.stat(target_uri)
+                await client.stat(push_uri)
                 write_mode = "replace"
             except Exception:
                 write_mode = "create"
-            await client.write(target_uri, entity_content, mode=write_mode, wait=True)
-            result["synced_entity_uri"] = target_uri
+            await client.write(push_uri, entity_content, mode=write_mode, wait=True)
+            result["synced_entity_uri"] = push_uri
         except Exception as exc:
             errors.append(f"entity: {exc}")
             logger.warning("Sync entity to remote failed: %s", exc)
