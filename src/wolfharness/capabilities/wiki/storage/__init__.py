@@ -18,6 +18,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
+from typing import Any
 
 from openviking_sdk.errors import NotFoundError, OpenVikingError  # type: ignore[import-untyped]
 from wolfharness.capabilities.wiki.namespaces import raw_namespace, wiki_namespace
@@ -38,6 +39,7 @@ __all__ = [
     "LocalVikingFS",
     "VikingFS",
     "WikiStore",
+    "async_viking_read",
     "create_raw_reader",
     "create_wiki_store",
 ]
@@ -76,6 +78,42 @@ def viking_read(uri: str, *, propagate_unavailable: bool = False) -> str | None:
         logger.warning("viking read failed: %s (%s)", uri, type(exc).__name__)
         if propagate_unavailable:
             raise
+        return None
+    return _strip_control_chars(content) if content is not None else None
+
+
+_async_client_cache: Any | None = None
+
+
+async def _async_viking_client() -> Any:
+    """Return a memoized AsyncHTTPClient for async remote operations.
+
+    Uses the same SDK class and env-var config as ``VikingCapability``.
+    """
+    global _async_client_cache  # noqa: PLW0603
+    if _async_client_cache is None:
+        from openviking_sdk import AsyncHTTPClient
+
+        _async_client_cache = AsyncHTTPClient(
+            url=os.environ.get("VIKING_BASE_URL", _VIKING_DEFAULT_URL),
+            api_key=os.environ.get("VIKING_API_KEY"),
+        )
+        await _async_client_cache.initialize()
+    return _async_client_cache
+
+
+async def async_viking_read(uri: str) -> str | None:
+    """Async cross-namespace read via ``AsyncHTTPClient``.
+
+    Same semantics as :func:`viking_read` but non-blocking.
+    """
+    try:
+        client = await _async_viking_client()
+        content = await client.read(uri)
+    except OpenVikingError as exc:
+        if isinstance(exc, NotFoundError) or str(getattr(exc, "code", "")).upper() == "NOT_FOUND":
+            return None
+        logger.warning("async viking read failed: %s (%s)", uri, type(exc).__name__)
         return None
     return _strip_control_chars(content) if content is not None else None
 

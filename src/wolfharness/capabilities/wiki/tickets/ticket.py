@@ -235,7 +235,7 @@ def _ticket_evidence(
     return list(dict.fromkeys([*cited, *linked]))
 
 
-def _sync_entity_to_remote(tools: Any, target_uri: str, opl_uri: str) -> dict[str, object]:
+async def _async_push_to_remote(tools: Any, target_uri: str, opl_uri: str) -> dict[str, object]:
     """Push the patched entity page and OPL record to remote Viking.
 
     Best-effort: if the SDK is unavailable or the API key is missing,
@@ -249,47 +249,41 @@ def _sync_entity_to_remote(tools: Any, target_uri: str, opl_uri: str) -> dict[st
         return {"sync_status": "skipped", "sync_reason": "VIKING_API_KEY not set"}
 
     try:
-        from openviking_sdk import SyncHTTPClient
+        from openviking_sdk import AsyncHTTPClient
     except ImportError:
         return {"sync_status": "skipped", "sync_reason": "openviking-sdk not installed"}
 
     base_url = os.environ.get("VIKING_BASE_URL", "http://viking.ai.rootcloud.info/")
-    client = SyncHTTPClient(url=base_url, api_key=api_key)
-    initialize = getattr(client, "initialize", None)
-    if callable(initialize):
-        initialize()
+    client = AsyncHTTPClient(url=base_url, api_key=api_key)
+    await client.initialize()
 
     result: dict[str, object] = {"sync_status": "ok"}
     errors: list[str] = []
 
-    entity_content = tools.read_resource(target_uri)
+    entity_content = await asyncio.to_thread(tools.read_resource, target_uri)
     if entity_content:
         try:
             try:
-                stat = getattr(client, "stat", None)
-                if callable(stat):
-                    stat(target_uri)
+                await client.stat(target_uri)
                 write_mode = "replace"
             except Exception:
                 write_mode = "create"
-            client.write(target_uri, entity_content, mode=write_mode, wait=True)
+            await client.write(target_uri, entity_content, mode=write_mode, wait=True)
             result["synced_entity_uri"] = target_uri
         except Exception as exc:
             errors.append(f"entity: {exc}")
             logger.warning("Sync entity to remote failed: %s", exc)
 
     if opl_uri.startswith("viking://"):
-        opl_content = tools.read_resource(opl_uri)
+        opl_content = await asyncio.to_thread(tools.read_resource, opl_uri)
         if opl_content:
             try:
                 try:
-                    stat = getattr(client, "stat", None)
-                    if callable(stat):
-                        stat(opl_uri)
+                    await client.stat(opl_uri)
                     write_mode = "replace"
                 except Exception:
                     write_mode = "create"
-                client.write(opl_uri, opl_content, mode=write_mode, wait=True)
+                await client.write(opl_uri, opl_content, mode=write_mode, wait=True)
                 result["synced_opl_uri"] = opl_uri
             except Exception as exc:
                 errors.append(f"opl: {exc}")
@@ -765,8 +759,7 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
                 str(opl_row.get("target_uri", "")) if opl_row else ""
             )
             opl_uri_effective = str(opl_row.get("uri", opl_uri)) if opl_row else opl_uri
-            result["sync"] = await asyncio.to_thread(
-                _sync_entity_to_remote,
+            result["sync"] = await _async_push_to_remote(
                 tools,
                 entity_uri,
                 opl_uri_effective,
@@ -1006,6 +999,10 @@ def _build_ticket_fns(tools: Any, *, sync_after_apply: bool = False) -> list[Cal
             ``sha256`` (hex digest of the UTF-8 encoded content).
         """
         content = await asyncio.to_thread(tools.read_resource, uri)
+        if not content and uri.startswith("viking://resources/"):
+            from wolfharness.capabilities.wiki.storage import async_viking_read
+
+            content = await async_viking_read(uri)
         if not content:
             return {"uri": uri, "content": "", "sha256": "", "error": "resource not found"}
         return {

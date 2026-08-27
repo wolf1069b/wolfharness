@@ -232,7 +232,8 @@ class EntityWriteMixin:
         # dangling body-link gap. Unknown targets are left untouched by the
         # repair helper and remain source-honest open gaps.
         content = materialize_body_links(content, concept, self)
-        self._reject_wrong_raw_refs(content)
+        if conflict_policy != "external_authority":
+            self._reject_wrong_raw_refs(content)
         self._reject_malformed_wiki_refs(content)
         self._reject_nonexistent_raw_sources(content)
         # Deduplicate inline [viking://uri] citations within each section.
