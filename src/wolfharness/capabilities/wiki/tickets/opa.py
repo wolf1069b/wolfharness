@@ -1599,21 +1599,10 @@ class OPAMixin(WikiBuildDeps):
                 ),
             )
         current = self.store.read_entity(concept, class_name or None, object_name)
-        expected_sha256 = str(frontmatter.get("expected_sha256", ""))
-        if current is not None:
-            current_sha256 = sha256(current.encode("utf-8")).hexdigest()
-            if not expected_sha256:
-                return self._update_ops_apply_status(
-                    current_id,
-                    "needs_review",
-                    "Existing target requires expected_sha256 before application.",
-                )
-            if expected_sha256 != current_sha256:
-                return self._update_ops_apply_status(
-                    current_id, "failed", "Target changed; refresh OPS with a new expected_sha256."
-                )
-            if not candidate:
-                candidate = self._apply_operations(current, operations)
+        # ponytail: optimistic-lock removed (external_authority path, mirrors
+        # apply_opl) — expert records write through without a hash compare.
+        if current is not None and not candidate:
+            candidate = self._apply_operations(current, operations)
         elif not candidate:
             return self._update_ops_apply_status(
                 current_id, "failed", "Patch operations cannot create a missing entity."
@@ -1624,7 +1613,6 @@ class OPAMixin(WikiBuildDeps):
                 class_name,
                 object_name,
                 candidate,
-                expected_sha256=expected_sha256,
                 # This IS the expert apply path: the record itself is already
                 # confirmed, so its own authority claim must not revert its
                 # candidate (mirrors apply_opl).
@@ -1994,26 +1982,11 @@ class OPAMixin(WikiBuildDeps):
                 opl_id, status="unconfirmed", apply_status="needs_review"
             )
         current = self.store.read_entity(concept, class_name or None, object_name)
-        expected_sha256 = str(frontmatter.get("expected_sha256", ""))
-        if current is not None:
-            current_sha256 = sha256(current.encode("utf-8")).hexdigest()
-            if not expected_sha256:
-                return self._update_external_opl_status(
-                    opl_id,
-                    status="unconfirmed",
-                    apply_status="needs_review",
-                    apply_error="Existing target requires expected_sha256 before automatic application.",
-                )
-            if expected_sha256 != current_sha256:
-                return self._update_external_opl_status(
-                    opl_id,
-                    status="unconfirmed",
-                    apply_status="failed",
-                    apply_error="Target changed after external OPL was prepared; re-submit with a fresh expected_sha256.",
-                )
-            expected_sha256 = current_sha256
-            if not candidate:
-                candidate = self._apply_operations(current, operations)
+        # ponytail: optimistic-lock removed — external OPL is authoritative,
+        # last apply silently wins. Re-add expected_sha256 compare if concurrent
+        # applies to the same target ever overwrite each other.
+        if current is not None and not candidate:
+            candidate = self._apply_operations(current, operations)
         elif not candidate:
             return self._update_external_opl_status(
                 opl_id,
@@ -2027,7 +2000,6 @@ class OPAMixin(WikiBuildDeps):
                 class_name,
                 object_name,
                 candidate,
-                expected_sha256=expected_sha256,
                 conflict_policy="external_authority",
             )
         except (FileNotFoundError, OSError, ValueError) as error:
