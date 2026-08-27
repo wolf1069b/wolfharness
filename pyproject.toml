@@ -385,7 +385,7 @@ python_version = "3.13"
 pretty = true
 strict = true
 check_untyped_defs = true
-exclude = ["venv/", ".venv/", "src/wolfharness/capabilities/wiki/"]
+exclude = ["venv/", ".venv/"]
 plugins = ["pydantic.mypy"]
 warn_return_any = true
 warn_unused_configs = true
@@ -443,8 +443,6 @@ module = [
   "fastmcp.tools.tool",
   "apprise",
   "openviking_sdk",
-  "xeno_adp_agentic.*",
-  "xeno_adp_harness.*",
 ]
 ignore_missing_imports = true
 

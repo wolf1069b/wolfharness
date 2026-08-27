@@ -141,7 +141,7 @@ async def test_execute_turn_dispatches_to_agent_event_handler() -> None:
     """Serve path (RunHandle) forwards events to the agent's event handler.
 
     The configured ``event_handlers`` (e.g.
-    ``wolfharness.capabilities.wiki.harness.event_handlers:per_session_file_handler``) only fire
+    ``xeno_adp_agentic.wiki.harness.event_handlers:per_session_file_handler``) only fire
     when ``_execute_turn()`` dispatches each mapped event to
     ``agent.event_handler``. Without this dispatch, per-session log files
     are never written in the serve/OpenCode path.
