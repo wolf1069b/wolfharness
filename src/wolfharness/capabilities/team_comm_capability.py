@@ -2388,7 +2388,13 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         # leaks.  This covers the scenario where the lead's run finishes
         # but ``close_session(lead)`` is not called (e.g. protocol server
         # keeps the lead session alive for follow-ups).
-        self._schedule_member_cleanup(agent_ctx, lead_session_id, list(created_sessions))
+        self._schedule_member_cleanup(
+            agent_ctx,
+            lead_session_id,
+            list(created_sessions),
+            team_id,
+            base_dir,
+        )
 
         team_dir = team_state._team_dir(team_id)
         logger.info(
@@ -2408,6 +2414,8 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         agent_ctx: AgentContextDeps,
         lead_session_id: str,
         member_session_ids: list[str],
+        team_id: str,
+        base_dir: str,
     ) -> None:
         """Schedule a background task to close member sessions when the lead goes idle.
 
@@ -2415,7 +2423,10 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         has been inactive for longer than ``idle_timeout`` (default 300s),
         closes every member session whose ID is still recorded in
         ``session.metadata["team_member_sessions"]`` (``team_delete``
-        clears this list to signal manual cleanup was already performed).
+        clears this list to signal manual cleanup was already performed),
+        **and** removes those members from ``state.json`` so that the
+        freed capacity slots are visible to subsequent ``team_add_member``
+        calls.
 
         This approach correctly handles protocol-server sessions (e.g.
         OpenCode) where the lead's RunLoop stays alive between turns —
@@ -2426,6 +2437,8 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             agent_ctx: The lead agent's per-turn context.
             lead_session_id: The lead session ID.
             member_session_ids: Member session IDs to close on idle.
+            team_id: Team ID for state.json cleanup.
+            base_dir: Base directory for FileTeamState.
         """
         session_pool = agent_ctx.host.session_pool
         if session_pool is None:
@@ -2513,6 +2526,11 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                                 member_session_id=msid,
                                 lead_session_id=lead_session_id,
                             )
+                    self._remove_members_from_state(
+                        team_id,
+                        base_dir,
+                        set(member_session_ids),
+                    )
                     # Clear list so cascade close is a no-op.
                     current_session.metadata["team_member_sessions"] = []
                     return  # Cleanup done, exit loop.
@@ -2532,6 +2550,34 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                 )
 
         task.add_done_callback(_on_done)
+
+    @staticmethod
+    def _remove_members_from_state(
+        team_id: str,
+        base_dir: str,
+        closed_session_ids: set[str],
+    ) -> None:
+        """Remove members whose session IDs are in *closed_session_ids* from state.json.
+
+        Used by idle auto-cleanup to free ``max_members`` capacity slots
+        after closing member sessions.
+        """
+        from wolfharness.capabilities.file_team_state import FileTeamState
+
+        team_state = FileTeamState(base_dir)
+        state_path = team_state._state_path(team_id)
+        if not state_path.exists():
+            return
+        state = team_state._read_json(state_path)
+        members: dict[str, dict[str, str]] = state.get("members", {})
+        changed = False
+        for mname, mdata in list(members.items()):
+            if mdata.get("session_id", "") in closed_session_ids:
+                members.pop(mname, None)
+                changed = True
+        if changed:
+            state["members"] = members
+            team_state._atomic_write(state_path, state)
 
     async def team_delete(self, ctx: RunContext[Any]) -> ToolReturn:
         """Delete the current team and close all member sessions (lead-only).
