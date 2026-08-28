@@ -104,6 +104,12 @@ def test_get_member_session_id_returns_none_for_unregistered(
     assert result is None
 
 
+def test_get_member_agent_returns_registered_role(initialized_team: FileTeamState) -> None:
+    """Member display names resolve to their configured agent role."""
+    assert initialized_team.get_member_agent("team-1", "alice") == "alice"
+    assert initialized_team.get_member_agent("team-1", "charlie") is None
+
+
 # ------------------------------------------------------------------
 # 3. write_message + read_messages round-trip
 # ------------------------------------------------------------------

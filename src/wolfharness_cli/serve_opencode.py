@@ -14,6 +14,8 @@ Configuration is resolved from multiple layers (in precedence order):
 from __future__ import annotations
 
 import asyncio
+import os
+from pathlib import Path
 from typing import Annotated, Any
 
 from platformdirs import user_log_path
@@ -53,7 +55,12 @@ def _configure_observability_and_logging(
 
     registry.configure_observability(manifest.observability)
 
-    log_dir = user_log_path("wolfharness", appauthor=False)
+    configured_log_dir = os.environ.get("WOLFHARNESS_LOG_DIR", "").strip()
+    log_dir = (
+        Path(configured_log_dir).expanduser()
+        if configured_log_dir
+        else user_log_path("wolfharness", appauthor=False)
+    )
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "opencode.log"
     ap_log.configure_logging(level=log_level.upper(), force=True, log_file=str(log_file))

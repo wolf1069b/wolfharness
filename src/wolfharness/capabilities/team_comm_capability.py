@@ -54,9 +54,11 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import datetime
+import hashlib
 import json
+import re
 import tempfile
-from typing import TYPE_CHECKING, Annotated, Any, override
+from typing import TYPE_CHECKING, Annotated, Any, NotRequired, TypedDict, override
 import uuid
 
 from pydantic.fields import Field
@@ -85,6 +87,24 @@ logger = get_logger(__name__)
 # Strong references to cleanup tasks so asyncio does not garbage-collect them
 # while they are awaiting ``RunHandle.complete_event``.
 _cleanup_tasks: set[asyncio.Task[Any]] = set()
+
+# Bounded wait for an ephemeral member's run to complete. ``complete_event``
+# may never fire on protocol-server sessions (see _schedule_member_cleanup),
+# so after this grace window we fall back to the shared task board: no
+# in_progress task owned by the member => safe to clean up the session.
+_EPHEMERAL_COMPLETE_GRACE_SECONDS = 120.0
+
+
+class InitialMemberTask(TypedDict):
+    """Task persisted atomically before a newly added member is awakened."""
+
+    subject: str
+    description: NotRequired[str]
+    blocked_by: NotRequired[list[str]]
+    parent_id: NotRequired[str]
+    progress_total: NotRequired[int]
+    write_scope: NotRequired[str]
+    write_set: NotRequired[list[str]]
 
 
 class TeamCommCapability(FunctionToolsetCapability[Any]):
@@ -170,54 +190,81 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         """
         return body
 
-    async def _notify_member(
+    async def _notify_member(  # noqa: PLR0911
         self,
         agent_ctx: AgentContextDeps,
         team_id: str,
         member_name: str,
         msg_body: str,
-    ) -> None:
+        *,
+        force_queue: bool = True,
+    ) -> bool:
         """Send a best-effort system notification to a team member.
 
         Used by task_create and task_update to push notifications when
         tasks are assigned or unblocked, so agents don't have to poll
         task_list to discover their work.
 
+        Task notifications default to QUEUE delivery so that, when the
+        member is busy, the message lands in ``prompt_queue`` and
+        ``_consume_run`` chains a follow-up turn after the current one
+        ends.  STEER (``self._notice_mode``) would inject into the active
+        turn and be consumed there without scheduling a follow-up —
+        leaving the member permanently idle at one turn.  When the member
+        is idle, QUEUE still starts a new run via ``_start_run_handle``
+        (idle sessions ignore priority), so no wakeup is lost.  Pass
+        ``force_queue=False`` only for genuinely in-band steerable
+        messages.
+
         Silently skips when the member has no session, when notifying
         self, or when session_pool is unavailable.
         """
         team_state = self._get_team_state(agent_ctx)
         if team_state is None:
-            return
+            return False
         session_pool = agent_ctx.host.session_pool
         if session_pool is None:
-            return
+            return False
         target_sid = team_state.get_member_session_id(team_id, member_name)
         if target_sid is None:
-            return
+            return False
         current_member: str = agent_ctx.session.metadata.get(
             "team_member_name",
             self._agent_name,
         )
         if member_name == current_member:
-            return
+            return False
         wrapped = (
             f'<team-message from="system" type="task_notification">\n\n'
             f"{msg_body}\n\n</team-message>"
         )
+        # Task notifications must QUEUE so a busy member gets a follow-up
+        # turn; STEER would be swallowed by the active turn (see docstring).
+        from wolfharness.lifecycle.types import DeliveryMode
+
+        mode = DeliveryMode.QUEUE if force_queue else self._notice_mode
         try:
-            await session_pool.send_message(
+            result = await session_pool.send_message(
                 target_sid,
                 self._wrap_notice_content(wrapped),
-                mode=self._notice_mode,
+                mode=mode,
                 source="accepted",
                 meta={"from": "system", "team_id": team_id},
             )
+            if result is None:
+                target_session = session_pool.sessions.get_session(target_sid)
+                return (
+                    target_session is not None
+                    and not target_session.closing
+                    and not target_session.is_closing
+                )
+            return True  # noqa: TRY300
         except Exception:  # noqa: BLE001
             logger.warning(
                 "Failed to notify member '%s' for task notification",
                 member_name,
             )
+            return False
 
     # ------------------------------------------------------------------
     # Helpers
@@ -341,17 +388,56 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         # Prefer base_dir from session metadata (set by team_create) so
         # that team_status and other tools always find the state even if
         # team_mode_config is None in the per-turn AgentContextDeps.
-        base_dir: str = agent_ctx.session.metadata.get(
-            "team_base_dir",
-            "",
-        )
-        if not base_dir:
-            base_dir = (
-                agent_ctx.team_mode_config.effective_base_dir
-                if agent_ctx.team_mode_config is not None
-                else tempfile.gettempdir()
-            )
-        return FileTeamState(base_dir)
+        return FileTeamState(self._get_team_base_dir(agent_ctx))
+
+    @staticmethod
+    def _session_has_live_run(session_pool: Any, session_id: str) -> bool:
+        """Return runtime busy state from the live run registry.
+
+        ``current_run_id`` can outlive its ``RunHandle`` during cancellation
+        cleanup. Prefer the controller's repair-capable lookup and retain a
+        conservative fallback for lightweight test doubles.
+        """
+        sessions = getattr(session_pool, "sessions", None)
+        get_live_run = getattr(sessions, "get_live_run", None)
+        if callable(get_live_run):
+            return get_live_run(session_id) is not None
+        session = sessions.get_session(session_id) if sessions is not None else None
+        if session is None:
+            return False
+        run_id = getattr(session, "current_run_id", None)
+        if run_id is None:
+            return False
+        get_run = getattr(session_pool, "get_run", None)
+        if callable(get_run):
+            run = get_run(run_id)
+            return run is not None and not run.complete_event.is_set()
+        return True
+
+    @staticmethod
+    def _task_lease_active(task: dict[str, Any]) -> bool:
+        """Return whether a task currently has a live lease."""
+        token = str(task.get("lease_token", "")).strip()
+        expires_at = str(task.get("lease_expires_at", "")).strip()
+        if not token or not expires_at:
+            return False
+        try:
+            expires = datetime.datetime.fromisoformat(expires_at)
+        except ValueError:
+            return False
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=datetime.UTC)
+        return expires > datetime.datetime.now(datetime.UTC)
+
+    @staticmethod
+    def _get_team_base_dir(agent_ctx: AgentContextDeps) -> str:
+        """Resolve the shared directory containing a team's durable state."""
+        base_dir: str = agent_ctx.session.metadata.get("team_base_dir", "")
+        if base_dir:
+            return base_dir
+        if agent_ctx.team_mode_config is not None:
+            return agent_ctx.team_mode_config.effective_base_dir
+        return tempfile.gettempdir()
 
     async def _create_member_session(
         self,
@@ -506,6 +592,95 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         return summaries
 
     @staticmethod
+    def _task_idempotency_key(
+        subject: str,
+        description: str,
+        parent_id: str | None = None,
+        write_set: list[str] | None = None,
+    ) -> str:
+        """Build a stable key for workflow tasks that carry packet metadata.
+
+        Wiki workflow retries are common around turn/session boundaries.  The
+        packet and stage identify the workflow; including the operation,
+        entity type, parent, and canonical write set identifies the concrete
+        unit of work.  This permits independent Phase 0 shards from one
+        packet while keeping an exact shard retry idempotent. Generic team
+        tasks without packet metadata retain the old behavior.
+        """
+        text = f"{subject}\n{description}"
+
+        def field(name: str) -> str:
+            match = re.search(
+                rf"\b{name}\s*[:=]\s*['\"]?(?:\[\s*)?([A-Za-z0-9_.-]+)",
+                text,
+                re.IGNORECASE,
+            )
+            return match.group(1).casefold() if match else ""
+
+        explicit = field("idempotency_key") or field("task_key")
+        # ponytail: "0" is a conductor placeholder — fall through to
+        # packet_id to avoid collapsing distinct chapters
+        if explicit == "0":
+            explicit = ""
+        packet = field("packet_id") or field("packet_ids")
+        if not explicit and not packet:
+            return ""
+        phase = field("phase")
+        operation = field("phase0_operation")
+        entity_type = field("entity_type")
+        parent = parent_id or ""
+        targets = {value.strip() for value in write_set or [] if value.strip()}
+        if not targets:
+            write_set_match = re.search(
+                r"\bwrite_set\s*[:=]\s*\[(?P<values>[^\]]*)\]",
+                text,
+                re.IGNORECASE | re.DOTALL,
+            )
+            if write_set_match:
+                targets.update(
+                    match.group(0).rstrip(".,;)")
+                    for match in re.finditer(
+                        r"[A-Za-z][A-Za-z0-9+.-]*://[^\s,\]}'\"]+",
+                        write_set_match.group("values"),
+                    )
+                )
+        target_fingerprint = ""
+        if targets:
+            target_fingerprint = hashlib.sha256(
+                "\x1f".join(sorted(targets)).encode("utf-8"),
+            ).hexdigest()[:16]
+        # Once packet/task metadata exists, the metadata is the stable intent
+        # identity.  Titles are deliberately excluded: a retry may rephrase
+        # a subject without representing a new unit of work.
+        return "|".join(
+            (explicit or packet, phase, operation, entity_type, parent, target_fingerprint),
+        )
+
+    @classmethod
+    def _find_existing_idempotent_task(
+        cls,
+        team_state: FileTeamState,
+        team_id: str,
+        subject: str,
+        description: str,
+        parent_id: str | None,
+        write_set: list[str] | None = None,
+    ) -> str | None:
+        key = cls._task_idempotency_key(subject, description, parent_id, write_set)
+        if not key:
+            return None
+        for task in team_state.list_tasks(team_id):
+            existing_key = cls._task_idempotency_key(
+                str(task.get("subject", "")),
+                str(task.get("description", "")),
+                str(task.get("parent_id", "")) or None,
+                task.get("write_set") if isinstance(task.get("write_set"), list) else None,
+            )
+            if existing_key == key:
+                return str(task.get("task_id", "")) or None
+        return None
+
+    @staticmethod
     def _snapshot_task_mtimes(
         team_state: FileTeamState,
         team_id: str,
@@ -595,8 +770,10 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             mode = self._notice_mode
             delivered = 0
             lead_sid = agent_ctx.session.session_id
+            sent_at = datetime.datetime.now(datetime.UTC).isoformat().replace("+00:00", "Z")
             msg_body = (
-                f'<team-message from="{self._agent_name}" type="broadcast">'
+                f'<team-message from="{self._agent_name}" type="broadcast" '
+                f'sent_at="{sent_at}">'
                 f"\n\n{body}\n\n</team-message>"
             )
             for member_name in members:
@@ -679,8 +856,10 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         from wolfharness.lifecycle.types import DeliveryMode
 
         mode = self._notice_mode
+        sent_at = datetime.datetime.now(datetime.UTC).isoformat().replace("+00:00", "Z")
         msg_body = (
-            f'<team-message from="{self._agent_name}" type="private">\n\n{body}\n\n</team-message>'
+            f'<team-message from="{self._agent_name}" type="private" '
+            f'sent_at="{sent_at}">\n\n{body}\n\n</team-message>'
         )
         result = await session_pool.send_message(
             target_sid,
@@ -725,7 +904,7 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
 
         return ToolReturn(return_value=result_msg)
 
-    async def task_create(
+    async def task_create(  # noqa: PLR0911
         self,
         ctx: RunContext[Any],
         subject: Annotated[str, Field(description="Short task title")],
@@ -750,6 +929,18 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                 "When None (top-level), only lead can create"
             ),
         ] = None,
+        write_scope: Annotated[
+            str | None,
+            Field(
+                description="Optional exclusive write scope, such as relation_closure",
+            ),
+        ] = None,
+        write_set: Annotated[
+            list[str] | None,
+            Field(
+                description="Optional canonical entity URIs this task may write",
+            ),
+        ] = None,
     ) -> ToolReturn:
         """Assign work to a team member by creating a task on the shared task board.
 
@@ -763,6 +954,13 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         role: str = agent_ctx.session.metadata.get("team_role", "")
         if parent_id is None and role != "lead":
             return ToolReturn(return_value="Only lead can use task_create")
+        if parent_id is not None and role != "lead" and not self._config.member_can_create_subtasks:
+            return ToolReturn(
+                return_value=(
+                    "Member subtask creation is disabled for this workflow; "
+                    "report the missing work to the lead instead of creating a task."
+                ),
+            )
         team_id = self._get_team_id(agent_ctx)
         if team_id is None:
             return ToolReturn(return_value="Not in a team session")
@@ -770,6 +968,17 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         team_state = self._get_team_state(agent_ctx)
         if team_state is None:
             return ToolReturn(return_value="Not in a team session")
+
+        existing_id = self._find_existing_idempotent_task(
+            team_state,
+            team_id,
+            subject,
+            description,
+            parent_id,
+            write_set,
+        )
+        if existing_id:
+            return ToolReturn(return_value=f"Task already exists (idempotent retry): {existing_id}")
 
         if parent_id is not None:
             parent = team_state.get_task(team_id, parent_id)
@@ -781,8 +990,15 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             "description": description,
             "blocked_by": blocked_by or [],
         }
+        intent_key = self._task_idempotency_key(subject, description, parent_id, write_set)
+        if intent_key:
+            task_dict["intent_key"] = intent_key
         if parent_id is not None:
             task_dict["parent_id"] = parent_id
+        if write_scope:
+            task_dict["write_scope"] = write_scope
+        if write_set:
+            task_dict["write_set"] = write_set
         if owner:
             task_dict["owner"] = owner
 
@@ -806,7 +1022,7 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             )
 
         # Notify the assigned member about the new task.
-        if owner != current_member:
+        if owner and owner != current_member:
             blocked_str = ""
             if blocked_by:
                 blocked_str = f" (blocked by: {', '.join(blocked_by)})"
@@ -823,7 +1039,7 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             result += "\n" + "\n".join(warnings)
         return ToolReturn(return_value=result)
 
-    async def task_create_batch(
+    async def task_create_batch(  # noqa: PLR0915
         self,
         ctx: RunContext[Any],
         tasks: Annotated[
@@ -834,7 +1050,8 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                 '"blocked_by" (list of #N index refs or symbolic id refs), '
                 '"parent_id" (also supports #N/id refs), "id" (optional '
                 'symbolic name for cross-references), "progress_total" '
-                '(optional int)")'
+                '(optional int), "write_scope" and "write_set" for '
+                'formal-write isolation)"'
             ),
         ],
     ) -> ToolReturn:
@@ -859,15 +1076,106 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         if team_state is None:
             return ToolReturn(return_value="Not in a team session")
 
+        existing_by_key: dict[str, str] = {}
+        for task in team_state.list_tasks(team_id):
+            key = self._task_idempotency_key(
+                str(task.get("subject", "")),
+                str(task.get("description", "")),
+                str(task.get("parent_id", "")) or None,
+                task.get("write_set") if isinstance(task.get("write_set"), list) else None,
+            )
+            if key:
+                existing_by_key[key] = str(task.get("task_id", ""))
+        duplicate_ids: list[str] = []
+        batch_keys: set[str] = set()
+        for task in tasks:
+            key = self._task_idempotency_key(
+                str(task.get("subject", "")),
+                str(task.get("description", "")),
+                str(task.get("parent_id", "")) or None,
+                task.get("write_set") if isinstance(task.get("write_set"), list) else None,
+            )
+            if not key:
+                continue
+            if key in existing_by_key:
+                duplicate_ids.append(existing_by_key[key])
+            elif key in batch_keys:
+                duplicate_ids.append(f"batch:{key}")
+            batch_keys.add(key)
+        if duplicate_ids:
+            return ToolReturn(
+                return_value=(
+                    "Idempotency guard: task batch overlaps existing or duplicate "
+                    f"workflow task(s): {', '.join(duplicate_ids)}. Retry only the missing tasks."
+                ),
+            )
+
+        persisted_tasks: list[dict[str, Any]] = []
+        for task in tasks:
+            persisted = dict(task)
+            intent_key = self._task_idempotency_key(
+                str(task.get("subject", "")),
+                str(task.get("description", "")),
+                str(task.get("parent_id", "")) or None,
+                task.get("write_set") if isinstance(task.get("write_set"), list) else None,
+            )
+            if intent_key:
+                persisted["intent_key"] = intent_key
+            persisted_tasks.append(persisted)
+
         try:
-            task_ids = team_state.create_tasks_batch(team_id, tasks)
+            task_ids = team_state.create_tasks_batch(team_id, persisted_tasks)
         except ValueError as exc:
             return ToolReturn(return_value=str(exc))
+
+        # Batch creation must have the same dispatch semantics as task_create.
+        # Without this notification, workers spawned before the batch see an
+        # empty mine_only view and ephemeral workers may exit before their task
+        # becomes actionable.  Group notifications by owner to keep one batch
+        # atomic at the board level and one wake-up per worker.
+        current_member: str = agent_ctx.session.metadata.get(
+            "team_member_name",
+            self._agent_name,
+        )
+        notifications: dict[str, list[str]] = {}
+        for task, task_id in zip(persisted_tasks, task_ids, strict=True):
+            owner = str(task.get("owner", "")).strip()
+            if not owner or owner == current_member:
+                continue
+            blocked_by = task.get("blocked_by") or []
+            blocked_str = ""
+            if blocked_by:
+                blocked_str = f" (blocked by: {', '.join(str(ref) for ref in blocked_by)})"
+            subject = str(task.get("subject", "?")).strip()
+            notifications.setdefault(owner, []).append(f"- [{task_id}] {subject}{blocked_str}")
+
+        delivery_lines: list[str] = []
+        for owner, task_lines in notifications.items():
+            target_sid = team_state.get_member_session_id(team_id, owner)
+            if target_sid is None:
+                delivery_lines.append(
+                    f"⚠️ {owner}=NO_SESSION ({len(task_lines)} task(s)) — "
+                    f"worker not created. Use team_add_member(initial_task=...) "
+                    f"to create this worker before assigning tasks."
+                )
+                continue
+            delivered = await self._notify_member(
+                agent_ctx,
+                team_id,
+                owner,
+                "These are authoritative assignments from the latest task batch. "
+                "Ignore any earlier placeholder or stale task context.\n"
+                + "\n".join(task_lines)
+                + "\nUse task_list(mine_only=True), then claim each task with "
+                'task_update(status="in_progress") before doing work.',
+            )
+            state = "notified" if delivered else "notification_pending"
+            delivery_lines.append(f"{owner}={state} ({len(task_lines)} task(s))")
 
         # Build mapping of #N / symbolic id -> actual task ID for the return.
         id_mapping: list[str] = []
         for i, tid in enumerate(task_ids):
-            sym_id: str | None = tasks[i].get("id") if i < len(tasks) else None
+            sym_id: str | None = persisted_tasks[i].get("id") if i < len(persisted_tasks) else None
             if sym_id:
                 id_mapping.append(f"#{i} / '{sym_id}' -> {tid}")
             else:
@@ -876,7 +1184,13 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         mapping_str = "\n".join(id_mapping)
         return ToolReturn(
             return_value=(
-                f"Created {len(task_ids)} tasks:\n{mapping_str}\nTask IDs: {', '.join(task_ids)}"
+                f"Created {len(task_ids)} tasks:\n{mapping_str}\n"
+                f"Task IDs: {', '.join(task_ids)}"
+                + (
+                    "\nDispatch: " + "; ".join(delivery_lines)
+                    if delivery_lines
+                    else "\nDispatch: no external owners"
+                )
             )
         )
 
@@ -900,6 +1214,13 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             bool,
             Field(description="If True, show only tasks owned by you"),
         ] = False,
+        active_only: Annotated[
+            bool,
+            Field(
+                description="If True, omit terminal tasks from the response; "
+                "use task_get for completed-task audit details"
+            ),
+        ] = False,
     ) -> ToolReturn:
         """List tasks on the shared task board.
 
@@ -908,6 +1229,10 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         that task (as a flat list).  When ``include_children=True``,
         subtasks are nested inside parent tasks in the XML output.
         When ``mine_only=True``, filters to tasks owned by the calling member.
+        The owned view is flat and includes owned subtasks even when their
+        parent belongs to another member; otherwise a worker can be assigned
+        work but see an empty board because the default view contains only
+        top-level tasks.
 
         Returns:
             XML task list with owner summary, or error string.
@@ -927,8 +1252,16 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             return ToolReturn(return_value="Not in a team session")
 
         all_tasks = team_state.list_tasks(team_id)
+        if active_only:
+            all_tasks = [
+                task
+                for task in all_tasks
+                if task.get("status")
+                not in {"completed", "failed", "cancelled", "deleted", "dead_letter"}
+            ]
         if not all_tasks:
-            return ToolReturn(return_value="<task_list>(empty)</task_list>")
+            suffix = " active tasks" if active_only else " tasks"
+            return ToolReturn(return_value=f"<task_list>(empty)</task_list>\n0{suffix}")
 
         # Filter to mine_only if requested.
         if mine_only:
@@ -941,6 +1274,18 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                 return ToolReturn(
                     return_value=(f"<task_list>(empty)</task_list>\n0 tasks for {current_member}")
                 )
+
+            # A worker's primary question is "what is assigned to me?".
+            # Do not apply the top-level-only presentation below: assigned
+            # work is commonly represented as a child of a conductor task.
+            if parent_id is None:
+                lines = ["<task_list>"]
+                lines.append(
+                    f"<!-- {format_owner_summary([TaskRecord.from_dict(t) for t in all_tasks])} -->"
+                )
+                lines.extend(self._format_task_xml(t, indent=2) for t in all_tasks)
+                lines.append("</task_list>")
+                return ToolReturn(return_value="\n".join(lines))
 
         # Build TaskRecord list for owner summary.
         task_records = [TaskRecord.from_dict(t) for t in all_tasks]
@@ -1088,6 +1433,13 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             int | None,
             Field(description="Total progress value (denominator)"),
         ] = None,
+        lease_token: Annotated[
+            str,
+            Field(
+                description="Lease token returned when claiming the task. "
+                "Optional on the same session; the server remembers it."
+            ),
+        ] = "",
     ) -> ToolReturn:
         """Update a task's status or owner on the shared task board.
 
@@ -1161,9 +1513,16 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             "team_member_name",
             self._agent_name,
         )
+        role: str = agent_ctx.session.metadata.get("team_role", "")
+        session_tokens: dict[str, str] = agent_ctx.session.metadata.setdefault(
+            "_task_lease_tokens",
+            {},
+        )
+        # Prefer session-stored token (always latest after heartbeat renewal)
+        # over client-provided token (may be stale after intermediate heartbeats).
+        effective_lease_token = session_tokens.get(task_id, "") or lease_token.strip()
 
         # Permission check: lead bypasses, members need ownership or unclaimed.
-        role: str = agent_ctx.session.metadata.get("team_role", "")
         if role != "lead":
             current_owner: str = existing_task.get("owner", "")
             if current_owner and current_owner != current_member:
@@ -1174,16 +1533,73 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                         f"coordinate, or ask the lead to reassign."
                     )
                 )
+            if owner and owner != current_owner and (current_owner or owner != current_member):
+                return ToolReturn(
+                    return_value=(
+                        f"Only the team lead can reassign task {task_id} "
+                        f"from '{current_owner or 'unclaimed'}' to '{owner}'. "
+                        "A member may only claim an unclaimed task for itself."
+                    )
+                )
+            if status == "in_progress" and existing_task.get("status") != "in_progress":
+                active_tasks = [
+                    task
+                    for task in team_state.list_tasks(team_id)
+                    if task.get("owner") == current_member
+                    and task.get("status") == "in_progress"
+                    and task.get("task_id") != task_id
+                ]
+                if active_tasks:
+                    active = active_tasks[0]
+                    return ToolReturn(
+                        return_value=(
+                            f"Team member '{current_member}' already has in_progress task "
+                            f"{active.get('task_id', '?')} ({active.get('subject', '?')}). "
+                            "Complete or fail that task before starting another."
+                        )
+                    )
+            if (
+                status in {"completed", "failed", "cancelled", "dead_letter"}
+                and existing_task.get("status") != "in_progress"
+            ):
+                return ToolReturn(return_value="TASK_LEASE_INVALID")
 
         try:
+            lease_expired = existing_task.get(
+                "status"
+            ) == "in_progress" and not self._task_lease_active(existing_task)
+            claiming = (
+                role != "lead"
+                and existing_task.get("owner", "") in {"", current_member}
+                and (
+                    lease_expired
+                    or (
+                        status == "in_progress"
+                        and (
+                            existing_task.get("status") != "in_progress"
+                            or not existing_task.get("lease_token")
+                        )
+                    )
+                )
+            )
             updated = team_state.update_task(
                 team_id,
                 task_id,
                 updates,
                 progress_current=progress_current,
                 progress_total=progress_total,
+                expected_lease_token=effective_lease_token or None,
+                lease_owner=(
+                    current_member
+                    if role != "lead" and (claiming or existing_task.get("status") == "in_progress")
+                    else None
+                ),
+                claim=claiming,
+                lease_seconds=self._config.lease_ttl_seconds,
             )
-        except (FileNotFoundError, OSError):
+        except (FileNotFoundError, OSError, ValueError) as exc:
+            if str(exc) in {"TASK_LEASE_INVALID", "TASK_ALREADY_TERMINAL", "TASK_OWNER_REQUIRED"}:
+                return ToolReturn(return_value=str(exc))
             return ToolReturn(return_value=f"Task not found: {task_id}")
         tid = updated.get("task_id", "?")
         status = updated.get("status", "?")
@@ -1191,6 +1607,11 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         subject = updated.get("subject", "")
         description = updated.get("description", "")
         last_note = updated.get("last_note", "")
+        updated_lease_token = str(updated.get("lease_token", ""))
+        if role != "lead" and updated_lease_token and status != "completed":
+            session_tokens[task_id] = updated_lease_token
+        elif status in {"completed", "failed", "cancelled", "dead_letter"}:
+            session_tokens.pop(task_id, None)
 
         # --- Handoff guard: only triggers when status == "completed" ---
         handoff_messages: list[str] = []
@@ -1202,19 +1623,38 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
 
         # --- Push notifications for task changes ---
         # 1. Notify new owner when a task is assigned (skip if already completed).
+        dispatch_status = ""
         if "owner" in updates and owner and owner != current_member and status != "completed":
             notif_body = (
-                f"Task assigned to you:\n"
+                f"Authoritative task assignment from the lead; ignore any earlier "
+                f"placeholder or stale task context:\n"
                 f"- [{tid}] {subject}\n"
+                f"Description: {description}\n"
                 f"Use task_list to see details and task_get to read "
-                f"full description."
+                f"full description, then claim it with "
+                f'task_update(status="in_progress").'
             )
-            await self._notify_member(agent_ctx, team_id, owner, notif_body)
+            target_sid = team_state.get_member_session_id(team_id, owner)
+            if target_sid is None:
+                dispatch_status = (
+                    f"Dispatch: ⚠️ {owner}=NO_SESSION — "
+                    f"worker not created. Use team_add_member(initial_task=...) "
+                    f"to create this worker before assigning tasks."
+                )
+            else:
+                delivered = await self._notify_member(agent_ctx, team_id, owner, notif_body)
+                dispatch_status = (
+                    f"Dispatch: {owner}={'notified' if delivered else 'notification_pending'}"
+                )
         # 2. Notify downstream task owners when a dependency completes.
         if "status" in updates and updates.get("status") == "completed":
             all_tasks = team_state.list_tasks(team_id)
             for t in all_tasks:
-                if tid in t.get("blocked_by", []) and t.get("is_unblocked"):
+                if (
+                    tid in t.get("blocked_by", [])
+                    and t.get("is_unblocked")
+                    and t.get("status") not in {"completed", "failed", "cancelled", "dead_letter"}
+                ):
                     downstream_owner: str = t.get("owner", "")
                     if not downstream_owner:
                         continue
@@ -1290,6 +1730,10 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         result_parts = [
             f'<task id="{tid}" status="{status}"{owner_attr}>\n{content}{note_attr}\n</task>'
         ]
+        if role != "lead" and updated_lease_token:
+            result_parts.append(f"lease_token={updated_lease_token}")
+        if dispatch_status:
+            result_parts.append(dispatch_status)
         if handoff_messages:
             result_parts.extend(handoff_messages)
         return ToolReturn(return_value="\n".join(result_parts))
@@ -1679,7 +2123,7 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                     runtime_status = "offline"
                 elif member_session.closing or member_session.is_closing:
                     runtime_status = "closing"
-                elif member_session.current_run_id is not None:
+                elif self._session_has_live_run(session_pool, sid):
                     runtime_status = "busy"
                 else:
                     runtime_status = "idle"
@@ -1827,11 +2271,7 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
 
         from wolfharness.capabilities.file_team_state import FileTeamState
 
-        base_dir = (
-            agent_ctx.team_mode_config.effective_base_dir
-            if agent_ctx.team_mode_config is not None
-            else tempfile.gettempdir()
-        )
+        base_dir = self._get_team_base_dir(agent_ctx)
         team_state = FileTeamState(base_dir)
         team_state.init(
             team_id,
@@ -1884,6 +2324,7 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                     tool_call_id=ctx.tool_call_id,
                     team_id=team_id,
                     team_name=name,
+                    team_base_dir=base_dir,
                     team_role="member",
                     team_member_name=member["name"],
                     team_member_instructions=member_instructions,
@@ -1915,6 +2356,8 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                     team_name=name,
                     role="member",
                     member_name=member["name"],
+                    max_members=self._config.bounds.max_members,
+                    max_parallel_members=self._config.bounds.max_parallel_members,
                 )
                 full_prompt = f"{base_prompt}\n\n## Team Members\n{roster}"
                 if prompt:
@@ -2222,6 +2665,22 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                 "member's system prompt"
             ),
         ] = None,
+        initial_task: Annotated[
+            InitialMemberTask | None,
+            Field(
+                description="Optional authoritative task to persist and assign "
+                "to the new member before its first run. Use this for dynamic "
+                "workers so mine_only is never temporarily empty"
+            ),
+        ] = None,
+        initial_task_id: Annotated[
+            str,
+            Field(
+                description="Optional existing pending task ID to assign to "
+                "the new member before its first run. Use this for atomic "
+                "worker replacement; mutually exclusive with initial_task"
+            ),
+        ] = "",
     ) -> ToolReturn:
         """Add a new member to an existing team (lead-only).
 
@@ -2278,6 +2737,110 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         if session_pool is None:
             return ToolReturn(return_value="SessionPool not available")
 
+        # Bounds: max_parallel_members check (concurrent active workers).
+        max_parallel = self._config.bounds.max_parallel_members
+        if max_parallel > 0:
+            active_count = 0
+            for mname, member in members.items():
+                if mname == lead_member_name:
+                    continue
+                member_sid = member.get("session_id", "") if isinstance(member, dict) else ""
+                if member_sid and self._session_has_live_run(session_pool, member_sid):
+                    active_count += 1
+            if active_count >= max_parallel:
+                return ToolReturn(
+                    return_value=(
+                        f"Team exceeds max_parallel_members "
+                        f"({active_count} active workers >= {max_parallel}). "
+                        "Wait for active workers to become idle or shutdown "
+                        "completed workers."
+                    )
+                )
+
+        normalized_initial_task_id = initial_task_id.strip()
+        if initial_task is not None and normalized_initial_task_id:
+            return ToolReturn(
+                return_value="initial_task and initial_task_id are mutually exclusive",
+            )
+
+        initial_task_record: dict[str, Any] | None = None
+        existing_initial_task: dict[str, Any] | None = None
+        if normalized_initial_task_id:
+            existing_initial_task = team_state.get_task(
+                team_id,
+                normalized_initial_task_id,
+            )
+            if existing_initial_task is None:
+                return ToolReturn(
+                    return_value=f"Initial task not found: {normalized_initial_task_id}",
+                )
+            existing_status = str(existing_initial_task.get("status", ""))
+            existing_owner = str(existing_initial_task.get("owner", "")).strip()
+            if existing_status not in {"pending", "blocked"}:
+                return ToolReturn(
+                    return_value=(
+                        f"Initial task {normalized_initial_task_id} has status "
+                        f"{existing_status!r}; only pending/blocked tasks can be "
+                        "bound to a new member"
+                    ),
+                )
+            if existing_owner not in {"", name}:
+                return ToolReturn(
+                    return_value=(
+                        f"Initial task {normalized_initial_task_id} is still owned by "
+                        f"{existing_owner!r}; release it before worker replacement"
+                    ),
+                )
+        if initial_task is not None:
+            subject = str(initial_task.get("subject", "")).strip()
+            if not subject:
+                return ToolReturn(return_value="initial_task.subject must not be empty")
+            description = str(initial_task.get("description", ""))
+            parent_id = str(initial_task.get("parent_id", "")).strip() or None
+            if parent_id is not None and team_state.get_task(team_id, parent_id) is None:
+                return ToolReturn(return_value=f"Parent task not found: {parent_id}")
+            write_set = initial_task.get("write_set")
+            existing_task_id = self._find_existing_idempotent_task(
+                team_state,
+                team_id,
+                subject,
+                description,
+                parent_id,
+                write_set,
+            )
+            if existing_task_id:
+                return ToolReturn(
+                    return_value=(
+                        "Initial task already exists (idempotent retry): "
+                        f"{existing_task_id}. Reassign that task instead of "
+                        "creating another member."
+                    ),
+                )
+            initial_task_record = {
+                "subject": subject,
+                "description": description,
+                "blocked_by": list(initial_task.get("blocked_by", [])),
+                "owner": name,
+            }
+            if parent_id is not None:
+                initial_task_record["parent_id"] = parent_id
+            write_scope = str(initial_task.get("write_scope", "")).strip()
+            if write_scope:
+                initial_task_record["write_scope"] = write_scope
+            if write_set:
+                initial_task_record["write_set"] = list(write_set)
+            progress_total = initial_task.get("progress_total")
+            if progress_total is not None:
+                initial_task_record["progress_total"] = progress_total
+            intent_key = self._task_idempotency_key(
+                subject,
+                description,
+                parent_id,
+                write_set,
+            )
+            if intent_key:
+                initial_task_record["intent_key"] = intent_key
+
         lead_session_id: str = agent_ctx.session.session_id
 
         # Create child session for the new member.
@@ -2302,6 +2865,7 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                 tool_call_id=ctx.tool_call_id,
                 team_id=team_id,
                 team_name=agent_ctx.session.metadata.get("team_name"),
+                team_base_dir=self._get_team_base_dir(agent_ctx),
                 team_role="member",
                 team_member_name=name,
                 team_member_instructions=member_instructions,
@@ -2315,6 +2879,24 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         if member_agent is not None:
             member_agent._display_name = name
 
+        assigned_task_id = normalized_initial_task_id
+        if initial_task_record is not None:
+            try:
+                assigned_task_id = team_state.create_task(team_id, initial_task_record)
+            except (OSError, ValueError) as exc:
+                await session_pool.close_session(member_session_id)
+                return ToolReturn(return_value=f"Failed to create initial task: {exc}")
+        elif existing_initial_task is not None:
+            try:
+                existing_initial_task = team_state.update_task(
+                    team_id,
+                    assigned_task_id,
+                    {"owner": name},
+                )
+            except (OSError, ValueError) as exc:
+                await session_pool.close_session(member_session_id)
+                return ToolReturn(return_value=f"Failed to bind initial task: {exc}")
+
         # Register member in team state.
         team_state.register_member(
             team_id,
@@ -2327,10 +2909,12 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         from wolfharness.lifecycle.types import DeliveryMode
 
         team_name: str = state.get("team_name", "unknown")
-        base_prompt = prompt or self._config.protocol_template.format(
+        base_prompt = self._config.protocol_template.format(
             team_name=team_name,
             role="member",
             member_name=name,
+            max_members=self._config.bounds.max_members,
+            max_parallel_members=self._config.bounds.max_parallel_members,
         )
         # Append current member roster so the new member knows their teammates.
         existing_members: dict[str, dict[str, Any]] = state.get("members", {})
@@ -2345,11 +2929,27 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             role_label = "lead" if m_name == lead_member_name else "member"
             work = work_summaries.get(m_name, "No active work")
             roster_lines.append(f"  - `{m_name}` (agent=`{m_agent}`, role=`{role_label}`) — {work}")
+        assigned_task = initial_task_record or existing_initial_task
+        initial_subject = str(assigned_task.get("subject", "")) if assigned_task else ""
+        new_member_work = f"Assigned: {initial_subject}" if initial_subject else "No active work"
+        roster_lines.append(
+            f"  - `{name}` (agent=`{agent}`, role=`member`) — {new_member_work}",
+        )
         roster = "\n".join(roster_lines)
         initial_prompt = f"{base_prompt}\n\n## Team Members\n{roster}"
-        if prompt:
+        if assigned_task_id and assigned_task is not None:
             initial_prompt += (
-                f"\n\n## Task\n{prompt}"
+                "\n\n## Authoritative Initial Task\n"
+                f"- [{assigned_task_id}] {initial_subject}\n"
+                f"{assigned_task.get('description', '')}\n\n"
+                "The task already exists on the shared board and is owned by you. "
+                "Call task_list(mine_only=True, active_only=True), then claim this "
+                'exact task with task_update(status="in_progress") before work.'
+            )
+        if prompt:
+            prompt_heading = "Additional Context" if assigned_task_id else "Task"
+            initial_prompt += (
+                f"\n\n## {prompt_heading}\n{prompt}"
                 "\n\nRemember to report progress regularly using "
                 '`task_update(technical_note="...")`.'
             )
@@ -2442,7 +3042,10 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         team_member_sessions.append(member_session_id)
         agent_ctx.session.metadata["team_member_sessions"] = team_member_sessions
 
-        return ToolReturn(return_value=f"Member '{name}' added to team (lifecycle={lifecycle})")
+        result = f"Member '{name}' added to team (lifecycle={lifecycle})"
+        if assigned_task_id:
+            result += f" with initial task {assigned_task_id} (persisted before wakeup)"
+        return ToolReturn(return_value=result)
 
     async def shutdown_request(  # noqa: PLR0911
         self,
@@ -2481,10 +3084,51 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         if member_sid is None:
             return ToolReturn(return_value=f"Member '{member_name}' not found")
 
+        # The task heartbeat and artifact write are separate calls. A member
+        # can therefore be doing real work while all owned tasks still say
+        # ``pending``. Closing such a session cancels its in-flight write.
+        session_pool = agent_ctx.host.session_pool
+
+        # Use the repair-capable live-run lookup instead of the raw
+        # ``current_run_id`` field — the latter can outlive an errored run's
+        # cleanup and permanently block shutdown of dead workers.
+        if session_pool is not None and self._session_has_live_run(session_pool, member_sid):
+            return ToolReturn(
+                return_value=(
+                    f"Shutdown rejected for {member_name}: member has an active "
+                    "run. Wait for it to become idle, then re-read "
+                    "task_list/team_status before retrying shutdown."
+                ),
+            )
+
         # Check for unfinished tasks before closing the session.
         unfinished = self._get_unfinished_tasks(team_state, team_id, member_name)
+        active = [task for task in unfinished if task.get("status") == "in_progress"]
+        if active:
+            # The member has no live run but still owns in_progress tasks.
+            # This happens when ``on_run_error``'s ``_release_owned_tasks``
+            # didn't fire or raced.  Auto-release the lease (clears owner →
+            # ``FileTeamState`` flips status to ``pending``) so the lead can
+            # reassign instead of deadlocking on shutdown.
+            for task in active:
+                try:
+                    team_state.update_task(team_id, task["task_id"], {"owner": ""})
+                except Exception:  # noqa: BLE001
+                    logger.warning(
+                        "Failed to release task %s during shutdown of %s",
+                        task.get("task_id", "?"),
+                        member_name,
+                    )
+            active_tasks = ", ".join(
+                f"'{task.get('subject', '?')}' (id={task.get('task_id', '?')})" for task in active
+            )
+            logger.info(
+                "Auto-released %d in_progress task(s) from %s during shutdown: %s",
+                len(active),
+                member_name,
+                active_tasks,
+            )
 
-        session_pool = agent_ctx.host.session_pool
         if session_pool is not None:
             await session_pool.close_session(member_sid)
 
@@ -2577,7 +3221,39 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                         # Run handle already cleaned up — session should
                         # be idle or starting a new chained run.
                         break
-                    await run_handle.complete_event.wait()
+                    try:
+                        await asyncio.wait_for(
+                            run_handle.complete_event.wait(),
+                            timeout=_EPHEMERAL_COMPLETE_GRACE_SECONDS,
+                        )
+                    except asyncio.TimeoutError:
+                        # complete_event can hang forever on protocol-server
+                        # sessions whose RunLoop stays alive between turns
+                        # (see _schedule_member_cleanup docstring). Fall back
+                        # to the task board: if the member owns no in_progress
+                        # task, the work is done — clean up instead of leaving
+                        # a zombie session that keeps getting re-woken with
+                        # nothing to do (empty responses then burn the model
+                        # output-retry budget).
+                        session = session_pool.sessions.get_session(member_session_id)
+                        if session is None:
+                            return
+                        if session.current_run_id is not None and session.current_run_id != run_id:
+                            continue  # New chained run — wait for it too
+                        team_state = FileTeamState(base_dir)
+                        tasks = (
+                            team_state.list_tasks(team_id)
+                            if team_state._state_path(team_id).exists()
+                            else []
+                        )
+                        owns_in_progress = any(
+                            t.get("owner") == member_name
+                            and t.get("status") == "in_progress"
+                            for t in tasks
+                        )
+                        if not owns_in_progress:
+                            break  # No live work — safe to clean up
+                        continue  # Still working on a task — keep waiting
                     # Check if a new chained run started (prompt_queue).
                     session = session_pool.sessions.get_session(member_session_id)
                     if session is None:
@@ -2694,11 +3370,11 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
     ) -> AgentRunResult[Any]:
         """Check for unfinished tasks after a member agent's run completes.
 
-        If this is a team member (not lead) with ``in_progress`` tasks,
-        routes a reminder message to the member's own session via the same
-        delivery mechanism as ``send_message``.  Skipped when the session
-        is being closed (shutdown path).  Limited to one reminder per
-        session to avoid infinite loops.
+        If this is a team member (not lead) with ``pending`` or
+        ``in_progress`` tasks, routes a reminder message to the member's
+        own session via the same delivery mechanism as ``send_message``.
+        Skipped when the session is being closed (shutdown path).
+        Limited to one reminder per session to avoid infinite loops.
         """
         try:
             agent_ctx = self._resolve_agent_context(ctx)
@@ -2739,12 +3415,13 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             f"  - '{t.get('subject', '?')}' (id={t.get('task_id', '?')})" for t in unfinished
         )
         reminder_body = (
-            f"You have {len(unfinished)} unfinished task(s) still "
-            f"in_progress:\n{task_lines}\n\n"
-            f"Please complete your work and update the task status using "
-            f"task_update(task_id=..., status='completed') or "
-            f"task_update(task_id=..., status='failed') if you encountered "
-            f"issues."
+            f"You have {len(unfinished)} unfinished task(s) (pending or "
+            f"in_progress):\n{task_lines}\n\n"
+            f"Please start or complete your work and update the task "
+            f"status using task_update(task_id=..., status='in_progress') "
+            f"to begin, then task_update(task_id=..., status='completed') "
+            f"or task_update(task_id=..., status='failed') if you "
+            f"encountered issues."
         )
         msg_body = (
             f'<team-message from="system" type="task_reminder">\n\n'
@@ -2773,12 +3450,19 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
         team_id: str,
         member_name: str,
     ) -> list[dict[str, Any]]:
-        """Return tasks owned by *member_name* that are still in_progress."""
+        """Return tasks owned by *member_name* that are not yet completed.
+
+        Includes both ``pending`` (assigned but not started) and
+        ``in_progress`` tasks.  Pending tasks are included so that
+        ``after_run`` can remind an idle worker whose task notification
+        was consumed by a prior turn without triggering a follow-up
+        turn — see ``_notify_member`` for the QUEUE delivery fix.
+        """
         all_tasks = team_state.list_tasks(team_id)
         return [
             t
             for t in all_tasks
-            if t.get("owner") == member_name and t.get("status") == "in_progress"
+            if t.get("owner") == member_name and t.get("status") in ("pending", "in_progress")
         ]
 
     @staticmethod
@@ -2809,8 +3493,9 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
             - ``session_metadata`` is empty/``None``
 
         When both conditions are met, renders ``config.protocol_template``
-        via ``str.format()`` with ``team_name``, ``role``, and ``member_name``
-        extracted from session metadata (with sensible defaults).
+        via ``str.format()`` with ``team_name``, ``role``, ``member_name``,
+        ``max_members``, and ``max_parallel_members`` extracted from session
+        metadata and team bounds (with sensible defaults).
         """
         if not self._config.enabled or not self._session_metadata:
             return None
@@ -2822,6 +3507,8 @@ class TeamCommCapability(FunctionToolsetCapability[Any]):
                 "team_member_name",
                 self._agent_name,
             ),
+            max_members=self._config.bounds.max_members,
+            max_parallel_members=self._config.bounds.max_parallel_members,
         )
 
         # Role-specific capabilities section.

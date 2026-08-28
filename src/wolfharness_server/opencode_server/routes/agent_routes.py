@@ -571,7 +571,9 @@ async def list_mcp_resources(state: StateDep) -> dict[str, McpResource]:
                 client = cap.server_name
                 for resource in res:
                     result[resource_catalog_key(client, resource.uri)] = McpResource(
-                        name=resource.name,
+                        # TUI picker displays and quick-matches on `name` —
+                        # fall back to the URI for entries without a readable name.
+                        name=resource.name or resource.uri,
                         uri=resource.uri,
                         description=resource.description,
                         mime_type=resource.mime_type,

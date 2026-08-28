@@ -151,6 +151,9 @@ max-complexity = 15
   "TRY300",
   "PLR0915"
 ]
+# Viking ticket tools: ctx is pydantic-ai internal, reward-complex closures,
+# BLE001 is intentional for best-effort remote sync
+"src/wolfharness/capabilities/viking/ticket.py" = ["D417", "BLE001", "PLR0915"]
 # Viking capability: BLE001 for safe SkillResource defaults, TRY300 for early-return pattern
 "src/wolfharness/capabilities/viking/__init__.py" = ["BLE001", "TRY300"]
 # Viking instructions: E501 for markdown table lines

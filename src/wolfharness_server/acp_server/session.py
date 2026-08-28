@@ -211,6 +211,12 @@ class ACPSession(
     elicitation requests for crash recovery.
     """
 
+    latest_user_prompt_text: str = ""
+    """Latest raw ACP user prompt text for capability-level ingestion fallback."""
+
+    latest_user_prompt_message_id: str = ""
+    """Message id associated with ``latest_user_prompt_text``."""
+
     def __post_init__(self) -> None:
         """Initialize session state and set up providers."""
         self.mcp_servers = self.mcp_servers or []

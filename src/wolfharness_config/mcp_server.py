@@ -173,6 +173,13 @@ class BaseMCPServerConfig(Schema):
     )
     """Tools to exclude from this server (blacklist). Mutually exclusive with enabled_tools."""
 
+    tool_prefix: str | None = Field(
+        default=None,
+        examples=["kb_main", "manuals"],
+        title="Tool prefix",
+    )
+    """Optional namespace prefix for tool names exposed by this MCP server."""
+
     @model_validator(mode="after")
     def _validate_tool_filters(self) -> Self:
         """Validate that enabled_tools and disabled_tools are mutually exclusive."""

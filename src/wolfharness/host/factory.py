@@ -39,6 +39,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from wolfharness.capabilities.resource_protocols import UriSchemeConflictError
 from wolfharness.log import get_logger
 
 
@@ -210,11 +211,20 @@ class AgentFactory:
                 # URI scheme registry (e.g. VikingCapability owns "viking").
                 owned: frozenset[str] = getattr(cap, "owned_schemes", frozenset())
                 if owned:
-                    self._pool.extension_registry.scheme_registry.register(
-                        provider_name=type(cap).__name__,
-                        schemes=owned,
-                        provider=cap,
-                    )
+                    try:
+                        self._pool.extension_registry.scheme_registry.register(
+                            provider_name=type(cap).__name__,
+                            schemes=owned,
+                            provider=cap,
+                        )
+                    except UriSchemeConflictError:
+                        logger.debug(
+                            "Skipping duplicate agent-scoped URI scheme registration",
+                            agent_name=agent_name,
+                            capability=type(cap).__name__,
+                            owned_schemes=sorted(owned),
+                            exc_info=True,
+                        )
 
     @staticmethod
     def _build_agent_descriptions(
