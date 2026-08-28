@@ -23,8 +23,10 @@ from pydantic_ai.models.function import (
     DeltaToolCalls,
     FunctionModel,
 )
-from pydantic_ai.models.openai import OpenAIChatModel, OpenAIResponsesModel
+from pydantic_ai.models.openai import OpenAIResponsesModel
 from pydantic_ai.providers.openai import OpenAIProvider
+
+from wolfharness.models.openai_compatible import OpenAICompatibleModel
 
 
 logger = logging.getLogger(__name__)
@@ -38,14 +40,21 @@ if TYPE_CHECKING:
 def _get_openai_based_model(
     model: str, base_url: str | None = None, api_key: str | None = None
 ) -> Model:
-    """Get model instance with appropriate implementation based on environment."""
+    """Get model instance with appropriate implementation based on environment.
+
+    Uses :class:`OpenAICompatibleModel` (a subclass of
+    :class:`OpenAIChatModel`) to ensure list-type tool returns are sent
+    as native list content instead of JSON strings, which is required
+    by OpenAI-compatible models whose chat templates branch on tool
+    role content being a string vs list (e.g. GLM-5). See issue #112.
+    """
     model_name = model
 
     if ":" in model:
         _, model_name = model.split(":", 1)
 
     provider = OpenAIProvider(base_url=base_url, api_key=api_key)
-    return OpenAIChatModel(model_name=model_name, provider=provider)
+    return OpenAICompatibleModel(model_name=model_name, provider=provider)
 
 
 def infer_model(model: str | Model) -> Model:
@@ -127,7 +136,7 @@ def _infer_single_model(model: str | Model) -> Model:  # noqa: PLR0911
         base_url = "https://api.githubcopilot.com"
         prov = OpenAIProvider(base_url=base_url, api_key=token, http_client=client)
         model_name = model.removeprefix("copilot:")
-        return OpenAIChatModel(model_name=model_name, provider=prov)
+        return OpenAICompatibleModel(model_name=model_name, provider=prov)
 
     if model.startswith("import:"):
         from wolfharness.utils.importing import import_callable
