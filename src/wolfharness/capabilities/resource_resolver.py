@@ -270,7 +270,7 @@ async def resolve_resource_content(
             return None
         selected_caps = filtered
 
-    # ---- Scheme-based routing (via UriSchemeRegistry) ----
+    # ---- Scheme-based routing ----
     from urllib.parse import urlparse
 
     parsed = urlparse(uri)
@@ -278,7 +278,7 @@ async def resolve_resource_content(
 
     if scheme and scheme_registry is not None:
         provider = scheme_registry.lookup(scheme)
-        if provider is not None and (client_name is None or provider in selected_caps):
+        if provider is not None and provider in selected_caps:
             try:
                 contents = await provider.read_resource(uri)
             except UriSchemeMismatchError:
@@ -297,6 +297,30 @@ async def resolve_resource_content(
                 return None
             if contents:
                 return _convert_resource_parts(uri, contents, max_text_chars)
+            return None
+
+    if scheme:
+        owned_caps = [cap for cap in selected_caps if scheme in cap.owned_schemes]
+        for resource_cap in owned_caps:
+            try:
+                contents = await resource_cap.read_resource(uri)
+            except UriSchemeMismatchError:
+                logfire.warning(
+                    "Provider '{name}' rejected URI '{uri}' (scheme mismatch)",
+                    name=getattr(resource_cap, "server_name", type(resource_cap).__name__),
+                    uri=uri,
+                )
+                continue
+            except Exception:  # noqa: BLE001
+                logfire.exception(
+                    "Failed to read resource '{uri}' from {cap}",
+                    uri=uri,
+                    cap=type(resource_cap).__name__,
+                )
+                continue
+            if contents:
+                return _convert_resource_parts(uri, contents, max_text_chars)
+        if owned_caps:
             return None
 
     # ---- Fallback for unregistered schemes ----

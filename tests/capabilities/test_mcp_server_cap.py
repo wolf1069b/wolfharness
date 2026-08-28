@@ -80,6 +80,10 @@ class FakeMCPClient:
     async def __aexit__(self, *args: object) -> None:
         self._connected = False
 
+    @property
+    def connected(self) -> bool:
+        return self._connected
+
     async def list_tools(self) -> list[Any]:
         if not self._connected:
             raise RuntimeError("Not connected")

@@ -414,8 +414,9 @@ class MCPManager:
             return None
 
         # De-duplicate the model-visible tool prefix across servers sharing
-        # a display_name so prefixed tool names never collide (RFC-0058).
-        base_prefix = config.display_name
+        # a configured prefix/display_name so prefixed tool names never collide
+        # (RFC-0058).
+        base_prefix = config.tool_prefix or config.display_name
         candidate = base_prefix
         n = 2
         while candidate in self._used_tool_prefixes:
@@ -722,6 +723,7 @@ class MCPManager:
         """
         from pydantic_ai.capabilities import MCP
         from pydantic_ai.mcp import MCPToolset
+        from pydantic_ai.toolsets import PrefixedToolset
 
         from wolfharness_config.mcp_server import (
             SSEMCPServerConfig,
@@ -783,22 +785,38 @@ class MCPManager:
             client_id = server.client_id
             toolset = toolset_cache.get(client_id)
             if toolset is None:
-                toolset = MCPToolset(client=transport, **_make_kwargs(server))
+                raw = MCPToolset(client=transport, **_make_kwargs(server))
                 try:
-                    await toolset.__aenter__()
+                    await raw.__aenter__()
                 except Exception:
                     # Eager enter failed — don't cache a broken toolset.
                     # Subsequent calls can retry.
-                    del toolset  # Help GC
+                    del raw  # Help GC
                     raise
+                # Wrap in PrefixedToolset when a tool_prefix is configured so
+                # model-visible tool names are namespaced (RFC-0058), matching
+                # the McpServerCap provider path.
+                toolset = (
+                    PrefixedToolset(wrapped=raw, prefix=server.tool_prefix)
+                    if server.tool_prefix
+                    else raw
+                )
                 toolset_cache[client_id] = toolset
+
+            # Apply tool_prefix to allowed_tools so the capability advertises
+            # the namespaced names the model will actually see.
+            prefix = server.tool_prefix
+            if prefix and server.enabled_tools:
+                allowed: list[str] | None = [f"{prefix}_{t}" for t in server.enabled_tools]
+            else:
+                allowed = server.enabled_tools
 
             return MCP(
                 url=_derive_url(server),
-                local=toolset,
+                local=toolset_cache[client_id],
                 native=False,
                 id=server.name or server.client_id,
-                allowed_tools=server.enabled_tools,
+                allowed_tools=allowed,
             )
 
         async def _process_global_configs(

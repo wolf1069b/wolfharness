@@ -164,7 +164,7 @@ tts = [
   "anyvoice[tts-edge,openai]>=0.0.2"
 ]  # Text-to-Speech using AnyVoice (disabled: cffi doesn't support free-threaded 3.13)
 viking = [
-  "openviking-sdk>=0.1.6"
+  "openviking-sdk>=0.1.8"
 ]  # Viking storage & retrieval capability (download_bytes for image vision)
 watchdog = ["watchdog>=4.0.0"]  # Filesystem watcher for skill hot-reload
 zed = ["zstandard>=0.23.0"]  # Zed IDE storage provider
@@ -445,6 +445,8 @@ module = [
   "fastmcp.tools.tool",
   "apprise",
   "openviking_sdk",
+  "xeno_adp_agentic.*",
+  "xeno_adp_harness.*",
 ]
 ignore_missing_imports = true
 

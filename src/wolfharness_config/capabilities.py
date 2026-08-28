@@ -16,9 +16,10 @@ Three resolution paths:
 
 from __future__ import annotations
 
+import os
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 KNOWN_CAPABILITY_TYPES: frozenset[str] = frozenset({
@@ -129,6 +130,9 @@ class DCPCapabilityConfig(BaseModel):
     """Glob patterns matching tool names that should never be pruned."""
     protected_tools: set[str] = Field(default_factory=set)
     """Literal tool names that should never be pruned."""
+    auto_compact_on_critical: bool = Field(default=False)
+    """Whether to run the manifest ``compaction`` pipeline on the persistent
+    conversation when the watermark reaches CRITICAL (fires once per episode)."""
 
 
 class SkillActivationCapabilityConfig(BaseModel):
@@ -209,6 +213,11 @@ class VikingCapabilityConfig(BaseModel):
     """Viking user ID. If None, SDK resolves from env vars."""
     timeout: float | None = None
     """Request timeout in seconds. If None, SDK uses default (60s)."""
+    tool_prefix: str | None = None
+    """Optional namespace prefix for Viking tool names.
+
+    When unset, legacy ``viking_*`` names are kept.
+    """
     skills_uri: str | None = None
     """Override for skills URI. Default: viking://user/{user or 'default'}/skills/"""
     resources_uri: str | None = None
@@ -233,6 +242,25 @@ class VikingCapabilityConfig(BaseModel):
     """
     uploads_uri: str | None = None
     """Override for uploads URI."""
+
+    @field_validator(
+        "url",
+        "api_key",
+        "account",
+        "user",
+        "skills_uri",
+        "resources_uri",
+        "sessions_uri",
+        "uploads_uri",
+        mode="before",
+    )
+    @classmethod
+    def expand_env_vars(cls, value: object) -> object:
+        """Expand shell-style environment variables in Viking string fields."""
+        if isinstance(value, str):
+            return os.path.expandvars(value)
+        return value
+
     public_download_base_url: str | None = None
     """Base URL for public download links."""
     enable_link: bool = False
@@ -317,18 +345,14 @@ class VikingCapabilityConfig(BaseModel):
     these tools are blocked from accessing viking:// URIs. Customize to add
     or remove tools from the protected list."""
     allowed_uri_prefixes: list[str] = Field(default_factory=list)
-    """URI prefix allowlist covering all viking:// namespaces. When
-    non-empty:
-    - knowledge-base access (all ``viking_*`` tools + the @-mention flow)
-      rejects URIs outside the listed prefixes;
-    - memory paths — auto-recall, profile injection, compaction, and
-      multimodal-bridge uploads — are only active when their target URI
-      (e.g. ``viking://user/{user}/memories/``) is inside the list;
-    - skill discovery (``list_skills``/``read_skill``/``skill_exists``) is
-      only active when the skills URI is inside the list.
-    Since one list governs everything, include both the intended resource
-    prefixes and the memory/skill prefixes when those features are needed.
-    Empty list (default) means unrestricted — backward compatible."""
+    """Read/search URI prefix allowlist for viking://resources/. When
+    non-empty, retrieval, listing, resource reads, and @-mention discovery
+    reject resource URIs outside the listed prefixes. This does not constrain
+    write tools or provider-owned ticket submission scopes."""
+    write_allowed_uri_prefixes: list[str] = Field(default_factory=list)
+    """Optional write URI prefix allowlist for viking://resources/. When
+    empty, writes are not constrained by URI prefix. Configure this only when
+    a deployment needs an explicit write-side guard."""
     compaction_enabled: bool = False
     """When True, archive old conversation messages to Viking before context
     overflow. Disabled by default."""
@@ -354,6 +378,18 @@ class VikingCapabilityConfig(BaseModel):
     """When True (default), profile injection runs only on the first turn
     of a session (message count <= 2). When False, injection runs on every
     before_model_request call where _profile_injected is False."""
+    index_enabled: bool = False
+    """Enable first-turn resource-namespace index injection. When True, the
+    capability lists live ``viking://resources/<namespace>`` namespaces on
+    the first turn and injects them as an <openviking-index> XML block."""
+    index_max_tokens: int = 1000
+    """Maximum token budget for the injected index block. Content exceeding
+    this budget is truncated with a [... truncated] indicator."""
+    index_limit: int = 20
+    """Maximum number of namespace names to include in the index block."""
+    index_uri: str | None = None
+    """Namespace URI to list. When None, resolves to ``viking://resources/``."""
+
     enabled_tools: list[str] | None = Field(
         default=None,
         examples=[["viking_ls", "viking_read", "viking_grep"]],

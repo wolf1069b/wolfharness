@@ -195,7 +195,7 @@ def _replace_old_messages(
     """Create a new ModelRequestContext with archivable messages replaced.
 
     Removes the archivable messages from the front of the list and
-    inserts a new ``ModelRequest`` containing a ``SystemPromptPart`` with
+    inserts a new ``ModelRequest`` containing a ``UserPromptPart`` with
     the summary and a reference to the archive URI. The kept messages
     follow immediately after.
 
@@ -209,11 +209,11 @@ def _replace_old_messages(
     Returns:
         A new ``ModelRequestContext`` with the modified message list.
     """
-    from pydantic_ai.messages import ModelRequest, SystemPromptPart
+    from pydantic_ai.messages import ModelRequest, UserPromptPart
 
     archive_message = ModelRequest(
         parts=[
-            SystemPromptPart(
+            UserPromptPart(
                 content=(
                     f"[Conversation history archived. Summary:\n{summary}\n\n"
                     f"Full archive available at: {archive_uri}\n"

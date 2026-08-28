@@ -26,6 +26,7 @@ from wolfharness.capabilities.resource_protocols import (
     TextResourceContent,
 )
 from wolfharness.capabilities.resource_resolver import resolve_resource_content
+from wolfharness.capabilities.uri_scheme_registry import UriSchemeRegistry
 
 
 if TYPE_CHECKING:
@@ -71,6 +72,24 @@ class FakeResourceAccess:
 
     async def resource_exists(self, uri: str) -> bool:
         return self._read_result is not None
+
+
+class FakeOwnedResourceAccess(FakeResourceAccess):
+    """Resource provider that explicitly owns one URI scheme."""
+
+    def __init__(
+        self,
+        *,
+        scheme: str,
+        read_result: list[TextResourceContent | BlobResourceContent] | None = None,
+        raise_exc: Exception | None = None,
+    ) -> None:
+        super().__init__(read_result=read_result, raise_exc=raise_exc)
+        self._scheme = scheme
+
+    @property
+    def owned_schemes(self) -> frozenset[str]:
+        return frozenset({self._scheme})
 
 
 class FakeSkillResource:
@@ -214,6 +233,33 @@ async def test_resolve_resource_mixed_text_and_binary() -> None:
     assert result[2].data == b"pic"
     assert result[2].media_type == "image/png"
     assert result[3] == "\n</resource>"
+
+
+async def test_resolve_resource_uses_visible_owner_when_global_owner_not_visible() -> None:
+    """Agent-scoped duplicate scheme owners route to the visible provider."""
+    first_agent_cap = FakeOwnedResourceAccess(
+        scheme="viking",
+        read_result=[TextResourceContent(text="first", uri="viking://doc.md")],
+    )
+    visible_agent_cap = FakeOwnedResourceAccess(
+        scheme="viking",
+        read_result=[TextResourceContent(text="visible", uri="viking://doc.md")],
+    )
+    scheme_registry = UriSchemeRegistry()
+    scheme_registry.register(
+        provider_name="FirstAgentViking",
+        schemes=frozenset({"viking"}),
+        provider=first_agent_cap,
+    )
+
+    result = await resolve_resource_content(
+        "viking://doc.md",
+        resource_caps=[visible_agent_cap],
+        skill_caps=[],
+        scheme_registry=scheme_registry,
+    )
+
+    assert result == ['<resource uri="viking://doc.md">\nvisible\n</resource>']
 
 
 async def test_resolve_resource_multiple_providers() -> None:

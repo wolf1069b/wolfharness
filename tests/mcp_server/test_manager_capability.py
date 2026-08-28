@@ -7,6 +7,7 @@ from typing import Any
 
 from pydantic import HttpUrl
 from pydantic_ai.mcp import MCPToolset
+from pydantic_ai.toolsets import PrefixedToolset
 import pytest
 
 from wolfharness.mcp_server.manager import MCPManager, _make_elicitation_handler
@@ -142,6 +143,23 @@ async def test_allowed_tools_passed_through() -> None:
 
     assert len(caps) == 1
     assert caps[0].allowed_tools == ["read_file", "list_directory"]
+
+
+async def test_tool_prefix_namespaces_mcp_tools() -> None:
+    """tool_prefix should namespace MCP tools and allowed tool names."""
+    config = StdioMCPServerConfig(
+        command="python",
+        args=["server.py"],
+        enabled_tools=["search", "read"],
+        tool_prefix="kb1",
+    )
+    manager = MCPManager(servers=[config])
+
+    caps = await manager.get_capabilities()
+
+    assert len(caps) == 1
+    assert caps[0].allowed_tools == ["kb1_search", "kb1_read"]
+    assert isinstance(caps[0].local, PrefixedToolset)
 
 
 async def test_capability_is_abstract_capability() -> None:
