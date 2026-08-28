@@ -346,6 +346,7 @@ class ACPServer(BaseServer):
             self.log.info("ACP server shutdown requested")
         except Exception:
             self.log.exception("ACP server error")
+            raise
         finally:
             await viking_archive.close()
 
