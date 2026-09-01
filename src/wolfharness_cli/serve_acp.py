@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 import warnings
 
@@ -326,6 +327,11 @@ def acp_command(  # noqa: PLR0915
             logger.info("ACP server shutdown requested")
         except Exception as e:
             logger.exception("ACP server error")
+            print(
+                f"ACP server failed to start: {type(e).__name__}: {e}",
+                file=sys.stderr,
+            )
+            print(f"Full traceback in log file: {log_file}", file=sys.stderr)
             raise t.Exit(1) from e
 
     asyncio.run(run_acp_server())
