@@ -342,6 +342,8 @@ class ACPServer(BaseServer):
             self.log.info("ACP server shutdown requested")
         except Exception:
             self.log.exception("ACP server error")
+            if self.raise_exceptions:
+                raise
 
     def stop(self) -> None:
         """Stop the ACP server.
