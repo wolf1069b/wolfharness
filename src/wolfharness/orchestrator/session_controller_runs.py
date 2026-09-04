@@ -125,10 +125,12 @@ class SessionControllerRunsMixin:
                 comm_channel = self._get_protocol_channel(session_id)
                 if comm_channel is not None:
                     await comm_channel.publish(event)
+                    await self._deliver_to_event_handler(session_id, event)
                     return
 
                 # Fall back: direct EventBus publish (idle session).
                 await self._event_bus.publish(session_id, event)
+                await self._deliver_to_event_handler(session_id, event)
             except Exception:
                 logger.warning(
                     "Failed to emit UserMessageInsertedEvent",
@@ -156,6 +158,43 @@ class SessionControllerRunsMixin:
         if isinstance(comm_channel, ProtocolChannel):
             return comm_channel
         return None
+
+    async def _deliver_to_event_handler(
+        self,
+        session_id: str,
+        event: Any,
+    ) -> None:
+        """Deliver an event to the active run's agent event handler.
+
+        Looks up the active RunHandle for the session and forwards the
+        event to the agent's ``event_handler`` (a ``MultiEventHandler``).
+        This is needed for events published outside ``_execute_turn()``
+        (e.g. ``UserMessageInsertedEvent``) which otherwise never reach
+        the agent's event handlers in the RunLoop path.
+
+        Silently skips when the session is idle (no active run) or the
+        agent is unavailable. Exceptions are logged at debug level to
+        avoid disrupting the publish path.
+
+        Args:
+            session_id: The session to deliver the event to.
+            event: The event to deliver.
+        """
+        try:
+            session = self.get_session(session_id)
+            if session is None or session.current_run_id is None:
+                return
+            run = self._runs.get(session.current_run_id)
+            if run is None or run.agent is None:
+                return
+            await run.agent.event_handler(
+                run.agent.get_context(run_ctx=run.run_ctx), event,
+            )
+        except Exception:
+            logger.debug(
+                "Failed to deliver event to agent event handler",
+                exc_info=True,
+            )
 
     async def _consume_run(self, run_handle: RunHandle, initial_prompt: str | list[Any]) -> None:  # noqa: PLR0915
         """Drive RunHandle execution to completion, chaining prompts.

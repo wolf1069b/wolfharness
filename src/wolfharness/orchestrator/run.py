@@ -553,6 +553,9 @@ class RunHandle:
         if event_bus is not None and not comm.publishes_to_event_bus:
             await event_bus.publish(self.session_id, run_started)
         await self._safe_publish(comm, run_started)
+        await agent.event_handler(
+            agent.get_context(run_ctx=self.run_ctx), run_started,
+        )
         # Set _current_input_provider ContextVar so MCP elicitation can
         # access it during turn execution.
         if session.input_provider is not None:
@@ -596,6 +599,9 @@ class RunHandle:
                         if event_bus is not None and not comm.publishes_to_event_bus:
                             await event_bus.publish(self.session_id, event)
                         await self._safe_publish(comm, event)
+                        await agent.event_handler(
+                            agent.get_context(run_ctx=self.run_ctx), event,
+                        )
                         # Save assistant final message to conversation BEFORE
                         # yielding. The _consume_run caller closes the generator
                         # immediately after receiving StreamCompleteEvent, which

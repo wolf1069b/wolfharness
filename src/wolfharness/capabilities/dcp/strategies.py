@@ -130,10 +130,28 @@ def _is_pruned(part: ToolReturnPart) -> bool:
 # path calls ``args_as_json_str()`` which returns string args as-is; if the
 # string is not valid JSON the downstream model server (e.g. sglang) will
 # fail with ``json.loads()`` → JSONDecodeError.
-_PRUNED_CALL_STUB: str = '{"pruned": true}'
-_DEDUP_CALL_STUB: str = '{"dedup": true}'
+#
+# The keys are prefixed with an underscore as an internal-marker convention:
+# models have been observed imitating the plain ``pruned``/``dedup`` keys in
+# new tool calls after seeing them in history (phantom-parameter pollution),
+# so the keys intentionally look like internal fields no caller would add.
+# Old stubs (without underscore) are kept in ``_PRUNED_CALL_MARKERS`` so
+# existing sessions whose pruned history uses the old spelling still match
+# the idempotency check.
+_PRUNED_CALL_STUB: str = '{"_pruned": true}'
+_DEDUP_CALL_STUB: str = '{"_dedup": true}'
 
-_PRUNED_CALL_MARKERS: frozenset[str] = frozenset({_PRUNED_CALL_STUB, _DEDUP_CALL_STUB})
+_LEGACY_PRUNED_CALL_STUB: str = '{"pruned": true}'
+_LEGACY_DEDUP_CALL_STUB: str = '{"dedup": true}'
+
+_PRUNED_CALL_MARKERS: frozenset[str] = frozenset(
+    {
+        _PRUNED_CALL_STUB,
+        _DEDUP_CALL_STUB,
+        _LEGACY_PRUNED_CALL_STUB,
+        _LEGACY_DEDUP_CALL_STUB,
+    }
+)
 
 
 def _prune_call_part(
@@ -152,7 +170,7 @@ def _prune_call_part(
     Args:
         call_part: The ``ToolCallPart`` to prune.
         replacement: The new args string (must be valid JSON, e.g.
-            ``'{"pruned": true}'``).
+            ``'{"_pruned": true}'``).
 
     Returns:
         A new ``ToolCallPart`` with replaced args.
@@ -167,8 +185,8 @@ def _is_call_pruned(part: ToolCallPart) -> bool:
     """Check whether a ``ToolCallPart`` has already been pruned.
 
     A call part is considered pruned if its ``args`` is a string equal
-    to one of the known pruned-call markers (``'{"pruned": true}'`` or
-    ``'{"dedup": true}'``).
+    to one of the known pruned-call markers (e.g. ``'{"_pruned": true}'``
+    or ``'{"_dedup": true}'``, plus the legacy un-prefixed spellings).
 
     Args:
         part: The ``ToolCallPart`` to check.
@@ -329,7 +347,7 @@ def _apply_pruned_tools(
     in ``adapter.applied_action_ids``), replace the ``content`` of the
     matching ``ToolReturnPart`` using ``_prune_part`` with kind
     ``"dedup"``.  When ``prune_tool_calls`` is True, also replace the
-    matching ``ToolCallPart`` args with ``'{"pruned": true}'`` via
+    matching ``ToolCallPart`` args with ``'{"_pruned": true}'`` via
     ``_prune_calls_for_ids``.  A ``CompressionBlock`` of kind ``"dedup"``
     is created and stored in the adapter's block store for each pruned
     tool.  After processing, ``adapter.pruned_tools`` is cleared.
@@ -442,7 +460,7 @@ def _dedup_exact(
     times, only the **last** occurrence is kept; earlier occurrences have
     their corresponding ``ToolReturnPart`` pruned with ``"[duplicate removed]"``
     via ``_prune_part`` and, when ``config.prune_tool_calls`` is True,
-    their ``ToolCallPart`` args replaced with ``'{"dedup": true}'`` via
+    their ``ToolCallPart`` args replaced with ``'{"_dedup": true}'`` via
     ``_prune_calls_for_ids``.
 
     Protected tools (from ``config.protected_tools``) are exempt from
